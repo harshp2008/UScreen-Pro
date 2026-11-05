@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.hardware.usb.UsbManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
@@ -351,6 +352,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         applyImmersiveMode()
+        touchCapture?.sendPing()
     }
 
     fun applyImmersiveMode(optIn: Boolean = prefs.immersiveModeEnabled) {
@@ -511,6 +513,7 @@ class MainActivity : ComponentActivity() {
         }
         // Connect control socket; mode acknowledgement from host starts videoReceiver if needed
         touchCapture?.connect()
+        touchCapture?.sendPing()
     }
 
     override fun onStop() {
@@ -577,6 +580,7 @@ fun UScreenMain(
     var immersiveOn by remember { mutableStateOf(prefs?.immersiveModeEnabled ?: false) }
     var keepConnectedInBackground by remember { mutableStateOf(prefs?.keepConnectedInBackground ?: false) }
     var keepDisplayAliveWhenLocked by remember { mutableStateOf(prefs?.keepDisplayAliveWhenLocked ?: true) }
+    var preferredTransport by remember { mutableStateOf(prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO) }
 
     val context = LocalContext.current
     val activity = context as? MainActivity
@@ -660,7 +664,12 @@ fun UScreenMain(
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
         ) {
-            OnboardingScreen(videoReceiver = videoReceiver)
+            OnboardingScreen(
+                videoReceiver = videoReceiver,
+                touchCapture = touchCapture,
+                prefs = prefs,
+                isConnected = isConnected
+            )
         }
 
         // Stats chip (top-left, only while streaming)
@@ -722,7 +731,8 @@ fun UScreenMain(
         }
 
         // "Update available" pill at bottom center so it does not overlap the top settings cog.
-        if (updateAvailable != null && showSettingsHandle && !showThanks) {
+        // Only show on failure/waiting screen, never while actively streaming.
+        if (updateAvailable != null && !isConnected && !penOnly && !showThanks) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -840,6 +850,11 @@ fun UScreenMain(
                     prefs?.keepDisplayAliveWhenLocked = it
                     activity?.applyLockScreenFlags()
                 },
+                preferredTransport = preferredTransport,
+                onPreferredTransportChange = {
+                    preferredTransport = it
+                    prefs?.preferredTransport = it
+                },
                 onExitApp = {
                     activity?.finish()
                 },
@@ -918,7 +933,9 @@ private fun getOnboardingStep(context: Context): OnboardingStep {
     if (!devEnabled) return OnboardingStep.DEVELOPER_OPTIONS_DISABLED
 
     val adbEnabled = try {
-        Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) != 0
+        val usbAdb = Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) != 0
+        val wifiAdb = Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0) != 0
+        usbAdb || wifiAdb
     } catch (_: Exception) {
         true
     }
@@ -928,14 +945,19 @@ private fun getOnboardingStep(context: Context): OnboardingStep {
 }
 
 private fun checkUsbConnected(context: Context): Boolean {
+    val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
+    val hasUsb = try {
+        (usbManager?.deviceList?.isNotEmpty() == true) || (usbManager?.accessoryList?.isNotEmpty() == true)
+    } catch (_: Exception) {
+        false
+    }
     val filter = IntentFilter("android.hardware.usb.action.USB_STATE")
     val intent = context.registerReceiver(null, filter)
-    if (intent != null && intent.getBooleanExtra("connected", false)) {
-        return true
-    }
+    val usbConnected = intent != null && intent.getBooleanExtra("connected", false)
     val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
     val plugged = batteryIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
-    return plugged == BatteryManager.BATTERY_PLUGGED_USB || plugged == BatteryManager.BATTERY_PLUGGED_AC
+    val isPluggedUsb = plugged == BatteryManager.BATTERY_PLUGGED_USB || plugged == BatteryManager.BATTERY_PLUGGED_AC
+    return hasUsb || usbConnected || isPluggedUsb
 }
 
 private fun checkWifiConnected(context: Context): Boolean {
@@ -956,29 +978,43 @@ enum class DiagnosticState {
 private fun evaluateDiagnostic(
     usbPlugged: Boolean,
     wifiOn: Boolean,
+    preferredTransport: Int,
     dynamicDiagnostic: String?,
     secondsWaiting: Int
 ): Pair<DiagnosticState, String> {
+    val transportOk = when (preferredTransport) {
+        Prefs.TRANSPORT_USB -> usbPlugged
+        Prefs.TRANSPORT_WIFI -> wifiOn
+        else -> usbPlugged || wifiOn
+    }
     val state = when {
-        !usbPlugged && !wifiOn -> DiagnosticState.NO_TRANSPORT
+        !transportOk -> DiagnosticState.NO_TRANSPORT
         dynamicDiagnostic?.contains("refused", ignoreCase = true) == true -> DiagnosticState.SOCKET_REFUSED
-        usbPlugged && secondsWaiting > 6 && dynamicDiagnostic == null -> DiagnosticState.USB_UNAUTHORIZED
         !usbPlugged && wifiOn && (secondsWaiting > 4 || dynamicDiagnostic?.contains("unreachable", ignoreCase = true) == true) -> DiagnosticState.WIFI_HOST_UNREACHABLE
         else -> DiagnosticState.CONNECTING
     }
     val message = when (state) {
-        DiagnosticState.NO_TRANSPORT -> "Please connect a USB cable or ensure Wi-Fi is enabled."
-        DiagnosticState.USB_UNAUTHORIZED -> "RSA Fingerprint not accepted. Check your tablet screen."
+        DiagnosticState.NO_TRANSPORT -> when (preferredTransport) {
+            Prefs.TRANSPORT_USB -> "Please connect a USB cable."
+            Prefs.TRANSPORT_WIFI -> "Please connect to a Wi-Fi network."
+            else -> "Please connect a USB cable or ensure Wi-Fi is enabled."
+        }
+        DiagnosticState.USB_UNAUTHORIZED -> "Waiting for UScreen desktop..."
         DiagnosticState.SOCKET_REFUSED -> "Connection refused. Is UScreen running on your PC?"
         DiagnosticState.WIFI_HOST_UNREACHABLE -> "Wi-Fi connected, but host unreachable. Are you on the same network?"
-        DiagnosticState.CONNECTING -> "Connecting to host..."
+        DiagnosticState.CONNECTING -> "Waiting for UScreen desktop..."
     }
     return Pair(state, message)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
+private fun OnboardingScreen(
+    videoReceiver: VideoReceiver?,
+    touchCapture: TouchCapture?,
+    prefs: Prefs?,
+    isConnected: Boolean
+) {
     val context = LocalContext.current
     var step by remember { mutableStateOf(getOnboardingStep(context)) }
     var usbPlugged by remember { mutableStateOf(checkUsbConnected(context)) }
@@ -986,6 +1022,7 @@ private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
     var showHelpWizard by remember { mutableStateOf(false) }
     var dynamicDiagnostic by remember { mutableStateOf<String?>(null) }
     var secondsWaiting by remember { mutableStateOf(0) }
+    val preferredTransport = prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO
 
     LaunchedEffect(videoReceiver) {
         videoReceiver?.onDiagnosticUpdate = { diag ->
@@ -1054,7 +1091,7 @@ private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
                                 text = "UScreen communicates with your PC via Android USB/Wi-Fi debugging. " +
-                                    "Tap 'Build number' 7 times in Device Info to unlock Developer options.",
+                                    "Tap 'Build number' 7 times in About Device to unlock Developer options.",
                                 fontSize = 13.sp,
                                 lineHeight = 20.sp,
                                 color = Color(0xFFB0B0C0),
@@ -1071,7 +1108,7 @@ private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Accent)
                             ) {
-                                Text("Open Device Info", color = Color.White, fontWeight = FontWeight.SemiBold)
+                                Text("Open About Device", color = Color.White, fontWeight = FontWeight.SemiBold)
                             }
                         }
                     }
@@ -1087,7 +1124,7 @@ private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "Enable USB Debugging",
+                                text = "Enable USB / Wireless Debugging",
                                 fontSize = 18.sp,
                                 color = Warn,
                                 fontWeight = FontWeight.Bold,
@@ -1095,8 +1132,8 @@ private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
-                                text = "Developer options are enabled, but USB debugging is turned off. " +
-                                    "Please turn on 'USB debugging' to allow your PC to connect.",
+                                text = "Developer options are enabled, but debugging is turned off. " +
+                                    "Please turn on 'USB debugging' or 'Wireless debugging' to allow your PC to connect.",
                                 fontSize = 13.sp,
                                 lineHeight = 20.sp,
                                 color = Color(0xFFB0B0C0),
@@ -1122,6 +1159,7 @@ private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
                     val (diagState, diagMessage) = evaluateDiagnostic(
                         usbPlugged = usbPlugged,
                         wifiOn = wifiOn,
+                        preferredTransport = preferredTransport,
                         dynamicDiagnostic = dynamicDiagnostic,
                         secondsWaiting = secondsWaiting
                     )
@@ -1155,13 +1193,23 @@ private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
         if (showHelpWizard) {
             val devOn = step != OnboardingStep.DEVELOPER_OPTIONS_DISABLED
             val adbOn = step == OnboardingStep.WAITING_FOR_HOST
-            val transportOk = usbPlugged || wifiOn
+            val transportOk = when (preferredTransport) {
+                Prefs.TRANSPORT_USB -> usbPlugged
+                Prefs.TRANSPORT_WIFI -> wifiOn
+                else -> usbPlugged || wifiOn
+            }
 
-            // Auto-dismiss and reconnect when all prerequisites become true (standard 2000ms UX window)
+            // Trigger reconnection attempt as soon as all prerequisites become true
             LaunchedEffect(transportOk, devOn, adbOn) {
                 if (transportOk && devOn && adbOn) {
-                    delay(2000)
                     videoReceiver?.restartSocket()
+                    touchCapture?.connect()
+                }
+            }
+
+            // Dismiss troubleshooter ONLY when connection is established
+            LaunchedEffect(isConnected) {
+                if (isConnected) {
                     showHelpWizard = false
                 }
             }
@@ -1170,62 +1218,108 @@ private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
                 onDismissRequest = { showHelpWizard = false },
                 containerColor = Color(0xFF16161F)
             ) {
-                Column(
-                    modifier = Modifier
-                        .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                        .padding(horizontal = 24.dp, vertical = 12.dp)
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
                 ) {
-                    Text(
-                        "Connection Troubleshooter",
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Let's verify each requirement step-by-step:",
-                        fontSize = 13.sp,
-                        color = Color(0xFF9A9AB0)
-                    )
-                    Spacer(Modifier.height(16.dp))
+                    Column(
+                        modifier = Modifier
+                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
+                            .padding(horizontal = 24.dp, vertical = 12.dp)
+                    ) {
+                        Text(
+                            "Connection Troubleshooter",
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Let's verify each requirement step-by-step:",
+                            fontSize = 13.sp,
+                            color = Color(0xFF9A9AB0)
+                        )
+                        Spacer(Modifier.height(16.dp))
 
-                    // Combined Network Transport check (USB OR Wi-Fi)
-                    TroubleshootCheckItem(
-                        title = "1. Network Transport",
-                        detail = when {
-                            usbPlugged && wifiOn -> "USB and Wi-Fi connected."
-                            usbPlugged -> "USB cable is securely detected."
-                            wifiOn -> "Connected to Wi-Fi network."
-                            else -> "No USB or Wi-Fi connection detected. Connect cable or Wi-Fi."
-                        },
-                        passed = transportOk
-                    )
-                    Spacer(Modifier.height(12.dp))
+                        // Step 1: Transport check adapted to Preferred Transport
+                        val (tTitle, tDetail) = when (preferredTransport) {
+                            Prefs.TRANSPORT_USB -> "1. USB Cable Connection" to (
+                                if (usbPlugged) "USB cable is securely detected." else "No USB cable detected. Please connect your USB cable."
+                            )
+                            Prefs.TRANSPORT_WIFI -> "1. Wi-Fi Connection" to (
+                                if (wifiOn) "Connected to Wi-Fi network." else "Wi-Fi is disconnected. Please connect to Wi-Fi."
+                            )
+                            else -> "1. Network Transport" to when {
+                                usbPlugged && wifiOn -> "USB and Wi-Fi connected."
+                                usbPlugged -> "USB cable is securely detected."
+                                wifiOn -> "Connected to Wi-Fi network."
+                                else -> "No USB or Wi-Fi connection detected. Connect cable or Wi-Fi."
+                            }
+                        }
 
-                    // Checklist Step 2: Developer Options
-                    TroubleshootCheckItem(
-                        title = "2. Developer Options",
-                        detail = if (devOn) "Developer options enabled." else "Disabled. Must tap Build number 7 times.",
-                        passed = devOn
-                    )
-                    Spacer(Modifier.height(12.dp))
+                        TroubleshootCheckItem(
+                            title = tTitle,
+                            detail = tDetail,
+                            passed = transportOk,
+                            actionButtonText = if (!transportOk && preferredTransport == Prefs.TRANSPORT_WIFI) "Open Wi-Fi Settings" else null,
+                            onActionClick = if (!transportOk && preferredTransport == Prefs.TRANSPORT_WIFI) {
+                                {
+                                    try {
+                                        context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+                                    } catch (_: Exception) {
+                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                    }
+                                }
+                            } else null
+                        )
+                        Spacer(Modifier.height(12.dp))
 
-                    // Checklist Step 3: USB Debugging
-                    TroubleshootCheckItem(
-                        title = "3. USB Debugging",
-                        detail = if (adbOn) "USB debugging is enabled." else "Disabled. Must toggle in Developer Options.",
-                        passed = adbOn
-                    )
+                        // Checklist Step 2: Developer Options
+                        TroubleshootCheckItem(
+                            title = "2. Developer Options",
+                            detail = if (devOn) "Developer options enabled." else "Disabled. Must tap Build number 7 times in About Device.",
+                            passed = devOn,
+                            actionButtonText = if (!devOn) "Open About Device" else null,
+                            onActionClick = if (!devOn) {
+                                {
+                                    try {
+                                        context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS))
+                                    } catch (_: Exception) {
+                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                    }
+                                }
+                            } else null
+                        )
+                        Spacer(Modifier.height(12.dp))
 
-                    Spacer(Modifier.height(20.dp))
-                    Text(
-                        text = "Once all items above show a green checkmark, UScreen will connect automatically.",
-                        fontSize = 12.sp,
-                        color = Color(0xFF9A9AB0),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(Modifier.height(16.dp))
+                        // Checklist Step 3: Debugging
+                        TroubleshootCheckItem(
+                            title = "3. USB / Wireless Debugging",
+                            detail = if (adbOn) "Debugging is enabled." else "Disabled. Must toggle USB or Wireless debugging in Developer Options.",
+                            passed = adbOn,
+                            actionButtonText = if (!adbOn) "Open Developer Options" else null,
+                            onActionClick = if (!adbOn) {
+                                {
+                                    try {
+                                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                                    } catch (_: Exception) {
+                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                    }
+                                }
+                            } else null
+                        )
+
+                        Spacer(Modifier.height(20.dp))
+                        Text(
+                            text = if (transportOk && devOn && adbOn) "All checks passed! Connecting to PC..." else "Once all items show a green checkmark, UScreen will connect automatically.",
+                            fontSize = 12.sp,
+                            color = if (transportOk && devOn && adbOn) AccentSoft else Color(0xFF9A9AB0),
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(16.dp))
+                    }
                 }
             }
         }
@@ -1233,25 +1327,45 @@ private fun OnboardingScreen(videoReceiver: VideoReceiver?) {
 }
 
 @Composable
-private fun TroubleshootCheckItem(title: String, detail: String, passed: Boolean) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+private fun TroubleshootCheckItem(
+    title: String,
+    detail: String,
+    passed: Boolean,
+    actionButtonText: String? = null,
+    onActionClick: (() -> Unit)? = null
+) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0x332A2A3D))
             .padding(12.dp)
     ) {
-        Text(
-            text = if (passed) "✓" else "✗",
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold,
-            color = if (passed) Color(0xFF4CAF50) else Color(0xFFEF5350),
-            modifier = Modifier.padding(end = 12.dp)
-        )
-        Column {
-            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-            Text(detail, fontSize = 12.sp, color = Color(0xFFB0B0C0))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(
+                text = if (passed) "✓" else "✗",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (passed) Color(0xFF4CAF50) else Color(0xFFEF5350),
+                modifier = Modifier.padding(end = 12.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                Text(detail, fontSize = 12.sp, color = Color(0xFFB0B0C0))
+            }
+        }
+        if (!passed && actionButtonText != null && onActionClick != null) {
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onActionClick,
+                colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                modifier = Modifier.padding(start = 28.dp)
+            ) {
+                Text(actionButtonText, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }
@@ -1279,6 +1393,8 @@ private fun SettingsSheet(
     onKeepConnectedInBackgroundChange: (Boolean) -> Unit = {},
     keepDisplayAliveWhenLocked: Boolean = true,
     onKeepDisplayAliveWhenLockedChange: (Boolean) -> Unit = {},
+    preferredTransport: Int = Prefs.TRANSPORT_AUTO,
+    onPreferredTransportChange: (Int) -> Unit = {},
     onExitApp: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
@@ -1405,6 +1521,37 @@ private fun SettingsSheet(
                     color = Color(0xFF6A6A7E)
                 )
             }
+            Spacer(Modifier.height(20.dp))
+
+            // Preferred Transport selector
+            Text("Preferred transport", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    Prefs.TRANSPORT_AUTO to "Auto",
+                    Prefs.TRANSPORT_USB to "USB",
+                    Prefs.TRANSPORT_WIFI to "Wi-Fi",
+                ).forEach { (value, label) ->
+                    FilterChip(
+                        selected = preferredTransport == value,
+                        onClick = { onPreferredTransportChange(value) },
+                        label = { Text(label) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = Accent,
+                            selectedLabelColor = Color.White
+                        )
+                    )
+                }
+            }
+            Text(
+                when (preferredTransport) {
+                    Prefs.TRANSPORT_USB -> "Strictly connect using a physical USB cable."
+                    Prefs.TRANSPORT_WIFI -> "Strictly connect over Wi-Fi network."
+                    else -> "Automatically use USB when plugged in, falling back to Wi-Fi."
+                },
+                fontSize = 11.sp,
+                color = Color(0xFF6A6A7E)
+            )
             Spacer(Modifier.height(20.dp))
 
             if (!penOnly) {
@@ -1613,7 +1760,18 @@ private fun SettingsSheet(
                     Text("Exit UScreen", fontSize = 14.sp)
                 }
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
+
+            val buildVer = BuildConfig.VERSION_NAME
+            val isDirtyVer = buildVer.contains("-dirty")
+            val displayVer = if (isDirtyVer) "$buildVer (Uncommitted Changes)" else buildVer
+            Text(
+                text = "UScreen Build: $displayVer",
+                fontSize = 11.sp,
+                color = if (isDirtyVer) Color(0xFFFFB74D) else Color(0xFF6A6A7E),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+            )
         }
     }
 }

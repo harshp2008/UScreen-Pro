@@ -209,6 +209,9 @@ pub enum InputEvent {
         #[serde(default)]
         decode_us: i64,
     },
+    /// Foreground hello/reconnect ping from the device app onStart/onResume.
+    #[serde(rename = "ping")]
+    Ping,
 }
 
 #[derive(Serialize)]
@@ -1103,6 +1106,7 @@ pub struct InputServer {
     /// mapped onto that card's connector, not onto "the first EVDI output" -
     /// with two tablets that would put both pens on one screen.
     card_rx: watch::Receiver<Option<u32>>,
+    ping_notify: Arc<tokio::sync::Notify>,
 }
 
 impl InputServer {
@@ -1113,6 +1117,7 @@ impl InputServer {
         latency: crate::latency::LatencyTracker,
         relaunch: Arc<tokio::sync::Notify>,
         card_rx: watch::Receiver<Option<u32>>,
+        ping_notify: Arc<tokio::sync::Notify>,
     ) -> Self {
         Self {
             config,
@@ -1122,6 +1127,7 @@ impl InputServer {
             latency,
             relaunch,
             card_rx,
+            ping_notify,
         }
     }
 
@@ -1270,9 +1276,10 @@ impl InputServer {
             let latency = self.latency.clone();
             let devices = uinput.clone();
             let relaunch = self.relaunch.clone();
+            let ping_notify = self.ping_notify.clone();
             tokio::spawn(async move {
                 if let Err(e) =
-                    handle_connection(socket, cfg, settings, mode_tx, latency, devices, relaunch)
+                    handle_connection(socket, cfg, settings, mode_tx, latency, devices, relaunch, ping_notify)
                         .await
                 {
                     warn!("Input handler {}: {}", peer, e);
@@ -1299,6 +1306,7 @@ async fn handle_connection(
     latency: crate::latency::LatencyTracker,
     uinput: Arc<std::sync::Mutex<InjectDevices>>,
     relaunch: Arc<tokio::sync::Notify>,
+    ping_notify: Arc<tokio::sync::Notify>,
 ) -> Result<()> {
     // Input events are a few hundred bytes. The library default of 64 MiB
     // per message is a memory bill nobody on this socket should be able to
@@ -1447,7 +1455,7 @@ async fn handle_connection(
         match msg {
             Ok(Message::Text(text)) => match serde_json::from_str::<InputEvent>(&text) {
                 Ok(event) => {
-                    handle_event(event, &uinput, &settings_tx, &mode_tx, &latency);
+                    handle_event(event, &uinput, &settings_tx, &mode_tx, &latency, &ping_notify);
                 }
                 Err(e) => {
                     warn!("Invalid input: {} - {}", e, text);
@@ -1505,6 +1513,7 @@ fn handle_event(
     settings_tx: &Option<watch::Sender<EncoderSettings>>,
     mode_tx: &watch::Sender<bool>,
     latency: &crate::latency::LatencyTracker,
+    ping_notify: &Arc<tokio::sync::Notify>,
 ) {
     match event {
         InputEvent::Touch {
@@ -1714,6 +1723,11 @@ fn handle_event(
                 if pen_only { "pen-only mode" } else { "second-screen mode" }
             );
             let _ = mode_tx.send(pen_only);
+        }
+
+        InputEvent::Ping => {
+            info!("Received foreground ping from client — immediately re-asserting adb reverse tunnels");
+            ping_notify.notify_waiters();
         }
     }
 }

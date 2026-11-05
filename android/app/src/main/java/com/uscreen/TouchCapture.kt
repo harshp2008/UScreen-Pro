@@ -123,6 +123,10 @@ class TouchCapture {
                 webSocket.send(it.toString())
                 pendingMode = null
             }
+            webSocket.send(JSONObject().apply {
+                put("type", "ping")
+            }.toString())
+            Log.i(TAG, "Sent initial connection ping")
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -650,6 +654,22 @@ class TouchCapture {
             // truth for the mode, and re-asserting a stale choice on every
             // reconnect would fight whatever it was set to in the meantime.
             pendingMode = msg
+        }
+    }
+
+    /**
+     * Send a foreground hello/reconnect ping to the host so it re-asserts
+     * adb reverse port forwarding immediately upon app resume.
+     */
+    fun sendPing() {
+        val msg = JSONObject().apply {
+            put("type", "ping")
+        }
+        if (isConnected) {
+            webSocket?.send(msg.toString())
+            Log.i(TAG, "Sent reconnect ping to host")
+        } else {
+            connect()
         }
     }
 

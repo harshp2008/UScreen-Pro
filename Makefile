@@ -8,7 +8,17 @@ ADB = adb
 BIN_DIR = ${HOME}/.local/bin
 DATA_DIR = ${HOME}/.local/share/uscreen
 
-all: build
+GIT_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+GIT_DIRTY := $(shell git status --porcelain 2>/dev/null)
+ifneq ($(GIT_DIRTY),)
+    GIT_VERSION := $(GIT_HASH)-dirty
+else
+    GIT_VERSION := $(GIT_HASH)
+endif
+export GIT_VERSION_STRING := $(GIT_VERSION)
+
+all: build android
+	@echo "✓ Synchronized unified build complete: v$(GIT_VERSION_STRING)"
 
 # Generic -O3 (no -march=native): release binaries must run on any x86-64 CPU
 build-helper:

@@ -39,9 +39,10 @@ fun queryIsGitDirty(): Boolean {
     }
 }
 
+val envVersion = System.getenv("GIT_VERSION_STRING")?.trim()?.takeIf { it.isNotEmpty() }
 val gitHash = queryGitHash()
 val isDirty = queryIsGitDirty()
-val gitVersionString = if (isDirty) {
+val gitVersionString = envVersion ?: if (isDirty) {
     logger.warn("WARNING: Building APK with uncommitted changes. Version will be marked as dirty.")
     "$gitHash-dirty"
 } else {
