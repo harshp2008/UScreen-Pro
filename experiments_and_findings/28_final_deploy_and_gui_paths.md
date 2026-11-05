@@ -16,7 +16,7 @@ Following the recovery from a killed background task and the implementation of E
 2. **Troubleshooter Auto-Dismiss Window Calibration (Task 2):**
    The auto-dismiss delay in `MainActivity.kt` was temporarily raised to 8000ms for diagnostic capture. It must be reverted to the production standard 2000ms UX window.
 3. **End-to-End Multi-System Hardware Verification (Tasks 3 & 4):**
-   Full hardware verification across touch routing, battery/background lifecycle handling, troubleshooter logic, and daemon health on the Samsung Galaxy Tab S9 FE (`R52X708AEHK`).
+   Full hardware verification across touch routing, battery/background lifecycle handling, troubleshooter logic, and daemon health on the Samsung Galaxy Tab S9 FE (`TABLET_SERIAL`).
 
 ---
 

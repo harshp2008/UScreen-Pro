@@ -332,10 +332,10 @@ Having completed the scientific literature review, root-cause analyses, hypothes
 ## 10. Empirical Verification Protocol & Raw Unedited Logs
 
 ### 10.1 Test 1: Kill Android App & Reopen It (App Restart Reconnection)
-- **Protocol:** While actively streaming on Galaxy Tab S9 FE+ (`R52X708AEHK`), force-kill the Android application with `am force-stop com.uscreen`. Wait 3 seconds, reopen the app via `am start -n com.uscreen/.MainActivity`. Verify immediate re-establishment of the stream and IDR keyframe reception without restarting the desktop daemon.
+- **Protocol:** While actively streaming on Galaxy Tab S9 FE+ (`TABLET_SERIAL`), force-kill the Android application with `am force-stop com.uscreen`. Wait 3 seconds, reopen the app via `am start -n com.uscreen/.MainActivity`. Verify immediate re-establishment of the stream and IDR keyframe reception without restarting the desktop daemon.
 - **Execution Log:**
 ```text
-$ adb -s R52X708AEHK shell am force-stop com.uscreen; sleep 3; adb -s R52X708AEHK shell am start -n com.uscreen/.MainActivity; sleep 3; adb -s R52X708AEHK shell pidof com.uscreen
+$ adb -s TABLET_SERIAL shell am force-stop com.uscreen; sleep 3; adb -s TABLET_SERIAL shell am start -n com.uscreen/.MainActivity; sleep 3; adb -s TABLET_SERIAL shell pidof com.uscreen
 Starting: Intent { cmp=com.uscreen/.MainActivity }
 Warning: Activity not started, intent has been delivered to currently running top-most instance.
 17741
@@ -359,7 +359,7 @@ Warning: Activity not started, intent has been delivered to currently running to
 ---
 
 ### 10.2 Test 2: Transport Switching & Multi-Transport Handoff
-- **Protocol:** Verify stream stability across heterogeneous transports (USB and Wi-Fi) with both devices connected (`R52X708AEHK` on USB and `192.168.1.74:5555` on Wi-Fi).
+- **Protocol:** Verify stream stability across heterogeneous transports (USB and Wi-Fi) with both devices connected (`TABLET_SERIAL` on USB and `192.168.1.102:5555` on Wi-Fi).
 - **Execution Log:**
 ```text
 harsh    1231811  uscreen start
@@ -426,5 +426,5 @@ harsh    1232402  ffmpeg (2560x1600, card 0 / slot 1)
 All mandates of the engineering investigation have been achieved with academic rigor:
 1. **Root-Cause Analysis:** The reconnection blackout, false onboarding instructions, binary status dots, and port collision failure modes were identified down to kernel and socket mechanics.
 2. **Implementation:** Surgical, resilient fixes were applied across daemon capture lifecycle, reverse port forwarding, Android onboarding state machine, dynamic diagnostics, and egui multi-state status indicators.
-3. **Empirical Verification:** The solution was verified through empirical tests on real hardware endpoints (`R52X708AEHK` and `192.168.1.74:5555`), confirming recovery times under 0.5s and zero compositor crashes.
+3. **Empirical Verification:** The solution was verified through empirical tests on real hardware endpoints (`TABLET_SERIAL` and `192.168.1.102:5555`), confirming recovery times under 0.5s and zero compositor crashes.
 4. **Research Proposals:** Comprehensive, academic research proposals analyzing Cross-Network Connectivity (Task 7) and Bandwidth Aggregation (Task 8) have been formulated and documented for future architectural phases.

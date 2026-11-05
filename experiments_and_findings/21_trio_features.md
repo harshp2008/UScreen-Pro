@@ -37,7 +37,7 @@ Android Debug Bridge (ADB) operates on a client-server architecture with transpo
 
 In *scrcpy*, wireless initialization is handled through automatic device discovery (`scrcpy --tcpip`), which extracts the device's wlan0 IP via `adb shell ip route` or `getprop`, issues `adb tcpip 5555`, and reconnects via network sockets. 
 
-Prior to this work, UScreen possessed latent Wi-Fi configuration parsing (`setup_wifi` in `host/src/main.rs`), but lacked GUI configuration, automatic pairing, and connection failover. When a USB cable was disconnected, the daemon considered the device lost and destroyed the display server pipeline. By tracking both USB and TCP/IP serial representations (e.g., `R52X708AEHK` vs `192.168.1.100:5555`), the daemon can dynamically retarget reverse port tunnels (`adb reverse tcp:<port> tcp:<port>`) without cycling the virtual monitor or dropping the Wayland video pipeline.
+Prior to this work, UScreen possessed latent Wi-Fi configuration parsing (`setup_wifi` in `host/src/main.rs`), but lacked GUI configuration, automatic pairing, and connection failover. When a USB cable was disconnected, the daemon considered the device lost and destroyed the display server pipeline. By tracking both USB and TCP/IP serial representations (e.g., `TABLET_SERIAL` vs `192.168.1.100:5555`), the daemon can dynamically retarget reverse port tunnels (`adb reverse tcp:<port> tcp:<port>`) without cycling the virtual monitor or dropping the Wayland video pipeline.
 
 ### 2.2 GNOME Wayland Window Constraints & Mutter Architecture
 Under modern Wayland compositors, client applications operate in strict isolation: no unprivileged client can query window lists, read foreign window titles, or reposition surfaces on arbitrary monitors. 
@@ -342,7 +342,7 @@ harsh     810439 26.1  0.3 3638540 87288 ?       SNLl 04:42   0:15 ffmpeg -hide_
 
 ### 5.2 Verification 2: Keep-Alive 1 FPS Throttling & Seamless Reconnection
 **Test Protocol:**
-1. Configure `keep_alive = true` for device `R52X708AEHK`.
+1. Configure `keep_alive = true` for device `TABLET_SERIAL`.
 2. Terminate Android client via `adb shell am force-stop com.uscreen`.
 3. Verify Mutter display remains active and `evdi_helper` throttles to 1 FPS.
 4. Relaunch Android client via `adb shell am start -n com.uscreen/.MainActivity`.
@@ -356,8 +356,8 @@ harsh     810439 26.1  0.3 3638540 87288 ?       SNLl 04:42   0:15 ffmpeg -hide_
 [evdi-helper] 0.0 grabs/s (total 98), mode:1 dpms:1 pending:1
 [evdi-helper] stages: req→ready avg 0.0ms (0 waited, 0 imm), grab avg 0.0ms, conv avg 0.0ms, write avg 2.5ms
 [evdi-helper] Resumed normal FPS (client active)
-2026-11-04T23:11:43.272859Z  INFO uscreen: 1406: Auto-enabled adb tcpip 5555 for USB device R52X708AEHK
-2026-11-04T23:11:43.431581Z  INFO uscreen: 1406: Auto-enabled adb tcpip 5555 for USB device RZCX809Y0FT
+2026-11-04T23:11:43.272859Z  INFO uscreen: 1406: Auto-enabled adb tcpip 5555 for USB device TABLET_SERIAL
+2026-11-04T23:11:43.431581Z  INFO uscreen: 1406: Auto-enabled adb tcpip 5555 for USB device PHONE_SERIAL
 2026-11-04T23:11:43.899646Z  INFO uscreen::gnome: 219: Mapped pen and touch to DVI-I-2 (['USC', 'UScreen', '0x00000001'])
 ```
 *Result:* Virtual display remained active without desktop flickering. CPU usage dropped immediately upon disconnection and resumed smoothly upon reconnect.
@@ -370,8 +370,8 @@ harsh     810439 26.1  0.3 3638540 87288 ?       SNLl 04:42   0:15 ffmpeg -hide_
 
 **Unedited Log Output:**
 ```text
-2026-11-04T23:11:37.250441Z  INFO uscreen: 1406: Auto-enabled adb tcpip 5555 for USB device R52X708AEHK
-2026-11-04T23:11:37.463570Z  INFO uscreen: 1406: Auto-enabled adb tcpip 5555 for USB device RZCX809Y0FT
+2026-11-04T23:11:37.250441Z  INFO uscreen: 1406: Auto-enabled adb tcpip 5555 for USB device TABLET_SERIAL
+2026-11-04T23:11:37.463570Z  INFO uscreen: 1406: Auto-enabled adb tcpip 5555 for USB device PHONE_SERIAL
 ```
 *Result:* Automatic Wi-Fi ADB provisioning executed smoothly on attached hardware without user intervention.
 

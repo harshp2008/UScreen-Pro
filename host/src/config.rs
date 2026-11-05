@@ -393,7 +393,7 @@ fps = 60
 quality = 18
 bitrate = 20000
 
-[tablets.R52X708AEHK]
+[tablets.TABLET_SERIAL]
 label = "SM-X616B"
 nickname = "My Desk Tablet"
 width = 2560
@@ -408,8 +408,8 @@ position = "left"
 "#;
 
         let cfg: FileConfig = toml::from_str(toml_data).expect("parse config");
-        let profile = cfg.tablets.get("R52X708AEHK").expect("profile exists");
-        assert_eq!(profile.display_name("R52X708AEHK"), "My Desk Tablet");
+        let profile = cfg.tablets.get("TABLET_SERIAL").expect("profile exists");
+        assert_eq!(profile.display_name("TABLET_SERIAL"), "My Desk Tablet");
         assert_eq!(profile.nickname.as_deref(), Some("My Desk Tablet"));
         assert_eq!(profile.fps, Some(30));
         assert_eq!(profile.quality, Some(16));
@@ -425,7 +425,7 @@ position = "left"
         assert!(serialized.contains("fps = 30"));
 
         let reparsed: FileConfig = toml::from_str(&serialized).expect("reparse");
-        let p2 = reparsed.tablets.get("R52X708AEHK").unwrap();
+        let p2 = reparsed.tablets.get("TABLET_SERIAL").unwrap();
         assert_eq!(p2.nickname.as_deref(), Some("My Desk Tablet"));
         assert_eq!(p2.ten_bit, Some(true));
     }
