@@ -87,3 +87,20 @@ SUM:                           126           3168           2809          25442
   - `cargo test --workspace`: PASSED (43/43 host tests, 4/4 GUI tests)
   - `./gradlew assembleDebug`: PASSED (exit code 0)
 
+### 3.3 Task 2: C Helper Cleansing (`host/evdi/evdi_helper.c`)
+- **Formatting Standardization**: Applied `clang-format` using LLVM style across `host/evdi/evdi_helper.c`.
+- **Architectural Documentation**: Added detailed K&R/Doxygen-style documentation above POSIX signal handlers (`handle_signal`, `handle_throttle`) detailing:
+  - `SIGTERM`/`SIGINT`: Orderly event-loop exit, thread join, condvar broadcast, boundary window teardown, and EVDI handle release.
+  - `SIGUSR1`: 1 FPS keep-alive standby throttle to eliminate CPU/GPU bus contention when client is inactive or in background.
+  - `SIGUSR2`: Resuming active frame cadence and triggering `mark_all_dirty()` across all triple-buffer slots to guarantee immediate full-frame keyframe delivery upon reconnection.
+- **Dead Code & Warning Elimination**:
+  - Removed dead/shadowed variable `request_period_ns` in `run_event_loop()`.
+  - Expanded `drm_path` buffer to 512 bytes in `find_evdi_device()` to eliminate potential snprintf truncation warnings.
+  - Verified with `gcc -Wall -Wextra -O3`: 0 warnings, clean compilation.
+- **Verification**:
+  - `cargo check`: PASSED
+  - `cargo test --workspace`: PASSED
+  - `./gradlew assembleDebug`: PASSED
+
+
+
