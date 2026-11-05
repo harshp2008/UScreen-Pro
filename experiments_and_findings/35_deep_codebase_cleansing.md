@@ -129,6 +129,69 @@ SUM:                           126           3168           2809          25442
   - `cargo test --workspace`: PASSED
   - `./gradlew assembleDebug`: PASSED
 
+### 3.6 Task 5: Final Comprehensive Verification
+- Executed `make all` unified build pipeline:
+  ```
+  gcc -O3 -o host/evdi/evdi_helper host/evdi/evdi_helper.c /lib/libevdi.so.1 -lpthread -lX11 -lXrandr -Ihost/evdi
+  cargo build --release
+  cd android && ./gradlew assembleDebug --no-daemon
+  ✓ APK: android/app/build/outputs/apk/debug/app-debug.apk
+  ✓ Synchronized unified build complete: v78c61db
+  ```
+- Executed `cargo test --workspace`: 47 tests passed (43 host unittests + 4 GUI tests), 0 failures.
+- Executed `git status`: Working tree clean.
+
+---
+
+## 4. Quantitative Before & After Structural Comparison
+
+### 4.1 Monolithic Files Breakdown
+| File | Baseline Code Lines | Refactored Code Lines | Delta (%) | Status |
+|---|---|---|---|---|
+| `host/src/main.rs` | 2,026 | 697 | **-65.6%** | Modularized into `adb.rs`, `session.rs`, `config_handler.rs` |
+| `android/.../MainActivity.kt` | 1,720 | 424 | **-75.3%** | Modularized into `ui/Onboarding.kt`, `ui/SettingsSheet.kt`, `ui/ConnectionScreen.kt`, `ui/Theme.kt` |
+| `host/evdi/evdi_helper.c` | 1,157 | 1,343 | +16.0% (Formatted) | LLVM formatted, signal documentation, zero dead code |
+
+### 4.2 Modular File Hierarchy (Post-Refactor)
+```
+host/src/
+├── main.rs                 (697 lines: CLI parser, logging, daemon loop orchestration)
+├── adb.rs                  (539 lines: ADB transport, tunnel setup, launch intents)
+├── session.rs              (797 lines: Multi-device display session state machine)
+├── config_handler.rs       (255 lines: App lock sync, control socket IPC, PID files)
+├── capture.rs              (EVDI frame capture, timing, and encoder dispatch)
+├── encoders.rs             (Hardware encoder probes and render node negotiation)
+├── input.rs                (WebSocket input receiver and Linux uinput dispatch)
+└── doctor.rs               (System health and diagnosis)
+
+host/evdi/
+└── evdi_helper.c           (1,343 lines: LLVM style, documented SIGTERM/SIGUSR1/SIGUSR2)
+
+android/app/src/main/java/com/uscreen/
+├── MainActivity.kt         (424 lines: Activity lifecycle, Keyguard, WakeLock, hover dispatch)
+└── ui/
+    ├── Theme.kt            (23 lines: OLED dark theme and color tokens)
+    ├── ConnectionScreen.kt (423 lines: SurfaceView viewport, stats, mismatch banner)
+    ├── Onboarding.kt       (490 lines: Guided setup, diagnostics, troubleshooter)
+    └── SettingsSheet.kt    (530 lines: Live streaming params, transport, pairing guide)
+```
+
+---
+
+## 5. Formal Git History & Atomic Commit Verification
+
+```
+78c61db docs: update README and build system documentation
+fee26b7 refactor(android): split MainActivity into modular Compose UI files and remove dead code
+5821a6d refactor(evdi): format C helper, document signals, and remove dead code
+b6c227a refactor(host): modularize main.rs and resolve all clippy warnings
+b306058 feat(pairing, gui, android): implement institutional secure pairing, legacy fallback gate, transport routing, and UI polish
+3511478 institutional: overhaul onboarding intents, push reconnection, gui alignment, and unified build versioning
+```
+
+All refactoring operations strictly preserved behavioral invariants while modularizing, documenting, and eliminating technical debt across the entire codebase.
+
+
 
 
 
