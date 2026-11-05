@@ -102,5 +102,21 @@ SUM:                           126           3168           2809          25442
   - `cargo test --workspace`: PASSED
   - `./gradlew assembleDebug`: PASSED
 
+### 3.4 Task 3: Android UI Cleansing (`android/`)
+- **Diagnostic Audit**: Executed `./gradlew lintDebug` and `compileDebugKotlin`. Identified unused parameter warnings in `getLocalWifiIp(context)` and `notePenActivity(vw, vh)`.
+- **Decomposition of Monolithic `MainActivity.kt`**:
+  - Extracted theme definitions and color tokens into `android/app/src/main/java/com/uscreen/ui/Theme.kt` (31 lines).
+  - Extracted onboarding progression cards, developer options guidance, connection diagnostics, and interactive troubleshooter into `android/app/src/main/java/com/uscreen/ui/Onboarding.kt` (544 lines).
+  - Extracted live settings bottom sheet, bitrate/FPS sliders, display orientation toggles, preferred transport selector, and wireless pairing setup into `android/app/src/main/java/com/uscreen/ui/SettingsSheet.kt` (564 lines).
+  - Extracted main SurfaceView video viewport, stats overlay chip, version mismatch banner, device locked banner, and graphics tablet blanking into `android/app/src/main/java/com/uscreen/ui/ConnectionScreen.kt` (451 lines).
+  - Reduced `MainActivity.kt` from 1,957 physical lines down to 520 lines, focusing strictly on Activity lifecycle, hardware refresh rate management, and input hover event dispatching.
+- **Documentation**: Added comprehensive KDoc documentation to all public and major internal composables, diagnostic state evaluators, and system check helpers.
+- **Verification**:
+  - `./gradlew lintDebug`: PASSED (0 errors)
+  - `cargo check`: PASSED
+  - `cargo test --workspace`: PASSED
+  - `./gradlew assembleDebug`: PASSED
+
+
 
 

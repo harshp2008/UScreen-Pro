@@ -1,0 +1,451 @@
+package com.uscreen.ui
+
+import android.content.Intent
+import android.net.Uri
+import android.view.SurfaceHolder
+import android.view.SurfaceView
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
+import com.uscreen.BuildConfig
+import com.uscreen.MainActivity
+import com.uscreen.Prefs
+import com.uscreen.TouchCapture
+import com.uscreen.UpdateCheck
+import com.uscreen.VideoReceiver
+import kotlinx.coroutines.delay
+
+/**
+ * Screen displayed when running in Graphics Tablet mode.
+ * Shows informational guidance and blanks out the OLED screen after a timeout to conserve battery.
+ */
+@Composable
+fun PenOnlyScreen(blankAfterSeconds: Int) {
+    var blank by remember { mutableStateOf(false) }
+    LaunchedEffect(blankAfterSeconds) {
+        blank = false
+        if (blankAfterSeconds > 0) {
+            delay(blankAfterSeconds * 1000L)
+            blank = true
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!blank) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(32.dp)
+            ) {
+                Text(
+                    "Graphics tablet mode",
+                    fontSize = 20.sp,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    "The pen drives your computer's screen.\n" +
+                        "Touch input is sent back; no video is streamed here.",
+                    fontSize = 14.sp,
+                    color = Color(0xFFB0B0C0),
+                    textAlign = TextAlign.Center
+                )
+                if (blankAfterSeconds > 0) {
+                    Spacer(Modifier.height(18.dp))
+                    Text(
+                        "The screen goes black in a few seconds to spare OLED panels. " +
+                            "Settings are behind the faint ⚙ in the corner.",
+                        fontSize = 12.sp,
+                        color = Color(0xFF6A6A7E),
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Root Composable orchestrating video rendering, touch capture, onboarding,
+ * telemetry overlays, and settings sheet interactions.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun UScreenMain(
+    onSurfaceReady: (SurfaceView) -> Unit,
+    penOnly: Boolean = false,
+    updateAvailable: String? = null,
+    showThanks: Boolean = false,
+    onDismissThanks: () -> Unit = {},
+    onSurfaceDestroyed: () -> Unit = {},
+    videoReceiver: VideoReceiver? = null,
+    touchCapture: TouchCapture? = null,
+    onOrientationChange: (Int) -> Unit = {},
+    prefs: Prefs? = null,
+    isDeviceLocked: Boolean = false,
+    hostVersion: String? = null,
+) {
+    var isConnected by remember { mutableStateOf(false) }
+    var fps by remember { mutableStateOf(0f) }
+    var mbps by remember { mutableStateOf(0f) }
+    var showSettings by remember { mutableStateOf(false) }
+    var showStats by remember { mutableStateOf(prefs?.showStats ?: false) }
+    var touchOn by remember { mutableStateOf(prefs?.touchEnabled ?: true) }
+    var blankInPenMode by remember { mutableStateOf(prefs?.blankPenOnly ?: true) }
+    var orientationChoice by remember { mutableStateOf(prefs?.orientation ?: Prefs.ORIENTATION_AUTO) }
+    var immersiveOn by remember { mutableStateOf(prefs?.immersiveModeEnabled ?: false) }
+    var keepConnectedInBackground by remember { mutableStateOf(prefs?.keepConnectedInBackground ?: false) }
+    var keepDisplayAliveWhenLocked by remember { mutableStateOf(prefs?.keepDisplayAliveWhenLocked ?: true) }
+    var preferredTransport by remember { mutableStateOf(prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO) }
+
+    val context = LocalContext.current
+    val activity = context as? MainActivity
+
+    BackHandler(enabled = immersiveOn && (isConnected || penOnly) && !showSettings) {
+        showSettings = true
+    }
+
+    LaunchedEffect(showSettings) {
+        if (!showSettings) {
+            activity?.applyImmersiveMode(immersiveOn)
+        }
+    }
+
+    LaunchedEffect(videoReceiver) {
+        videoReceiver?.onConnected = {
+            (context as? ComponentActivity)?.runOnUiThread { isConnected = true }
+        }
+        videoReceiver?.onDisconnected = {
+            (context as? ComponentActivity)?.runOnUiThread { isConnected = false }
+        }
+    }
+
+    LaunchedEffect(isConnected, showStats) {
+        while (isConnected) {
+            delay(1000)
+            fps = videoReceiver?.getFps() ?: 0f
+            mbps = videoReceiver?.getMbps() ?: 0f
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                SurfaceView(ctx).apply {
+                    holder.setFormat(android.graphics.PixelFormat.OPAQUE)
+                    holder.addCallback(
+                        object : SurfaceHolder.Callback {
+                            override fun surfaceCreated(holder: SurfaceHolder) {
+                                onSurfaceReady(this@apply)
+                            }
+                            override fun surfaceChanged(
+                                holder: SurfaceHolder,
+                                format: Int, width: Int, height: Int
+                            ) {
+                                onSurfaceReady(this@apply)
+                            }
+                            override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                onSurfaceDestroyed()
+                            }
+                        }
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        AnimatedVisibility(
+            visible = penOnly,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            PenOnlyScreen(blankAfterSeconds = if (blankInPenMode) 8 else 0)
+        }
+
+        AnimatedVisibility(
+            visible = !isConnected && !penOnly,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            OnboardingScreen(
+                videoReceiver = videoReceiver,
+                touchCapture = touchCapture,
+                prefs = prefs,
+                isConnected = isConnected
+            )
+        }
+
+        if (isConnected && showStats) {
+            Surface(
+                color = Color(0x99000000),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = "%.0f fps   %.1f Mbps".format(fps, mbps),
+                    fontSize = 12.sp,
+                    color = Color(0xFFB0B0C0),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                )
+            }
+        }
+
+        val isMismatch = hostVersion != null && hostVersion != BuildConfig.GIT_VERSION_STRING
+        AnimatedVisibility(
+            visible = isMismatch,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(50f)
+        ) {
+            Surface(
+                color = Color(0xFFD32F2F),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⚠ Host version mismatch (Host: ${hostVersion ?: "unknown"}, Device: ${BuildConfig.GIT_VERSION_STRING}). Please update on PC.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
+        if (isDeviceLocked) {
+            Surface(
+                color = Color(0xD9B71C1C),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = if (isMismatch) 48.dp else 16.dp)
+            ) {
+                Text(
+                    text = "🔒 Device Locked — Touch Disabled",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                )
+            }
+        }
+
+        val showSettingsHandle = !immersiveOn || !isConnected
+
+        if (showSettingsHandle) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(10.dp)
+                    .size(38.dp)
+                    .alpha(if (penOnly && blankInPenMode) 0.18f else if (isConnected) 0.35f else 0.9f)
+                    .clip(CircleShape)
+                    .background(Color(0xAA20202C))
+                    .clickable { showSettings = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("⚙", fontSize = 18.sp, color = Color.White)
+            }
+        }
+
+        if (updateAvailable != null && !isConnected && !penOnly && !showThanks) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 24.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xCC20202C))
+                    .clickable {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse(UpdateCheck.RELEASES_PAGE)
+                            )
+                        )
+                    }
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text("Update $updateAvailable available", fontSize = 12.sp, color = Color.White)
+            }
+        }
+
+        if (showThanks) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(24.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xE620202C))
+                    .padding(16.dp)
+            ) {
+                Column {
+                    Text("UScreen is working.", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    Text(
+                        "If it replaced a second monitor for you, a star on GitHub or a compatibility " +
+                            "report helps other Linux users find it. This note appears only once.",
+                        fontSize = 12.sp, color = Color(0xFFB0B0C0)
+                    )
+                    Row(modifier = Modifier.padding(top = 10.dp)) {
+                        Text(
+                            "Open GitHub",
+                            fontSize = 13.sp,
+                            color = Accent,
+                            modifier = Modifier
+                                .clickable {
+                                    context.startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("https://github.com/majmichu1/UScreen")
+                                        )
+                                    )
+                                    onDismissThanks()
+                                }
+                                .padding(end = 20.dp)
+                        )
+                        Text(
+                            "Dismiss",
+                            fontSize = 13.sp,
+                            color = Color(0xFF9A9AB0),
+                            modifier = Modifier.clickable { onDismissThanks() }
+                        )
+                    }
+                }
+            }
+        }
+
+        if (showSettings) {
+            SettingsSheet(
+                prefs = prefs,
+                updateAvailable = updateAvailable,
+                onOpenUpdate = {
+                    context.startActivity(
+                        Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse(UpdateCheck.RELEASES_PAGE)
+                        )
+                    )
+                },
+                penOnly = penOnly,
+                onPenOnlyChange = { wantPenOnly ->
+                    touchCapture?.sendMode(wantPenOnly)
+                    showSettings = false
+                },
+                showStats = showStats,
+                onShowStatsChange = {
+                    showStats = it
+                    prefs?.showStats = it
+                },
+                blankPenOnly = blankInPenMode,
+                onBlankPenOnlyChange = {
+                    blankInPenMode = it
+                    prefs?.blankPenOnly = it
+                },
+                touchEnabled = touchOn,
+                onTouchEnabledChange = {
+                    touchOn = it
+                    prefs?.touchEnabled = it
+                    touchCapture?.setTouchEnabled(it)
+                },
+                orientation = orientationChoice,
+                onOrientationChange = {
+                    orientationChoice = it
+                    onOrientationChange(it)
+                },
+                onApply = { bitrateKbps, newFps ->
+                    prefs?.bitrateKbps = bitrateKbps
+                    prefs?.fps = newFps
+                    touchCapture?.sendConfig(bitrateKbps, newFps)
+                },
+                immersiveModeEnabled = immersiveOn,
+                onImmersiveModeEnabledChange = {
+                    immersiveOn = it
+                    prefs?.immersiveModeEnabled = it
+                    activity?.applyImmersiveMode(it)
+                },
+                keepConnectedInBackground = keepConnectedInBackground,
+                onKeepConnectedInBackgroundChange = {
+                    keepConnectedInBackground = it
+                    prefs?.keepConnectedInBackground = it
+                },
+                keepDisplayAliveWhenLocked = keepDisplayAliveWhenLocked,
+                onKeepDisplayAliveWhenLockedChange = {
+                    keepDisplayAliveWhenLocked = it
+                    prefs?.keepDisplayAliveWhenLocked = it
+                    activity?.applyLockScreenFlags()
+                },
+                preferredTransport = preferredTransport,
+                onPreferredTransportChange = {
+                    preferredTransport = it
+                    prefs?.preferredTransport = it
+                    val transStr = when (it) {
+                        Prefs.TRANSPORT_WIFI -> "wifi"
+                        Prefs.TRANSPORT_USB -> "usb"
+                        else -> "auto"
+                    }
+                    touchCapture?.sendPreferredTransport(transStr)
+                },
+                onExitApp = {
+                    activity?.finish()
+                },
+                onDismiss = { showSettings = false }
+            )
+        }
+    }
+}

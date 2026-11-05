@@ -200,7 +200,7 @@ class TouchCapture {
                 MotionEvent.ACTION_HOVER_ENTER,
                 MotionEvent.ACTION_HOVER_MOVE -> {
                     if (isPenLike(event, 0)) {
-                        notePenActivity(vw, vh)
+                        notePenActivity()
                         sendPenEvent(event, 0, 3, vw, vh)
                     }
                 }
@@ -336,7 +336,7 @@ class TouchCapture {
                     return true
                 }
                 if (isPenLike(event, actionIndex)) {
-                    notePenActivity(vw, vh)
+                    notePenActivity()
                     sendPenEvent(event, actionIndex, 0, vw, vh)
                 } else {
                     if (penIsActive() || !touchEnabled) return true
@@ -361,7 +361,7 @@ class TouchCapture {
                         continue
                     }
                     if (isPenLike(event, i)) {
-                        notePenActivity(vw, vh)
+                        notePenActivity()
                         // Android batches several samples between frames.
                         // Forward the historical points too, otherwise fast
                         // pen strokes look jagged in GIMP.
@@ -396,7 +396,7 @@ class TouchCapture {
             MotionEvent.ACTION_UP,
             MotionEvent.ACTION_POINTER_UP -> {
                 if (isPenLike(event, actionIndex)) {
-                    notePenActivity(vw, vh)
+                    notePenActivity()
                     sendPenEvent(event, actionIndex, 1, vw, vh)
                 } else {
                     // Not filtered on palm: whatever the contact is called
@@ -720,7 +720,7 @@ class TouchCapture {
         lastPenNanos != 0L && System.nanoTime() - lastPenNanos < PEN_OWNS_SCREEN_NS
 
     /** The pen took over: anything a finger left pressed has to be lifted. */
-    private fun notePenActivity(vw: Float, vh: Float) {
+    private fun notePenActivity() {
         lastPenNanos = System.nanoTime()
         liftTouches()
     }
