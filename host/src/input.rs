@@ -180,6 +180,10 @@ pub enum InputEvent {
         width_mm: u32,
         #[serde(default)]
         height_mm: u32,
+        #[serde(default)]
+        preferred_transport: Option<String>,
+        #[serde(default)]
+        version: Option<String>,
     },
     /// Settings pushed from the tablet app's settings UI
     #[serde(rename = "config")]
@@ -212,6 +216,9 @@ pub enum InputEvent {
     /// Foreground hello/reconnect ping from the device app onStart/onResume.
     #[serde(rename = "ping")]
     Ping,
+    /// Explicit preferred transport requested by the APK ("auto", "usb", "wifi")
+    #[serde(rename = "preferred_transport")]
+    PreferredTransport { transport: String },
 }
 
 #[derive(Serialize)]
@@ -235,6 +242,9 @@ pub struct InputResponse {
     pub fps: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bitrate_kbps: Option<u32>,
+    /// Git version string of the host binary for client-side version verification.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host_version: Option<String>,
 }
 
 #[derive(Clone)]
@@ -1373,6 +1383,7 @@ async fn handle_connection(
         pen_only: *mode_rx.borrow_and_update(),
         fps: last_sent.as_ref().map(|(f, _, _)| *f),
         bitrate_kbps: last_sent.as_ref().map(|(_, b, _)| *b),
+        host_version: Some(std::env::var("USCREEN_MOCK_HOST_VERSION").unwrap_or_else(|_| env!("GIT_VERSION_STRING").to_string())),
     };
 
     ws_sender
@@ -1402,6 +1413,7 @@ async fn handle_connection(
                     pen_only,
                     fps: now.as_ref().map(|(f, _, _)| *f),
                     bitrate_kbps: now.as_ref().map(|(_, b, _)| *b),
+                    host_version: Some(std::env::var("USCREEN_MOCK_HOST_VERSION").unwrap_or_else(|_| env!("GIT_VERSION_STRING").to_string())),
                 };
                 last_sent = now;
                 if ws_sender
@@ -1439,6 +1451,7 @@ async fn handle_connection(
                     pen_only: *mode_rx.borrow(),
                     fps: now.as_ref().map(|(f, _, _)| *f),
                     bitrate_kbps: now.as_ref().map(|(_, b, _)| *b),
+                    host_version: Some(std::env::var("USCREEN_MOCK_HOST_VERSION").unwrap_or_else(|_| env!("GIT_VERSION_STRING").to_string())),
                 };
                 last_sent = now;
                 if ws_sender
@@ -1628,11 +1641,26 @@ fn handle_event(
             height,
             width_mm,
             height_mm,
+            preferred_transport,
+            version,
         } => {
             info!(
-                "Tablet reports native resolution: {}x{} ({}x{} mm)",
-                width, height, width_mm, height_mm
+                "Tablet reports native resolution: {}x{} ({}x{} mm), version: {:?}, transport: {:?}",
+                width, height, width_mm, height_mm, version, preferred_transport
             );
+            if let Some(ref pref) = preferred_transport {
+                let mut cfg = crate::config::FileConfig::load();
+                let mut changed = false;
+                for (_k, p) in cfg.tablets.iter_mut() {
+                    if p.preferred_transport.as_deref() != Some(pref) {
+                        p.preferred_transport = Some(pref.clone());
+                        changed = true;
+                    }
+                }
+                if changed {
+                    let _ = cfg.save();
+                }
+            }
             let Some(tx) = settings_tx else { return };
             if !crate::config::FileConfig::load().auto_resolution {
                 info!("auto_resolution is off — keeping configured resolution");
@@ -1729,6 +1757,21 @@ fn handle_event(
             info!("Received foreground ping from client — immediately re-asserting adb reverse tunnels");
             ping_notify.notify_waiters();
         }
+
+        InputEvent::PreferredTransport { transport } => {
+            info!("Client reported preferred transport switch: {}", transport);
+            let mut cfg = crate::config::FileConfig::load();
+            let mut changed = false;
+            for (_k, p) in cfg.tablets.iter_mut() {
+                if p.preferred_transport.as_deref() != Some(&transport) {
+                    p.preferred_transport = Some(transport.clone());
+                    changed = true;
+                }
+            }
+            if changed {
+                let _ = cfg.save();
+            }
+        }
     }
 }
 
@@ -1789,6 +1832,7 @@ mod tests {
             pen_only: false,
             fps: Some(90),
             bitrate_kbps: Some(30000),
+            host_version: None,
         };
         let v: serde_json::Value = serde_json::from_str(&serde_json::to_string(&with).unwrap()).unwrap();
         assert_eq!(v["fps"], 90);

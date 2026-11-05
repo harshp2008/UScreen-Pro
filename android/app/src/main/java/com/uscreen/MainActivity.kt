@@ -2,6 +2,8 @@ package com.uscreen
 
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -18,6 +20,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -42,13 +45,34 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.zIndex
+import java.net.Inet4Address
+import java.net.NetworkInterface
+import java.util.Collections
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
+
+fun getLocalWifiIp(context: Context): String? {
+    try {
+        val interfaces = Collections.list(NetworkInterface.getNetworkInterfaces())
+        for (intf in interfaces) {
+            if (intf.name.startsWith("wlan")) {
+                for (addr in Collections.list(intf.inetAddresses)) {
+                    if (!addr.isLoopbackAddress && addr is Inet4Address) {
+                        return addr.hostAddress
+                    }
+                }
+            }
+        }
+    } catch (_: Exception) {}
+    return null
+}
 
 class MainActivity : ComponentActivity() {
     /// Mirrors the host's mode so the UI can say what is going on.
     private var penOnlyMode by mutableStateOf(false)
     private var updateAvailable by mutableStateOf<String?>(null)
+    private var hostVersion by mutableStateOf<String?>(null)
     private var updateChecked = false
     private var showThanks by mutableStateOf(false)
     private var videoReceiver: VideoReceiver? = null
@@ -203,6 +227,16 @@ class MainActivity : ComponentActivity() {
                 if (penOnly) videoReceiver?.stop() else videoReceiver?.start()
             }
         }
+        touchCapture?.onHostVersionKnown = { hostVer ->
+            runOnUiThread {
+                hostVersion = hostVer
+            }
+        }
+        touchCapture?.currentPreferredTransport = when (prefs.preferredTransport) {
+            Prefs.TRANSPORT_WIFI -> "wifi"
+            Prefs.TRANSPORT_USB -> "usb"
+            else -> "auto"
+        }
 
         // Report the real screen size (landscape-oriented) so the host can
         // size the virtual display to match this tablet exactly.
@@ -238,6 +272,7 @@ class MainActivity : ComponentActivity() {
                     touchCapture = touchCapture,
                     prefs = prefs,
                     isDeviceLocked = isDeviceLocked,
+                    hostVersion = hostVersion,
                     onSurfaceReady = { surfaceView ->
                         videoReceiver?.setSurface(surfaceView)
                         touchCapture?.setSurfaceView(surfaceView)
@@ -568,6 +603,7 @@ fun UScreenMain(
     onOrientationChange: (Int) -> Unit = {},
     prefs: Prefs? = null,
     isDeviceLocked: Boolean = false,
+    hostVersion: String? = null,
 ) {
     var isConnected by remember { mutableStateOf(false) }
     var fps by remember { mutableStateOf(0f) }
@@ -690,6 +726,35 @@ fun UScreenMain(
             }
         }
 
+        // Version Mismatch Banner (Task 6)
+        val isMismatch = hostVersion != null && hostVersion != BuildConfig.GIT_VERSION_STRING
+        AnimatedVisibility(
+            visible = isMismatch,
+            enter = fadeIn() + expandVertically(),
+            exit = fadeOut() + shrinkVertically(),
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .zIndex(50f)
+        ) {
+            Surface(
+                color = Color(0xFFD32F2F),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "⚠ Host version mismatch (Host: ${hostVersion ?: "unknown"}, Device: ${BuildConfig.GIT_VERSION_STRING}). Please update on PC.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+        }
+
         // Device locked warning banner
         if (isDeviceLocked) {
             Surface(
@@ -697,7 +762,7 @@ fun UScreenMain(
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(top = 16.dp)
+                    .padding(top = if (isMismatch) 48.dp else 16.dp)
             ) {
                 Text(
                     text = "🔒 Device Locked — Touch Disabled",
@@ -854,6 +919,12 @@ fun UScreenMain(
                 onPreferredTransportChange = {
                     preferredTransport = it
                     prefs?.preferredTransport = it
+                    val transStr = when (it) {
+                        Prefs.TRANSPORT_WIFI -> "wifi"
+                        Prefs.TRANSPORT_USB -> "usb"
+                        else -> "auto"
+                    }
+                    touchCapture?.sendPreferredTransport(transStr)
                 },
                 onExitApp = {
                     activity?.finish()
@@ -1402,6 +1473,7 @@ private fun SettingsSheet(
         mutableStateOf((prefs?.bitrateKbps ?: Prefs.DEFAULT_BITRATE_KBPS) / 1000f)
     }
     var fpsChoice by remember { mutableStateOf(prefs?.fps ?: Prefs.DEFAULT_FPS) }
+    val context = LocalContext.current
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1552,6 +1624,114 @@ private fun SettingsSheet(
                 fontSize = 11.sp,
                 color = Color(0xFF6A6A7E)
             )
+            Spacer(Modifier.height(20.dp))
+
+            // 🔗 Pairing Setup Guide Section (Task 4)
+            var guideExpanded by remember { mutableStateOf(false) }
+            val isAndroid11Plus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+            val localIp = remember { getLocalWifiIp(context) }
+
+            Surface(
+                color = Color(0xFF1E1E2C),
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .clickable { guideExpanded = !guideExpanded }
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "🔗 Pairing Setup Guide",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = if (guideExpanded) "▲" else "▼",
+                            fontSize = 13.sp,
+                            color = Color(0xFF9A9AB0)
+                        )
+                    }
+
+                    AnimatedVisibility(
+                        visible = guideExpanded,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Column(modifier = Modifier.padding(top = 10.dp)) {
+                            if (isAndroid11Plus) {
+                                Text(
+                                    text = "Secure Wi-Fi Pairing (Android 11+):",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF64B5F6)
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "1. Go to Settings → Developer Options → Wireless Debugging.\n" +
+                                           "2. Tap 'Pair device with pairing code'.\n" +
+                                           "3. Enter the 6-digit code in the UScreen PC app.",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFD0D0E0),
+                                    lineHeight = 18.sp
+                                )
+                            } else {
+                                Text(
+                                    text = "Legacy Wi-Fi Pairing (Android <11):",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFFFFB74D)
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = "1. Go to Settings → Developer Options → USB Debugging.\n" +
+                                           "2. Plug in the USB cable once.\n" +
+                                           "3. The PC will auto-enable Wi-Fi ADB.",
+                                    fontSize = 12.sp,
+                                    color = Color(0xFFD0D0E0),
+                                    lineHeight = 18.sp
+                                )
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val text = localIp ?: "192.168.1.1"
+                                        val clip = ClipData.newPlainText("UScreen IP", text)
+                                        clipboard.setPrimaryClip(clip)
+                                        Toast.makeText(context, "Copied IP: $text", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C3E)),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text("📋 Copy IP & Port", fontSize = 12.sp, color = Color.White)
+                                }
+
+                                Button(
+                                    onClick = {
+                                        try {
+                                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, "Developer options not enabled", Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                ) {
+                                    Text("⚙ Open Developer Options", fontSize = 12.sp, color = Color.White)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(20.dp))
 
             if (!penOnly) {

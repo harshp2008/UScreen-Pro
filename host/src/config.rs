@@ -71,6 +71,15 @@ pub struct TabletProfile {
     /// Firmware/APK version reported by the connected Android client.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,
+    /// Dynamically discovered secure TLS connect port for Android 11+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secure_port: Option<u16>,
+    /// Preferred transport ("auto", "usb", "wifi") requested by the user or APK
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferred_transport: Option<String>,
+    /// Android API level (SDK int, e.g. 36)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_level: Option<u32>,
 }
 
 #[allow(dead_code)]
@@ -190,9 +199,20 @@ pub struct FileConfig {
     /// Application window locking: allowed apps on the virtual monitor.
     #[serde(default)]
     pub locked_apps: Vec<String>,
+    /// Allow legacy plaintext tcpip fallback for devices running Android <11 (API <30).
+    /// Defaults to false for security and port collision prevention.
+    #[serde(default)]
+    pub allow_legacy_fallback: bool,
+    /// Automatically enable Wi-Fi ADB when a device is plugged in via USB.
+    #[serde(default = "default_true")]
+    pub auto_enable_wifi_adb: bool,
     /// Protocol/daemon version.
     #[serde(default = "default_version")]
     pub version: String,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_version() -> String {
@@ -228,6 +248,8 @@ impl Default for FileConfig {
             hevc_low_latency_tuning: true,
             keep_alive: false,
             locked_apps: Vec::new(),
+            allow_legacy_fallback: false,
+            auto_enable_wifi_adb: true,
         }
     }
 }

@@ -12,6 +12,7 @@ mod kwin;
 mod input;
 mod latency;
 mod osk;
+mod pairing;
 mod runtime;
 mod stream;
 pub mod timing;
@@ -1363,15 +1364,34 @@ async fn adb_monitor(
             }
         }
 
-        // Group ready devices by unique physical hardware ID, preferring USB over Network
+        // Group ready devices by unique physical hardware ID, respecting user's preferred transport
         let ready_devices: Vec<&DiscoveredDevice> = all_devices.iter().filter(|d| d.state == "device").collect();
         let mut physical_devices: std::collections::HashMap<String, &DiscoveredDevice> = std::collections::HashMap::new();
+        let current_file_cfg = config::FileConfig::load();
+
         for dev in ready_devices {
+            let pref = current_file_cfg.tablets.get(&dev.hw_id)
+                .and_then(|p| p.preferred_transport.as_deref())
+                .unwrap_or("auto");
+
             physical_devices
                 .entry(dev.hw_id.clone())
                 .and_modify(|existing| {
-                    if existing.transport != Transport::Usb && dev.transport == Transport::Usb {
-                        *existing = dev;
+                    if pref == "wifi" {
+                        // User explicitly requested Wi-Fi: strictly prioritize Network transport
+                        if existing.transport != Transport::Network && dev.transport == Transport::Network {
+                            *existing = dev;
+                        }
+                    } else if pref == "usb" {
+                        // User explicitly requested USB: strictly prioritize USB transport
+                        if existing.transport != Transport::Usb && dev.transport == Transport::Usb {
+                            *existing = dev;
+                        }
+                    } else {
+                        // Auto (default): prioritize USB over Network for lowest latency
+                        if existing.transport != Transport::Usb && dev.transport == Transport::Usb {
+                            *existing = dev;
+                        }
                     }
                 })
                 .or_insert(dev);
@@ -1653,10 +1673,10 @@ async fn adb_monitor(
                     let already_connected = all_devices.iter().any(|d| d.serial == target);
                     if !already_connected {
                         tokio::spawn(async move {
-                            let _ = tokio::process::Command::new("adb")
-                                .args(["connect", &target])
-                                .output()
-                                .await;
+                            let _ = tokio::time::timeout(
+                                std::time::Duration::from_secs(3),
+                                tokio::process::Command::new("adb").args(["connect", &target]).output(),
+                            ).await;
                         });
                     }
                 }
@@ -1834,49 +1854,23 @@ async fn tablet_ip(serial: &str) -> Option<String> {
     None
 }
 
-/// Automatically enable `adb tcpip 5555` in the background and discover the device's
-/// local Wi-Fi IP address when connected over USB, saving it for seamless handoff.
+/// Automatically provision Wi-Fi ADB in the background when connected over USB:
+/// - Android 11+ (API >= 30): auto-provisions secure mDNS TLS debugging.
+/// - Android < 11 (API < 30): gated on allow_legacy_fallback, assigning dynamic non-colliding ports.
 async fn auto_provision_wifi(serial: &str) {
     if transport_of(serial) != Transport::Usb || is_fake_serial(serial) {
         return;
     }
     let s = serial.to_string();
     tokio::spawn(async move {
-        // If Wi-Fi is already known for this device, avoid running `adb tcpip 5555`
-        // which resets Android's adbd and causes a disruptive USB bus re-enumeration.
-        let cfg = config::FileConfig::load();
-        if let Some(profile) = cfg.tablets.get(&s) {
-            if let Some(ref addr) = profile.wifi_address {
-                let _ = tokio::process::Command::new("adb")
-                    .args(["connect", addr])
-                    .output()
-                    .await;
-                return;
-            }
-        }
-
-        let out = tokio::process::Command::new("adb")
-            .args(["-s", &s, "tcpip", "5555"])
-            .output()
-            .await;
-        if out.as_ref().map(|o| o.status.success()).unwrap_or(false) {
-            info!("Auto-enabled adb tcpip 5555 for USB device {}", s);
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            if let Some(ip) = tablet_ip(&s).await {
-                let addr = format!("{}:5555", ip);
-                info!("Discovered Wi-Fi address for device {}: {}", s, addr);
-                let mut cfg = config::FileConfig::load();
-                let profile = cfg.tablets.entry(s.clone()).or_default();
-                if profile.wifi_address.as_ref() != Some(&addr) {
-                    profile.wifi_address = Some(addr.clone());
-                    let _ = cfg.save();
-                }
-                // Pre-connect in background so Wi-Fi transport is hot and ready for handoff
-                let _ = tokio::process::Command::new("adb")
-                    .args(["connect", &addr])
-                    .output()
-                    .await;
-            }
+        let mut cfg = config::FileConfig::load();
+        if let Err(e) = pairing::provision_wifi_for_device(
+            &s,
+            cfg.auto_enable_wifi_adb,
+            cfg.allow_legacy_fallback,
+            &mut cfg,
+        ).await {
+            warn!("Wi-Fi auto-provisioning failed for device {}: {}", s, e);
         }
     });
 }
