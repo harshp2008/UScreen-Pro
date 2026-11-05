@@ -41,6 +41,12 @@ struct TabletProfile {
     pub locked_apps: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secure_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preferred_transport: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_level: Option<u32>,
     #[serde(flatten)]
     pub extra: toml::value::Table,
 }
@@ -95,8 +101,16 @@ struct FileConfig {
     keep_alive: bool,
     #[serde(default)]
     locked_apps: Vec<String>,
+    #[serde(default)]
+    allow_legacy_fallback: bool,
+    #[serde(default = "default_true")]
+    auto_enable_wifi_adb: bool,
     #[serde(default = "default_version")]
     version: String,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_version() -> String {
@@ -132,6 +146,8 @@ impl Default for FileConfig {
             hevc_low_latency_tuning: true,
             keep_alive: false,
             locked_apps: Vec::new(),
+            allow_legacy_fallback: false,
+            auto_enable_wifi_adb: true,
         }
     }
 }
@@ -216,6 +232,7 @@ struct ConnectedDevice {
     state_detail: String,
     app_version: Option<String>,
     version_mismatch: bool,
+    api_level: Option<u32>,
 }
 
 #[derive(Default, Clone)]
@@ -624,7 +641,7 @@ fn poll_status() -> Status {
                     .unwrap_or_else(|| serial.clone())
             };
 
-            let (app_version, version_mismatch) = if adb_state == DeviceAdbState::Device {
+            let (app_version, version_mismatch, api_level) = if adb_state == DeviceAdbState::Device {
                 let ver = Command::new("adb")
                     .args(["-s", &serial, "shell", "dumpsys package com.uscreen | grep versionName"])
                     .output()
@@ -639,9 +656,14 @@ fn poll_status() -> Status {
                     Some(v) => v != env!("GIT_VERSION_STRING"),
                     None => true,
                 };
-                (ver, mismatch)
+                let api_lvl = Command::new("adb")
+                    .args(["-s", &serial, "shell", "getprop", "ro.build.version.sdk"])
+                    .output()
+                    .ok()
+                    .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u32>().ok());
+                (ver, mismatch, api_lvl)
             } else {
-                (None, false)
+                (None, false, None)
             };
 
             raw_devices.push(ConnectedDevice {
@@ -653,17 +675,33 @@ fn poll_status() -> Status {
                 state_detail,
                 app_version,
                 version_mismatch,
+                api_level,
             });
         }
 
-        // Deduplicate devices by physical hardware ID, preferring USB over Wi-Fi
+        // Deduplicate devices by physical hardware ID, respecting user's preferred transport
+        let file_cfg = FileConfig::load();
         let mut deduped: std::collections::HashMap<String, ConnectedDevice> = std::collections::HashMap::new();
         for dev in raw_devices {
+            let pref = file_cfg.tablets.get(&dev.hw_id)
+                .and_then(|p| p.preferred_transport.as_deref())
+                .unwrap_or("auto");
+
             deduped
                 .entry(dev.hw_id.clone())
                 .and_modify(|existing| {
-                    if existing.transport != "USB" && dev.transport == "USB" {
-                        *existing = dev.clone();
+                    if pref == "wifi" {
+                        if existing.transport != "Wi-Fi" && dev.transport == "Wi-Fi" {
+                            *existing = dev.clone();
+                        }
+                    } else if pref == "usb" {
+                        if existing.transport != "USB" && dev.transport == "USB" {
+                            *existing = dev.clone();
+                        }
+                    } else {
+                        if existing.transport != "USB" && dev.transport == "USB" {
+                            *existing = dev.clone();
+                        }
                     }
                 })
                 .or_insert(dev);
@@ -690,6 +728,7 @@ fn poll_status() -> Status {
                     state_detail: "Emulated virtual test device".to_string(),
                     app_version: Some(env!("GIT_VERSION_STRING").to_string()),
                     version_mismatch: false,
+                    api_level: Some(34),
                 });
                 s.device_connected = true;
                 if s.device_model.is_empty() {
@@ -790,6 +829,18 @@ enum SelectedView {
     Device(String),
 }
 
+#[derive(Default, Clone)]
+struct SecurePairingState {
+    open: bool,
+    target_serial: String,
+    device_model: String,
+    pairing_endpoint: String,
+    pairing_code: String,
+    is_pairing: bool,
+    status_text: String,
+    error: Option<String>,
+}
+
 struct App {
     cfg: FileConfig,
     saved_cfg: FileConfig,
@@ -800,6 +851,9 @@ struct App {
     installer_state: InstallerModalState,
     install_tx: Sender<InstallWorkerMsg>,
     install_rx: Receiver<InstallWorkerMsg>,
+    secure_pairing_state: SecurePairingState,
+    pair_tx: Sender<Result<(String, String), String>>,
+    pair_rx: Receiver<Result<(String, String), String>>,
 }
 
 const RELEASES_API: &str = "https://api.github.com/repos/majmichu1/UScreen/releases/latest";
@@ -846,6 +900,7 @@ impl App {
         let cfg = FileConfig::load();
         let status = Arc::new(Mutex::new(Status::default()));
         let (install_tx, install_rx) = channel();
+        let (pair_tx, pair_rx) = channel();
 
         let update = Arc::new(Mutex::new(None));
         if cfg.check_updates {
@@ -876,6 +931,9 @@ impl App {
             installer_state: InstallerModalState::default(),
             install_tx,
             install_rx,
+            secure_pairing_state: SecurePairingState::default(),
+            pair_tx,
+            pair_rx,
         }
     }
 
@@ -1113,8 +1171,15 @@ impl App {
 
                 ui.label("Wireless Connection");
                 ui.vertical(|ui| {
+                    ui.checkbox(&mut self.cfg.auto_enable_wifi_adb, "Auto-Enable Wi-Fi ADB")
+                        .on_hover_text("Automatically enables Wi-Fi ADB when a device is connected via USB, so you can unplug and stream wirelessly without manual setup.");
+                    ui.add_space(2.0);
+                    ui.checkbox(&mut self.cfg.allow_legacy_fallback, "Allow Legacy Fallback (Android <11)")
+                        .on_hover_text("Enables dynamic, unique-port legacy tcpip fallback for devices running Android 10 or older.");
+                    ui.label(egui::RichText::new("Android 11+ uses secure TLS pairing. Legacy fallback assigns unique collision-free ports (5556+) for older devices.").weak().size(11.0));
+                    ui.add_space(4.0);
                     ui.add(egui::TextEdit::singleline(&mut self.cfg.wifi_address).hint_text("e.g. 192.168.1.50:5555"));
-                    ui.label(egui::RichText::new("Default IP:5555 for automatic wireless fallback when USB cable is disconnected.").weak().size(11.0));
+                    ui.label(egui::RichText::new("Global fallback Wi-Fi IP:port when no per-device address is configured.").weak().size(11.0));
                 });
                 ui.end_row();
 
@@ -1154,6 +1219,11 @@ impl App {
         let global_ten_bit = self.cfg.ten_bit;
         let global_stream_scale = self.cfg.stream_scale;
         let global_position = self.cfg.position.clone();
+        let global_allow_legacy_fallback = self.cfg.allow_legacy_fallback;
+        let existing_ports: Vec<u16> = self.cfg.tablets.values()
+            .filter_map(|p| p.wifi_address.as_ref())
+            .filter_map(|a| a.rsplit_once(':').and_then(|(_, p_str)| p_str.parse().ok()))
+            .collect();
 
         let profile = self.cfg.tablets.entry(serial.to_string()).or_default();
         if profile.label.is_empty() && conn.is_some() {
@@ -1166,103 +1236,115 @@ impl App {
         ui.label(egui::RichText::new("Configure per-device parameters and overrides.").weak().size(12.0));
         ui.add_space(8.0);
 
-        // Hardware & Identity Card
+        // Hardware & Identity Card with Top-Right Version Info (Task 7.4)
         egui::Frame::group(ui.style())
-            .inner_margin(10.0)
+            .inner_margin(12.0)
             .show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal(|ui| {
-                    adb_status_dot(ui, &adb_state, &status_label, tooltip_detail);
-                    ui.add_space(14.0);
-                    ui.label(egui::RichText::new("Serial:").weak().size(11.0));
-                    ui.label(egui::RichText::new(serial).strong().size(11.0));
-                });
-
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Hardware Model:").weak().size(11.0));
-                    ui.label(egui::RichText::new(if profile.label.is_empty() { fallback_model } else { &profile.label }).size(11.0));
-                    if profile.has_display() {
-                        ui.add_space(10.0);
-                        ui.label(egui::RichText::new(format!("Panel: {}×{} ({}×{} mm)", profile.width, profile.height, profile.width_mm, profile.height_mm)).weak().size(11.0));
-                    }
-                });
-
-                ui.add_space(8.0);
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Custom Nickname:").strong());
-                    let mut nick = profile.nickname.clone().unwrap_or_default();
-                    let hint = if profile.label.is_empty() { fallback_model } else { &profile.label };
-                    if ui.add(egui::TextEdit::singleline(&mut nick).hint_text(hint).desired_width(220.0)).changed() {
-                        if nick.trim().is_empty() {
-                            profile.nickname = None;
-                        } else {
-                            profile.nickname = Some(nick);
-                        }
-                    }
-                });
-
-                if is_connected {
-                    ui.add_space(8.0);
-                    let host_ver = env!("GIT_VERSION_STRING");
-                    let dev_ver_opt = conn.and_then(|c| c.app_version.as_deref());
-                    let mismatch = conn.map(|c| c.version_mismatch).unwrap_or(true);
-                    let is_dirty = host_ver.ends_with("-dirty");
-
-                    egui::Frame::group(ui.style())
-                        .fill(if mismatch { egui::Color32::from_rgb(45, 34, 20) } else { egui::Color32::from_rgb(25, 38, 25) })
-                        .inner_margin(8.0)
-                        .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Host Version:").strong().size(12.0));
-                                ui.label(egui::RichText::new(host_ver).monospace().size(12.0));
-                                if is_dirty {
-                                    ui.label(egui::RichText::new("⚠ Untracked Dirty").color(egui::Color32::from_rgb(255, 180, 80)).size(11.0));
-                                } else {
-                                    ui.label(egui::RichText::new("🟢 Tracked").color(egui::Color32::from_rgb(140, 230, 140)).size(11.0));
-                                }
-                            });
-                            ui.add_space(2.0);
-                            ui.horizontal(|ui| {
-                                ui.label(egui::RichText::new("Device Version:").strong().size(12.0));
-                                if let Some(v) = dev_ver_opt {
-                                    ui.label(egui::RichText::new(v).monospace().size(12.0));
-                                } else {
-                                    ui.label(egui::RichText::new("Not Installed").color(egui::Color32::from_rgb(255, 120, 120)).size(12.0));
-                                }
-                            });
-                            ui.add_space(6.0);
-                            ui.horizontal(|ui| {
-                                if mismatch {
-                                    let btn = ui.button(
-                                        egui::RichText::new(format!("⚠ Update APK to {}", host_ver))
-                                            .strong()
-                                            .color(egui::Color32::from_rgb(255, 200, 100)),
-                                    );
-                                    if btn.clicked() {
-                                        self.installer_state.target_serial = serial.to_string();
-                                        self.installer_state.open = true;
-                                        self.installer_state.is_running = true;
-                                        self.installer_state.logs.clear();
-                                        self.installer_state.status_text = "Starting clean surgical update pipeline...".to_string();
-                                        start_surgical_update(serial.to_string(), true, self.install_tx.clone());
-                                    }
-                                } else {
-                                    ui.label(
-                                        egui::RichText::new(format!("✅ Up to Date ({})", host_ver))
-                                            .color(egui::Color32::from_rgb(140, 230, 140))
-                                            .strong()
-                                            .size(12.0),
-                                    );
-                                }
-
-                                if ui.button("📲 Reinstall App").clicked() {
-                                    self.installer_state.target_serial = serial.to_string();
-                                    self.installer_state.open = true;
-                                }
-                            });
+                    // Left Column: Identity, Serial, Model, Nickname
+                    ui.vertical(|ui| {
+                        ui.horizontal(|ui| {
+                            adb_status_dot(ui, &adb_state, &status_label, tooltip_detail);
+                            ui.add_space(14.0);
+                            ui.label(egui::RichText::new("Serial:").weak().size(11.0));
+                            ui.label(egui::RichText::new(serial).strong().size(11.0));
                         });
-                }
+
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Hardware Model:").weak().size(11.0));
+                            ui.label(egui::RichText::new(if profile.label.is_empty() { fallback_model } else { &profile.label }).size(11.0));
+                            if profile.has_display() {
+                                ui.add_space(10.0);
+                                ui.label(egui::RichText::new(format!("Panel: {}×{} ({}×{} mm)", profile.width, profile.height, profile.width_mm, profile.height_mm)).weak().size(11.0));
+                            }
+                        });
+
+                        ui.add_space(8.0);
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Custom Nickname:").strong());
+                            let mut nick = profile.nickname.clone().unwrap_or_default();
+                            let hint = if profile.label.is_empty() { fallback_model } else { &profile.label };
+                            if ui.add(egui::TextEdit::singleline(&mut nick).hint_text(hint).desired_width(220.0)).changed() {
+                                if nick.trim().is_empty() {
+                                    profile.nickname = None;
+                                } else {
+                                    profile.nickname = Some(nick);
+                                }
+                            }
+                        });
+                    });
+
+                    // Right Column: Version Status Card (Task 7.4: moved to top-right to fix empty space)
+                    if is_connected {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::TOP), |ui| {
+                            let host_ver = env!("GIT_VERSION_STRING");
+                            let dev_ver_opt = conn.and_then(|c| c.app_version.as_deref());
+                            let mismatch = conn.map(|c| c.version_mismatch).unwrap_or(true);
+                            let is_dirty = host_ver.ends_with("-dirty");
+
+                            egui::Frame::group(ui.style())
+                                .fill(if mismatch { egui::Color32::from_rgb(45, 34, 20) } else { egui::Color32::from_rgb(25, 38, 25) })
+                                .inner_margin(8.0)
+                                .show(ui, |ui| {
+                                    ui.vertical(|ui| {
+                                        ui.horizontal(|ui| {
+                                            ui.label(egui::RichText::new("Host Version:").strong().size(12.0));
+                                            ui.label(egui::RichText::new(host_ver).monospace().size(12.0));
+                                            if is_dirty {
+                                                ui.label(egui::RichText::new("⚠ Untracked Dirty").color(egui::Color32::from_rgb(255, 180, 80)).size(11.0));
+                                            } else {
+                                                ui.label(egui::RichText::new("🟢 Tracked").color(egui::Color32::from_rgb(140, 230, 140)).size(11.0));
+                                            }
+                                        });
+                                        ui.add_space(2.0);
+                                        ui.horizontal(|ui| {
+                                            ui.label(egui::RichText::new("Device Version:").strong().size(12.0));
+                                            if let Some(v) = dev_ver_opt {
+                                                ui.label(egui::RichText::new(v).monospace().size(12.0));
+                                            } else {
+                                                ui.label(egui::RichText::new("Not Installed").color(egui::Color32::from_rgb(255, 120, 120)).size(12.0));
+                                            }
+                                        });
+                                        ui.add_space(4.0);
+                                        ui.horizontal(|ui| {
+                                            if mismatch {
+                                                let btn = ui.button(
+                                                    egui::RichText::new(format!("⚠ Update APK to {}", host_ver))
+                                                        .strong()
+                                                        .color(egui::Color32::from_rgb(255, 200, 100)),
+                                                );
+                                                if btn.clicked() {
+                                                    self.installer_state.target_serial = serial.to_string();
+                                                    self.installer_state.open = true;
+                                                    self.installer_state.is_running = true;
+                                                    self.installer_state.logs.clear();
+                                                    self.installer_state.status_text = "Starting clean surgical update pipeline...".to_string();
+                                                    start_surgical_update(serial.to_string(), true, self.install_tx.clone());
+                                                }
+                                            } else {
+                                                ui.label(
+                                                    egui::RichText::new(format!("✅ Up to Date ({})", host_ver))
+                                                        .color(egui::Color32::from_rgb(140, 230, 140))
+                                                        .strong()
+                                                        .size(12.0),
+                                                );
+                                            }
+
+                                            // Reinstall button only shown if mismatch or dirty! (Task 7.3)
+                                            if mismatch || is_dirty {
+                                                if ui.button("📲 Reinstall App").clicked() {
+                                                    self.installer_state.target_serial = serial.to_string();
+                                                    self.installer_state.open = true;
+                                                }
+                                            }
+                                        });
+                                    });
+                                });
+                        });
+                    }
+                });
             });
 
         ui.add_space(12.0);
@@ -1460,19 +1542,73 @@ impl App {
                 // 9. Wireless Connection
                 ui.label("Wireless Connection");
                 ui.vertical(|ui| {
-                    let mut addr = profile.wifi_address.clone().unwrap_or_default();
-                    if ui.add(egui::TextEdit::singleline(&mut addr).hint_text("e.g. 192.168.1.50:5555")).changed() {
-                        profile.wifi_address = if addr.trim().is_empty() { None } else { Some(addr) };
+                    let dev_api = conn.and_then(|c| c.api_level).or(profile.api_level).unwrap_or(36);
+                    if dev_api < 30 && !global_allow_legacy_fallback {
+                        ui.label(
+                            egui::RichText::new("⚠ This device runs Android 10 or older. Enable 'Allow Legacy Fallback' in Global Settings to use Wi-Fi.")
+                                .color(egui::Color32::from_rgb(255, 180, 80))
+                                .size(11.5)
+                        );
+                    } else if dev_api < 30 && global_allow_legacy_fallback {
+                        ui.horizontal(|ui| {
+                            let mut addr = profile.wifi_address.clone().unwrap_or_default();
+                            if ui.add(egui::TextEdit::singleline(&mut addr).hint_text("e.g. 192.168.1.50:5556").desired_width(180.0)).changed() {
+                                profile.wifi_address = if addr.trim().is_empty() { None } else { Some(addr) };
+                            }
+                            if is_connected && ui.button("Enable Wi-Fi ADB (Legacy)").clicked() {
+                                let s = serial.to_string();
+                                let ports_snapshot = existing_ports.clone();
+                                std::thread::spawn(move || {
+                                    let mut candidate = 5556u16;
+                                    while candidate < 65535 {
+                                        if candidate != 5555 && !ports_snapshot.contains(&candidate) {
+                                            break;
+                                        }
+                                        candidate += 1;
+                                    }
+                                    let _ = std::process::Command::new("adb").args(["-s", &s, "tcpip", &candidate.to_string()]).output();
+                                });
+                            }
+                        });
+                        ui.label(egui::RichText::new("Unique collision-free port assigned dynamically for Android <11.").weak().size(11.0));
+                    } else {
+                        // Android 11+: Secure Pairing
+                        ui.horizontal(|ui| {
+                            let mut addr = profile.wifi_address.clone().unwrap_or_default();
+                            if ui.add(egui::TextEdit::singleline(&mut addr).hint_text("e.g. 192.168.1.101:41235").desired_width(180.0)).changed() {
+                                profile.wifi_address = if addr.trim().is_empty() { None } else { Some(addr) };
+                            }
+                            if ui.button("🔒 Pair Securely").clicked() {
+                                self.secure_pairing_state.open = true;
+                                self.secure_pairing_state.target_serial = serial.to_string();
+                                self.secure_pairing_state.device_model = fallback_model.to_string();
+                                self.secure_pairing_state.pairing_endpoint = profile.wifi_address.clone().unwrap_or_default();
+                                self.secure_pairing_state.status_text.clear();
+                                self.secure_pairing_state.error = None;
+                            }
+                        });
+                        ui.label(egui::RichText::new("Android 11+ uses encrypted TLS pairing. Tap 'Pair Securely' to pair with 6-digit code.").weak().size(11.0));
                     }
-                    ui.horizontal(|ui| {
-                        if is_connected && ui.small_button("Enable Wi-Fi ADB (tcpip 5555)").clicked() {
-                            let s = serial.to_string();
-                            std::thread::spawn(move || {
-                                let _ = std::process::Command::new("adb").args(["-s", &s, "tcpip", "5555"]).output();
-                            });
-                        }
-                    });
-                    ui.label(egui::RichText::new("When USB is unplugged, UScreen seamlessly transfers the session to Wi-Fi without tearing down the virtual display.").weak().size(11.0));
+                });
+                ui.end_row();
+
+                // 10. Preferred Transport Override (Task 5)
+                ui.label("Preferred Transport");
+                ui.vertical(|ui| {
+                    let mut curr_pref = profile.preferred_transport.clone().unwrap_or_else(|| "auto".to_string());
+                    egui::ComboBox::from_id_salt(format!("pref_trans_{}", serial))
+                        .selected_text(match curr_pref.as_str() {
+                            "wifi" => "Wi-Fi Network",
+                            "usb" => "USB Cable",
+                            _ => "Auto (USB preferred)",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut curr_pref, "auto".to_string(), "Auto (USB preferred)");
+                            ui.selectable_value(&mut curr_pref, "usb".to_string(), "USB Cable");
+                            ui.selectable_value(&mut curr_pref, "wifi".to_string(), "Wi-Fi Network");
+                        });
+                    profile.preferred_transport = Some(curr_pref);
+                    ui.label(egui::RichText::new("Forces whether this device connects over USB, Wi-Fi, or automatically.").weak().size(11.0));
                 });
                 ui.end_row();
 
@@ -1597,7 +1733,7 @@ impl App {
                         });
                     });
 
-                ui.add_space(8.0);
+                ui.add_space(10.0);
 
                 // Card 2: Target Device Card
                 egui::Frame::group(ui.style())
@@ -1678,7 +1814,7 @@ impl App {
                         }
                     });
 
-                ui.add_space(8.0);
+                ui.add_space(10.0);
 
                 // Card 3: Action & Progress Card (Always Clean Reinstall)
                 egui::Frame::group(ui.style())
@@ -1689,35 +1825,52 @@ impl App {
                         ui.label(egui::RichText::new("INSTALLATION ACTION").strong().size(11.0).color(egui::Color32::from_rgb(140, 150, 170)));
                         ui.add_space(6.0);
 
+                        let target_dev = status.connected_devices.iter().find(|d| d.serial == self.installer_state.target_serial);
+                        let is_up_to_date = target_dev.and_then(|d| d.app_version.as_deref()) == Some(env!("GIT_VERSION_STRING"));
+                        let is_dirty = env!("GIT_VERSION_STRING").ends_with("-dirty");
+                        let needs_update = !is_up_to_date || is_dirty || target_dev.is_none();
+
                         let apk_opt = find_apk_path();
                         let can_install = !self.installer_state.is_running
                             && apk_opt.is_some()
                             && !self.installer_state.target_serial.is_empty();
 
-                        ui.horizontal(|ui| {
-                            let btn_label = if self.installer_state.is_running {
-                                "⏳ Installing Clean Update..."
-                            } else {
-                                "🚀 Install & Sync App (Clean Reinstall)"
-                            };
+                        if needs_update || self.installer_state.is_running {
+                            ui.horizontal(|ui| {
+                                let btn_label = if self.installer_state.is_running {
+                                    "⏳ Installing Clean Update..."
+                                } else {
+                                    "🚀 Install & Sync App (Clean Reinstall)"
+                                };
 
-                            let btn = ui.add_sized(
-                                egui::vec2(ui.available_width() - 80.0, 32.0),
-                                egui::Button::new(egui::RichText::new(btn_label).size(14.0).strong()),
-                            );
-                            if btn.clicked() && can_install {
-                                self.installer_state.is_running = true;
-                                self.installer_state.logs.clear();
-                                self.installer_state.status_text = "Starting clean surgical update pipeline...".to_string();
-                                let serial = self.installer_state.target_serial.clone();
-                                let tx = self.install_tx.clone();
-                                start_surgical_update(serial, true, tx);
-                            }
+                                let btn = ui.add_sized(
+                                    egui::vec2(ui.available_width() - 80.0, 32.0),
+                                    egui::Button::new(egui::RichText::new(btn_label).size(14.0).strong()),
+                                );
+                                if btn.clicked() && can_install {
+                                    self.installer_state.is_running = true;
+                                    self.installer_state.logs.clear();
+                                    self.installer_state.status_text = "Starting clean surgical update pipeline...".to_string();
+                                    let serial = self.installer_state.target_serial.clone();
+                                    let tx = self.install_tx.clone();
+                                    start_surgical_update(serial, true, tx);
+                                }
 
-                            if !self.installer_state.is_running && ui.add_sized(egui::vec2(70.0, 32.0), egui::Button::new(egui::RichText::new("Close").size(13.0))).clicked() {
-                                close_modal = true;
-                            }
-                        });
+                                if !self.installer_state.is_running && ui.add_sized(egui::vec2(70.0, 32.0), egui::Button::new(egui::RichText::new("Close").size(13.0))).clicked() {
+                                    close_modal = true;
+                                }
+                            });
+                        } else {
+                            // Conditional Reinstall Button (Task 7.3): Suppressed when up-to-date and clean
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("✅ Device is fully up to date with host build. Reinstallation not needed.").color(egui::Color32::from_rgb(140, 230, 140)).size(12.5).strong());
+                                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                    if ui.add_sized(egui::vec2(70.0, 32.0), egui::Button::new(egui::RichText::new("Close").size(13.0))).clicked() {
+                                        close_modal = true;
+                                    }
+                                });
+                            });
+                        }
 
                         ui.add_space(6.0);
 
@@ -1753,6 +1906,174 @@ impl App {
 
         if close_modal {
             self.installer_state.open = false;
+        }
+    }
+
+    fn render_secure_pairing_modal(&mut self, ctx: &egui::Context) {
+        if !self.secure_pairing_state.open {
+            return;
+        }
+
+        let mut close_modal = false;
+
+        egui::Window::new("🔒 Secure Wi-Fi Pairing (Android 11+)")
+            .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+            .collapsible(false)
+            .resizable(false)
+            .fixed_size([500.0, 380.0])
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.heading(egui::RichText::new("TLS Pairing Assistant").size(17.0).strong());
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if !self.secure_pairing_state.is_pairing && ui.button(" ✕ ").clicked() {
+                            close_modal = true;
+                        }
+                    });
+                });
+                ui.separator();
+                ui.add_space(4.0);
+
+                // Instructions Card
+                egui::Frame::group(ui.style())
+                    .fill(egui::Color32::from_rgb(26, 28, 34))
+                    .inner_margin(10.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(egui::RichText::new("PAIRING INSTRUCTIONS").strong().size(11.0).color(egui::Color32::from_rgb(140, 150, 170)));
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new("1. On tablet, open Settings → Developer Options → Wireless Debugging.").size(12.5));
+                        ui.label(egui::RichText::new("2. Tap 'Pair device with pairing code'.").size(12.5));
+                        ui.label(egui::RichText::new("3. Enter the pairing IP:Port and 6-digit code shown on screen:").size(12.5));
+                    });
+
+                ui.add_space(10.0);
+
+                // Inputs Card
+                egui::Frame::group(ui.style())
+                    .fill(egui::Color32::from_rgb(26, 28, 34))
+                    .inner_margin(10.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(egui::RichText::new("PAIRING CREDENTIALS").strong().size(11.0).color(egui::Color32::from_rgb(140, 150, 170)));
+                        ui.add_space(6.0);
+
+                        egui::Grid::new("secure_pairing_grid").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+                            ui.label(egui::RichText::new("Target Device:").strong().size(13.0));
+                            ui.label(egui::RichText::new(format!("{} ({})", self.secure_pairing_state.device_model, self.secure_pairing_state.target_serial)).size(13.0).monospace());
+                            ui.end_row();
+
+                            ui.label(egui::RichText::new("Pairing IP & Port:").strong().size(13.0));
+                            ui.add(egui::TextEdit::singleline(&mut self.secure_pairing_state.pairing_endpoint).hint_text("e.g. 192.168.1.101:41235").desired_width(220.0));
+                            ui.end_row();
+
+                            ui.label(egui::RichText::new("6-Digit Code:").strong().size(13.0));
+                            ui.add(egui::TextEdit::singleline(&mut self.secure_pairing_state.pairing_code).hint_text("e.g. 123456").desired_width(120.0));
+                            ui.end_row();
+                        });
+                    });
+
+                ui.add_space(10.0);
+
+                // Action & Status Card
+                egui::Frame::group(ui.style())
+                    .fill(egui::Color32::from_rgb(26, 28, 34))
+                    .inner_margin(10.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        let can_pair = !self.secure_pairing_state.is_pairing
+                            && !self.secure_pairing_state.pairing_endpoint.trim().is_empty()
+                            && self.secure_pairing_state.pairing_code.trim().len() >= 4;
+
+                        ui.horizontal(|ui| {
+                            let btn_label = if self.secure_pairing_state.is_pairing {
+                                "⏳ Pairing & Discovering..."
+                            } else {
+                                "🔒 Pair & Connect"
+                            };
+
+                            let btn = ui.add_sized(
+                                egui::vec2(ui.available_width() - 80.0, 32.0),
+                                egui::Button::new(egui::RichText::new(btn_label).size(14.0).strong()),
+                            );
+                            if btn.clicked() && can_pair {
+                                self.secure_pairing_state.is_pairing = true;
+                                self.secure_pairing_state.error = None;
+                                self.secure_pairing_state.status_text = "Running adb pair...".to_string();
+
+                                let tx = self.pair_tx.clone();
+                                let serial = self.secure_pairing_state.target_serial.clone();
+                                let endpoint = self.secure_pairing_state.pairing_endpoint.trim().to_string();
+                                let code = self.secure_pairing_state.pairing_code.trim().to_string();
+
+                                std::thread::spawn(move || {
+                                    let pair_res = std::process::Command::new("adb")
+                                        .args(["pair", &endpoint, &code])
+                                        .output();
+
+                                    let pair_out = match pair_res {
+                                        Ok(o) => o,
+                                        Err(e) => {
+                                            let _ = tx.send(Err(format!("Failed to execute adb: {}", e)));
+                                            return;
+                                        }
+                                    };
+
+                                    let stdout = String::from_utf8_lossy(&pair_out.stdout).to_string();
+                                    let stderr = String::from_utf8_lossy(&pair_out.stderr).to_string();
+                                    if !pair_out.status.success() || stdout.to_lowercase().contains("failed") || stderr.to_lowercase().contains("failed") {
+                                        let msg = if !stderr.trim().is_empty() { stderr } else { stdout };
+                                        let _ = tx.send(Err(format!("Pairing failed: {}", msg.trim())));
+                                        return;
+                                    }
+
+                                    std::thread::sleep(std::time::Duration::from_millis(1200));
+                                    let ip = endpoint.split(':').next().unwrap_or("").trim();
+                                    let mut connect_endpoint = None;
+
+                                    if let Ok(mdns) = std::process::Command::new("adb").args(["mdns", "services"]).output() {
+                                        let mdns_txt = String::from_utf8_lossy(&mdns.stdout);
+                                        for line in mdns_txt.lines() {
+                                            if line.contains("_adb-tls-connect._tcp") {
+                                                let parts: Vec<&str> = line.split_whitespace().collect();
+                                                for part in parts {
+                                                    if part.starts_with(ip) && part.contains(':') {
+                                                        connect_endpoint = Some(part.to_string());
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    let target = connect_endpoint.unwrap_or_else(|| endpoint.clone());
+                                    let _ = std::process::Command::new("adb").args(["connect", &target]).output();
+                                    let _ = tx.send(Ok((serial, target)));
+                                });
+                            }
+
+                            if !self.secure_pairing_state.is_pairing && ui.add_sized(egui::vec2(70.0, 32.0), egui::Button::new(egui::RichText::new("Close").size(13.0))).clicked() {
+                                close_modal = true;
+                            }
+                        });
+
+                        ui.add_space(6.0);
+
+                        if self.secure_pairing_state.is_pairing {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label(egui::RichText::new(&self.secure_pairing_state.status_text).size(12.5).color(egui::Color32::from_rgb(200, 220, 255)));
+                            });
+                        } else if let Some(ref err) = self.secure_pairing_state.error {
+                            ui.label(egui::RichText::new(format!("❌ {}", err)).color(egui::Color32::from_rgb(255, 120, 120)).size(12.5));
+                        } else if !self.secure_pairing_state.status_text.is_empty() {
+                            ui.label(egui::RichText::new(&self.secure_pairing_state.status_text).color(egui::Color32::from_rgb(140, 230, 140)).size(12.5));
+                        }
+                    });
+            });
+
+        if close_modal {
+            self.secure_pairing_state.open = false;
         }
     }
 }
@@ -1860,6 +2181,15 @@ fn render_sidebar_item(
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Global typography scaling (Task 7.2)
+        ctx.style_mut(|style| {
+            style.text_styles.insert(egui::TextStyle::Heading, egui::FontId::proportional(20.0));
+            style.text_styles.insert(egui::TextStyle::Body, egui::FontId::proportional(15.0));
+            style.text_styles.insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+            style.text_styles.insert(egui::TextStyle::Small, egui::FontId::proportional(12.0));
+            style.text_styles.insert(egui::TextStyle::Monospace, egui::FontId::monospace(14.0));
+        });
+
         // Drain surgical installer worker updates
         while let Ok(msg) = self.install_rx.try_recv() {
             match msg {
@@ -1896,7 +2226,29 @@ impl eframe::App for App {
             }
         }
 
-        if self.installer_state.is_running {
+        // Drain secure pairing worker updates (Task 1)
+        while let Ok(res) = self.pair_rx.try_recv() {
+            self.secure_pairing_state.is_pairing = false;
+            match res {
+                Ok((serial, target)) => {
+                    self.secure_pairing_state.status_text = format!("✅ Successfully paired and connected to {}", target);
+                    let profile = self.cfg.tablets.entry(serial).or_default();
+                    profile.wifi_address = Some(target.clone());
+                    if let Some((_, port_str)) = target.rsplit_once(':') {
+                        if let Ok(port) = port_str.parse::<u16>() {
+                            profile.secure_port = Some(port);
+                        }
+                    }
+                    let _ = self.cfg.save();
+                    self.saved_cfg = self.cfg.clone();
+                }
+                Err(err) => {
+                    self.secure_pairing_state.error = Some(err);
+                }
+            }
+        }
+
+        if self.installer_state.is_running || self.secure_pairing_state.is_pairing {
             ctx.request_repaint();
         } else {
             ctx.request_repaint_after(Duration::from_secs(1));
@@ -1973,7 +2325,9 @@ impl eframe::App for App {
             .min_width(180.0)
             .max_width(320.0)
             .show(ctx, |ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
                 egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
                     ui.add_space(8.0);
                     // Section 1: Navigation
                     ui.horizontal(|ui| {
@@ -2147,8 +2501,9 @@ impl eframe::App for App {
             });
         });
 
-        // 5. Foreground Installer Modal
+        // 5. Modals
         self.render_installer_modal(ctx, &status);
+        self.render_secure_pairing_modal(ctx);
     }
 }
 

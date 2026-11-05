@@ -49,6 +49,10 @@ class TouchCapture {
     var onCodecKnown: ((codec: String) -> Unit)? = null
     /** The computer's fps and bitrate, on connect and whenever they change there. */
     var onSettingsKnown: ((fps: Int, bitrateKbps: Int) -> Unit)? = null
+    /** The computer's daemon Git version string, received on connect */
+    var onHostVersionKnown: ((version: String) -> Unit)? = null
+
+    @Volatile var currentPreferredTransport: String = "auto"
 
     /// Session token from the host, delivered as an intent extra when the
     /// daemon launches us over adb. Must be the first thing sent on the
@@ -113,6 +117,7 @@ class TouchCapture {
                         put("width_mm", nativeWidthMm)
                         put("height_mm", nativeHeightMm)
                     }
+                    put("preferred_transport", currentPreferredTransport)
                 }
                 webSocket.send(res.toString())
                 Log.i(TAG, "Reported native resolution: ${nativeWidth}x${nativeHeight} " +
@@ -136,6 +141,10 @@ class TouchCapture {
                 val o = JSONObject(text)
                 if (o.has("codec")) {
                     onCodecKnown?.invoke(o.getString("codec"))
+                }
+                if (o.has("host_version")) {
+                    val hv = o.getString("host_version")
+                    onHostVersionKnown?.invoke(hv)
                 }
                 if (o.has("fps") && o.has("bitrate_kbps")) {
                     onSettingsKnown?.invoke(o.getInt("fps"), o.getInt("bitrate_kbps"))
@@ -670,6 +679,18 @@ class TouchCapture {
             Log.i(TAG, "Sent reconnect ping to host")
         } else {
             connect()
+        }
+    }
+
+    fun sendPreferredTransport(transport: String) {
+        currentPreferredTransport = transport
+        val msg = JSONObject().apply {
+            put("type", "preferred_transport")
+            put("transport", transport)
+        }
+        if (isConnected) {
+            webSocket?.send(msg.toString())
+            Log.i(TAG, "Sent preferred transport to host: $transport")
         }
     }
 
