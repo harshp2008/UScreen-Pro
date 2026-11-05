@@ -103,7 +103,9 @@ pub async fn enable_output(names: &[String]) {
 
 /// Switch the output off so COSMIC moves its windows back to the real screens.
 pub async fn disable_output(names: &[String]) {
-    let Some((_, listing)) = randr(&["list"]).await else { return };
+    let Some((_, listing)) = randr(&["list"]).await else {
+        return;
+    };
     for name in names.iter().filter(|n| state_in(&listing, n) == Some(true)) {
         info!("Disabling COSMIC output {}", name);
         let _ = randr(&["disable", name]).await;

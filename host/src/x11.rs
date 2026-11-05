@@ -24,7 +24,9 @@ fn command_exists(name: &str) -> bool {
 
 pub fn active() -> bool {
     let session = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
-    let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_uppercase();
+    let desktop = std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .to_uppercase();
     session == "x11"
         && !desktop.contains("KDE")
         && std::env::var_os("DISPLAY").is_some()
@@ -33,7 +35,11 @@ pub fn active() -> bool {
 }
 
 async fn run(program: &str, args: &[&str]) -> Option<(bool, String)> {
-    let out = tokio::process::Command::new(program).args(args).output().await.ok()?;
+    let out = tokio::process::Command::new(program)
+        .args(args)
+        .output()
+        .await
+        .ok()?;
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stdout),
@@ -63,7 +69,10 @@ fn targets_for(names: &[String]) -> Vec<Target> {
     crate::vdisplay::evdi_connectors()
         .into_iter()
         .filter(|c| names.contains(&c.name))
-        .map(|c| Target { name: c.name, edid: c.edid })
+        .map(|c| Target {
+            name: c.name,
+            edid: c.edid,
+        })
         .collect()
 }
 
@@ -93,14 +102,22 @@ fn parse_geometry(token: &str) -> Option<(i64, i64, i64, i64)> {
     let (size, rest) = token.split_once('+')?;
     let (w, h) = size.split_once('x')?;
     let (x, y) = rest.split_once('+')?;
-    Some((w.parse().ok()?, h.parse().ok()?, x.parse().ok()?, y.parse().ok()?))
+    Some((
+        w.parse().ok()?,
+        h.parse().ok()?,
+        x.parse().ok()?,
+        y.parse().ok()?,
+    ))
 }
 
 fn hex_bytes(s: &str) -> Option<Vec<u8>> {
     if s.is_empty() || !s.len().is_multiple_of(2) || !s.bytes().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
-    (0..s.len()).step_by(2).map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok()).collect()
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).ok())
+        .collect()
 }
 
 fn parse_outputs(text: &str) -> Vec<Output> {
@@ -125,7 +142,9 @@ fn parse_outputs(text: &str) -> Vec<Output> {
             continue;
         }
         let mut t = line.split_whitespace();
-        let (Some(name), Some(state)) = (t.next(), t.next()) else { continue };
+        let (Some(name), Some(state)) = (t.next(), t.next()) else {
+            continue;
+        };
         if state != "connected" && state != "disconnected" {
             continue;
         }
@@ -169,7 +188,12 @@ pub async fn enable_output(names: &[String], position: crate::config::Position) 
         let edge = |key: fn(&(i64, i64, i64, i64)) -> i64, largest: bool| {
             let mut v: Vec<&&Output> = active.iter().collect();
             v.sort_by_key(|o| key(&o.geometry.unwrap()));
-            if largest { v.last().copied() } else { v.first().copied() }.map(|o| o.name.clone())
+            if largest {
+                v.last().copied()
+            } else {
+                v.first().copied()
+            }
+            .map(|o| o.name.clone())
         };
         use crate::config::Position::*;
         let (flag, reference) = match position {
@@ -196,7 +220,10 @@ pub async fn enable_output(names: &[String], position: crate::config::Position) 
 pub async fn disable_output(names: &[String]) {
     let targets = targets_for(names);
     let Some(all) = outputs().await else { return };
-    for o in all.iter().filter(|o| is_ours(o, &targets) && o.geometry.is_some()) {
+    for o in all
+        .iter()
+        .filter(|o| is_ours(o, &targets) && o.geometry.is_some())
+    {
         info!("Disabling X11 output {}", o.name);
         let _ = run("xrandr", &["--output", &o.name, "--off"]).await;
     }
@@ -207,10 +234,10 @@ pub async fn wait_active(names: &[String], timeout: std::time::Duration) -> Opti
     let targets = targets_for(names);
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
-        if let Some(o) = outputs()
-            .await
-            .and_then(|all| all.into_iter().find(|o| o.geometry.is_some() && is_ours(o, &targets)))
-        {
+        if let Some(o) = outputs().await.and_then(|all| {
+            all.into_iter()
+                .find(|o| o.geometry.is_some() && is_ours(o, &targets))
+        }) {
             return Some(o.name);
         }
         if tokio::time::Instant::now() >= deadline {
@@ -225,8 +252,14 @@ pub async fn wait_active(names: &[String], timeout: std::time::Duration) -> Opti
 pub async fn primary_output(ours: &[String]) -> Option<String> {
     let targets = targets_for(ours);
     let all = outputs().await?;
-    let real: Vec<&Output> = all.iter().filter(|o| o.geometry.is_some() && !is_ours(o, &targets)).collect();
-    real.iter().find(|o| o.primary).or_else(|| real.first()).map(|o| o.name.clone())
+    let real: Vec<&Output> = all
+        .iter()
+        .filter(|o| o.geometry.is_some() && !is_ours(o, &targets))
+        .collect();
+    real.iter()
+        .find(|o| o.primary)
+        .or_else(|| real.first())
+        .map(|o| o.name.clone())
 }
 
 /// Whether the `xinput` device `listed` is `wanted` or one of its sub-devices
@@ -234,9 +267,7 @@ pub async fn primary_output(ours: &[String]) -> Option<String> {
 fn belongs_to(listed: &str, wanted: &str) -> bool {
     match listed.strip_prefix(wanted) {
         Some("") => true,
-        Some(rest) => {
-            rest.starts_with(' ') && !rest.trim().chars().all(|c| c.is_ascii_digit())
-        }
+        Some(rest) => rest.starts_with(' ') && !rest.trim().chars().all(|c| c.is_ascii_digit()),
         None => false,
     }
 }
@@ -271,7 +302,12 @@ mod tests {
 
     fn hex_block(edid: &[u8]) -> String {
         edid.chunks(16)
-            .map(|c| format!("\t\t{}\n", c.iter().map(|b| format!("{:02x}", b)).collect::<String>()))
+            .map(|c| {
+                format!(
+                    "\t\t{}\n",
+                    c.iter().map(|b| format!("{:02x}", b)).collect::<String>()
+                )
+            })
             .collect()
     }
 
@@ -311,15 +347,31 @@ DVI-I-1-1 connected (normal left inverted right x axis y axis) 314mm x 195mm\n\
         let ours = crate::edid::make_edid(2960, 1848, 90);
         let o = parse_outputs(&prop_output(&ours, &[0x11u8; 128]));
         // The kernel calls it DVI-I-1; so does a real monitor on the main GPU.
-        let targets = vec![Target { name: "DVI-I-1".into(), edid: ours }];
-        let found: Vec<&str> = o.iter().filter(|x| is_ours(x, &targets)).map(|x| x.name.as_str()).collect();
+        let targets = vec![Target {
+            name: "DVI-I-1".into(),
+            edid: ours,
+        }];
+        let found: Vec<&str> = o
+            .iter()
+            .filter(|x| is_ours(x, &targets))
+            .map(|x| x.name.as_str())
+            .collect();
         assert_eq!(found, ["DVI-I-1-1"]);
     }
 
     #[test]
     fn falls_back_to_the_suffixed_name_without_an_edid() {
-        let o = |name: &str| Output { name: name.into(), connected: true, geometry: None, primary: false, edid: Vec::new() };
-        let t = vec![Target { name: "DVI-I-2".into(), edid: Vec::new() }];
+        let o = |name: &str| Output {
+            name: name.into(),
+            connected: true,
+            geometry: None,
+            primary: false,
+            edid: Vec::new(),
+        };
+        let t = vec![Target {
+            name: "DVI-I-2".into(),
+            edid: Vec::new(),
+        }];
         assert!(is_ours(&o("DVI-I-2"), &t));
         assert!(is_ours(&o("DVI-I-2-1"), &t));
         assert!(!is_ours(&o("DVI-I-2-x"), &t));

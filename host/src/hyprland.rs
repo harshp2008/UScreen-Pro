@@ -40,7 +40,11 @@ pub fn instance() -> Option<String> {
         })
         .collect();
     found.sort();
-    found.into_iter().rev().map(|(_, sig)| sig).find(|sig| live(sig))
+    found
+        .into_iter()
+        .rev()
+        .map(|(_, sig)| sig)
+        .find(|sig| live(sig))
 }
 
 /// Whether this is a Hyprland session we can talk to.
@@ -116,7 +120,11 @@ fn parse_monitors(json: &str) -> Option<Vec<Monitor>> {
         v.as_array()?
             .iter()
             .map(|m| Monitor {
-                name: m.get("name").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                name: m
+                    .get("name")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string(),
                 x: f(m, "x"),
                 y: f(m, "y"),
                 width: f(m, "width"),
@@ -163,7 +171,9 @@ pub async fn enable_output(names: &[String], position: crate::config::Position) 
         if attempt > 0 {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         }
-        let Some(all) = monitors().await else { continue };
+        let Some(all) = monitors().await else {
+            continue;
+        };
         let Some(mon) = all.iter().find(|m| names.contains(&m.name)) else {
             continue;
         };
@@ -183,7 +193,11 @@ pub async fn enable_output(names: &[String], position: crate::config::Position) 
         };
         let scale = mon.best_mode.map(|(w, h)| scale_for(w, h)).unwrap_or(1);
         info!("Hyprland left {} off — switching it on", mon.name);
-        keyword("monitor", &format!("{},preferred,{},{}", mon.name, side, scale)).await;
+        keyword(
+            "monitor",
+            &format!("{},preferred,{},{}", mon.name, side, scale),
+        )
+        .await;
 
         for _ in 0..10 {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
@@ -199,7 +213,11 @@ pub async fn enable_output(names: &[String], position: crate::config::Position) 
         warn!(
             "Hyprland did not switch {} on. By hand, at half resolution: \
              hyprctl keyword monitor {},{}x{}@60,{},1",
-            mon.name, mon.name, w / 2, h / 2, side
+            mon.name,
+            mon.name,
+            w / 2,
+            h / 2,
+            side
         );
         return;
     }
@@ -220,10 +238,10 @@ pub async fn disable_output(names: &[String]) {
 pub async fn wait_on(names: &[String], timeout: std::time::Duration) -> Option<String> {
     let deadline = tokio::time::Instant::now() + timeout;
     loop {
-        if let Some(m) = monitors()
-            .await
-            .and_then(|all| all.into_iter().find(|m| names.contains(&m.name) && m.is_on()))
-        {
+        if let Some(m) = monitors().await.and_then(|all| {
+            all.into_iter()
+                .find(|m| names.contains(&m.name) && m.is_on())
+        }) {
             return Some(m.name);
         }
         if tokio::time::Instant::now() >= deadline {
@@ -237,7 +255,10 @@ pub async fn wait_on(names: &[String], timeout: std::time::Duration) -> Option<S
 /// monitor unless it is one of ours, else the first real one that is on.
 pub async fn primary_output(ours: &[String]) -> Option<String> {
     let all = monitors().await?;
-    let real: Vec<&Monitor> = all.iter().filter(|m| m.is_on() && !ours.contains(&m.name)).collect();
+    let real: Vec<&Monitor> = all
+        .iter()
+        .filter(|m| m.is_on() && !ours.contains(&m.name))
+        .collect();
     real.iter()
         .find(|m| m.focused)
         .or_else(|| real.first())
@@ -277,12 +298,25 @@ pub async fn map_devices(device_names: &[&str], output: &str) -> usize {
 /// bounding box: (x, y, width, height). Same contract as the KDE version.
 pub async fn output_area(output: &str) -> Option<(f64, f64, f64, f64)> {
     let all = monitors().await?;
-    let on: Vec<(f64, f64, f64, f64)> = all.iter().filter(|m| m.is_on()).map(Monitor::logical).collect();
-    let (x, y, w, h) = all.iter().find(|m| m.name == output && m.is_on())?.logical();
+    let on: Vec<(f64, f64, f64, f64)> = all
+        .iter()
+        .filter(|m| m.is_on())
+        .map(Monitor::logical)
+        .collect();
+    let (x, y, w, h) = all
+        .iter()
+        .find(|m| m.name == output && m.is_on())?
+        .logical();
     let min_x = on.iter().map(|b| b.0).fold(f64::INFINITY, f64::min);
     let min_y = on.iter().map(|b| b.1).fold(f64::INFINITY, f64::min);
-    let max_x = on.iter().map(|b| b.0 + b.2).fold(f64::NEG_INFINITY, f64::max);
-    let max_y = on.iter().map(|b| b.1 + b.3).fold(f64::NEG_INFINITY, f64::max);
+    let max_x = on
+        .iter()
+        .map(|b| b.0 + b.2)
+        .fold(f64::NEG_INFINITY, f64::max);
+    let max_y = on
+        .iter()
+        .map(|b| b.1 + b.3)
+        .fold(f64::NEG_INFINITY, f64::max);
     let (tw, th) = (max_x - min_x, max_y - min_y);
     (tw > 0.0 && th > 0.0).then(|| ((x - min_x) / tw, (y - min_y) / th, w / tw, h / th))
 }

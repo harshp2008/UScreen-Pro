@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::watch;
-use tokio_tungstenite::{accept_async_with_config, tungstenite::protocol::WebSocketConfig};
 use tokio_tungstenite::tungstenite::Message;
+use tokio_tungstenite::{accept_async_with_config, tungstenite::protocol::WebSocketConfig};
 use tracing::{error, info, warn};
 
 // Linux input event constants
@@ -88,7 +88,11 @@ pub struct DeviceIdentity {
 
 impl DeviceIdentity {
     pub fn for_instance(instance: u32) -> Self {
-        let suffix = if instance == 0 { String::new() } else { format!(" {}", instance + 1) };
+        let suffix = if instance == 0 {
+            String::new()
+        } else {
+            format!(" {}", instance + 1)
+        };
         let base = (instance as u16) * 16;
         Self {
             touch: format!("{}{}", TOUCH_DEVICE_NAME, suffix),
@@ -542,7 +546,11 @@ impl UInputDevice {
     ) -> Result<()> {
         // The active tablet-tool key depends on which end of the pen is in
         // use. An S Pen flipped to its eraser end reports TOOL_TYPE_ERASER.
-        let tool = if eraser { BTN_TOOL_RUBBER } else { BTN_TOOL_PEN };
+        let tool = if eraser {
+            BTN_TOOL_RUBBER
+        } else {
+            BTN_TOOL_PEN
+        };
         // A pen that is touching reports some pressure. A very light tap can
         // arrive from the tablet as exactly 0 (a Xiaomi Focus Pen Pro does),
         // which says "touching" with BTN_TOUCH and "not touching" with the
@@ -776,7 +784,11 @@ async fn kwin_device_property(sysname: &str, property: &str) -> Option<String> {
 /// and finding it empty, both when written before and after device creation.
 /// Setting the property directly takes effect immediately, and KWin persists it
 /// itself.
-async fn map_devices_to_output(pen_only: bool, ident: &DeviceIdentity, card: Option<u32>) -> Option<String> {
+async fn map_devices_to_output(
+    pen_only: bool,
+    ident: &DeviceIdentity,
+    card: Option<u32>,
+) -> Option<String> {
     if crate::hyprland::active() {
         return map_devices_on_hyprland(pen_only, ident, card).await;
     }
@@ -820,8 +832,7 @@ async fn map_devices_to_output(pen_only: bool, ident: &DeviceIdentity, card: Opt
             let Some(name) = kwin_device_property(&sysname, "name").await else {
                 continue;
             };
-            if !ident.owns(&name)
-            {
+            if !ident.owns(&name) {
                 continue;
             }
             let ok = crate::kwin::set_property(
@@ -851,7 +862,10 @@ async fn map_devices_to_output(pen_only: bool, ident: &DeviceIdentity, card: Opt
                         ),
                     }
                 }
-                false => warn!("Could not map '{}': KWin refused the outputName property", name),
+                false => warn!(
+                    "Could not map '{}': KWin refused the outputName property",
+                    name
+                ),
             }
         }
 
@@ -982,7 +996,10 @@ async fn map_and_note_area(
     if let Some((x, y, w, h)) = area {
         info!(
             "Pointer area on the desktop: {:.0}%,{:.0}% + {:.0}%x{:.0}%",
-            x * 100.0, y * 100.0, w * 100.0, h * 100.0
+            x * 100.0,
+            y * 100.0,
+            w * 100.0,
+            h * 100.0
         );
     }
 }
@@ -994,9 +1011,17 @@ async fn map_and_note_area(
 async fn output_area_on_desktop(output: &str) -> Option<(f64, f64, f64, f64)> {
     let outputs = kscreen_outputs().await?;
     let logical = |o: &serde_json::Value| -> Option<(f64, f64, f64, f64)> {
-        let scale = o.get("scale").and_then(|v| v.as_f64()).unwrap_or(1.0).max(0.01);
+        let scale = o
+            .get("scale")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0)
+            .max(0.01);
         let id = o.get("currentModeId")?.as_str()?;
-        let mode = o.get("modes")?.as_array()?.iter().find(|m| m.get("id").and_then(|v| v.as_str()) == Some(id))?;
+        let mode = o
+            .get("modes")?
+            .as_array()?
+            .iter()
+            .find(|m| m.get("id").and_then(|v| v.as_str()) == Some(id))?;
         let w = mode.pointer("/size/width")?.as_f64()? / scale;
         let h = mode.pointer("/size/height")?.as_f64()? / scale;
         let x = o.pointer("/pos/x")?.as_f64()?;
@@ -1009,7 +1034,9 @@ async fn output_area_on_desktop(output: &str) -> Option<(f64, f64, f64, f64)> {
         if !o.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
             continue;
         }
-        let Some((x, y, w, h)) = logical(o) else { continue };
+        let Some((x, y, w, h)) = logical(o) else {
+            continue;
+        };
         max_x = max_x.max(x + w);
         max_y = max_y.max(y + h);
         if o.get("name").and_then(|v| v.as_str()) == Some(output) {
@@ -1076,8 +1103,7 @@ async fn target_output(
                 .collect();
             let enabled = outputs.iter().find(|o| {
                 let name = o.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                mine.contains(&name)
-                    && o.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false)
+                mine.contains(&name) && o.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false)
             });
             if let Some(o) = enabled {
                 return o.get("name").and_then(|v| v.as_str()).map(str::to_string);
@@ -1189,7 +1215,10 @@ impl InputServer {
                 match UInputDevice::new_pointer(&ident_bg.pointer, ident_bg.product_pointer) {
                     Ok(dev) => Some(dev),
                     Err(e) => {
-                        warn!("No pointer device: {}. The cursor will vanish when the pen lifts.", e);
+                        warn!(
+                            "No pointer device: {}. The cursor will vanish when the pen lifts.",
+                            e
+                        );
                         None
                     }
                 }
@@ -1250,7 +1279,11 @@ impl InputServer {
                     // a mode change during the wait simply restarts it.
                     info!(
                         "Mode is now {} — remapping input devices{}",
-                        if pen_only { "pen-only" } else { "second screen" },
+                        if pen_only {
+                            "pen-only"
+                        } else {
+                            "second screen"
+                        },
                         card.map(|c| format!(" (card{})", c)).unwrap_or_default()
                     );
                     map_and_note_area(pen_only, &ident_map, card, &devices).await;
@@ -1288,9 +1321,17 @@ impl InputServer {
             let relaunch = self.relaunch.clone();
             let ping_notify = self.ping_notify.clone();
             tokio::spawn(async move {
-                if let Err(e) =
-                    handle_connection(socket, cfg, settings, mode_tx, latency, devices, relaunch, ping_notify)
-                        .await
+                if let Err(e) = handle_connection(
+                    socket,
+                    cfg,
+                    settings,
+                    mode_tx,
+                    latency,
+                    devices,
+                    relaunch,
+                    ping_notify,
+                )
+                .await
                 {
                     warn!("Input handler {}: {}", peer, e);
                 }
@@ -1308,6 +1349,7 @@ impl InputServer {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn handle_connection(
     raw_stream: tokio::net::TcpStream,
     config: InputConfig,
@@ -1336,7 +1378,11 @@ async fn handle_connection(
     let mut settings_rx = settings_tx.as_ref().map(|t| t.subscribe());
     let current_codec = |tx: &Option<watch::Sender<EncoderSettings>>, fallback: &str| -> String {
         tx.as_ref()
-            .map(|t| crate::capture::Codec::from_encoder(&t.borrow().encoder).muxer().to_string())
+            .map(|t| {
+                crate::capture::Codec::from_encoder(&t.borrow().encoder)
+                    .muxer()
+                    .to_string()
+            })
             .unwrap_or_else(|| fallback.to_string())
     };
     let current_settings = |tx: &Option<watch::Sender<EncoderSettings>>| {
@@ -1349,7 +1395,8 @@ async fn handle_connection(
 
     // Authenticate before anything else happens: no greeting, no events.
     if let Some(expected) = config.token.as_deref() {
-        let first = tokio::time::timeout(std::time::Duration::from_secs(3), ws_receiver.next()).await;
+        let first =
+            tokio::time::timeout(std::time::Duration::from_secs(3), ws_receiver.next()).await;
         let ok = match first {
             Ok(Some(Ok(Message::Text(text)))) => matches!(
                 serde_json::from_str::<InputEvent>(&text),
@@ -1363,7 +1410,9 @@ async fn handle_connection(
             static DROPS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             let n = DROPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if n < 5 {
-                warn!("Input client did not authenticate — dropped. Re-sending the token to the app.");
+                warn!(
+                    "Input client did not authenticate — dropped. Re-sending the token to the app."
+                );
             } else if n == 5 {
                 warn!("Further unauthenticated clients will be dropped quietly.");
             }
@@ -1383,7 +1432,10 @@ async fn handle_connection(
         pen_only: *mode_rx.borrow_and_update(),
         fps: last_sent.as_ref().map(|(f, _, _)| *f),
         bitrate_kbps: last_sent.as_ref().map(|(_, b, _)| *b),
-        host_version: Some(std::env::var("USCREEN_MOCK_HOST_VERSION").unwrap_or_else(|_| env!("GIT_VERSION_STRING").to_string())),
+        host_version: Some(
+            std::env::var("USCREEN_MOCK_HOST_VERSION")
+                .unwrap_or_else(|_| env!("GIT_VERSION_STRING").to_string()),
+        ),
     };
 
     ws_sender
@@ -1468,7 +1520,14 @@ async fn handle_connection(
         match msg {
             Ok(Message::Text(text)) => match serde_json::from_str::<InputEvent>(&text) {
                 Ok(event) => {
-                    handle_event(event, &uinput, &settings_tx, &mode_tx, &latency, &ping_notify);
+                    handle_event(
+                        event,
+                        &uinput,
+                        &settings_tx,
+                        &mode_tx,
+                        &latency,
+                        &ping_notify,
+                    );
                 }
                 Err(e) => {
                     warn!("Invalid input: {} - {}", e, text);
@@ -1503,7 +1562,9 @@ fn note_pen_action(action: u8) {
     if let Ok(mut c) = PEN_ACTIONS.lock() {
         c[(action as usize).min(7)] += 1;
     }
-    let Ok(mut last) = PEN_LOG_AT.lock() else { return };
+    let Ok(mut last) = PEN_LOG_AT.lock() else {
+        return;
+    };
     let now = std::time::Instant::now();
     match *last {
         Some(t) if t.elapsed().as_secs() < 3 => return,
@@ -1545,7 +1606,10 @@ fn handle_event(
                 let ok = if let Some(ref mut dev) = guard.touch {
                     match dev.inject_touch(abs_x, abs_y, abs_pressure, action, slot) {
                         Ok(_) => true,
-                        Err(e) => { warn!("Failed to inject touch: {}", e); false }
+                        Err(e) => {
+                            warn!("Failed to inject touch: {}", e);
+                            false
+                        }
                     }
                 } else {
                     match action {
@@ -1587,13 +1651,27 @@ fn handle_event(
 
             if let Ok(mut guard) = uinput.lock() {
                 let ok = if let Some(ref mut dev) = guard.pen {
-                    match dev.inject_pen(abs_x, abs_y, abs_pressure, tilt_x_deg, tilt_y_deg, action, eraser) {
+                    match dev.inject_pen(
+                        abs_x,
+                        abs_y,
+                        abs_pressure,
+                        tilt_x_deg,
+                        tilt_y_deg,
+                        action,
+                        eraser,
+                    ) {
                         Ok(_) => true,
-                        Err(e) => { warn!("Failed to inject pen: {}", e); false }
+                        Err(e) => {
+                            warn!("Failed to inject pen: {}", e);
+                            false
+                        }
                     }
                 } else {
                     match action {
-                        0 => info!("Pen DOWN at ({}, {}), eraser={}, tilt=({:.1},{:.1})", abs_x, abs_y, eraser, tilt_x, tilt_y),
+                        0 => info!(
+                            "Pen DOWN at ({}, {}), eraser={}, tilt=({:.1},{:.1})",
+                            abs_x, abs_y, eraser, tilt_x, tilt_y
+                        ),
                         1 => info!("Pen UP   at ({}, {})", abs_x, abs_y),
                         _ => {}
                     }
@@ -1651,7 +1729,7 @@ fn handle_event(
             if let Some(ref pref) = preferred_transport {
                 let mut cfg = crate::config::FileConfig::load();
                 let mut changed = false;
-                for (_k, p) in cfg.tablets.iter_mut() {
+                for p in cfg.tablets.values_mut() {
                     if p.preferred_transport.as_deref() != Some(pref) {
                         p.preferred_transport = Some(pref.clone());
                         changed = true;
@@ -1673,12 +1751,15 @@ fn handle_event(
             let mut new = tx.borrow().clone();
             // Reject nonsense physical sizes rather than baking them into an
             // EDID: a bad DPI makes the desktop come up at a absurd scale.
-            let (mm_w, mm_h) = if (50..=1000).contains(&width_mm) && (50..=1000).contains(&height_mm)
-            {
-                (width_mm, height_mm)
-            } else {
-                (crate::edid::DEFAULT_WIDTH_MM, crate::edid::DEFAULT_HEIGHT_MM)
-            };
+            let (mm_w, mm_h) =
+                if (50..=1000).contains(&width_mm) && (50..=1000).contains(&height_mm) {
+                    (width_mm, height_mm)
+                } else {
+                    (
+                        crate::edid::DEFAULT_WIDTH_MM,
+                        crate::edid::DEFAULT_HEIGHT_MM,
+                    )
+                };
             if new.width != width
                 || new.height != height
                 || new.width_mm != mm_w
@@ -1748,7 +1829,11 @@ fn handle_event(
             }
             info!(
                 "Tablet switched to {}",
-                if pen_only { "pen-only mode" } else { "second-screen mode" }
+                if pen_only {
+                    "pen-only mode"
+                } else {
+                    "second-screen mode"
+                }
             );
             let _ = mode_tx.send(pen_only);
         }
@@ -1762,7 +1847,7 @@ fn handle_event(
             info!("Client reported preferred transport switch: {}", transport);
             let mut cfg = crate::config::FileConfig::load();
             let mut changed = false;
-            for (_k, p) in cfg.tablets.iter_mut() {
+            for p in cfg.tablets.values_mut() {
                 if p.preferred_transport.as_deref() != Some(&transport) {
                     p.preferred_transport = Some(transport.clone());
                     changed = true;
@@ -1798,7 +1883,12 @@ mod tests {
 
     fn device_over_file(name: &str) -> (UInputDevice, std::path::PathBuf) {
         let path = std::env::temp_dir().join(format!("uscreen-{}-{}", name, std::process::id()));
-        let file = OpenOptions::new().create(true).truncate(true).write(true).open(&path).unwrap();
+        let file = OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
         (UInputDevice { file }, path)
     }
 
@@ -1819,7 +1909,11 @@ mod tests {
             !tip_up.contains(&(EV_KEY, BTN_TOOL_PEN, 0)),
             "the tool must still be in proximity while the last sample goes out"
         );
-        assert_eq!(f[4], vec![(EV_KEY, BTN_TOOL_PEN, 0)], "proximity out in its own frame");
+        assert_eq!(
+            f[4],
+            vec![(EV_KEY, BTN_TOOL_PEN, 0)],
+            "proximity out in its own frame"
+        );
     }
 
     #[test]
@@ -1834,12 +1928,18 @@ mod tests {
             bitrate_kbps: Some(30000),
             host_version: None,
         };
-        let v: serde_json::Value = serde_json::from_str(&serde_json::to_string(&with).unwrap()).unwrap();
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&with).unwrap()).unwrap();
         assert_eq!(v["fps"], 90);
         assert_eq!(v["bitrate_kbps"], 30000);
         // An older tablet app, or a session without settings, sees no new keys.
-        let without = InputResponse { fps: None, bitrate_kbps: None, ..with };
-        let v: serde_json::Value = serde_json::from_str(&serde_json::to_string(&without).unwrap()).unwrap();
+        let without = InputResponse {
+            fps: None,
+            bitrate_kbps: None,
+            ..with
+        };
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&without).unwrap()).unwrap();
         assert!(v.get("fps").is_none() && v.get("bitrate_kbps").is_none());
     }
 
@@ -1854,11 +1954,18 @@ mod tests {
         let f = frames(&path);
         let _ = std::fs::remove_file(&path);
         let pressure = |frame: &Vec<(u16, u16, i32)>| {
-            frame.iter().find(|e| e.0 == EV_ABS && e.1 == ABS_PRESSURE).map(|e| e.2)
+            frame
+                .iter()
+                .find(|e| e.0 == EV_ABS && e.1 == ABS_PRESSURE)
+                .map(|e| e.2)
         };
         assert_eq!(pressure(&f[1]), Some(1), "tip-down frame");
         assert_eq!(pressure(&f[2]), Some(1), "contact move");
-        assert_eq!(pressure(&f[3]), Some(PEN_PRESSURE_MAX), "clamped to the axis range");
+        assert_eq!(
+            pressure(&f[3]),
+            Some(PEN_PRESSURE_MAX),
+            "clamped to the axis range"
+        );
         assert_eq!(pressure(&f[4]), Some(0), "hover stays at zero");
         assert_eq!(pressure(&f[5]), Some(0), "the lift stays at zero");
     }

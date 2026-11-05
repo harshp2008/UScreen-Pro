@@ -122,6 +122,11 @@ mod tests {
         let dir = runtime_dir();
         let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
         // Either we created it 0700, or it is the user's own cache dir.
-        assert_eq!(mode & 0o077, 0, "runtime dir {} is group/world accessible", dir.display());
+        assert_eq!(
+            mode & 0o077,
+            0,
+            "runtime dir {} is group/world accessible",
+            dir.display()
+        );
     }
 }

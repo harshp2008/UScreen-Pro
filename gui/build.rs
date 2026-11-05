@@ -11,7 +11,9 @@ fn main() {
                 .ok()
                 .and_then(|out| {
                     if out.status.success() {
-                        String::from_utf8(out.stdout).ok().map(|s| s.trim().to_string())
+                        String::from_utf8(out.stdout)
+                            .ok()
+                            .map(|s| s.trim().to_string())
                     } else {
                         None
                     }
@@ -32,7 +34,9 @@ fn main() {
                 .unwrap_or(false);
 
             if is_dirty {
-                println!("cargo:warning=WARNING: Building with uncommitted changes. Marking as dirty.");
+                println!(
+                    "cargo:warning=WARNING: Building with uncommitted changes. Marking as dirty."
+                );
                 format!("{}-dirty", git_hash)
             } else {
                 git_hash

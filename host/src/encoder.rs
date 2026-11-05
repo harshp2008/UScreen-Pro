@@ -63,14 +63,15 @@ impl Encoder {
             .open_with(opts)
             .with_context(|| format!("configure {}", name))?;
 
-        let mut frame = ffmpeg_next::frame::Video::new(
-            ffmpeg_next::format::Pixel::NV12,
-            width,
-            height,
-        );
+        let mut frame =
+            ffmpeg_next::frame::Video::new(ffmpeg_next::format::Pixel::NV12, width, height);
         frame.set_color_range(ffmpeg_next::color::Range::MPEG);
 
-        Ok(Self { inner, frame, pts: 0 })
+        Ok(Self {
+            inner,
+            frame,
+            pts: 0,
+        })
     }
 
     /// Encoder-specific knobs. Kept in one place so the CLI path and this one

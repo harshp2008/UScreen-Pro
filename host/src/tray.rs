@@ -29,10 +29,14 @@ const PIXMAP_SIDE: i32 = 64;
 /// what StatusNotifierItem expects.
 fn pixmap(rgba: &[u8]) -> ksni::Icon {
     let mut data = Vec::with_capacity(rgba.len());
-    for px in rgba.chunks_exact(4) {
+    for px in rgba.as_chunks::<4>().0 {
         data.extend_from_slice(&[px[3], px[0], px[1], px[2]]);
     }
-    ksni::Icon { width: PIXMAP_SIDE, height: PIXMAP_SIDE, data }
+    ksni::Icon {
+        width: PIXMAP_SIDE,
+        height: PIXMAP_SIDE,
+        data,
+    }
 }
 
 struct UScreenTray {
@@ -74,7 +78,11 @@ impl Tray for UScreenTray {
     }
 
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        vec![pixmap(if self.pen_only { PIXMAP_TABLET } else { PIXMAP_SCREEN })]
+        vec![pixmap(if self.pen_only {
+            PIXMAP_TABLET
+        } else {
+            PIXMAP_SCREEN
+        })]
     }
 
     /// Always visible. Passive lets the desktop hide the icon, and an icon you
@@ -103,14 +111,12 @@ impl Tray for UScreenTray {
     }
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
-        let mut items: Vec<MenuItem<Self>> = vec![
-            StandardItem {
-                label: self.state_line(),
-                enabled: false,
-                ..Default::default()
-            }
-            .into(),
-        ];
+        let mut items: Vec<MenuItem<Self>> = vec![StandardItem {
+            label: self.state_line(),
+            enabled: false,
+            ..Default::default()
+        }
+        .into()];
         if let Some(v) = &self.update {
             items.push(
                 StandardItem {

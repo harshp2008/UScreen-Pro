@@ -62,9 +62,7 @@ pub fn make_edid_sized(
 
     // Chromaticity (sRGB). Bytes 25..=34 inclusive — ten of them; the previous
     // nine-byte copy left the last one zeroed.
-    edid[25..35].copy_from_slice(&[
-        0xEE, 0x91, 0xA3, 0x54, 0x4C, 0x99, 0x26, 0x0F, 0x50, 0x54,
-    ]);
+    edid[25..35].copy_from_slice(&[0xEE, 0x91, 0xA3, 0x54, 0x4C, 0x99, 0x26, 0x0F, 0x50, 0x54]);
 
     // No established timings; standard timings unused
     for i in 0..8 {
@@ -137,7 +135,14 @@ pub fn make_edid_sized(
 /// Build an EDID at the default physical size.
 #[cfg(test)]
 pub fn make_edid(width: u32, height: u32, refresh: u32) -> Vec<u8> {
-    make_edid_sized(width, height, refresh, DEFAULT_WIDTH_MM, DEFAULT_HEIGHT_MM, 1)
+    make_edid_sized(
+        width,
+        height,
+        refresh,
+        DEFAULT_WIDTH_MM,
+        DEFAULT_HEIGHT_MM,
+        1,
+    )
 }
 
 /// Bumped whenever the generator changes. It is part of the cache filename so
@@ -191,7 +196,14 @@ pub fn ensure_edid_sized(
 /// Write (or reuse) a generated EDID at the default physical size.
 #[allow(dead_code)]
 pub fn ensure_edid(width: u32, height: u32, refresh: u32) -> Result<PathBuf> {
-    ensure_edid_sized(width, height, refresh, DEFAULT_WIDTH_MM, DEFAULT_HEIGHT_MM, 1)
+    ensure_edid_sized(
+        width,
+        height,
+        refresh,
+        DEFAULT_WIDTH_MM,
+        DEFAULT_HEIGHT_MM,
+        1,
+    )
 }
 
 #[cfg(test)]

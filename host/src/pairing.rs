@@ -39,7 +39,10 @@ pub async fn perform_secure_pair(pairing_endpoint: &str, code: &str) -> Result<S
 
 /// Discovers the dynamic TLS connect endpoint (_adb-tls-connect._tcp) for a given IP
 /// by polling `adb mdns services`.
-pub async fn discover_mdns_tls_connect_endpoint(target_ip: &str, timeout_secs: u64) -> Option<String> {
+pub async fn discover_mdns_tls_connect_endpoint(
+    target_ip: &str,
+    timeout_secs: u64,
+) -> Option<String> {
     let start = std::time::Instant::now();
     let duration = std::time::Duration::from_secs(timeout_secs.max(1));
 
@@ -59,7 +62,10 @@ pub async fn discover_mdns_tls_connect_endpoint(target_ip: &str, timeout_secs: u
                         if let Some((ip, port_str)) = part.rsplit_once(':') {
                             if ip == target_ip {
                                 if let Ok(port) = port_str.parse::<u16>() {
-                                    info!("mDNS discovered TLS connect endpoint for {}: {}:{}", target_ip, ip, port);
+                                    info!(
+                                        "mDNS discovered TLS connect endpoint for {}: {}:{}",
+                                        target_ip, ip, port
+                                    );
                                     return Some(format!("{}:{}", ip, port));
                                 }
                             }
@@ -106,7 +112,9 @@ pub async fn enable_legacy_tcpip(serial: &str, port: u16) -> Result<()> {
 /// Queries the IP of a connected Android device over USB adb shell.
 pub async fn get_device_wlan_ip(serial: &str) -> Option<String> {
     let out = tokio::process::Command::new("adb")
-        .args(["-s", serial, "shell", "ip", "-f", "inet", "addr", "show", "wlan0"])
+        .args([
+            "-s", serial, "shell", "ip", "-f", "inet", "addr", "show", "wlan0",
+        ])
         .output()
         .await
         .ok()?;
@@ -141,19 +149,28 @@ pub async fn provision_wifi_for_device(
     cfg: &mut crate::config::FileConfig,
 ) -> Result<Option<String>> {
     if !auto_enable_wifi_adb {
-        info!("Auto-enable Wi-Fi ADB is disabled in config. Skipping provisioning for {}", serial);
+        info!(
+            "Auto-enable Wi-Fi ADB is disabled in config. Skipping provisioning for {}",
+            serial
+        );
         return Ok(None);
     }
 
     let api_level = match query_device_api_level(serial).await {
         Some(lvl) => lvl,
         None => {
-            warn!("Could not determine Android API level for device {}", serial);
+            warn!(
+                "Could not determine Android API level for device {}",
+                serial
+            );
             return Ok(None);
         }
     };
 
-    info!("Device {} is running Android API level {}", serial, api_level);
+    info!(
+        "Device {} is running Android API level {}",
+        serial, api_level
+    );
 
     // Cache the API level in the profile
     let profile = cfg.tablets.entry(serial.to_string()).or_default();
@@ -161,11 +178,23 @@ pub async fn provision_wifi_for_device(
 
     if api_level >= 30 {
         // Android 11+: Secure Pairing Architecture
-        info!("Device {} (API {}) supports Secure TLS Wireless Debugging", serial, api_level);
+        info!(
+            "Device {} (API {}) supports Secure TLS Wireless Debugging",
+            serial, api_level
+        );
 
         // Ensure Wireless Debugging is enabled on the device
         let _ = tokio::process::Command::new("adb")
-            .args(["-s", serial, "shell", "settings", "put", "global", "adb_wifi_enabled", "1"])
+            .args([
+                "-s",
+                serial,
+                "shell",
+                "settings",
+                "put",
+                "global",
+                "adb_wifi_enabled",
+                "1",
+            ])
             .output()
             .await;
 
@@ -173,7 +202,10 @@ pub async fn provision_wifi_for_device(
             info!("Device {} wlan0 IP: {}", serial, ip);
             // Check if mDNS already advertises the dynamic connect port
             if let Some(endpoint) = discover_mdns_tls_connect_endpoint(&ip, 3).await {
-                info!("Device {} auto-provisioned via secure mDNS: {}", serial, endpoint);
+                info!(
+                    "Device {} auto-provisioned via secure mDNS: {}",
+                    serial, endpoint
+                );
                 if let Some((_, p_str)) = endpoint.rsplit_once(':') {
                     if let Ok(p) = p_str.parse::<u16>() {
                         let profile = cfg.tablets.entry(serial.to_string()).or_default();
@@ -182,12 +214,18 @@ pub async fn provision_wifi_for_device(
                         let _ = cfg.save();
                     }
                 }
-                let _ = tokio::process::Command::new("adb").args(["connect", &endpoint]).output().await;
+                let _ = tokio::process::Command::new("adb")
+                    .args(["connect", &endpoint])
+                    .output()
+                    .await;
                 return Ok(Some(endpoint));
             } else if let Some(ref remembered) = profile.wifi_address.clone() {
                 // If not found immediately via mDNS, use remembered TLS address if matching IP
                 if remembered.starts_with(&ip) {
-                    let _ = tokio::process::Command::new("adb").args(["connect", remembered]).output().await;
+                    let _ = tokio::process::Command::new("adb")
+                        .args(["connect", remembered])
+                        .output()
+                        .await;
                     return Ok(Some(remembered.clone()));
                 }
             }
@@ -203,11 +241,14 @@ pub async fn provision_wifi_for_device(
             return Ok(None);
         }
 
-        info!("Device {} runs Android API {} (<30). Provisioning via dynamic legacy port.", serial, api_level);
+        info!(
+            "Device {} runs Android API {} (<30). Provisioning via dynamic legacy port.",
+            serial, api_level
+        );
 
         // Collect existing assigned legacy ports to prevent port collision
         let mut existing_ports = Vec::new();
-        for (_, p) in &cfg.tablets {
+        for p in cfg.tablets.values() {
             if let Some(ref addr) = p.wifi_address {
                 if let Some((_, port_str)) = addr.rsplit_once(':') {
                     if let Ok(port) = port_str.parse::<u16>() {
@@ -222,12 +263,18 @@ pub async fn provision_wifi_for_device(
 
         if let Some(ip) = get_device_wlan_ip(serial).await {
             let endpoint = format!("{}:{}", ip, dynamic_port);
-            info!("Legacy device {} provisioned on unique port: {}", serial, endpoint);
+            info!(
+                "Legacy device {} provisioned on unique port: {}",
+                serial, endpoint
+            );
             let profile = cfg.tablets.entry(serial.to_string()).or_default();
             profile.wifi_address = Some(endpoint.clone());
             let _ = cfg.save();
 
-            let _ = tokio::process::Command::new("adb").args(["connect", &endpoint]).output().await;
+            let _ = tokio::process::Command::new("adb")
+                .args(["connect", &endpoint])
+                .output()
+                .await;
             return Ok(Some(endpoint));
         }
 

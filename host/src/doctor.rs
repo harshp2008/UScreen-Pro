@@ -131,7 +131,11 @@ fn check_modules(r: &mut Report) {
         match std::fs::OpenOptions::new().write(true).open(uinput) {
             Ok(_) => r.line(Level::Ok, "uinput device", "writable"),
             Err(e) => {
-                r.line(Level::Fail, "uinput device", &format!("not writable: {}", e));
+                r.line(
+                    Level::Fail,
+                    "uinput device",
+                    &format!("not writable: {}", e),
+                );
                 r.hint("sudo install -Dm644 packaging/60-uscreen-uinput.rules /etc/udev/rules.d/ && sudo udevadm control --reload && sudo udevadm trigger --name-match=uinput");
             }
         }
@@ -282,7 +286,7 @@ async fn check_processes(r: &mut Report) {
         r.hint("two readers on one pipe corrupt frames — kill the strays");
     } else if encoders.len() == 1 && tracked.is_none() {
         r.line(Level::Fail, "ffmpeg on capture FIFO", "orphaned");
-        r.hint(&format!("pkill -f 'ffmpeg.*{}'", &fifo_path()));
+        r.hint(&format!("pkill -f 'ffmpeg.*{}'", fifo_path()));
     } else {
         r.line(
             Level::Ok,
@@ -344,12 +348,18 @@ async fn check_tablet(r: &mut Report, cfg: &FileConfig) {
             // situation entirely: the daemon drives the first and the app is
             // launched there, so watching the other one shows a black screen.
             // Only the second kind has more than one USB serial.
-            let usb: Vec<&&str> = devices.iter().filter(|d| !crate::is_network_serial(d)).collect();
+            let usb: Vec<&&str> = devices
+                .iter()
+                .filter(|d| !crate::is_network_serial(d))
+                .collect();
             if usb.len() > 1 {
                 let mut named = Vec::new();
                 for d in &devices {
-                    match output_of("adb", &["-s", d, "shell", "getprop", "ro.product.model"]).await {
-                        Some(m) if !m.trim().is_empty() => named.push(format!("{} ({})", d, m.trim())),
+                    match output_of("adb", &["-s", d, "shell", "getprop", "ro.product.model"]).await
+                    {
+                        Some(m) if !m.trim().is_empty() => {
+                            named.push(format!("{} ({})", d, m.trim()))
+                        }
                         _ => named.push(d.to_string()),
                     }
                 }
@@ -411,9 +421,17 @@ async fn check_tablet(r: &mut Report, cfg: &FileConfig) {
         let hevc = out.contains("video/hevc");
         let main10 = out.contains("Main10");
         match (hevc, main10, cfg.encoder.contains("hevc")) {
-            (_, _, true) => r.line(Level::Ok, "tablet codec", "HEVC, and the host is sending it"),
+            (_, _, true) => r.line(
+                Level::Ok,
+                "tablet codec",
+                "HEVC, and the host is sending it",
+            ),
             (true, true, false) => {
-                r.line(Level::Ok, "tablet codec", "HEVC Main10 supported in hardware");
+                r.line(
+                    Level::Ok,
+                    "tablet codec",
+                    "HEVC Main10 supported in hardware",
+                );
                 r.hint(
                     "optional: switch the encoder to hevc_nvenc for sharper text at the same \
                      bitrate, and tick 10-bit to smooth gradients",
@@ -480,7 +498,11 @@ async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
                     &format!("{} at {}x{}, scale {}", m.name, m.width, m.height, m.scale),
                 );
             } else {
-                r.line(Level::Warn, "Hyprland output", &format!("{} is off (0x0)", m.name));
+                r.line(
+                    Level::Warn,
+                    "Hyprland output",
+                    &format!("{} is off (0x0)", m.name),
+                );
                 r.hint("the daemon switches it on while a tablet is a screen; nothing is rendered while it is off");
             }
         }
@@ -511,7 +533,10 @@ async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
             r.hint("the daemon enables it on start; nothing is rendered while it is off");
             continue;
         }
-        let w = out.pointer("/size/width").and_then(|v| v.as_i64()).unwrap_or(0);
+        let w = out
+            .pointer("/size/width")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         let h = out
             .pointer("/size/height")
             .and_then(|v| v.as_i64())
@@ -528,7 +553,10 @@ async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
             r.line(
                 Level::Fail,
                 "KDE output mode",
-                &format!("{} is {}x{}, config says {}x{}", name, w, h, cfg.width, cfg.height),
+                &format!(
+                    "{} is {}x{}, config says {}x{}",
+                    name, w, h, cfg.width, cfg.height
+                ),
             );
             r.hint("the encoder frame size will not match the capture — picture will be skewed");
         }
@@ -539,7 +567,11 @@ async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
 fn kwin_version(text: &str) -> Option<(u32, u32, u32)> {
     let v = text.split_whitespace().last()?;
     let mut parts = v.split('.').map(|p| p.parse::<u32>().ok());
-    Some((parts.next()??, parts.next()??, parts.next().flatten().unwrap_or(0)))
+    Some((
+        parts.next()??,
+        parts.next()??,
+        parts.next().flatten().unwrap_or(0),
+    ))
 }
 
 /// The on-screen keyboard pops up whenever a touchscreen is used, and the
@@ -549,15 +581,27 @@ fn kwin_version(text: &str) -> Option<(u32, u32, u32)> {
 async fn check_osk(r: &mut Report) {
     // Hyprland has no KWin to ask; hyprctl does the mapping there.
     if crate::hyprland::active() {
-        r.line(Level::Ok, "Hyprland", "hyprctl maps touch and pen onto the tablet's output");
+        r.line(
+            Level::Ok,
+            "Hyprland",
+            "hyprctl maps touch and pen onto the tablet's output",
+        );
         return;
     }
     if crate::gnome::active() {
-        r.line(Level::Ok, "GNOME", "pen and touch are mapped through GNOME's per-device settings");
+        r.line(
+            Level::Ok,
+            "GNOME",
+            "pen and touch are mapped through GNOME's per-device settings",
+        );
         return;
     }
     if crate::x11::active() {
-        r.line(Level::Ok, "X11", "pen and touch are mapped with xinput map-to-output");
+        r.line(
+            Level::Ok,
+            "X11",
+            "pen and touch are mapped with xinput map-to-output",
+        );
         return;
     }
     // KWin is only there on Plasma. On COSMIC or GNOME its absence is not a
@@ -569,7 +613,8 @@ async fn check_osk(r: &mut Report) {
             "desktop",
             &format!("{} — pen and touch mapping is manual here", session),
         );
-        if std::env::var("XDG_SESSION_TYPE").is_ok_and(|t| t == "x11") && !command_exists("xinput") {
+        if std::env::var("XDG_SESSION_TYPE").is_ok_and(|t| t == "x11") && !command_exists("xinput")
+        {
             r.hint("install the `xinput` package and UScreen maps the pen and touch itself on X11");
         } else {
             r.hint(
@@ -584,7 +629,11 @@ async fn check_osk(r: &mut Report) {
     // Whether we can reach KWin at all decides whether touch and pen land on
     // the tablet's screen, so it is reported first and in its own right.
     match crate::kwin::backend().await {
-        Some(b) => r.line(Level::Ok, "KWin D-Bus", &format!("reachable via {}", b.name())),
+        Some(b) => r.line(
+            Level::Ok,
+            "KWin D-Bus",
+            &format!("reachable via {}", b.name()),
+        ),
         None => {
             r.line(
                 Level::Fail,
@@ -631,11 +680,7 @@ async fn check_osk(r: &mut Report) {
     let mode: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
     match mode.trim() {
         "1" | "2" => {
-            r.line(
-                Level::Warn,
-                "on-screen keyboard",
-                "pops up on touch input",
-            );
+            r.line(Level::Warn, "on-screen keyboard", "pops up on touch input");
             r.hint("the daemon turns this off while it runs and puts it back on exit");
         }
         "0" => r.line(Level::Ok, "on-screen keyboard", "only when asked for"),
@@ -667,7 +712,12 @@ async fn check_autostart(r: &mut Report) {
 async fn check_colour(r: &mut Report) {
     // Eye comfort / blue light filter warms the whole panel. Nothing on the
     // host can compensate, and it is easy to leave on by accident.
-    match output_of("adb", &["shell", "settings", "get", "system", "blue_light_filter"]).await {
+    match output_of(
+        "adb",
+        &["shell", "settings", "get", "system", "blue_light_filter"],
+    )
+    .await
+    {
         Some(v) if v.trim() == "1" => {
             r.line(Level::Fail, "blue light filter", "ON — colours are warmed");
             r.hint("tablet: Settings → Display → Eye comfort shield → off");
@@ -704,7 +754,11 @@ async fn check_colour(r: &mut Report) {
 
     // Samsung's "Vivid" screen mode stretches saturation past sRGB. "Natural"
     // is the colour-accurate one.
-    if let Some(v) = output_of("adb", &["shell", "settings", "get", "system", "screen_mode_setting"]).await
+    if let Some(v) = output_of(
+        "adb",
+        &["shell", "settings", "get", "system", "screen_mode_setting"],
+    )
+    .await
     {
         let v = v.trim().to_string();
         if v == "2" {
@@ -724,7 +778,11 @@ async fn check_colour(r: &mut Report) {
     // gets 60 and every frame waits an average of 8 ms for vsync instead of
     // 4. Seen on a Tab S9 Ultra: the app asked for the best mode and was
     // handed 60 Hz until this was switched to Adaptive.
-    if let Some(v) = output_of("adb", &["shell", "settings", "get", "secure", "refresh_rate_mode"]).await
+    if let Some(v) = output_of(
+        "adb",
+        &["shell", "settings", "get", "secure", "refresh_rate_mode"],
+    )
+    .await
     {
         let v = v.trim().to_string();
         if v == "0" {
@@ -735,7 +793,11 @@ async fn check_colour(r: &mut Report) {
             );
             r.hint("tablet: Settings → Display → Motion smoothness → Adaptive (120 Hz)");
         } else if !v.is_empty() && v != "null" {
-            r.line(Level::Ok, "tablet refresh rate", "Motion smoothness: adaptive");
+            r.line(
+                Level::Ok,
+                "tablet refresh rate",
+                "Motion smoothness: adaptive",
+            );
         }
     }
 
@@ -747,7 +809,11 @@ async fn check_colour(r: &mut Report) {
         .collect();
     if let Some(json) = output_of("kscreen-doctor", &["-j"]).await {
         if let Ok(v) = serde_json::from_str::<serde_json::Value>(&json) {
-            for out in v.get("outputs").and_then(|o| o.as_array()).unwrap_or(&vec![]) {
+            for out in v
+                .get("outputs")
+                .and_then(|o| o.as_array())
+                .unwrap_or(&vec![])
+            {
                 let name = out.get("name").and_then(|v| v.as_str()).unwrap_or("");
                 if !names.iter().any(|n| n == name) {
                     continue;
@@ -757,7 +823,11 @@ async fn check_colour(r: &mut Report) {
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
                 if icc.is_empty() {
-                    r.line(Level::Warn, "colour profile", "none assigned to the virtual display");
+                    r.line(
+                        Level::Warn,
+                        "colour profile",
+                        "none assigned to the virtual display",
+                    );
                     r.hint(
                         "System Settings → Display → pick the UScreen display → Color Profile. \
                          A generic sRGB profile is the right baseline; a measured one needs a \
@@ -773,7 +843,14 @@ async fn check_colour(r: &mut Report) {
 
 async fn check_version(r: &mut Report, cfg: &FileConfig) {
     if !cfg.check_updates {
-        r.line(Level::Ok, "version", &format!("{} (update check disabled)", crate::update::current_version()));
+        r.line(
+            Level::Ok,
+            "version",
+            &format!(
+                "{} (update check disabled)",
+                crate::update::current_version()
+            ),
+        );
         return;
     }
     // One-shot: doctor is its own process and cannot read the daemon's daily
@@ -783,13 +860,21 @@ async fn check_version(r: &mut Report, cfg: &FileConfig) {
         Some(tag) => {
             let latest = tag.trim_start_matches('v').to_string();
             if crate::update::is_newer(&latest, cur) {
-                r.line(Level::Warn, "version", &format!("{} — {} is available", cur, latest));
+                r.line(
+                    Level::Warn,
+                    "version",
+                    &format!("{} — {} is available", cur, latest),
+                );
                 r.hint(crate::update::RELEASES_PAGE);
             } else {
                 r.line(Level::Ok, "version", &format!("{} (latest)", cur));
             }
         }
-        None => r.line(Level::Ok, "version", &format!("{} (could not check for updates)", cur)),
+        None => r.line(
+            Level::Ok,
+            "version",
+            &format!("{} (could not check for updates)", cur),
+        ),
     }
 }
 
@@ -805,17 +890,25 @@ fn check_config(r: &mut Report, cfg: &FileConfig) {
     if cfg.max_tablets > 1 {
         let cards = crate::vdisplay::evdi_cards().len() as u32;
         if cards >= cfg.max_tablets {
-            r.line(Level::Ok, "tablet slots", &format!("{} (EVDI devices: {})", cfg.max_tablets, cards));
+            r.line(
+                Level::Ok,
+                "tablet slots",
+                &format!("{} (EVDI devices: {})", cfg.max_tablets, cards),
+            );
         } else {
             r.line(
                 Level::Warn,
                 "tablet slots",
-                &format!("{} wanted, but only {} EVDI device(s) exist", cfg.max_tablets, cards),
+                &format!(
+                    "{} wanted, but only {} EVDI device(s) exist",
+                    cfg.max_tablets, cards
+                ),
             );
             r.hint(&format!(
                 "for this boot: echo 1 | sudo tee /sys/devices/evdi/add   (repeat {} time(s)); \
                  for every boot: initial_device_count={} in /etc/modprobe.d/uscreen-evdi.conf",
-                cfg.max_tablets - cards, cfg.max_tablets
+                cfg.max_tablets - cards,
+                cfg.max_tablets
             ));
         }
     }
@@ -844,9 +937,11 @@ fn check_config(r: &mut Report, cfg: &FileConfig) {
         r.line(
             Level::Warn,
             "bitrate on disk",
-            &format!("{} Mbps — clamped to {} Mbps at runtime",
+            &format!(
+                "{} Mbps — clamped to {} Mbps at runtime",
                 raw_bitrate / 1000,
-                cfg.bitrate / 1000),
+                cfg.bitrate / 1000
+            ),
         );
         r.hint("rewrite it via uscreen-gui (or the tablet settings) to make the file agree");
     } else {
@@ -940,7 +1035,11 @@ pub async fn run() -> Result<()> {
 /// median suggests — the Wi-Fi tail is several times worse.
 fn report_transport(r: &mut Report, serial: &str) {
     if crate::is_network_serial(serial) {
-        r.line(Level::Warn, "transport", "Wi-Fi — expect occasional stutter");
+        r.line(
+            Level::Warn,
+            "transport",
+            "Wi-Fi — expect occasional stutter",
+        );
         r.hint("plug the USB cable in for steady latency; the daemon prefers it automatically");
     } else {
         r.line(Level::Ok, "transport", "USB");

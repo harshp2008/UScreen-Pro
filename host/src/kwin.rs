@@ -43,7 +43,11 @@ impl Backend {
 static BACKEND: OnceCell<Option<Backend>> = OnceCell::const_new();
 
 async fn output_of(cmd: &str, args: &[&str]) -> Option<String> {
-    let out = tokio::process::Command::new(cmd).args(args).output().await.ok()?;
+    let out = tokio::process::Command::new(cmd)
+        .args(args)
+        .output()
+        .await
+        .ok()?;
     if !out.status.success() {
         return None;
     }
@@ -54,7 +58,9 @@ pub fn is_kde_session(desktop: &str) -> bool {
     if desktop.is_empty() {
         return true;
     }
-    desktop.split(':').any(|entry| entry.eq_ignore_ascii_case("KDE"))
+    desktop
+        .split(':')
+        .any(|entry| entry.eq_ignore_ascii_case("KDE"))
 }
 
 pub fn in_kde_session() -> bool {
@@ -71,7 +77,14 @@ pub async fn backend() -> Option<Backend> {
             }
             if output_of(
                 "busctl",
-                &["--user", "get-property", SERVICE, PROBE_PATH, PROBE_IFACE, PROBE_PROP],
+                &[
+                    "--user",
+                    "get-property",
+                    SERVICE,
+                    PROBE_PATH,
+                    PROBE_IFACE,
+                    PROBE_PROP,
+                ],
             )
             .await
             .is_some()
@@ -114,7 +127,11 @@ pub async fn get_property(path: &str, iface: &str, prop: &str) -> Option<String>
     match backend().await? {
         Backend::Busctl => {
             // `s "DVI-I-1"`, `i 1`, `b true` — signature first, then the value.
-            let raw = output_of("busctl", &["--user", "get-property", SERVICE, path, iface, prop]).await?;
+            let raw = output_of(
+                "busctl",
+                &["--user", "get-property", SERVICE, path, iface, prop],
+            )
+            .await?;
             let value = raw.split_once(' ').map(|(_, v)| v).unwrap_or(&raw).trim();
             Some(value.trim_matches('"').to_string())
         }
@@ -122,7 +139,14 @@ pub async fn get_property(path: &str, iface: &str, prop: &str) -> Option<String>
             // `[Variant(QString): "DVI-I-1"]`, `[Variant(int): 1]`
             let raw = output_of(
                 cmd,
-                &["--literal", SERVICE, path, "org.freedesktop.DBus.Properties.Get", iface, prop],
+                &[
+                    "--literal",
+                    SERVICE,
+                    path,
+                    "org.freedesktop.DBus.Properties.Get",
+                    iface,
+                    prop,
+                ],
             )
             .await?;
             if raw.contains('"') {
@@ -131,7 +155,11 @@ pub async fn get_property(path: &str, iface: &str, prop: &str) -> Option<String>
                 (end > start).then(|| raw[start..end].to_string())
             } else {
                 let value = raw.rsplit_once(':').map(|(_, v)| v).unwrap_or(&raw);
-                Some(value.trim_matches(|c: char| !c.is_ascii_alphanumeric()).to_string())
+                Some(
+                    value
+                        .trim_matches(|c: char| !c.is_ascii_alphanumeric())
+                        .to_string(),
+                )
             }
         }
     }
@@ -139,17 +167,40 @@ pub async fn get_property(path: &str, iface: &str, prop: &str) -> Option<String>
 
 /// Write a scalar property. `signature` is the D-Bus type: `s` for a string,
 /// `i` for an int — busctl needs it, qdbus infers it.
-pub async fn set_property(path: &str, iface: &str, prop: &str, signature: &str, value: &str) -> bool {
+pub async fn set_property(
+    path: &str,
+    iface: &str,
+    prop: &str,
+    signature: &str,
+    value: &str,
+) -> bool {
     match backend().await {
         Some(Backend::Busctl) => output_of(
             "busctl",
-            &["--user", "set-property", SERVICE, path, iface, prop, signature, value],
+            &[
+                "--user",
+                "set-property",
+                SERVICE,
+                path,
+                iface,
+                prop,
+                signature,
+                value,
+            ],
         )
         .await
         .is_some(),
         Some(Backend::Qdbus(cmd)) => output_of(
             cmd,
-            &["--literal", SERVICE, path, "org.freedesktop.DBus.Properties.Set", iface, prop, value],
+            &[
+                "--literal",
+                SERVICE,
+                path,
+                "org.freedesktop.DBus.Properties.Set",
+                iface,
+                prop,
+                value,
+            ],
         )
         .await
         .is_some(),
@@ -162,8 +213,18 @@ pub async fn list_strings(path: &str, iface: &str, prop: &str) -> Option<Vec<Str
     match backend().await? {
         Backend::Busctl => {
             // `as 12 "event7" "event8" …` — every other field between quotes.
-            let raw = output_of("busctl", &["--user", "get-property", SERVICE, path, iface, prop]).await?;
-            Some(raw.split('"').skip(1).step_by(2).map(str::to_string).collect())
+            let raw = output_of(
+                "busctl",
+                &["--user", "get-property", SERVICE, path, iface, prop],
+            )
+            .await?;
+            Some(
+                raw.split('"')
+                    .skip(1)
+                    .step_by(2)
+                    .map(str::to_string)
+                    .collect(),
+            )
         }
         Backend::Qdbus(cmd) => {
             // qdbus reads a property through its member name, one per line.
@@ -181,7 +242,12 @@ mod tests {
     #[test]
     fn busctl_string_array_is_split_on_quotes() {
         let raw = r#"as 3 "event7" "event8" "event4""#;
-        let got: Vec<String> = raw.split('"').skip(1).step_by(2).map(str::to_string).collect();
+        let got: Vec<String> = raw
+            .split('"')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_string)
+            .collect();
         assert_eq!(got, vec!["event7", "event8", "event4"]);
     }
 

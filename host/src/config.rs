@@ -345,15 +345,20 @@ impl FileConfig {
         // Say exactly which lines change. Settings that drift with nobody
         // touching them are impossible to chase down otherwise.
         if let Ok(old) = std::fs::read_to_string(&path) {
-            let before: std::collections::BTreeMap<&str, &str> = old
-                .lines()
-                .filter_map(|l| l.split_once(" = "))
-                .collect();
+            let before: std::collections::BTreeMap<&str, &str> =
+                old.lines().filter_map(|l| l.split_once(" = ")).collect();
             let changed: Vec<String> = text
                 .lines()
                 .filter_map(|l| l.split_once(" = "))
                 .filter(|(k, v)| before.get(k) != Some(v))
-                .map(|(k, v)| format!("{} = {} (was {})", k, v, before.get(k).unwrap_or(&"<unset>")))
+                .map(|(k, v)| {
+                    format!(
+                        "{} = {} (was {})",
+                        k,
+                        v,
+                        before.get(k).unwrap_or(&"<unset>")
+                    )
+                })
                 .collect();
             if !changed.is_empty() {
                 tracing::info!("Config written: {}", changed.join(", "));
@@ -404,7 +409,15 @@ height = 1080
         assert!(serialized.contains("encoder = \"hevc_vaapi\""));
         let re_parsed: FileConfig = toml::from_str(&serialized).expect("re-parse");
         assert_eq!(re_parsed.tablets.get("DEVICE_B").unwrap().encoder, None);
-        assert_eq!(re_parsed.tablets.get("DEVICE_A").unwrap().encoder.as_deref(), Some("hevc_vaapi"));
+        assert_eq!(
+            re_parsed
+                .tablets
+                .get("DEVICE_A")
+                .unwrap()
+                .encoder
+                .as_deref(),
+            Some("hevc_vaapi")
+        );
     }
 
     #[test]
@@ -488,6 +501,9 @@ locked_apps = ["com.google.android.youtube"]
         let p = cfg.tablets.get("R52WA0A0KED").unwrap();
         assert_eq!(p.keep_alive, Some(false));
         assert_eq!(p.wifi_address.as_deref(), Some("192.168.1.150:5555"));
-        assert_eq!(p.locked_apps.as_ref().unwrap(), &vec!["com.google.android.youtube"]);
+        assert_eq!(
+            p.locked_apps.as_ref().unwrap(),
+            &vec!["com.google.android.youtube"]
+        );
     }
 }

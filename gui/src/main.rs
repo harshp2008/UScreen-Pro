@@ -4,8 +4,8 @@ use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 /// What one device reported about itself and per-device overrides.
@@ -208,18 +208,13 @@ fn set_autostart(on: bool) -> Result<(), String> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Default)]
 pub enum DeviceAdbState {
     Device,
     Unauthorized,
+    #[default]
     Offline,
     Failed(String),
-}
-
-impl Default for DeviceAdbState {
-    fn default() -> Self {
-        Self::Offline
-    }
 }
 
 #[derive(Default, Clone, PartialEq, Eq)]
@@ -290,7 +285,10 @@ fn find_apk_path() -> Option<PathBuf> {
     // 1. Check local share directory (standard user install location)
     let h = home();
     if !h.is_empty() {
-        candidates.push(PathBuf::from(format!("{}/.local/share/uscreen/app-debug.apk", h)));
+        candidates.push(PathBuf::from(format!(
+            "{}/.local/share/uscreen/app-debug.apk",
+            h
+        )));
     }
 
     // 2. Check system-wide installation directory
@@ -316,12 +314,20 @@ fn find_apk_path() -> Option<PathBuf> {
     // 4. Check known project paths in home directory
     if !h.is_empty() {
         candidates.push(PathBuf::from(format!("{}/Documents/GITHUB PROJECTS/UScreen/android/app/build/outputs/apk/debug/app-debug.apk", h)));
-        candidates.push(PathBuf::from(format!("{}/UScreen/android/app/build/outputs/apk/debug/app-debug.apk", h)));
-        candidates.push(PathBuf::from(format!("{}/src/UScreen/android/app/build/outputs/apk/debug/app-debug.apk", h)));
+        candidates.push(PathBuf::from(format!(
+            "{}/UScreen/android/app/build/outputs/apk/debug/app-debug.apk",
+            h
+        )));
+        candidates.push(PathBuf::from(format!(
+            "{}/src/UScreen/android/app/build/outputs/apk/debug/app-debug.apk",
+            h
+        )));
     }
 
     // 5. Check relative to current working directory
-    candidates.push(PathBuf::from("android/app/build/outputs/apk/debug/app-debug.apk"));
+    candidates.push(PathBuf::from(
+        "android/app/build/outputs/apk/debug/app-debug.apk",
+    ));
     candidates.push(PathBuf::from("app-debug.apk"));
 
     candidates.into_iter().find(|p| p.is_file())
@@ -383,17 +389,26 @@ fn send_daemon_control(cmd: &str) -> Result<String, String> {
     use std::io::{BufRead, BufReader, Write};
     let sock = control_sock_path();
     if !sock.exists() {
-        return Err(format!("Control socket {:?} does not exist (daemon not running)", sock));
+        return Err(format!(
+            "Control socket {:?} does not exist (daemon not running)",
+            sock
+        ));
     }
     let mut stream = std::os::unix::net::UnixStream::connect(&sock)
         .map_err(|e| format!("Failed to connect to {:?}: {}", sock, e))?;
-    stream.set_read_timeout(Some(Duration::from_secs(5))).map_err(|e| e.to_string())?;
-    stream.set_write_timeout(Some(Duration::from_secs(5))).map_err(|e| e.to_string())?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .map_err(|e| e.to_string())?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .map_err(|e| e.to_string())?;
     writeln!(stream, "{}", cmd).map_err(|e| format!("Failed to send to control socket: {}", e))?;
     stream.flush().map_err(|e| e.to_string())?;
     let mut reader = BufReader::new(stream);
     let mut line = String::new();
-    reader.read_line(&mut line).map_err(|e| format!("Failed to read response: {}", e))?;
+    reader
+        .read_line(&mut line)
+        .map_err(|e| format!("Failed to read response: {}", e))?;
     let resp = line.trim().to_string();
     if let Some(err) = resp.strip_prefix("ERR ") {
         Err(err.to_string())
@@ -402,11 +417,7 @@ fn send_daemon_control(cmd: &str) -> Result<String, String> {
     }
 }
 
-fn start_surgical_update(
-    serial: String,
-    _force_reinstall: bool,
-    tx: Sender<InstallWorkerMsg>,
-) {
+fn start_surgical_update(serial: String, _force_reinstall: bool, tx: Sender<InstallWorkerMsg>) {
     std::thread::spawn(move || {
         let log = |s: &str| {
             let _ = tx.send(InstallWorkerMsg::LogLine(s.to_string()));
@@ -416,7 +427,10 @@ fn start_surgical_update(
             let _ = tx.send(InstallWorkerMsg::LogLine(format!(">>> {}", desc)));
         };
 
-        log(&format!("Starting surgical update pipeline for target device: {}", serial));
+        log(&format!(
+            "Starting surgical update pipeline for target device: {}",
+            serial
+        ));
         log("Execution mode: Clean uninstall & reinstall");
 
         let apk = match find_apk_path() {
@@ -428,10 +442,17 @@ fn start_surgical_update(
                 return;
             }
         };
-        log(&format!("Located APK: {} ({} bytes)", apk.display(), std::fs::metadata(&apk).map(|m| m.len()).unwrap_or(0)));
+        log(&format!(
+            "Located APK: {} ({} bytes)",
+            apk.display(),
+            std::fs::metadata(&apk).map(|m| m.len()).unwrap_or(0)
+        ));
 
         // Step A: Signal daemon to gracefully pause target device's EVDI helper & FFmpeg
-        stage(InstallStage::StepA_StoppingSession, "Step A: Signaling daemon to pause target device pipeline...");
+        stage(
+            InstallStage::StepA_StoppingSession,
+            "Step A: Signaling daemon to pause target device pipeline...",
+        );
         let daemon_online = match send_daemon_control(&format!("PAUSE {}", serial)) {
             Ok(resp) => {
                 log(&format!("Daemon acknowledged pause: {}", resp));
@@ -450,13 +471,22 @@ fn start_surgical_update(
         };
 
         // Step B: Wait for target device's virtual display to unmount cleanly
-        stage(InstallStage::StepB_WaitingDisplayUnmount, "Step B: Waiting for target virtual display to unmount...");
+        stage(
+            InstallStage::StepB_WaitingDisplayUnmount,
+            "Step B: Waiting for target virtual display to unmount...",
+        );
         std::thread::sleep(Duration::from_millis(1200));
         log("Virtual display unmount grace period elapsed.");
 
         // Step C: Run `adb -s <serial> uninstall com.uscreen` (Always perform clean uninstall)
-        stage(InstallStage::StepC_UninstallingOldApp, "Step C: Executing `adb uninstall com.uscreen` (clean uninstall)...");
-        match Command::new("adb").args(["-s", &serial, "uninstall", "com.uscreen"]).output() {
+        stage(
+            InstallStage::StepC_UninstallingOldApp,
+            "Step C: Executing `adb uninstall com.uscreen` (clean uninstall)...",
+        );
+        match Command::new("adb")
+            .args(["-s", &serial, "uninstall", "com.uscreen"])
+            .output()
+        {
             Ok(out) => {
                 let out_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 let err_str = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -471,7 +501,10 @@ fn start_surgical_update(
         }
 
         // Step D: Run `adb -s <serial> install -r app-debug.apk`
-        stage(InstallStage::StepD_InstallingNewApk, "Step D: Executing `adb install -r app-debug.apk`...");
+        stage(
+            InstallStage::StepD_InstallingNewApk,
+            "Step D: Executing `adb install -r app-debug.apk`...",
+        );
         let install_out = Command::new("adb")
             .args(["-s", &serial, "install", "-r", &apk.to_string_lossy()])
             .output();
@@ -485,7 +518,12 @@ fn start_surgical_update(
             Ok(out) => {
                 let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
                 let e = String::from_utf8_lossy(&out.stderr).trim().to_string();
-                log(&format!("adb install failed! Exit code: {:?}\nstdout: {}\nstderr: {}", out.status.code(), s, e));
+                log(&format!(
+                    "adb install failed! Exit code: {:?}\nstdout: {}\nstderr: {}",
+                    out.status.code(),
+                    s,
+                    e
+                ));
                 false
             }
             Err(e) => {
@@ -495,7 +533,10 @@ fn start_surgical_update(
         };
 
         if !install_success {
-            let err = format!("Installation of APK failed on device {}. Check logs.", serial);
+            let err = format!(
+                "Installation of APK failed on device {}. Check logs.",
+                serial
+            );
             let _ = tx.send(InstallWorkerMsg::Finished(Err(err), None));
             return;
         }
@@ -506,7 +547,12 @@ fn start_surgical_update(
         for attempt in 1..=6 {
             std::thread::sleep(Duration::from_millis(500));
             if let Ok(out) = Command::new("adb")
-                .args(["-s", &serial, "shell", "dumpsys package com.uscreen | grep versionName"])
+                .args([
+                    "-s",
+                    &serial,
+                    "shell",
+                    "dumpsys package com.uscreen | grep versionName",
+                ])
                 .output()
             {
                 let text = String::from_utf8_lossy(&out.stdout);
@@ -523,14 +569,20 @@ fn start_surgical_update(
                     break;
                 }
             }
-            log(&format!("Waiting for package manager to register new version (attempt {}/6)...", attempt));
+            log(&format!(
+                "Waiting for package manager to register new version (attempt {}/6)...",
+                attempt
+            ));
         }
         if let Some(ref ver) = detected_version {
             log(&format!("Detected updated package version: {}", ver));
         }
 
         // Step E: Trigger daemon to re-spawn EVDI session and relaunch app with correct dynamic port intents
-        stage(InstallStage::StepE_RespawningSession, "Step E: Signaling daemon to resume EVDI pipeline & launch app...");
+        stage(
+            InstallStage::StepE_RespawningSession,
+            "Step E: Signaling daemon to resume EVDI pipeline & launch app...",
+        );
         if daemon_online {
             match send_daemon_control(&format!("RESUME {}", serial)) {
                 Ok(resp) => {
@@ -539,22 +591,46 @@ fn start_surgical_update(
                 Err(e) => {
                     log(&format!("Warning: resume command error: {}. Launching app via adb am start directly.", e));
                     let _ = Command::new("adb")
-                        .args(["-s", &serial, "shell", "am", "start", "-n", "com.uscreen/.MainActivity"])
+                        .args([
+                            "-s",
+                            &serial,
+                            "shell",
+                            "am",
+                            "start",
+                            "-n",
+                            "com.uscreen/.MainActivity",
+                        ])
                         .output();
                 }
             }
         } else {
             log("Daemon is not running. Launching UScreen app directly via adb am start...");
             let _ = Command::new("adb")
-                .args(["-s", &serial, "shell", "am", "start", "-n", "com.uscreen/.MainActivity"])
+                .args([
+                    "-s",
+                    &serial,
+                    "shell",
+                    "am",
+                    "start",
+                    "-n",
+                    "com.uscreen/.MainActivity",
+                ])
                 .output();
             log("Note: Start the UScreen daemon to begin display streaming.");
         }
 
-        let ver_suffix = detected_version.as_deref().unwrap_or(env!("GIT_VERSION_STRING"));
-        let success_msg = format!("Successfully installed and synced UScreen v{} on {}", ver_suffix, serial);
+        let ver_suffix = detected_version
+            .as_deref()
+            .unwrap_or(env!("GIT_VERSION_STRING"));
+        let success_msg = format!(
+            "Successfully installed and synced UScreen v{} on {}",
+            ver_suffix, serial
+        );
         log(&format!(">>> COMPLETE: {}", success_msg));
-        let _ = tx.send(InstallWorkerMsg::Finished(Ok(success_msg), detected_version));
+        let _ = tx.send(InstallWorkerMsg::Finished(
+            Ok(success_msg),
+            detected_version,
+        ));
     });
 }
 
@@ -593,7 +669,10 @@ fn poll_status() -> Status {
             }
             let mut state_str = parts.get(1).copied().unwrap_or("unknown");
             if state_str == "unauthorized" {
-                if let Ok(st) = Command::new("adb").args(["-s", &serial, "get-state"]).output() {
+                if let Ok(st) = Command::new("adb")
+                    .args(["-s", &serial, "get-state"])
+                    .output()
+                {
                     let s = String::from_utf8_lossy(&st.stdout).trim().to_string();
                     if s == "device" {
                         state_str = "device";
@@ -641,9 +720,15 @@ fn poll_status() -> Status {
                     .unwrap_or_else(|| serial.clone())
             };
 
-            let (app_version, version_mismatch, api_level) = if adb_state == DeviceAdbState::Device {
+            let (app_version, version_mismatch, api_level) = if adb_state == DeviceAdbState::Device
+            {
                 let ver = Command::new("adb")
-                    .args(["-s", &serial, "shell", "dumpsys package com.uscreen | grep versionName"])
+                    .args([
+                        "-s",
+                        &serial,
+                        "shell",
+                        "dumpsys package com.uscreen | grep versionName",
+                    ])
                     .output()
                     .ok()
                     .and_then(|o| {
@@ -660,7 +745,12 @@ fn poll_status() -> Status {
                     .args(["-s", &serial, "shell", "getprop", "ro.build.version.sdk"])
                     .output()
                     .ok()
-                    .and_then(|o| String::from_utf8_lossy(&o.stdout).trim().parse::<u32>().ok());
+                    .and_then(|o| {
+                        String::from_utf8_lossy(&o.stdout)
+                            .trim()
+                            .parse::<u32>()
+                            .ok()
+                    });
                 (ver, mismatch, api_lvl)
             } else {
                 (None, false, None)
@@ -681,9 +771,12 @@ fn poll_status() -> Status {
 
         // Deduplicate devices by physical hardware ID, respecting user's preferred transport
         let file_cfg = FileConfig::load();
-        let mut deduped: std::collections::HashMap<String, ConnectedDevice> = std::collections::HashMap::new();
+        let mut deduped: std::collections::HashMap<String, ConnectedDevice> =
+            std::collections::HashMap::new();
         for dev in raw_devices {
-            let pref = file_cfg.tablets.get(&dev.hw_id)
+            let pref = file_cfg
+                .tablets
+                .get(&dev.hw_id)
                 .and_then(|p| p.preferred_transport.as_deref())
                 .unwrap_or("auto");
 
@@ -694,14 +787,8 @@ fn poll_status() -> Status {
                         if existing.transport != "Wi-Fi" && dev.transport == "Wi-Fi" {
                             *existing = dev.clone();
                         }
-                    } else if pref == "usb" {
-                        if existing.transport != "USB" && dev.transport == "USB" {
-                            *existing = dev.clone();
-                        }
-                    } else {
-                        if existing.transport != "USB" && dev.transport == "USB" {
-                            *existing = dev.clone();
-                        }
+                    } else if existing.transport != "USB" && dev.transport == "USB" {
+                        *existing = dev.clone();
                     }
                 })
                 .or_insert(dev);
@@ -710,7 +797,11 @@ fn poll_status() -> Status {
         sorted_devices.sort_by(|a, b| a.serial.cmp(&b.serial));
         s.connected_devices = sorted_devices;
 
-        if let Some(first) = s.connected_devices.iter().find(|d| d.adb_state == DeviceAdbState::Device) {
+        if let Some(first) = s
+            .connected_devices
+            .iter()
+            .find(|d| d.adb_state == DeviceAdbState::Device)
+        {
             s.device_connected = true;
             s.device_model = first.model.clone();
         }
@@ -805,7 +896,8 @@ fn start_daemon() -> Result<(), String> {
         });
     }
 
-    cmd.spawn().map_err(|e| format!("Failed to start daemon: {}", e))?;
+    cmd.spawn()
+        .map_err(|e| format!("Failed to start daemon: {}", e))?;
     Ok(())
 }
 
@@ -862,17 +954,27 @@ const RELEASES_PAGE: &str = "https://github.com/majmichu1/UScreen/releases/lates
 fn os_release_name() -> String {
     std::fs::read_to_string("/etc/os-release")
         .ok()
-        .and_then(|t| t.lines().find_map(|l| l.strip_prefix("PRETTY_NAME=").map(|v| v.trim_matches('"').to_string())))
+        .and_then(|t| {
+            t.lines().find_map(|l| {
+                l.strip_prefix("PRETTY_NAME=")
+                    .map(|v| v.trim_matches('"').to_string())
+            })
+        })
         .unwrap_or_default()
-        + " / " + &std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default()
-        + " (" + &std::env::var("XDG_SESSION_TYPE").unwrap_or_default() + ")"
+        + " / "
+        + &std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default()
+        + " ("
+        + &std::env::var("XDG_SESSION_TYPE").unwrap_or_default()
+        + ")"
 }
 
 fn urlencode(s: &str) -> String {
     let mut out = String::new();
     for b in s.bytes() {
         match b {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => out.push(b as char),
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char)
+            }
             _ => out.push_str(&format!("%{:02X}", b)),
         }
     }
@@ -880,18 +982,43 @@ fn urlencode(s: &str) -> String {
 }
 
 fn version_parts(v: &str) -> (u32, u32, u32) {
-    let mut it = v.trim().trim_start_matches('v').split('.').map(|p| p.parse().unwrap_or(0));
-    (it.next().unwrap_or(0), it.next().unwrap_or(0), it.next().unwrap_or(0))
+    let mut it = v
+        .trim()
+        .trim_start_matches('v')
+        .split('.')
+        .map(|p| p.parse().unwrap_or(0));
+    (
+        it.next().unwrap_or(0),
+        it.next().unwrap_or(0),
+        it.next().unwrap_or(0),
+    )
 }
 
 fn check_for_update() -> Option<String> {
     let out = Command::new("curl")
-        .args(["-sS", "--max-time", "4", "-H", "Accept: application/vnd.github+json",
-               "-H", concat!("User-Agent: uscreen-gui/", env!("GIT_VERSION_STRING")), RELEASES_API])
-        .output().ok()?;
-    if !out.status.success() { return None; }
+        .args([
+            "-sS",
+            "--max-time",
+            "4",
+            "-H",
+            "Accept: application/vnd.github+json",
+            "-H",
+            concat!("User-Agent: uscreen-gui/", env!("GIT_VERSION_STRING")),
+            RELEASES_API,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
     let body = String::from_utf8_lossy(&out.stdout);
-    let tag = body.split("\"tag_name\"").nth(1)?.split('"').nth(1)?.trim_start_matches('v').to_string();
+    let tag = body
+        .split("\"tag_name\"")
+        .nth(1)?
+        .split('"')
+        .nth(1)?
+        .trim_start_matches('v')
+        .to_string();
     (version_parts(&tag) > version_parts(env!("CARGO_PKG_VERSION"))).then_some(tag)
 }
 
@@ -907,7 +1034,9 @@ impl App {
             let slot = update.clone();
             std::thread::spawn(move || {
                 if let Some(v) = check_for_update() {
-                    if let Ok(mut g) = slot.lock() { *g = Some(v); }
+                    if let Ok(mut g) = slot.lock() {
+                        *g = Some(v);
+                    }
                 }
             });
         }
@@ -957,7 +1086,13 @@ impl App {
 
     fn render_global_settings(&mut self, ui: &mut egui::Ui, status: &Status) {
         ui.heading(egui::RichText::new("Global Settings").size(20.0));
-        ui.label(egui::RichText::new("Default settings applied to all connected devices unless overridden.").weak().size(12.0));
+        ui.label(
+            egui::RichText::new(
+                "Default settings applied to all connected devices unless overridden.",
+            )
+            .weak()
+            .size(12.0),
+        );
         ui.add_space(10.0);
 
         // System setup banner if needed
@@ -976,8 +1111,12 @@ impl App {
                     );
                     if missing_pkgs {
                         let mut pkgs = vec![];
-                        if !status.ffmpeg_ok { pkgs.push("ffmpeg"); }
-                        if !status.adb_ok { pkgs.push("android-tools (adb)"); }
+                        if !status.ffmpeg_ok {
+                            pkgs.push("ffmpeg");
+                        }
+                        if !status.adb_ok {
+                            pkgs.push("android-tools (adb)");
+                        }
                         ui.label(format!("Install with package manager: {}", pkgs.join(", ")));
                     }
                     if needs_setup {
@@ -986,7 +1125,10 @@ impl App {
                         } else {
                             "The virtual display device needs to be enabled (one time)."
                         });
-                        if ui.button("Enable virtual display (asks for password)").clicked() {
+                        if ui
+                            .button("Enable virtual display (asks for password)")
+                            .clicked()
+                        {
                             match run_system_setup() {
                                 Ok(_) => self.message = "System setup complete".into(),
                                 Err(e) => self.message = e,
@@ -1202,14 +1344,24 @@ impl App {
         let conn = status.connected_devices.iter().find(|t| t.serial == serial);
         let is_connected = conn.is_some();
         let fallback_model = conn.map(|t| t.model.as_str()).unwrap_or(serial);
-        let adb_state = conn.map(|t| t.adb_state.clone()).unwrap_or(DeviceAdbState::Offline);
+        let adb_state = conn
+            .map(|t| t.adb_state.clone())
+            .unwrap_or(DeviceAdbState::Offline);
         let status_label = match &adb_state {
             DeviceAdbState::Device => format!("Connected ({})", conn.unwrap().transport),
             DeviceAdbState::Unauthorized => "Unauthorized (Action Required)".to_string(),
-            DeviceAdbState::Offline => if is_connected { "Device Offline".to_string() } else { "Saved Profile (Offline)".to_string() },
+            DeviceAdbState::Offline => {
+                if is_connected {
+                    "Device Offline".to_string()
+                } else {
+                    "Saved Profile (Offline)".to_string()
+                }
+            }
             DeviceAdbState::Failed(err) => format!("Connection Error ({})", err),
         };
-        let tooltip_detail = conn.map(|t| t.state_detail.as_str()).unwrap_or("Device is offline. Connect via USB or Wi-Fi to start streaming.");
+        let tooltip_detail = conn
+            .map(|t| t.state_detail.as_str())
+            .unwrap_or("Device is offline. Connect via USB or Wi-Fi to start streaming.");
 
         // Snapshot global defaults before mutably borrowing device profile
         let global_encoder = self.cfg.encoder.clone();
@@ -1220,7 +1372,10 @@ impl App {
         let global_stream_scale = self.cfg.stream_scale;
         let global_position = self.cfg.position.clone();
         let global_allow_legacy_fallback = self.cfg.allow_legacy_fallback;
-        let existing_ports: Vec<u16> = self.cfg.tablets.values()
+        let existing_ports: Vec<u16> = self
+            .cfg
+            .tablets
+            .values()
             .filter_map(|p| p.wifi_address.as_ref())
             .filter_map(|a| a.rsplit_once(':').and_then(|(_, p_str)| p_str.parse().ok()))
             .collect();
@@ -1233,7 +1388,11 @@ impl App {
         let display_title = profile.display_name(fallback_model).to_string();
 
         ui.heading(egui::RichText::new(format!("Device: {}", display_title)).size(20.0));
-        ui.label(egui::RichText::new("Configure per-device parameters and overrides.").weak().size(12.0));
+        ui.label(
+            egui::RichText::new("Configure per-device parameters and overrides.")
+                .weak()
+                .size(12.0),
+        );
         ui.add_space(8.0);
 
         // Hardware & Identity Card with Top-Right Version Info (Task 7.4)
@@ -1333,11 +1492,9 @@ impl App {
                                             }
 
                                             // Reinstall button only shown if mismatch or dirty! (Task 7.3)
-                                            if mismatch || is_dirty {
-                                                if ui.button("📲 Reinstall App").clicked() {
-                                                    self.installer_state.target_serial = serial.to_string();
-                                                    self.installer_state.open = true;
-                                                }
+                                            if (mismatch || is_dirty) && ui.button("📲 Reinstall App").clicked() {
+                                                self.installer_state.target_serial = serial.to_string();
+                                                self.installer_state.open = true;
                                             }
                                         });
                                     });
@@ -1351,7 +1508,11 @@ impl App {
         ui.separator();
         ui.add_space(8.0);
 
-        ui.label(egui::RichText::new("Per-Device Overrides").strong().size(15.0));
+        ui.label(
+            egui::RichText::new("Per-Device Overrides")
+                .strong()
+                .size(15.0),
+        );
         ui.label(egui::RichText::new("Check 'Override' to customize a setting specifically for this device. Unchecked settings follow Global Settings.").weak().size(11.0));
         ui.add_space(8.0);
 
@@ -1654,7 +1815,13 @@ impl App {
         let mut remove_profile = false;
         if !is_connected {
             ui.add_space(20.0);
-            if ui.button(egui::RichText::new("Forget / Delete Saved Profile").color(egui::Color32::from_rgb(240, 100, 100))).clicked() {
+            if ui
+                .button(
+                    egui::RichText::new("Forget / Delete Saved Profile")
+                        .color(egui::Color32::from_rgb(240, 100, 100)),
+                )
+                .clicked()
+            {
                 remove_profile = true;
             }
         }
@@ -2137,40 +2304,43 @@ fn render_sidebar_item(
     tooltip: Option<&str>,
 ) -> egui::Response {
     let avail_width = ui.available_width();
-    let resp = ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
-        ui.spacing_mut().button_padding = egui::vec2(0.0, 0.0);
+    let resp = ui
+        .horizontal(|ui| {
+            ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+            ui.spacing_mut().button_padding = egui::vec2(0.0, 0.0);
 
-        let desired_size = egui::vec2(avail_width, 28.0);
-        let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+            let desired_size = egui::vec2(avail_width, 28.0);
+            let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
 
-        if ui.is_rect_visible(rect) {
-            let bg_color = if selected {
-                egui::Color32::from_rgba_unmultiplied(60, 100, 180, 80)
-            } else if response.hovered() {
-                egui::Color32::from_white_alpha(15)
-            } else {
-                egui::Color32::TRANSPARENT
-            };
-            if bg_color != egui::Color32::TRANSPARENT {
-                ui.painter().rect_filled(rect, egui::CornerRadius::same(4), bg_color);
+            if ui.is_rect_visible(rect) {
+                let bg_color = if selected {
+                    egui::Color32::from_rgba_unmultiplied(60, 100, 180, 80)
+                } else if response.hovered() {
+                    egui::Color32::from_white_alpha(15)
+                } else {
+                    egui::Color32::TRANSPARENT
+                };
+                if bg_color != egui::Color32::TRANSPARENT {
+                    ui.painter()
+                        .rect_filled(rect, egui::CornerRadius::same(4), bg_color);
+                }
+
+                let widget_text: egui::WidgetText = text.into();
+                let galley = widget_text.into_galley(
+                    ui,
+                    Some(egui::TextWrapMode::Truncate),
+                    avail_width - 8.0,
+                    egui::TextStyle::Button,
+                );
+                let pos = egui::pos2(
+                    rect.min.x + 4.0,
+                    rect.min.y + (28.0 - galley.size().y) * 0.5,
+                );
+                ui.painter().galley(pos, galley, egui::Color32::WHITE);
             }
-
-            let widget_text: egui::WidgetText = text.into();
-            let galley = widget_text.into_galley(
-                ui,
-                Some(egui::TextWrapMode::Truncate),
-                avail_width - 8.0,
-                egui::TextStyle::Button,
-            );
-            let pos = egui::pos2(
-                rect.min.x + 4.0,
-                rect.min.y + (28.0 - galley.size().y) * 0.5,
-            );
-            ui.painter().galley(pos, galley, egui::Color32::WHITE);
-        }
-        response
-    }).inner;
+            response
+        })
+        .inner;
 
     if let Some(tip) = tooltip {
         resp.on_hover_text(tip)
@@ -2183,11 +2353,21 @@ impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Global typography scaling (Task 7.2)
         ctx.style_mut(|style| {
-            style.text_styles.insert(egui::TextStyle::Heading, egui::FontId::proportional(20.0));
-            style.text_styles.insert(egui::TextStyle::Body, egui::FontId::proportional(15.0));
-            style.text_styles.insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
-            style.text_styles.insert(egui::TextStyle::Small, egui::FontId::proportional(12.0));
-            style.text_styles.insert(egui::TextStyle::Monospace, egui::FontId::monospace(14.0));
+            style
+                .text_styles
+                .insert(egui::TextStyle::Heading, egui::FontId::proportional(20.0));
+            style
+                .text_styles
+                .insert(egui::TextStyle::Body, egui::FontId::proportional(15.0));
+            style
+                .text_styles
+                .insert(egui::TextStyle::Button, egui::FontId::proportional(15.0));
+            style
+                .text_styles
+                .insert(egui::TextStyle::Small, egui::FontId::proportional(12.0));
+            style
+                .text_styles
+                .insert(egui::TextStyle::Monospace, egui::FontId::monospace(14.0));
         });
 
         // Drain surgical installer worker updates
@@ -2209,7 +2389,11 @@ impl eframe::App for App {
                             self.message = msg.clone();
                             if let Some(ref nv) = new_ver {
                                 if let Ok(mut st) = self.status.lock() {
-                                    if let Some(dev) = st.connected_devices.iter_mut().find(|d| d.serial == self.installer_state.target_serial) {
+                                    if let Some(dev) = st
+                                        .connected_devices
+                                        .iter_mut()
+                                        .find(|d| d.serial == self.installer_state.target_serial)
+                                    {
                                         dev.app_version = Some(nv.clone());
                                         dev.version_mismatch = nv != env!("GIT_VERSION_STRING");
                                     }
@@ -2231,7 +2415,8 @@ impl eframe::App for App {
             self.secure_pairing_state.is_pairing = false;
             match res {
                 Ok((serial, target)) => {
-                    self.secure_pairing_state.status_text = format!("✅ Successfully paired and connected to {}", target);
+                    self.secure_pairing_state.status_text =
+                        format!("✅ Successfully paired and connected to {}", target);
                     let profile = self.cfg.tablets.entry(serial).or_default();
                     profile.wifi_address = Some(target.clone());
                     if let Some((_, port_str)) = target.rsplit_once(':') {
@@ -2264,7 +2449,11 @@ impl eframe::App for App {
                 ui.label(egui::RichText::new("USB Virtual Display").weak().size(11.0));
 
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let btn_text = if status.daemon_running { "Stop Daemon" } else { "Start Daemon" };
+                    let btn_text = if status.daemon_running {
+                        "Stop Daemon"
+                    } else {
+                        "Start Daemon"
+                    };
                     if ui.button(btn_text).clicked() {
                         if status.daemon_running {
                             match stop_daemon() {
@@ -2283,8 +2472,16 @@ impl eframe::App for App {
                     status_dot(
                         ui,
                         status.daemon_running,
-                        if status.daemon_running { "Running" } else { "Stopped" },
-                        &if status.daemon_running { format!("(PID {})", status.daemon_pid) } else { String::new() },
+                        if status.daemon_running {
+                            "Running"
+                        } else {
+                            "Stopped"
+                        },
+                        &if status.daemon_running {
+                            format!("(PID {})", status.daemon_pid)
+                        } else {
+                            String::new()
+                        },
                     );
                 });
             });
@@ -2297,9 +2494,17 @@ impl eframe::App for App {
             let dirty = self.cfg != self.saved_cfg;
             ui.horizontal(|ui| {
                 if !self.message.is_empty() {
-                    ui.label(egui::RichText::new(&self.message).color(egui::Color32::from_rgb(100, 200, 255)).size(11.0));
+                    ui.label(
+                        egui::RichText::new(&self.message)
+                            .color(egui::Color32::from_rgb(100, 200, 255))
+                            .size(11.0),
+                    );
                 } else {
-                    ui.label(egui::RichText::new(format!("config: {}", config_path().display())).weak().size(10.0));
+                    ui.label(
+                        egui::RichText::new(format!("config: {}", config_path().display()))
+                            .weak()
+                            .size(10.0),
+                    );
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let label = if status.daemon_running {
@@ -2486,19 +2691,21 @@ impl eframe::App for App {
 
         // 4. Central Panel: Device or Global Settings
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-                ui.add_space(6.0);
-                match &self.selected_view {
-                    SelectedView::Global => {
-                        self.render_global_settings(ui, &status);
+            egui::ScrollArea::vertical()
+                .auto_shrink([false, false])
+                .show(ui, |ui| {
+                    ui.add_space(6.0);
+                    match &self.selected_view {
+                        SelectedView::Global => {
+                            self.render_global_settings(ui, &status);
+                        }
+                        SelectedView::Device(serial) => {
+                            let serial = serial.clone();
+                            self.render_device_settings(ui, &serial, &status);
+                        }
                     }
-                    SelectedView::Device(serial) => {
-                        let serial = serial.clone();
-                        self.render_device_settings(ui, &serial, &status);
-                    }
-                }
-                ui.add_space(16.0);
-            });
+                    ui.add_space(16.0);
+                });
         });
 
         // 5. Modals
@@ -2551,7 +2758,10 @@ mod tests {
         let apk = find_apk_path();
         let _ = std::env::set_current_dir(orig);
         println!("Resolved APK path from /: {:?}", apk);
-        assert!(apk.is_some(), "find_apk_path() must locate app-debug.apk even when cwd is /");
+        assert!(
+            apk.is_some(),
+            "find_apk_path() must locate app-debug.apk even when cwd is /"
+        );
         assert!(apk.unwrap().exists());
     }
 
@@ -2574,7 +2784,10 @@ mod tests {
             Some(v) => v != host,
             None => true,
         };
-        assert!(mismatch_missing, "Missing app must trigger mismatch (needs install)");
+        assert!(
+            mismatch_missing,
+            "Missing app must trigger mismatch (needs install)"
+        );
 
         // Matching version
         let dev_match = Some(host);

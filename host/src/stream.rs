@@ -28,7 +28,10 @@ pub struct StreamConfig {
 
 impl Default for StreamConfig {
     fn default() -> Self {
-        Self { video_port: 8890, token: None }
+        Self {
+            video_port: 8890,
+            token: None,
+        }
     }
 }
 
@@ -130,8 +133,10 @@ impl StreamServer {
                     .map(|t| crate::runtime::token_matches(expected, t))
                     .unwrap_or(false);
             if !ok {
-                warn!("Video client did not present a valid session token — dropped. \
-                       An app older than 1.1.0 cannot authenticate: update it.");
+                warn!(
+                    "Video client did not present a valid session token — dropped. \
+                       An app older than 1.1.0 cannot authenticate: update it."
+                );
                 return Ok(());
             }
         }
