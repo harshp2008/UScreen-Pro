@@ -24,13 +24,13 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tokio::signal;
-use tokio::sync::{broadcast, watch};
+use tokio::sync::{broadcast, watch, mpsc, oneshot};
 use tracing::{error, info, warn};
 
 #[derive(Parser)]
 #[command(
     name = "uscreen",
-    version,
+    version = env!("GIT_VERSION_STRING"),
     about = "USB second-screen server for Linux"
 )]
 struct Cli {
@@ -109,6 +109,14 @@ enum Commands {
         #[arg(long = "off")]
         off: bool,
     },
+    /// Pause a device's display and capture session for surgical update
+    PauseDevice {
+        serial: String,
+    },
+    /// Resume a device's display and capture session after surgical update
+    ResumeDevice {
+        serial: String,
+    },
     /// Diagnose the whole setup and report what is wrong
     Doctor,
 }
@@ -148,16 +156,48 @@ async fn main() -> Result<()> {
             return Ok(());
         }
         Some(Commands::Start { .. }) | None => {
-            info!("Starting uscreen daemon");
+            info!("Starting uscreen daemon v{} (PID: {})", env!("GIT_VERSION_STRING"), std::process::id());
             run_daemon(cli).await?;
         }
         Some(Commands::Stop) => stop_daemon().await?,
         Some(Commands::Status) => show_status().await?,
+        Some(Commands::PauseDevice { serial }) => client_control_cmd(&format!("PAUSE {}", serial)).await?,
+        Some(Commands::ResumeDevice { serial }) => client_control_cmd(&format!("RESUME {}", serial)).await?,
         Some(Commands::ListDisplays) => list_displays().await?,
         Some(Commands::Wifi { off }) => setup_wifi(*off).await?,
         Some(Commands::Doctor) => doctor::run().await?,
     }
 
+    Ok(())
+}
+
+pub enum DaemonControlMsg {
+    PauseDevice {
+        serial: String,
+        resp: oneshot::Sender<Result<(), String>>,
+    },
+    ResumeDevice {
+        serial: String,
+        resp: oneshot::Sender<Result<(), String>>,
+    },
+}
+
+async fn client_control_cmd(cmd: &str) -> Result<()> {
+    let control_sock_path = crate::runtime::runtime_dir().join("control.sock");
+    if !control_sock_path.exists() {
+        anyhow::bail!("uscreen daemon is not running (control socket {:?} not found)", control_sock_path);
+    }
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+    let mut stream = tokio::net::UnixStream::connect(&control_sock_path).await?;
+    stream.write_all(format!("{}\n", cmd).as_bytes()).await?;
+    let mut reader = tokio::io::BufReader::new(stream);
+    let mut line = String::new();
+    reader.read_line(&mut line).await?;
+    let resp = line.trim();
+    if let Some(err) = resp.strip_prefix("ERR ") {
+        anyhow::bail!("Control command failed: {}", err);
+    }
+    println!("{}", resp);
     Ok(())
 }
 
@@ -600,9 +640,25 @@ async fn run_daemon(cli: Cli) -> Result<()> {
     };
     let wifi_address = file_cfg.wifi_address.clone();
     let settings_tx_adb = settings_tx.clone();
+    let (control_tx, control_rx) = mpsc::channel::<DaemonControlMsg>(16);
     let adb_handle = tokio::spawn(async move {
-        adb_monitor(video_port, input_port, auto_launch, tablet_tx, adb_token, relaunch, extra, wifi_address, settings_tx_adb, serial_tx).await;
+        adb_monitor(video_port, input_port, auto_launch, tablet_tx, adb_token, relaunch, extra, wifi_address, settings_tx_adb, serial_tx, control_rx).await;
     });
+
+    let control_sock_path = crate::runtime::runtime_dir().join("control.sock");
+    let _ = std::fs::remove_file(&control_sock_path);
+    let control_handle = match tokio::net::UnixListener::bind(&control_sock_path) {
+        Ok(listener) => {
+            let ctrl_tx = control_tx.clone();
+            Some(tokio::spawn(async move {
+                run_control_server(listener, ctrl_tx).await;
+            }))
+        }
+        Err(e) => {
+            warn!("Could not bind control.sock: {}", e);
+            None
+        }
+    };
 
     println!();
     println!("================================================");
@@ -648,6 +704,10 @@ async fn run_daemon(cli: Cli) -> Result<()> {
     stream_handle.abort();
     input_handle.abort();
     adb_handle.abort();
+    if let Some(h) = control_handle {
+        h.abort();
+    }
+    let _ = std::fs::remove_file(&control_sock_path);
     save_handle.abort();
     mode_save_handle.abort();
     tray_handle.abort();
@@ -688,7 +748,7 @@ fn other_daemons() -> Vec<u32> {
         // subcommand means start. Only the other subcommands are not daemons.
         let args: Vec<&[u8]> = cmd.split(|b| *b == 0).skip(1).collect();
         let other_subcommand = args.iter().any(|a| {
-            matches!(*a, b"stop" | b"status" | b"list-displays" | b"doctor" | b"wifi" | b"--help" | b"-h" | b"--version" | b"-V" | b"-d" | b"--daemonize")
+            matches!(*a, b"stop" | b"status" | b"list-displays" | b"doctor" | b"wifi" | b"--help" | b"-h" | b"--version" | b"-V" | b"-d" | b"--daemonize" | b"pause-device" | b"resume-device")
         });
         if other_subcommand { continue; }
         // Same user only: another account's daemon is not ours to touch.
@@ -696,6 +756,66 @@ fn other_daemons() -> Vec<u32> {
         out.push(pid);
     }
     out
+}
+
+async fn run_control_server(
+    listener: tokio::net::UnixListener,
+    control_tx: mpsc::Sender<DaemonControlMsg>,
+) {
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+    loop {
+        let (mut socket, _) = match listener.accept().await {
+            Ok(s) => s,
+            Err(_) => break,
+        };
+        let ctrl_tx = control_tx.clone();
+        tokio::spawn(async move {
+            let (reader, mut writer) = socket.split();
+            let mut buf_reader = tokio::io::BufReader::new(reader);
+            let mut line = String::new();
+            while let Ok(n) = buf_reader.read_line(&mut line).await {
+                if n == 0 { break; }
+                let cmd = line.trim();
+                if let Some(serial) = cmd.strip_prefix("PAUSE ") {
+                    let serial = serial.trim().to_string();
+                    let (tx, rx) = oneshot::channel();
+                    let _ = ctrl_tx.send(DaemonControlMsg::PauseDevice { serial: serial.clone(), resp: tx }).await;
+                    match rx.await {
+                        Ok(Ok(())) => {
+                            let _ = writer.write_all(format!("OK PAUSED {}\n", serial).as_bytes()).await;
+                        }
+                        Ok(Err(e)) => {
+                            let _ = writer.write_all(format!("ERR {}\n", e).as_bytes()).await;
+                        }
+                        Err(_) => {
+                            let _ = writer.write_all(b"ERR channel closed\n").await;
+                        }
+                    }
+                } else if let Some(serial) = cmd.strip_prefix("RESUME ") {
+                    let serial = serial.trim().to_string();
+                    let (tx, rx) = oneshot::channel();
+                    let _ = ctrl_tx.send(DaemonControlMsg::ResumeDevice { serial: serial.clone(), resp: tx }).await;
+                    match rx.await {
+                        Ok(Ok(())) => {
+                            let _ = writer.write_all(format!("OK RESUMED {}\n", serial).as_bytes()).await;
+                        }
+                        Ok(Err(e)) => {
+                            let _ = writer.write_all(format!("ERR {}\n", e).as_bytes()).await;
+                        }
+                        Err(_) => {
+                            let _ = writer.write_all(b"ERR channel closed\n").await;
+                        }
+                    }
+                } else if cmd == "PING" {
+                    let _ = writer.write_all(b"PONG\n").await;
+                } else {
+                    let _ = writer.write_all(b"ERR unknown command\n").await;
+                }
+                let _ = writer.flush().await;
+                line.clear();
+            }
+        });
+    }
 }
 
 fn remove_pid_file_if_ours(pid_path: &std::path::Path, pid: u32) {
@@ -1145,7 +1265,9 @@ async fn adb_monitor(
     wifi_address: String,
     settings_tx: watch::Sender<capture::EncoderSettings>,
     serial_tx: watch::Sender<Option<String>>,
+    mut control_rx: mpsc::Receiver<DaemonControlMsg>,
 ) {
+    let mut paused_serials: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut slot_0_hw: Option<String> = None;
     let mut slot_0_active_serial: String = String::new();
     let mut slot_0_transport: Transport = Transport::Usb;
@@ -1201,7 +1323,9 @@ async fn adb_monitor(
 
         // 1. Maintain Slot 0 Session with strict device isolation
         if let Some(ref s0_hw) = slot_0_hw.clone() {
-            if let Some(best_dev) = physical_devices.get(s0_hw) {
+            if paused_serials.contains(&slot_0_active_serial) {
+                // Device is paused for surgical update — do not alter transport or state
+            } else if let Some(best_dev) = physical_devices.get(s0_hw) {
                 if !*tablet_tx.borrow() {
                     let _ = tablet_tx.send(true);
                 }
@@ -1242,6 +1366,10 @@ async fn adb_monitor(
         // 2. Maintain Extra Sessions with strict device isolation
         let mut gone_extras = Vec::new();
         for (hw_id, sess) in extras.iter_mut() {
+            if paused_serials.contains(&sess.active_serial) {
+                // Device is paused for surgical update — do not touch
+                continue;
+            }
             if let Some(best_dev) = physical_devices.get(hw_id) {
                 if !*sess.tablet_tx.borrow() {
                     let _ = sess.tablet_tx.send(true);
@@ -1283,6 +1411,10 @@ async fn adb_monitor(
 
         // 3. Assign newly attached devices to free slots without disturbing active sessions
         for (hw_id, dev) in &physical_devices {
+            if paused_serials.contains(&dev.serial) {
+                // Device is in surgical update pause — do not assign as new session
+                continue;
+            }
             if slot_0_hw.as_ref() == Some(hw_id) || extras.contains_key(hw_id) {
                 // Device already has an active session — leave it alone
                 continue;
@@ -1365,6 +1497,65 @@ async fn adb_monitor(
         };
 
         tokio::select! {
+            Some(msg) = control_rx.recv() => {
+                match msg {
+                    DaemonControlMsg::PauseDevice { serial, resp } => {
+                        info!("Received surgical PAUSE request for device {}", serial);
+                        paused_serials.insert(serial.clone());
+                        if slot_0_active_serial == serial {
+                            let _ = tablet_tx.send(false);
+                            let fifo = crate::capture::fifo_path_for(0);
+                            let _ = tokio::process::Command::new("pkill")
+                                .args(["-f", &format!("evdi_helper .*--capture-fifo {}( |$)", fifo)])
+                                .status().await;
+                            let _ = tokio::process::Command::new("pkill")
+                                .args(["-f", &format!("ffmpeg.*{}", fifo)])
+                                .status().await;
+                            crate::capture::CaptureManager::disable_evdi_display(vdisplay::evdi_cards().first().copied()).await;
+                            let _ = resp.send(Ok(()));
+                        } else if let Some(sess) = extras.values_mut().find(|s| s.active_serial == serial) {
+                            let _ = sess.tablet_tx.send(false);
+                            let fifo = crate::capture::fifo_path_for(sess.instance);
+                            let _ = tokio::process::Command::new("pkill")
+                                .args(["-f", &format!("evdi_helper .*--capture-fifo {}( |$)", fifo)])
+                                .status().await;
+                            let _ = tokio::process::Command::new("pkill")
+                                .args(["-f", &format!("ffmpeg.*{}", fifo)])
+                                .status().await;
+                            let cards = vdisplay::evdi_cards();
+                            let card = cards.get(sess.instance as usize).copied();
+                            crate::capture::CaptureManager::disable_evdi_display(card).await;
+                            let _ = resp.send(Ok(()));
+                        } else {
+                            let fifo = crate::capture::fifo_path_for(0);
+                            let _ = tokio::process::Command::new("pkill")
+                                .args(["-f", &format!("evdi_helper .*--capture-fifo {}( |$)", fifo)])
+                                .status().await;
+                            let _ = tokio::process::Command::new("pkill")
+                                .args(["-f", &format!("ffmpeg.*{}", fifo)])
+                                .status().await;
+                            let _ = resp.send(Ok(()));
+                        }
+                    }
+                    DaemonControlMsg::ResumeDevice { serial, resp } => {
+                        info!("Received surgical RESUME request for device {}", serial);
+                        paused_serials.remove(&serial);
+                        if slot_0_active_serial == serial {
+                            let _ = setup_adb_forwarding(&slot_0_active_serial, video_port, input_port).await;
+                            launch_app(&slot_0_active_serial, token.as_deref(), video_port, input_port).await;
+                            let _ = tablet_tx.send(true);
+                            let _ = resp.send(Ok(()));
+                        } else if let Some(sess) = extras.values_mut().find(|s| s.active_serial == serial) {
+                            let _ = setup_adb_forwarding(&sess.active_serial, sess.video_port, sess.input_port).await;
+                            launch_app(&sess.active_serial, token.as_deref(), sess.video_port, sess.input_port).await;
+                            let _ = sess.tablet_tx.send(true);
+                            let _ = resp.send(Ok(()));
+                        } else {
+                            let _ = resp.send(Err(format!("Device {} not found in active sessions", serial)));
+                        }
+                    }
+                }
+            }
             _ = tokio::time::sleep(tokio::time::Duration::from_secs(2)) => {
                 polls_since_check += 1;
                 if polls_since_check < APP_CHECK_EVERY {
@@ -1401,7 +1592,7 @@ async fn adb_monitor(
                 }
 
                 // B. App Running Watchdog for Slot 0
-                if auto_launch && !slot_0_active_serial.is_empty() && !is_fake_serial(&slot_0_active_serial) {
+                if auto_launch && !slot_0_active_serial.is_empty() && !is_fake_serial(&slot_0_active_serial) && !paused_serials.contains(&slot_0_active_serial) {
                     match app_running(&slot_0_active_serial).await {
                         Some(true) => {
                             slot_0_relaunch_wait = std::time::Duration::from_secs(5);
@@ -1420,7 +1611,7 @@ async fn adb_monitor(
                 // C. App Running Watchdog for ALL Extra Sessions
                 if auto_launch {
                     for sess in extras.values_mut() {
-                        if is_fake_serial(&sess.active_serial) { continue; }
+                        if is_fake_serial(&sess.active_serial) || paused_serials.contains(&sess.active_serial) { continue; }
                         match app_running(&sess.active_serial).await {
                             Some(true) => {
                                 sess.relaunch_wait = std::time::Duration::from_secs(5);
@@ -1438,7 +1629,7 @@ async fn adb_monitor(
                 }
             }
             _ = relaunch.notified() => {
-                if !slot_0_active_serial.is_empty() {
+                if !slot_0_active_serial.is_empty() && !paused_serials.contains(&slot_0_active_serial) {
                     if slot_0_last_relaunch.elapsed() >= slot_0_relaunch_wait {
                         slot_0_last_relaunch = std::time::Instant::now();
                         slot_0_relaunches += 1;
@@ -1454,7 +1645,7 @@ async fn adb_monitor(
             }
             _ = extra_relaunch => {
                 for sess in extras.values_mut() {
-                    if is_fake_serial(&sess.active_serial) { continue; }
+                    if is_fake_serial(&sess.active_serial) || paused_serials.contains(&sess.active_serial) { continue; }
                     if sess.last_relaunch.elapsed() >= sess.relaunch_wait {
                         sess.last_relaunch = std::time::Instant::now();
                         sess.relaunches += 1;
@@ -2072,13 +2263,13 @@ async fn show_status() -> Result<()> {
             // Check if the process is actually running
             let proc_path = format!("/proc/{}", pid);
             if std::path::Path::new(&proc_path).exists() {
-                println!("uscreen is running (PID: {})", pid);
+                println!("uscreen is running (PID: {}, version: {})", pid, env!("GIT_VERSION_STRING"));
             } else {
                 println!("uscreen is not running (stale PID file)");
                 let _ = std::fs::remove_file(&pid_path);
             }
         } else {
-            println!("uscreen is not running");
+            println!("uscreen is not running (version: {})", env!("GIT_VERSION_STRING"));
         }
     } else {
         // Fallback: pgrep excluding self
@@ -2088,9 +2279,9 @@ async fn show_status() -> Result<()> {
             .collect::<Vec<_>>()
             .join(" ");
         if !pids.is_empty() {
-            println!("uscreen is running (PID: {})", pids);
+            println!("uscreen is running (PID: {}, version: {})", pids, env!("GIT_VERSION_STRING"));
         } else {
-            println!("uscreen is not running");
+            println!("uscreen is not running (version: {})", env!("GIT_VERSION_STRING"));
         }
     }
     Ok(())

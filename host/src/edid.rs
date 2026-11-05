@@ -137,7 +137,7 @@ pub fn make_edid_sized(
 /// Build an EDID at the default physical size.
 #[cfg(test)]
 pub fn make_edid(width: u32, height: u32, refresh: u32) -> Vec<u8> {
-    make_edid_sized(width, height, refresh, DEFAULT_WIDTH_MM, DEFAULT_HEIGHT_MM)
+    make_edid_sized(width, height, refresh, DEFAULT_WIDTH_MM, DEFAULT_HEIGHT_MM, 1)
 }
 
 /// Bumped whenever the generator changes. It is part of the cache filename so

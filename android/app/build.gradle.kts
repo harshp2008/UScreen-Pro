@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.io.ByteArrayOutputStream
 
 plugins {
     id("com.android.application")
@@ -12,6 +13,41 @@ val keystoreProps = Properties().apply {
     if (f.exists()) f.inputStream().use { load(it) }
 }
 
+fun queryGitHash(): String {
+    return try {
+        val stdout = ByteArrayOutputStream()
+        project.exec {
+            commandLine("git", "rev-parse", "--short", "HEAD")
+            standardOutput = stdout
+        }
+        stdout.toString().trim()
+    } catch (e: Exception) {
+        "unknown"
+    }
+}
+
+fun queryIsGitDirty(): Boolean {
+    return try {
+        val stdout = ByteArrayOutputStream()
+        project.exec {
+            commandLine("git", "status", "--porcelain")
+            standardOutput = stdout
+        }
+        stdout.toString().trim().isNotEmpty()
+    } catch (e: Exception) {
+        false
+    }
+}
+
+val gitHash = queryGitHash()
+val isDirty = queryIsGitDirty()
+val gitVersionString = if (isDirty) {
+    logger.warn("WARNING: Building APK with uncommitted changes. Version will be marked as dirty.")
+    "$gitHash-dirty"
+} else {
+    gitHash
+}
+
 android {
     namespace = "com.uscreen"
     compileSdk = 34
@@ -21,7 +57,8 @@ android {
         minSdk = 27
         targetSdk = 34
         versionCode = 22
-        versionName = "1.3.0"
+        versionName = gitVersionString
+        buildConfigField("String", "GIT_VERSION_STRING", "\"$gitVersionString\"")
     }
 
     if (keystoreProps.isNotEmpty()) {
