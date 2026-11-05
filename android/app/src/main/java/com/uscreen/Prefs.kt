@@ -27,7 +27,16 @@ class Prefs(context: Context) {
         const val ORIENTATION_AUTO = 0
         const val ORIENTATION_CAMERA_UP = 1
         const val ORIENTATION_CAMERA_DOWN = 2
+
+        /** Values of [preferredTransport]. */
+        const val TRANSPORT_AUTO = 0
+        const val TRANSPORT_USB = 1
+        const val TRANSPORT_WIFI = 2
     }
+
+    var preferredTransport: Int
+        get() = sp.getInt("preferred_transport", TRANSPORT_AUTO)
+        set(v) = sp.edit().putInt("preferred_transport", v).apply()
 
     var bitrateKbps: Int
         get() = sp.getInt("bitrate_kbps", DEFAULT_BITRATE_KBPS)

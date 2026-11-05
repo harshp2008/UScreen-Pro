@@ -326,7 +326,7 @@ pub enum InstallStage {
 pub enum InstallWorkerMsg {
     StageUpdate(InstallStage, String),
     LogLine(String),
-    Finished(Result<String, String>),
+    Finished(Result<String, String>, Option<String>),
 }
 
 #[derive(Clone, Debug)]
@@ -343,7 +343,7 @@ pub struct InstallerModalState {
 impl Default for InstallerModalState {
     fn default() -> Self {
         Self {
-            open: false,
+            open: std::env::var("USCREEN_OPEN_MODAL").is_ok(),
             target_serial: String::new(),
             force_reinstall: false,
             stage: InstallStage::Idle,
@@ -387,7 +387,7 @@ fn send_daemon_control(cmd: &str) -> Result<String, String> {
 
 fn start_surgical_update(
     serial: String,
-    force_reinstall: bool,
+    _force_reinstall: bool,
     tx: Sender<InstallWorkerMsg>,
 ) {
     std::thread::spawn(move || {
@@ -400,14 +400,14 @@ fn start_surgical_update(
         };
 
         log(&format!("Starting surgical update pipeline for target device: {}", serial));
-        log(&format!("Force clean reinstall mode: {}", force_reinstall));
+        log("Execution mode: Clean uninstall & reinstall");
 
         let apk = match find_apk_path() {
             Some(p) => p,
             None => {
-                let err = "app-debug.apk not found. Build it with `./gradlew assembleDebug` or copy to ~/.local/share/uscreen/app-debug.apk".to_string();
+                let err = "app-debug.apk not found. Build it with `make all` or `./gradlew assembleDebug`".to_string();
                 log(&format!("ERROR: {}", err));
-                let _ = tx.send(InstallWorkerMsg::Finished(Err(err)));
+                let _ = tx.send(InstallWorkerMsg::Finished(Err(err), None));
                 return;
             }
         };
@@ -437,24 +437,20 @@ fn start_surgical_update(
         std::thread::sleep(Duration::from_millis(1200));
         log("Virtual display unmount grace period elapsed.");
 
-        // Step C: Run `adb -s <serial> uninstall com.uscreen` to gracefully delete old app
-        if force_reinstall {
-            stage(InstallStage::StepC_UninstallingOldApp, "Step C: Executing `adb uninstall com.uscreen`...");
-            match Command::new("adb").args(["-s", &serial, "uninstall", "com.uscreen"]).output() {
-                Ok(out) => {
-                    let out_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
-                    let err_str = String::from_utf8_lossy(&out.stderr).trim().to_string();
-                    log(&format!("adb uninstall stdout: {}", out_str));
-                    if !err_str.is_empty() {
-                        log(&format!("adb uninstall stderr: {}", err_str));
-                    }
-                }
-                Err(e) => {
-                    log(&format!("Warning: failed to invoke adb uninstall: {}", e));
+        // Step C: Run `adb -s <serial> uninstall com.uscreen` (Always perform clean uninstall)
+        stage(InstallStage::StepC_UninstallingOldApp, "Step C: Executing `adb uninstall com.uscreen` (clean uninstall)...");
+        match Command::new("adb").args(["-s", &serial, "uninstall", "com.uscreen"]).output() {
+            Ok(out) => {
+                let out_str = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let err_str = String::from_utf8_lossy(&out.stderr).trim().to_string();
+                log(&format!("adb uninstall stdout: {}", out_str));
+                if !err_str.is_empty() {
+                    log(&format!("adb uninstall stderr: {}", err_str));
                 }
             }
-        } else {
-            log("Step C: Preserving application data (fast upgrade mode, skipping adb uninstall).");
+            Err(e) => {
+                log(&format!("Warning: failed to invoke adb uninstall: {}", e));
+            }
         }
 
         // Step D: Run `adb -s <serial> install -r app-debug.apk`
@@ -483,8 +479,37 @@ fn start_surgical_update(
 
         if !install_success {
             let err = format!("Installation of APK failed on device {}. Check logs.", serial);
-            let _ = tx.send(InstallWorkerMsg::Finished(Err(err)));
+            let _ = tx.send(InstallWorkerMsg::Finished(Err(err), None));
             return;
+        }
+
+        // Poll package manager every 500ms for up to 3s to detect new versionName and clear mismatch
+        log("Verifying installed package version via dumpsys package...");
+        let mut detected_version = None;
+        for attempt in 1..=6 {
+            std::thread::sleep(Duration::from_millis(500));
+            if let Ok(out) = Command::new("adb")
+                .args(["-s", &serial, "shell", "dumpsys package com.uscreen | grep versionName"])
+                .output()
+            {
+                let text = String::from_utf8_lossy(&out.stdout);
+                for line in text.lines() {
+                    if let Some(pos) = line.find("versionName=") {
+                        let v = line[pos + 12..].trim().to_string();
+                        if !v.is_empty() {
+                            detected_version = Some(v);
+                            break;
+                        }
+                    }
+                }
+                if detected_version.is_some() {
+                    break;
+                }
+            }
+            log(&format!("Waiting for package manager to register new version (attempt {}/6)...", attempt));
+        }
+        if let Some(ref ver) = detected_version {
+            log(&format!("Detected updated package version: {}", ver));
         }
 
         // Step E: Trigger daemon to re-spawn EVDI session and relaunch app with correct dynamic port intents
@@ -509,9 +534,10 @@ fn start_surgical_update(
             log("Note: Start the UScreen daemon to begin display streaming.");
         }
 
-        let success_msg = format!("Successfully installed and synced UScreen v{} on {}", env!("GIT_VERSION_STRING"), serial);
+        let ver_suffix = detected_version.as_deref().unwrap_or(env!("GIT_VERSION_STRING"));
+        let success_msg = format!("Successfully installed and synced UScreen v{} on {}", ver_suffix, serial);
         log(&format!(">>> COMPLETE: {}", success_msg));
-        let _ = tx.send(InstallWorkerMsg::Finished(Ok(success_msg)));
+        let _ = tx.send(InstallWorkerMsg::Finished(Ok(success_msg), detected_version));
     });
 }
 
@@ -548,7 +574,15 @@ fn poll_status() -> Status {
             if serial.is_empty() {
                 continue;
             }
-            let state_str = parts.get(1).copied().unwrap_or("unknown");
+            let mut state_str = parts.get(1).copied().unwrap_or("unknown");
+            if state_str == "unauthorized" {
+                if let Ok(st) = Command::new("adb").args(["-s", &serial, "get-state"]).output() {
+                    let s = String::from_utf8_lossy(&st.stdout).trim().to_string();
+                    if s == "device" {
+                        state_str = "device";
+                    }
+                }
+            }
             let model = parts
                 .iter()
                 .find_map(|t| t.strip_prefix("model:"))
@@ -566,7 +600,7 @@ fn poll_status() -> Status {
                 ),
                 "unauthorized" => (
                     DeviceAdbState::Unauthorized,
-                    "RSA Fingerprint not accepted. Check your tablet screen.".to_string(),
+                    "Waiting for app...".to_string(),
                 ),
                 "offline" => (
                     DeviceAdbState::Offline,
@@ -653,7 +687,7 @@ fn poll_status() -> Status {
                     model: model.clone(),
                     transport: "Emulated".to_string(),
                     adb_state: DeviceAdbState::Device,
-                    state_detail: "Emulated virtual test tablet".to_string(),
+                    state_detail: "Emulated virtual test device".to_string(),
                     app_version: Some(env!("GIT_VERSION_STRING").to_string()),
                     version_mismatch: false,
                 });
@@ -1207,12 +1241,11 @@ impl App {
                                     );
                                     if btn.clicked() {
                                         self.installer_state.target_serial = serial.to_string();
-                                        self.installer_state.force_reinstall = false;
                                         self.installer_state.open = true;
                                         self.installer_state.is_running = true;
                                         self.installer_state.logs.clear();
-                                        self.installer_state.status_text = "Starting surgical update pipeline...".to_string();
-                                        start_surgical_update(serial.to_string(), false, self.install_tx.clone());
+                                        self.installer_state.status_text = "Starting clean surgical update pipeline...".to_string();
+                                        start_surgical_update(serial.to_string(), true, self.install_tx.clone());
                                     }
                                 } else {
                                     ui.label(
@@ -1223,9 +1256,8 @@ impl App {
                                     );
                                 }
 
-                                if ui.button("📲 Force Reinstall").clicked() {
+                                if ui.button("📲 Reinstall App").clicked() {
                                     self.installer_state.target_serial = serial.to_string();
-                                    self.installer_state.force_reinstall = true;
                                     self.installer_state.open = true;
                                 }
                             });
@@ -1504,17 +1536,17 @@ impl App {
 
         let mut close_modal = false;
 
-        egui::Window::new("📲 UScreen Android App Surgical Updater")
+        egui::Window::new("📲 UScreen Device Updater")
             .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
             .collapsible(false)
             .resizable(false)
-            .fixed_size([500.0, 420.0])
+            .fixed_size([540.0, 480.0])
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.heading("APK Surgical Updater");
+                    ui.heading(egui::RichText::new("APK Surgical Updater").size(17.0).strong());
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if !self.installer_state.is_running && ui.button("✕").clicked() {
+                        if !self.installer_state.is_running && ui.button(" ✕ ").clicked() {
                             close_modal = true;
                         }
                     });
@@ -1522,170 +1554,201 @@ impl App {
                 ui.separator();
                 ui.add_space(4.0);
 
-                // Host Version Display
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Host Version:").strong());
-                    ui.label(egui::RichText::new(env!("GIT_VERSION_STRING")).monospace());
-                    if env!("GIT_VERSION_STRING").ends_with("-dirty") {
-                        ui.label(
-                            egui::RichText::new("⚠ Untracked Dirty Build")
-                                .color(egui::Color32::from_rgb(255, 180, 80))
-                                .size(11.0),
-                        );
-                    } else {
-                        ui.label(
-                            egui::RichText::new("🟢 Tracked Commit")
-                                .color(egui::Color32::from_rgb(140, 230, 140))
-                                .size(11.0),
-                        );
-                    }
-                });
+                // Card 1: Build & Binary Status
+                egui::Frame::group(ui.style())
+                    .fill(egui::Color32::from_rgb(26, 28, 34))
+                    .inner_margin(10.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(egui::RichText::new("BUILD & BINARY STATUS").strong().size(11.0).color(egui::Color32::from_rgb(140, 150, 170)));
+                        ui.add_space(4.0);
 
-                // APK Status
-                let apk_opt = find_apk_path();
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Target APK:").strong());
-                    if let Some(ref p) = apk_opt {
-                        let size_mb = std::fs::metadata(p).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
-                        ui.label(egui::RichText::new(format!("{} ({:.2} MB)", p.display(), size_mb)).weak().size(11.0));
-                    } else {
-                        ui.label(
-                            egui::RichText::new("Not found! Build with `./gradlew assembleDebug`")
-                                .color(egui::Color32::from_rgb(255, 120, 120))
-                                .size(11.0),
-                        );
-                    }
-                });
-
-                ui.add_space(6.0);
-                ui.separator();
-                ui.add_space(6.0);
-
-                // Device Selection Combo Box (never cleared, pulled directly from status)
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("Target Device:").strong());
-                    let devices: Vec<_> = status.connected_devices.iter().filter(|d| d.adb_state == DeviceAdbState::Device).collect();
-                    if devices.is_empty() {
-                        ui.label(
-                            egui::RichText::new("No authorized Android devices detected via ADB")
-                                .color(egui::Color32::from_rgb(255, 140, 140))
-                                .italics(),
-                        );
-                    } else {
-                        if self.installer_state.target_serial.is_empty() || !devices.iter().any(|d| d.serial == self.installer_state.target_serial) {
-                            if let Some(first) = devices.first() {
-                                self.installer_state.target_serial = first.serial.clone();
-                            }
-                        }
-
-                        let curr_serial = self.installer_state.target_serial.clone();
-                        let curr_label = devices.iter()
-                            .find(|d| d.serial == curr_serial)
-                            .map(|d| format!("{} ({})", d.model, d.serial))
-                            .unwrap_or_else(|| curr_serial.clone());
-
-                        egui::ComboBox::from_id_salt("installer_target_device_combo")
-                            .selected_text(curr_label)
-                            .show_ui(ui, |ui| {
-                                for d in &devices {
-                                    let label = format!("{} ({}) [v{}]", d.model, d.serial, d.app_version.as_deref().unwrap_or("missing"));
-                                    ui.selectable_value(&mut self.installer_state.target_serial, d.serial.clone(), label);
-                                }
-                            });
-                    }
-                });
-
-                // Device Installed Version & State
-                if let Some(target_dev) = status.connected_devices.iter().find(|d| d.serial == self.installer_state.target_serial) {
-                    ui.horizontal(|ui| {
-                        ui.label(egui::RichText::new("Installed App Version:").weak());
-                        if let Some(ref ver) = target_dev.app_version {
-                            let match_color = if ver == env!("GIT_VERSION_STRING") {
-                                egui::Color32::from_rgb(140, 230, 140)
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Host Version:").size(13.0).strong());
+                            ui.label(egui::RichText::new(env!("GIT_VERSION_STRING")).size(13.0).monospace().color(egui::Color32::from_rgb(220, 220, 240)));
+                            if env!("GIT_VERSION_STRING").ends_with("-dirty") {
+                                ui.label(
+                                    egui::RichText::new("⚠ Untracked Dirty Build")
+                                        .color(egui::Color32::from_rgb(255, 180, 80))
+                                        .size(11.0),
+                                );
                             } else {
-                                egui::Color32::from_rgb(255, 180, 80)
-                            };
-                            ui.label(egui::RichText::new(ver).color(match_color).strong());
-                            if ver == env!("GIT_VERSION_STRING") {
-                                ui.label(egui::RichText::new("✅ Up to Date").color(match_color).size(11.0));
-                            } else {
-                                ui.label(egui::RichText::new("⚠ Mismatch (Update Recommended)").color(match_color).size(11.0));
-                            }
-                        } else {
-                            ui.label(egui::RichText::new("Not Installed").color(egui::Color32::from_rgb(255, 120, 120)).strong());
-                        }
-                    });
-                }
-
-                ui.add_space(6.0);
-                ui.checkbox(&mut self.installer_state.force_reinstall, "Force clean reinstall (run `adb uninstall com.uscreen` before install)");
-
-                ui.add_space(8.0);
-                ui.separator();
-                ui.add_space(4.0);
-
-                // Progress Status / Active Spinner Area
-                if self.installer_state.is_running {
-                    ui.horizontal(|ui| {
-                        ui.spinner();
-                        ui.label(egui::RichText::new(&self.installer_state.status_text).strong().size(13.0));
-                    });
-                } else {
-                    let text_color = match &self.installer_state.stage {
-                        InstallStage::Done(Ok(_)) => egui::Color32::from_rgb(140, 230, 140),
-                        InstallStage::Done(Err(_)) => egui::Color32::from_rgb(255, 120, 120),
-                        _ => egui::Color32::from_rgb(200, 200, 200),
-                    };
-                    ui.label(egui::RichText::new(&self.installer_state.status_text).color(text_color).strong());
-                }
-
-                ui.add_space(4.0);
-
-                // Collapsible Log Console
-                ui.collapsing("Execution & ADB Logs", |ui| {
-                    egui::ScrollArea::vertical()
-                        .max_height(120.0)
-                        .stick_to_bottom(true)
-                        .show(ui, |ui| {
-                            for line in &self.installer_state.logs {
-                                ui.monospace(egui::RichText::new(line).size(10.0));
+                                ui.label(
+                                    egui::RichText::new("🟢 Tracked Commit")
+                                        .color(egui::Color32::from_rgb(140, 230, 140))
+                                        .size(11.0),
+                                );
                             }
                         });
-                });
+
+                        let apk_opt = find_apk_path();
+                        ui.horizontal(|ui| {
+                            ui.label(egui::RichText::new("Target APK:").size(13.0).strong());
+                            if let Some(ref p) = apk_opt {
+                                let size_mb = std::fs::metadata(p).map(|m| m.len() as f64 / 1_048_576.0).unwrap_or(0.0);
+                                ui.label(egui::RichText::new(format!("app-debug.apk ({:.2} MB)", size_mb)).size(12.0).color(egui::Color32::from_rgb(180, 200, 220)));
+                            } else {
+                                ui.label(
+                                    egui::RichText::new("Not found! Run `make all` or `./gradlew assembleDebug`")
+                                        .color(egui::Color32::from_rgb(255, 120, 120))
+                                        .size(12.0),
+                                );
+                            }
+                        });
+                    });
 
                 ui.add_space(8.0);
-                ui.separator();
-                ui.add_space(6.0);
 
-                // Buttons
-                ui.horizontal(|ui| {
-                    let can_install = !self.installer_state.is_running
-                        && apk_opt.is_some()
-                        && !self.installer_state.target_serial.is_empty();
+                // Card 2: Target Device Card
+                egui::Frame::group(ui.style())
+                    .fill(egui::Color32::from_rgb(26, 28, 34))
+                    .inner_margin(10.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(egui::RichText::new("TARGET DEVICE").strong().size(11.0).color(egui::Color32::from_rgb(140, 150, 170)));
+                        ui.add_space(4.0);
 
-                    let btn_label = if self.installer_state.is_running {
-                        "⏳ Installing..."
-                    } else if self.installer_state.force_reinstall {
-                        "🚀 Force Reinstall APK"
-                    } else {
-                        "🚀 Start Surgical Update"
-                    };
+                        let devices: Vec<_> = status.connected_devices.iter().filter(|d| d.adb_state == DeviceAdbState::Device).collect();
+                        if devices.is_empty() {
+                            ui.label(
+                                egui::RichText::new("No authorized Android devices detected via ADB")
+                                    .color(egui::Color32::from_rgb(255, 140, 140))
+                                    .italics()
+                                    .size(13.0),
+                            );
+                        } else {
+                            if self.installer_state.target_serial.is_empty() || !devices.iter().any(|d| d.serial == self.installer_state.target_serial) {
+                                if let Some(first) = devices.first() {
+                                    self.installer_state.target_serial = first.serial.clone();
+                                }
+                            }
 
-                    let btn = ui.add_enabled(can_install, egui::Button::new(btn_label));
-                    if btn.clicked() {
-                        self.installer_state.is_running = true;
-                        self.installer_state.logs.clear();
-                        self.installer_state.status_text = "Starting surgical update pipeline...".to_string();
-                        let serial = self.installer_state.target_serial.clone();
-                        let force = self.installer_state.force_reinstall;
-                        let tx = self.install_tx.clone();
-                        start_surgical_update(serial, force, tx);
-                    }
+                            let curr_serial = self.installer_state.target_serial.clone();
+                            let curr_nickname = devices.iter()
+                                .find(|d| d.serial == curr_serial)
+                                .map(|d| {
+                                    if let Some(p) = self.cfg.tablets.get(&d.serial) {
+                                        p.display_name(&d.model).to_string()
+                                    } else {
+                                        d.model.clone()
+                                    }
+                                })
+                                .unwrap_or_else(|| curr_serial.clone());
 
-                    if !self.installer_state.is_running && ui.button("Close").clicked() {
-                        close_modal = true;
-                    }
-                });
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Device:").size(14.0).strong());
+                                egui::ComboBox::from_id_salt("installer_target_device_combo")
+                                    .selected_text(egui::RichText::new(&curr_nickname).size(14.0).strong())
+                                    .show_ui(ui, |ui| {
+                                        for d in &devices {
+                                            let nick = if let Some(p) = self.cfg.tablets.get(&d.serial) {
+                                                p.display_name(&d.model).to_string()
+                                            } else {
+                                                d.model.clone()
+                                            };
+                                            let label = format!("{} (v{})", nick, d.app_version.as_deref().unwrap_or("missing"));
+                                            ui.selectable_value(&mut self.installer_state.target_serial, d.serial.clone(), egui::RichText::new(label).size(13.0));
+                                        }
+                                    });
+                                ui.label(egui::RichText::new(format!("({})", curr_serial)).weak().size(11.0).monospace());
+                            });
+
+                            if let Some(target_dev) = status.connected_devices.iter().find(|d| d.serial == self.installer_state.target_serial) {
+                                ui.add_space(4.0);
+                                ui.horizontal(|ui| {
+                                    ui.label(egui::RichText::new("Installed App:").size(13.0).strong());
+                                    if let Some(ref ver) = target_dev.app_version {
+                                        let is_match = ver == env!("GIT_VERSION_STRING");
+                                        let match_color = if is_match {
+                                            egui::Color32::from_rgb(140, 230, 140)
+                                        } else {
+                                            egui::Color32::from_rgb(255, 180, 80)
+                                        };
+                                        ui.label(egui::RichText::new(ver).color(match_color).monospace().size(13.0).strong());
+                                        if is_match {
+                                            ui.label(egui::RichText::new("✅ Up to Date").color(match_color).size(12.0));
+                                        } else {
+                                            ui.label(egui::RichText::new("⚠ Version Mismatch").color(match_color).size(12.0));
+                                        }
+                                    } else {
+                                        ui.label(egui::RichText::new("Not Installed").color(egui::Color32::from_rgb(255, 120, 120)).size(13.0).strong());
+                                    }
+                                });
+                            }
+                        }
+                    });
+
+                ui.add_space(8.0);
+
+                // Card 3: Action & Progress Card (Always Clean Reinstall)
+                egui::Frame::group(ui.style())
+                    .fill(egui::Color32::from_rgb(26, 28, 34))
+                    .inner_margin(10.0)
+                    .show(ui, |ui| {
+                        ui.set_min_width(ui.available_width());
+                        ui.label(egui::RichText::new("INSTALLATION ACTION").strong().size(11.0).color(egui::Color32::from_rgb(140, 150, 170)));
+                        ui.add_space(6.0);
+
+                        let apk_opt = find_apk_path();
+                        let can_install = !self.installer_state.is_running
+                            && apk_opt.is_some()
+                            && !self.installer_state.target_serial.is_empty();
+
+                        ui.horizontal(|ui| {
+                            let btn_label = if self.installer_state.is_running {
+                                "⏳ Installing Clean Update..."
+                            } else {
+                                "🚀 Install & Sync App (Clean Reinstall)"
+                            };
+
+                            let btn = ui.add_sized(
+                                egui::vec2(ui.available_width() - 80.0, 32.0),
+                                egui::Button::new(egui::RichText::new(btn_label).size(14.0).strong()),
+                            );
+                            if btn.clicked() && can_install {
+                                self.installer_state.is_running = true;
+                                self.installer_state.logs.clear();
+                                self.installer_state.status_text = "Starting clean surgical update pipeline...".to_string();
+                                let serial = self.installer_state.target_serial.clone();
+                                let tx = self.install_tx.clone();
+                                start_surgical_update(serial, true, tx);
+                            }
+
+                            if !self.installer_state.is_running && ui.add_sized(egui::vec2(70.0, 32.0), egui::Button::new(egui::RichText::new("Close").size(13.0))).clicked() {
+                                close_modal = true;
+                            }
+                        });
+
+                        ui.add_space(6.0);
+
+                        if self.installer_state.is_running {
+                            ui.horizontal(|ui| {
+                                ui.spinner();
+                                ui.label(egui::RichText::new(&self.installer_state.status_text).strong().size(13.0).color(egui::Color32::from_rgb(240, 240, 255)));
+                            });
+                        } else {
+                            let text_color = match &self.installer_state.stage {
+                                InstallStage::Done(Ok(_)) => egui::Color32::from_rgb(140, 230, 140),
+                                InstallStage::Done(Err(_)) => egui::Color32::from_rgb(255, 120, 120),
+                                _ => egui::Color32::from_rgb(180, 180, 190),
+                            };
+                            ui.label(egui::RichText::new(&self.installer_state.status_text).color(text_color).size(12.0));
+                        }
+
+                        ui.add_space(4.0);
+
+                        // Execution & ADB Logs
+                        ui.collapsing("Execution & ADB Logs", |ui| {
+                            egui::ScrollArea::vertical()
+                                .max_height(100.0)
+                                .stick_to_bottom(true)
+                                .show(ui, |ui| {
+                                    for line in &self.installer_state.logs {
+                                        ui.monospace(egui::RichText::new(line).size(10.0));
+                                    }
+                                });
+                        });
+                    });
             });
 
         if close_modal {
@@ -1746,6 +1809,55 @@ fn adb_status_dot(ui: &mut egui::Ui, state: &DeviceAdbState, label: &str, toolti
     });
 }
 
+fn render_sidebar_item(
+    ui: &mut egui::Ui,
+    selected: bool,
+    text: egui::RichText,
+    tooltip: Option<&str>,
+) -> egui::Response {
+    let avail_width = ui.available_width();
+    let resp = ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+        ui.spacing_mut().button_padding = egui::vec2(0.0, 0.0);
+
+        let desired_size = egui::vec2(avail_width, 28.0);
+        let (rect, response) = ui.allocate_exact_size(desired_size, egui::Sense::click());
+
+        if ui.is_rect_visible(rect) {
+            let bg_color = if selected {
+                egui::Color32::from_rgba_unmultiplied(60, 100, 180, 80)
+            } else if response.hovered() {
+                egui::Color32::from_white_alpha(15)
+            } else {
+                egui::Color32::TRANSPARENT
+            };
+            if bg_color != egui::Color32::TRANSPARENT {
+                ui.painter().rect_filled(rect, egui::CornerRadius::same(4), bg_color);
+            }
+
+            let widget_text: egui::WidgetText = text.into();
+            let galley = widget_text.into_galley(
+                ui,
+                Some(egui::TextWrapMode::Truncate),
+                avail_width - 8.0,
+                egui::TextStyle::Button,
+            );
+            let pos = egui::pos2(
+                rect.min.x + 4.0,
+                rect.min.y + (28.0 - galley.size().y) * 0.5,
+            );
+            ui.painter().galley(pos, galley, egui::Color32::WHITE);
+        }
+        response
+    }).inner;
+
+    if let Some(tip) = tooltip {
+        resp.on_hover_text(tip)
+    } else {
+        resp
+    }
+}
+
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Drain surgical installer worker updates
@@ -1758,13 +1870,21 @@ impl eframe::App for App {
                 InstallWorkerMsg::LogLine(line) => {
                     self.installer_state.logs.push(line);
                 }
-                InstallWorkerMsg::Finished(res) => {
+                InstallWorkerMsg::Finished(res, new_ver) => {
                     self.installer_state.is_running = false;
                     match &res {
                         Ok(msg) => {
                             self.installer_state.stage = InstallStage::Done(Ok(msg.clone()));
                             self.installer_state.status_text = format!("✅ {}", msg);
                             self.message = msg.clone();
+                            if let Some(ref nv) = new_ver {
+                                if let Ok(mut st) = self.status.lock() {
+                                    if let Some(dev) = st.connected_devices.iter_mut().find(|d| d.serial == self.installer_state.target_serial) {
+                                        dev.app_version = Some(nv.clone());
+                                        dev.version_mismatch = nv != env!("GIT_VERSION_STRING");
+                                    }
+                                }
+                            }
                         }
                         Err(err) => {
                             self.installer_state.stage = InstallStage::Done(Err(err.clone()));
@@ -1856,12 +1976,17 @@ impl eframe::App for App {
                 egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                     ui.add_space(8.0);
                     // Section 1: Navigation
-                    ui.label(egui::RichText::new("NAVIGATION").strong().size(10.0).color(egui::Color32::from_rgb(140, 140, 150)));
+                    ui.horizontal(|ui| {
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new("NAVIGATION").strong().size(10.0).color(egui::Color32::from_rgb(140, 140, 150)));
+                    });
                     ui.add_space(4.0);
                     let is_global = self.selected_view == SelectedView::Global;
-                    if ui.add_sized(
-                        egui::vec2(ui.available_width(), 26.0),
-                        egui::Button::selectable(is_global, "🌐  Global Settings"),
+                    if render_sidebar_item(
+                        ui,
+                        is_global,
+                        egui::RichText::new("🌐  Global Settings").size(12.5),
+                        None,
                     ).clicked() {
                         self.selected_view = SelectedView::Global;
                     }
@@ -1869,7 +1994,10 @@ impl eframe::App for App {
                     ui.add_space(14.0);
 
                     // Section 2: Devices
-                    ui.label(egui::RichText::new("DEVICES").strong().size(10.0).color(egui::Color32::from_rgb(140, 140, 150)));
+                    ui.horizontal(|ui| {
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new("DEVICES").strong().size(10.0).color(egui::Color32::from_rgb(140, 140, 150)));
+                    });
                     ui.add_space(4.0);
 
                     struct DeviceItem {
@@ -1908,7 +2036,10 @@ impl eframe::App for App {
                     }
 
                     if device_list.is_empty() {
-                        ui.label(egui::RichText::new("No devices detected").weak().size(11.0));
+                        ui.horizontal(|ui| {
+                            ui.add_space(4.0);
+                            ui.label(egui::RichText::new("No devices detected").weak().size(11.0));
+                        });
                     } else {
                         for dev in device_list {
                             let is_selected = match &self.selected_view {
@@ -1926,11 +2057,7 @@ impl eframe::App for App {
                             if is_selected {
                                 rich = rich.strong();
                             }
-                            let btn = ui.add_sized(
-                                egui::vec2(ui.available_width(), 26.0),
-                                egui::Button::selectable(is_selected, rich),
-                            ).on_hover_text(&dev.tooltip);
-                            if btn.clicked() {
+                            if render_sidebar_item(ui, is_selected, rich, Some(&dev.tooltip)).clicked() {
                                 self.selected_view = SelectedView::Device(dev.serial.clone());
                             }
                         }
@@ -1948,10 +2075,12 @@ impl eframe::App for App {
                         (None, Some(p)) => format!("Found {}. Connect a device via USB to install.", p.display()),
                         (None, None) => "Warning: app-debug.apk not found and no active Android device connected.".to_string(),
                     };
-                    if ui.add_sized(
-                        egui::vec2(ui.available_width(), 26.0),
-                        egui::Button::new("📲  Install Android App"),
-                    ).on_hover_text(tooltip).clicked() {
+                    if render_sidebar_item(
+                        ui,
+                        false,
+                        egui::RichText::new("📲  Install Android App").size(12.0),
+                        Some(&tooltip),
+                    ).clicked() {
                         self.installer_state.target_serial = target_serial.unwrap_or_default();
                         self.installer_state.force_reinstall = false;
                         self.installer_state.open = true;

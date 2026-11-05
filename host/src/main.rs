@@ -395,6 +395,7 @@ async fn run_daemon(cli: Cli) -> Result<()> {
     let latency = capture_mgr.latency_tracker();
     let stream_srv =
         stream::StreamServer::new(stream_config, codec_config, capture_mgr.idr_request_flag());
+    let ping_notify = std::sync::Arc::new(tokio::sync::Notify::new());
     let input_srv = input::InputServer::new(
         input_config,
         Some(settings_tx.clone()),
@@ -402,6 +403,7 @@ async fn run_daemon(cli: Cli) -> Result<()> {
         latency,
         relaunch.clone(),
         card_rx.clone(),
+        ping_notify.clone(),
     );
 
     // Deliberately shallow. This ring is pure latency when it fills: 256 frames
@@ -455,7 +457,7 @@ async fn run_daemon(cli: Cli) -> Result<()> {
     let (shutdown_tx, shutdown_rx) = watch::channel(false);
 
     if pen_only {
-        info!("Starting in pen-only mode: the tablet drives this machine's own");
+        info!("Starting in pen-only mode: the device drives this machine's own");
         info!("  screen with the pen. No virtual display, no encoding.");
     }
 
@@ -637,12 +639,14 @@ async fn run_daemon(cli: Cli) -> Result<()> {
         token: token.clone(),
         mode_tx: mode_tx.clone(),
         shutdown_rx: shutdown_tx.subscribe(),
+        ping_notify: ping_notify.clone(),
     };
     let wifi_address = file_cfg.wifi_address.clone();
     let settings_tx_adb = settings_tx.clone();
     let (control_tx, control_rx) = mpsc::channel::<DaemonControlMsg>(16);
+    let adb_ping = ping_notify.clone();
     let adb_handle = tokio::spawn(async move {
-        adb_monitor(video_port, input_port, auto_launch, tablet_tx, adb_token, relaunch, extra, wifi_address, settings_tx_adb, serial_tx, control_rx).await;
+        adb_monitor(video_port, input_port, auto_launch, tablet_tx, adb_token, relaunch, extra, wifi_address, settings_tx_adb, serial_tx, control_rx, adb_ping).await;
     });
 
     let control_sock_path = crate::runtime::runtime_dir().join("control.sock");
@@ -664,7 +668,7 @@ async fn run_daemon(cli: Cli) -> Result<()> {
     println!("================================================");
     println!("  uscreen daemon running (PID: {})", pid);
     println!("================================================");
-    println!("  On your tablet, open the UScreen app");
+    println!("  On your device, open the UScreen app");
     println!("  ADB ports will be auto-forwarded if possible.");
     println!("  Otherwise, run:");
     println!("    adb reverse tcp:8890 tcp:8890");
@@ -930,6 +934,7 @@ struct ExtraSessionTemplate {
     token: Option<String>,
     mode_tx: watch::Sender<bool>,
     shutdown_rx: watch::Receiver<bool>,
+    ping_notify: std::sync::Arc<tokio::sync::Notify>,
 }
 
 /// One extra tablet's running pipeline.
@@ -1026,7 +1031,7 @@ fn spawn_extra_session(
     cfg.card = cards.get(instance as usize).copied();
     if cfg.card.is_none() {
         warn!(
-            "Tablet {} has no EVDI device of its own: {} exist, {} are wanted. \
+            "Device {} has no EVDI device of its own: {} exist, {} are wanted. \
              Put initial_device_count={} in /etc/modprobe.d/uscreen-evdi.conf, \
              then `sudo modprobe -r evdi && sudo modprobe evdi` or reboot.",
             instance + 1,
@@ -1078,6 +1083,7 @@ fn spawn_extra_session(
         latency,
         relaunch.clone(),
         card_rx.clone(),
+        t.ping_notify.clone(),
     );
 
     let (tablet_tx, mut tablet_rx) = watch::channel(false);
@@ -1129,7 +1135,7 @@ fn spawn_extra_session(
         }
     }));
     info!(
-        "Tablet slot {} ready: video port {}, input port {}{}",
+        "Device slot {} ready: video port {}, input port {}{}",
         instance + 1,
         video_port,
         input_port,
@@ -1197,6 +1203,39 @@ async fn resolve_hw_id(
     serial.to_string()
 }
 
+fn spawn_adb_tracker() -> mpsc::Receiver<String> {
+    let (tx, rx) = mpsc::channel(32);
+    tokio::spawn(async move {
+        loop {
+            let mut cmd = tokio::process::Command::new("adb");
+            cmd.arg("track-devices")
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null());
+
+            match cmd.spawn() {
+                Ok(mut child) => {
+                    if let Some(stdout) = child.stdout.take() {
+                        use tokio::io::{AsyncBufReadExt, BufReader};
+                        let mut reader = BufReader::new(stdout).lines();
+                        while let Ok(Some(line)) = reader.next_line().await {
+                            if tx.send(line).await.is_err() {
+                                let _ = child.kill().await;
+                                return;
+                            }
+                        }
+                    }
+                    let _ = child.wait().await;
+                }
+                Err(_) => {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                }
+            }
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+        }
+    });
+    rx
+}
+
 async fn scan_adb_devices(
     hw_cache: &mut std::collections::HashMap<String, String>,
 ) -> Vec<DiscoveredDevice> {
@@ -1213,7 +1252,22 @@ async fn scan_adb_devices(
     for line in text.lines().skip(1) {
         let mut parts = line.split_whitespace();
         let Some(serial) = parts.next() else { continue };
-        let Some(state) = parts.next() else { continue };
+        let Some(state_part) = parts.next() else { continue };
+        let mut state = state_part.to_string();
+        if state == "unauthorized" {
+            // Query adb -s <serial> get-state to avoid false unauthorized due to backgrounding
+            if let Ok(st_out) = tokio::process::Command::new("adb")
+                .args(["-s", serial, "get-state"])
+                .output()
+                .await
+            {
+                let s = String::from_utf8_lossy(&st_out.stdout).trim().to_string();
+                if s == "device" {
+                    info!("Device {} reported 'unauthorized' by devices -l but get-state is 'device' (Waiting for app...)", serial);
+                    state = "device".to_string();
+                }
+            }
+        }
         let transport = transport_of(serial);
         let hw_id = if transport == Transport::Usb {
             serial.to_string()
@@ -1222,7 +1276,7 @@ async fn scan_adb_devices(
         };
         out_devices.push(DiscoveredDevice {
             serial: serial.to_string(),
-            state: state.to_string(),
+            state,
             transport,
             hw_id,
         });
@@ -1266,6 +1320,7 @@ async fn adb_monitor(
     settings_tx: watch::Sender<capture::EncoderSettings>,
     serial_tx: watch::Sender<Option<String>>,
     mut control_rx: mpsc::Receiver<DaemonControlMsg>,
+    ping_notify: std::sync::Arc<tokio::sync::Notify>,
 ) {
     let mut paused_serials: std::collections::HashSet<String> = std::collections::HashSet::new();
     let mut slot_0_hw: Option<String> = None;
@@ -1277,10 +1332,11 @@ async fn adb_monitor(
     const RELAUNCH_WAIT_MAX: std::time::Duration = std::time::Duration::from_secs(600);
 
     let mut polls_since_check: u32 = 0;
-    const APP_CHECK_EVERY: u32 = 2; // Check watchdog every 4s
+    const APP_CHECK_EVERY: u32 = 2; // Check watchdog every 6s (with 3s sleep)
     let mut extras: std::collections::HashMap<String, ExtraSession> = std::collections::HashMap::new();
     let mut hw_cache: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut offline_since: std::collections::HashMap<String, std::time::Instant> = std::collections::HashMap::new();
+    let mut track_rx = spawn_adb_tracker();
 
     if tokio::process::Command::new("adb").arg("version").output().await.is_err() {
         error!("adb is not installed — devices cannot be found. Install android-tools (or adb) and restart.");
@@ -1497,6 +1553,20 @@ async fn adb_monitor(
         };
 
         tokio::select! {
+            Some(_track_line) = track_rx.recv() => {
+                // ADB track-devices pushed an event (device attached/detached/state transition)
+            }
+            _ = ping_notify.notified() => {
+                info!("Received foreground ping from device — re-asserting adb reverse tunnels immediately");
+                if !slot_0_active_serial.is_empty() && !is_fake_serial(&slot_0_active_serial) && !paused_serials.contains(&slot_0_active_serial) {
+                    let _ = setup_adb_forwarding(&slot_0_active_serial, video_port, input_port).await;
+                }
+                for sess in extras.values() {
+                    if !is_fake_serial(&sess.active_serial) && !paused_serials.contains(&sess.active_serial) {
+                        let _ = setup_adb_forwarding(&sess.active_serial, sess.video_port, sess.input_port).await;
+                    }
+                }
+            }
             Some(msg) = control_rx.recv() => {
                 match msg {
                     DaemonControlMsg::PauseDevice { serial, resp } => {
@@ -1556,7 +1626,7 @@ async fn adb_monitor(
                     }
                 }
             }
-            _ = tokio::time::sleep(tokio::time::Duration::from_secs(2)) => {
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(3)) => {
                 polls_since_check += 1;
                 if polls_since_check < APP_CHECK_EVERY {
                     continue;
@@ -1634,7 +1704,7 @@ async fn adb_monitor(
                         slot_0_last_relaunch = std::time::Instant::now();
                         slot_0_relaunches += 1;
                         if slot_0_relaunches == 3 {
-                            warn!("A client keeps connecting without a valid token. Update the UScreen app on the tablet (1.1.0 or newer).");
+                            warn!("A client keeps connecting without a valid token. Update the UScreen app on the device (1.1.0 or newer).");
                         }
                         info!("Delivering session token to Slot 1 app (attempt {}, next in {:?})", slot_0_relaunches, slot_0_relaunch_wait.min(RELAUNCH_WAIT_MAX));
                         let _ = setup_adb_forwarding(&slot_0_active_serial, video_port, input_port).await;
@@ -1679,14 +1749,14 @@ async fn setup_wifi(off: bool) -> Result<()> {
         }
         cfg.wifi_address = String::new();
         cfg.save()?;
-        println!("Wi-Fi off. Plug the cable in to use the tablet again.");
+        println!("Wi-Fi off. Plug the cable in to use the device again.");
         return Ok(());
     }
 
     let Some(serial) = adb_devices().await.into_iter().find(|s| transport_of(s) == Transport::Usb)
     else {
         anyhow::bail!(
-            "No tablet on USB. Plug the cable in for this one step — the tablet has to be told \
+            "No device on USB. Plug the cable in for this one step — the device has to be told \
              to listen on the network, and only the cable can tell it."
         );
     };
@@ -1704,8 +1774,8 @@ async fn setup_wifi(off: bool) -> Result<()> {
 
     let Some(ip) = tablet_ip(&serial).await else {
         anyhow::bail!(
-            "The tablet is listening, but its address could not be read. Find it under \
-             Settings → About tablet → Status, then put `wifi_address = \"<ip>:5555\"` in \
+            "The device is listening, but its address could not be read. Find it under \
+             Settings → About device → Status, then put `wifi_address = \"<ip>:5555\"` in \
              ~/.config/uscreen/config.toml."
         );
     };
@@ -1722,7 +1792,7 @@ async fn setup_wifi(off: bool) -> Result<()> {
     println!("Connected to {}. The cable can come out.", address);
     println!(
         "The daemon reconnects to this address by itself whenever the cable is not in, \
-         so this is a one-off — until the tablet reboots, which puts its adb back on USB \
+         so this is a one-off — until the device reboots, which puts its adb back on USB \
          and means running this once more.\n\
          Wi-Fi is a fallback: the median latency matches the cable but single frames \
          arrive much later. `uscreen wifi --off` forgets the address."
@@ -1986,7 +2056,7 @@ async fn launch_app(serial: &str, token: Option<&str>, video_port: u16, input_po
         let _ = stdin.shutdown().await;
     }
     match tokio::time::timeout(std::time::Duration::from_secs(15), child.wait()).await {
-        Ok(Ok(st)) if st.success() => info!("UScreen app launched on tablet"),
+        Ok(Ok(st)) if st.success() => info!("UScreen app launched on device"),
         _ => warn!("Could not launch the app (is it installed?)"),
     }
 }
