@@ -29,13 +29,25 @@
 7. **Latency loop.** Every frame carries a sequence number; the app echoes it
    when the frame reaches the screen, and the daemon logs p50/p95 end-to-end.
 
-## Processes
+## Processes and Module Architecture
 
-- `uscreen` — the daemon: adb monitor, per-tablet sessions, tray icon, config.
-- `evdi_helper` — one per tablet slot, owns one EVDI card.
+- `uscreen` — the daemon:
+  - `main.rs`: CLI argument parsing, daemon lifecycle orchestration, signal traps.
+  - `adb.rs`: ADB device tracking, transport negotiation (`Transport::Usb` vs `Transport::Network`), and APK launch intents.
+  - `session.rs`: Multi-device display session state machine, EVDI card slot mapping, and surgical update pause/resume handlers.
+  - `config_handler.rs`: GNOME Shell window-lock synchronization, Unix domain control socket server, and PID tracking.
+  - `capture.rs`, `encoders.rs`: Hardware encoder pipeline (NVENC, VAAPI, software H.264/HEVC) and EVDI frame grabber ring buffers.
+  - `input.rs`: WebSocket input server mapping multi-touch and pen data into Linux `uinput` devices.
+  - `doctor.rs`: Comprehensive diagnostic suite verifying DRM nodes, permissions, and encoder health.
+- `evdi_helper` — one per tablet slot, owns one EVDI card. Handles POSIX signals for nominal 60 FPS streaming, 1 FPS keep-alive standby throttle (`SIGUSR1`), and full keyframe refresh (`SIGUSR2`).
 - `ffmpeg` — one per slot (unless built with the in-process encoder).
-- `uscreen-gui` — optional settings window, talks to the daemon through the
-  config file and the PID file.
+- `uscreen-gui` — optional egui settings window, talks to the daemon through the control socket, config file, and PID file.
+- `android/` — Android client:
+  - `MainActivity.kt`: Lifecycle, Keyguard, WakeLock, refresh rate, and hover dispatch.
+  - `ui/Theme.kt`: OLED-optimized dark theme.
+  - `ui/ConnectionScreen.kt`: Primary video surface, stats overlay, and version mismatch telemetry.
+  - `ui/Onboarding.kt`: Developer options setup, diagnostics, and troubleshooter bottom sheet.
+  - `ui/SettingsSheet.kt`: Bitrate/FPS sliders, display orientation, transport selection, and wireless pairing.
 
 ## Protocol
 

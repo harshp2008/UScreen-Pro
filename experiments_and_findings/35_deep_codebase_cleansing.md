@@ -117,6 +117,19 @@ SUM:                           126           3168           2809          25442
   - `cargo test --workspace`: PASSED
   - `./gradlew assembleDebug`: PASSED
 
+### 3.5 Task 4: Documentation & Build Audit
+- **Build System Cleansing**:
+  - Audited `Makefile`: Added comprehensive documentation headers for all 18 targets (`all`, `build-helper`, `build`, `install`, `setup-system`, `android`, `edid`, `status`, etc.). Updated `clean` to invoke workspace-level `cargo clean`.
+  - Audited `host/build.rs`: Documented git SHA and dirty detection mechanism and compiler rerun triggers.
+- **Documentation Overhaul**:
+  - Updated `README.md` with an explicit "Codebase Architecture" breakdown covering modularized host components (`adb.rs`, `session.rs`, `config_handler.rs`), C helper signals, and modular Compose UI.
+  - Updated `docs/architecture.md` to document the separated module structure.
+- **Verification**:
+  - `cargo check`: PASSED
+  - `cargo test --workspace`: PASSED
+  - `./gradlew assembleDebug`: PASSED
+
+
 
 
 

@@ -199,6 +199,33 @@ More in [docs/faq.md](docs/faq.md).
 - [Benchmarks](docs/benchmarks.md) · [Compatibility](docs/compatibility.md) · [FAQ](docs/faq.md)
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
+## Codebase Architecture
+
+UScreen is architected as a modular, low-overhead system with decoupled backend, capture, and client subsystems:
+
+- **Host Daemon (`host/src/`)**:
+  - `main.rs`: CLI parsing, entry point orchestration, signal handling, and logging.
+  - `adb.rs`: Asynchronous ADB device detection, transport negotiation (`Transport::Usb` vs `Transport::Network`), reverse port forwarding, and APK lifecycle intents.
+  - `session.rs`: Multi-device display session state machine, EVDI card slot mapping, seamless USB <-> Wi-Fi transport handoff, and surgical update pause/resume handlers.
+  - `config_handler.rs`: GNOME Shell window-lock synchronization, Unix domain socket control server, and PID tracking.
+  - `capture.rs`, `encoders.rs`: Hardware encoder pipeline (NVENC, VAAPI, software H.264/HEVC) and EVDI frame grabber ring buffers.
+  - `input.rs`: WebSocket input server mapping multi-touch, stylus pressure/tilt/eraser/buttons into Linux `uinput` devices.
+  - `doctor.rs`: Comprehensive environment diagnostic suite verifying DRM nodes, permissions, and encoder health.
+
+- **C EVDI Helper (`host/evdi/evdi_helper.c`)**:
+  - Event-driven display grabber communicating directly with the `evdi` kernel module via `libevdi`.
+  - Triple-buffered NV12 conversion with SIMD SWAR acceleration and per-buffer damage tracking.
+  - POSIX signal handling supporting active 60 FPS streaming, 1 FPS keep-alive standby throttle (`SIGUSR1`), and full keyframe refresh (`SIGUSR2`).
+
+- **Android Client (`android/`)**:
+  - `MainActivity.kt`: Thin Activity host managing Keyguard flags, WakeLocks, display refresh rate negotiation, and stylus hover event dispatching.
+  - `ui/Theme.kt`: Consistent high-contrast dark theme optimized for OLED tablet displays.
+  - `ui/ConnectionScreen.kt`: Primary video viewport (SurfaceView), stats chip overlay, and version mismatch telemetry.
+  - `ui/Onboarding.kt`: Guided Developer Options setup, real-time connection diagnostics, and interactive Troubleshooter bottom sheet.
+  - `ui/SettingsSheet.kt`: Settings sheet for bitrate/FPS tuning, orientation locks, preferred transport, and wireless pairing.
+  - `VideoReceiver.kt`: Low-latency `MediaCodec` hardware video decoder rendering directly to a native Surface.
+  - `TouchCapture.kt`: MotionEvent interception forwarding touch and S Pen events back to the host over WebSocket.
+
 ## Releases
 
 Regular releases go out **on Saturday evenings (US Eastern time)**, with
