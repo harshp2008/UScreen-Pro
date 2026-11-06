@@ -1,9 +1,9 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { IconButton } from "@bug-on/m3-expressive/buttons";
+import { Button } from "@/components/ui/button";
 import { Minus, Moon, Square, Sun, X, Copy } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import appIcon from "../assets/uscreen-pro.svg";
-import { cx } from "./ui/controls";
+import { cn } from "@/lib/utils";
 
 function WindowButton({
   label,
@@ -17,16 +17,16 @@ function WindowButton({
   children: ReactNode;
 }) {
   return (
-    <IconButton
+    <Button
+      variant="ghost"
+      size="icon"
       aria-label={label}
       title={label}
       onClick={onClick}
-      size="xs"
-      colorStyle="standard"
-      className={cx("text-on-surface-variant", danger && "hover:text-error")}
+      className={cn("size-7 text-muted-foreground", danger && "hover:bg-destructive/15 hover:text-destructive")}
     >
       {children}
-    </IconButton>
+    </Button>
   );
 }
 

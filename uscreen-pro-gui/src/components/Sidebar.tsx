@@ -1,12 +1,9 @@
-import { Activity, FlaskConical, Plus, Play, Sliders, Square, Tablet, WifiOff } from "lucide-react";
-import {
-  NavigationDrawer,
-  NavigationDrawerContent,
-  NavigationDrawerItem,
-  NavigationDrawerSectionHeader,
-} from "@bug-on/m3-expressive/navigation";
+import { Activity, FlaskConical, LoaderCircle, Play, Plus, Sliders, Square, Tablet, WifiOff } from "lucide-react";
+import type { ReactNode } from "react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { cn } from "@/lib/utils";
 import type { AppConfig, ConnectedDevice, View } from "../lib/types";
-import { Button } from "./ui/controls";
 
 interface Props {
   view: View;
@@ -18,6 +15,37 @@ interface Props {
   onToggleDaemon: () => void;
   onSelect: (v: View) => void;
   onAddDevice: () => void;
+}
+
+function NavItem({
+  selected,
+  icon,
+  label,
+  badge,
+  onClick,
+}: {
+  selected: boolean;
+  icon: ReactNode;
+  label: string;
+  badge?: string;
+  onClick: () => void;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-current={selected ? "page" : undefined}
+      onClick={onClick}
+      className={cn(
+        "w-full justify-start gap-3 px-3 font-normal",
+        selected && "bg-secondary font-medium text-secondary-foreground hover:bg-secondary",
+      )}
+    >
+      {icon}
+      <span className="min-w-0 flex-1 truncate text-left">{label}</span>
+      {badge && <span className="text-[11px] text-muted-foreground">{badge}</span>}
+    </Button>
+  );
 }
 
 export function Sidebar({
@@ -34,79 +62,51 @@ export function Sidebar({
   const selectedSerial = typeof view === "object" ? view.device : null;
   const busyLabel = daemonBusy === "starting" ? "Starting" : "Stopping";
 
-  /*
-   * One primary call-to-action replaces the old status card. Stopped: Primary (Emerald) "Start daemon".
-   * Running: Error (red) "Stop daemon". The label and colour are the status; PID is the tooltip.
-   */
-  const daemonButton = (
-    <Button
-      variant={daemonRunning ? "error" : "filled"}
-      fullWidth
-      loading={daemonBusy !== null}
-      disabled={daemonBusy !== null}
-      title={daemonBusy ? busyLabel : daemonRunning ? `Running, PID ${daemonPid ?? "?"}` : "Stopped"}
-      icon={daemonRunning ? <Square className="size-[18px]" /> : <Play className="size-[18px]" />}
-      onClick={onToggleDaemon}
-    >
-      {daemonRunning ? "Stop Daemon" : "Start Daemon"}
-    </Button>
-  );
-
   return (
-    <NavigationDrawer
-      variant="standard"
-      width={240}
-      aria-label="UScreen navigation"
-      footer={
-        <Button variant="tonal" fullWidth icon={<Plus className="size-[18px]" />} onClick={onAddDevice}>
-          Add device
-        </Button>
-      }
-      className="h-auto min-h-0 shrink-0 gap-2 rounded-none border-r border-outline-variant bg-transparent px-3 pb-3 pt-3"
-    >
-      <NavigationDrawerContent>
-        {daemonButton}
-        {/* Secondary-container indicator with On-Secondary-Container label is the drawer item's active state. */}
-        <NavigationDrawerItem
-          className="h-9"
-          selected={view === "settings"}
-          icon={<Sliders className="size-5" />}
-          label="Settings"
-          onClick={() => onSelect("settings")}
-        />
-        <NavigationDrawerItem
-          className="h-9"
-          selected={view === "advanced"}
-          icon={<FlaskConical className="size-5" />}
-          label="Advanced"
-          onClick={() => onSelect("advanced")}
-        />
-        <NavigationDrawerItem
-          className="h-9"
-          selected={view === "health"}
-          icon={<Activity className="size-5" />}
-          label="System health"
-          onClick={() => onSelect("health")}
-        />
+    <nav aria-label="UScreen navigation" className="flex w-60 shrink-0 flex-col gap-1 border-r border-border p-3">
+      {/* One call-to-action is the daemon status: green Start when stopped, red Stop when running. */}
+      <Button
+        variant={daemonRunning ? "destructive" : "default"}
+        size="sm"
+        className="mb-4 w-full"
+        disabled={daemonBusy !== null}
+        title={daemonBusy ? busyLabel : daemonRunning ? `Running, PID ${daemonPid ?? "?"}` : "Stopped"}
+        onClick={onToggleDaemon}
+      >
+        {daemonBusy ? <LoaderCircle className="animate-spin" /> : daemonRunning ? <Square /> : <Play />}
+        {daemonRunning ? "Stop Daemon" : "Start Daemon"}
+      </Button>
 
-        <NavigationDrawerSectionHeader>Devices ({devices.length})</NavigationDrawerSectionHeader>
-        {devices.length === 0 && <div className="px-4 py-2 text-on-surface-variant">No devices yet</div>}
+      <NavItem selected={view === "settings"} icon={<Sliders />} label="Settings" onClick={() => onSelect("settings")} />
+      <NavItem selected={view === "advanced"} icon={<FlaskConical />} label="Advanced" onClick={() => onSelect("advanced")} />
+      <NavItem selected={view === "health"} icon={<Activity />} label="System health" onClick={() => onSelect("health")} />
+
+      <Separator className="my-2" />
+      <div className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        Devices ({devices.length})
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
+        {devices.length === 0 && <div className="px-3 py-2 text-muted-foreground">No devices yet</div>}
         {devices.map((d) => {
           const name = config?.tablets[d.serial]?.nickname?.trim() || d.model || d.serial;
           const online = d.transport !== "Disconnected" && d.state === "device";
           return (
-            <NavigationDrawerItem
-              className="h-9"
+            <NavItem
               key={d.serial}
               selected={selectedSerial === d.serial}
-              icon={online ? <Tablet className="size-5" /> : <WifiOff className="size-5" />}
+              icon={online ? <Tablet /> : <WifiOff />}
               label={name}
               badge={d.transport === "Disconnected" ? "off" : d.transport}
               onClick={() => onSelect({ device: d.serial })}
             />
           );
         })}
-      </NavigationDrawerContent>
-    </NavigationDrawer>
+      </div>
+
+      <Button variant="secondary" size="sm" className="mt-2 w-full" onClick={onAddDevice}>
+        <Plus />
+        Add device
+      </Button>
+    </nav>
   );
 }

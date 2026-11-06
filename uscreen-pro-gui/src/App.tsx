@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { AddDeviceWizard } from "./components/AddDeviceWizard";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
@@ -11,7 +12,7 @@ import { DeviceSettings } from "./views/DeviceSettings";
 import { Advanced } from "./views/Advanced";
 import { GlobalSettings } from "./views/GlobalSettings";
 import { Health } from "./views/Health";
-import "./styles.css";
+import "./index.css";
 
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -27,7 +28,7 @@ export default function App() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [daemonBusy, setDaemonBusy] = useState<"starting" | "stopping" | null>(null);
-  // The library's baseline scheme is keyed on the `.dark` class (see styles.css); index.html sets it pre-paint.
+  // The library's baseline scheme is keyed on the `.dark` class (see index.css); index.html sets it pre-paint.
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
 
   const toggleTheme = () => {
@@ -181,8 +182,8 @@ export default function App() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-full w-full flex-col overflow-hidden bg-surface text-on-surface">
-        <Notifications />
+      <div className="flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
+        <Notifications dark={dark} />
         <AddDeviceWizard
           open={wizardOpen}
           onOpenChange={setWizardOpen}
@@ -208,7 +209,7 @@ export default function App() {
             onAddDevice={() => setWizardOpen(true)}
           />
 
-          <main className="flex min-w-0 flex-1 flex-col bg-surface">
+          <main className="flex min-w-0 flex-1 flex-col bg-background">
             <div className="flex-1 overflow-y-auto p-4">
               <div className="mx-auto w-full max-w-5xl">
                 {view === "settings" && config && (
@@ -244,7 +245,7 @@ export default function App() {
             </div>
 
             {/* The daemon state lives in the sidebar card; the status bar only carries build info. */}
-            <footer className="flex shrink-0 items-center justify-between px-4 pb-4 pt-2 text-xs text-on-surface-variant">
+            <footer className="flex shrink-0 items-center justify-between px-4 pb-4 pt-2 text-xs text-muted-foreground">
               <span className="flex items-center gap-2">
                 UScreen Pro
                 {busy && <RefreshCw className="size-3 animate-spin" />}
@@ -252,9 +253,7 @@ export default function App() {
               <span className="flex items-center gap-2 font-mono">
                 {status?.host_version ?? "-"}
                 {status?.is_dirty && (
-                  <span className="rounded-full bg-tertiary-container px-2 py-0.5 font-sans text-[11px] text-on-tertiary-container">
-                    dirty
-                  </span>
+                  <Badge variant="secondary">dirty</Badge>
                 )}
               </span>
             </footer>

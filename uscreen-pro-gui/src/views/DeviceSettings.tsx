@@ -1,6 +1,7 @@
 import { AlertTriangle, Check, Download, Pause, Play, Trash2 } from "lucide-react";
 import { AppLockList } from "../components/ui/AppLockList";
-import { Button, Segmented, Select, TextInput } from "../components/ui/controls";
+import { Button } from "@/components/ui/button";
+import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow, type Override } from "../components/ui/layout";
 import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL, TRANSPORTS, labelOf, qualityLabel } from "../lib/options";
 import type { AppConfig, ConnectedDevice, TabletProfile } from "../lib/types";
@@ -49,25 +50,26 @@ export function DeviceSettings({
         subtitle={`${serial}  ${device?.transport ?? "Saved"}`}
       >
         {online && (
-          <Button onClick={onTogglePause} icon={device?.paused ? <Play className="size-4" /> : <Pause className="size-4" />}>
+          <Button size="sm" variant="secondary" onClick={onTogglePause}>
+            {device?.paused ? <Play /> : <Pause />}
             {device?.paused ? "Resume" : "Pause"}
           </Button>
         )}
-        <Button onClick={onInstallApk} disabled={!online} icon={<Download className="size-4" />}>
+        <Button size="sm" variant="secondary" onClick={onInstallApk} disabled={!online}><Download />
           Push APK
         </Button>
-        <Button variant="filled" onClick={onSave} icon={<Check className="size-4" />}>
+        <Button size="sm" onClick={onSave}><Check />
           Save
         </Button>
       </PageHeader>
 
       {mismatch && (
-        <div className="flex items-center justify-between gap-3 rounded-lg bg-warning-container px-3 py-2 text-warning">
+        <div className="flex items-center justify-between gap-3 rounded-lg bg-warning/15 px-3 py-2 text-warning">
           <span className="flex items-center gap-2">
             <AlertTriangle className="size-4 shrink-0" />
             Tablet app is {device?.device_version}, host is {hostVersion}.
           </span>
-          <Button variant="text" className="text-warning" onClick={onInstallApk}>
+          <Button size="sm" variant="ghost" className="text-warning" onClick={onInstallApk}>
             Update app
           </Button>
         </div>
@@ -136,7 +138,6 @@ export function DeviceSettings({
           min={5000}
           max={60000}
           step={1000}
-          formatValue={(v) => `${Math.round(v / 1000)} Mbps`}
           onChange={(bitrate) => onChange({ bitrate })}
           override={ov("bitrate", g.bitrate, `${Math.round(g.bitrate / 1000)} Mbps`)}
         />
@@ -195,7 +196,7 @@ export function DeviceSettings({
               value={p.width ?? 0}
               onChange={(v) => onChange({ width: Number(v) })}
             />
-            <span className="text-on-surface-variant">x</span>
+            <span className="text-muted-foreground">x</span>
             <TextInput
               type="number"
               aria-label="Height"
@@ -209,7 +210,7 @@ export function DeviceSettings({
 
       {device?.transport === "Disconnected" && (
         <div className="flex justify-end">
-          <Button variant="danger" onClick={onDelete} icon={<Trash2 className="size-4" />}>
+          <Button size="sm" variant="destructive" onClick={onDelete}><Trash2 />
             Forget device
           </Button>
         </div>

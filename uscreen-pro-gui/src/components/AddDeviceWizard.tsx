@@ -1,4 +1,3 @@
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Check, ChevronLeft, ExternalLink, LoaderCircle, RefreshCw, Smartphone, Usb, Wifi, X } from "lucide-react";
@@ -6,8 +5,10 @@ import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "../lib/toast";
 import type { AdbEntry, ManualPairResult, PairingEvent, QrPairingSession } from "../lib/types";
-import { IconButton } from "@bug-on/m3-expressive/buttons";
-import { Button, TextInput, cx } from "./ui/controls";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+import { TextInput } from "./ui/controls";
 
 const STEPS = ["Connect", "Debugging", "Install", "Wireless", "Finish"] as const;
 type Step = 1 | 2 | 3 | 4 | 5;
@@ -25,20 +26,20 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 function Note({ tone = "neutral", children }: { tone?: "neutral" | "warning" | "error" | "success"; children: ReactNode }) {
   const tones = {
-    neutral: "bg-surface-high text-on-surface",
-    warning: "bg-warning-container text-warning",
-    error: "bg-error-container text-error",
-    success: "bg-success-container text-success",
+    neutral: "bg-muted text-foreground",
+    warning: "bg-warning/15 text-warning",
+    error: "bg-destructive/15 text-destructive",
+    success: "bg-success/15 text-success",
   };
-  return <div className={cx("rounded-xl px-4 py-3 text-sm leading-relaxed", tones[tone])}>{children}</div>;
+  return <div className={cn("rounded-lg px-3 py-2 text-xs leading-relaxed", tones[tone])}>{children}</div>;
 }
 
 function Instructions({ items }: { items: ReactNode[] }) {
   return (
-    <ol className="space-y-2 text-on-surface-variant">
+    <ol className="space-y-2 text-muted-foreground">
       {items.map((item, i) => (
         <li key={i} className="flex gap-2">
-          <span className="flex size-4 shrink-0 items-center justify-center rounded-[2px] bg-surface-highest font-mono text-[10px] text-on-surface">
+          <span className="flex size-4 shrink-0 items-center justify-center rounded-[2px] bg-muted font-mono text-[10px] text-foreground">
             {i + 1}
           </span>
           <span>{item}</span>
@@ -254,21 +255,14 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
   };
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60" />
-        <DialogPrimitive.Content
-          aria-describedby={undefined}
-          onOpenAutoFocus={(e) => e.preventDefault()}
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[480px] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl bg-card text-sm"
-        >
-          <header className="flex items-center justify-between px-6 pb-2 pt-4">
-            <DialogPrimitive.Title className="text-2xl font-normal leading-8 text-on-surface">Add device</DialogPrimitive.Title>
-            <DialogPrimitive.Close asChild>
-              <IconButton aria-label="Close" size="xs" colorStyle="standard" className="text-on-surface-variant">
-                <X className="size-5" />
-              </IconButton>
-            </DialogPrimitive.Close>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        aria-describedby={undefined}
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        className="flex max-h-[92vh] w-[480px] max-w-[96vw] flex-col gap-0 overflow-hidden p-0 text-sm"
+      >
+          <header className="px-6 pb-2 pt-4">
+            <DialogTitle className="text-xl font-medium leading-8 text-foreground">Add device</DialogTitle>
           </header>
 
           <ol className="flex gap-2 px-6 pb-4 pt-2">
@@ -277,12 +271,12 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
               return (
                 <li key={label} className="flex-1">
                   <div
-                    className={cx(
+                    className={cn(
                       "h-1 rounded-full transition-colors",
-                      n <= step ? "bg-primary" : "bg-surface-highest",
+                      n <= step ? "bg-primary" : "bg-muted",
                     )}
                   />
-                  <div className={cx("mt-2 text-xs", n === step ? "font-medium text-on-surface" : "text-on-surface-variant")}>
+                  <div className={cn("mt-2 text-xs", n === step ? "font-medium text-foreground" : "text-muted-foreground")}>
                     {n}. {label}
                   </div>
                 </li>
@@ -293,19 +287,19 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
           <div className="flex min-h-[260px] flex-1 flex-col overflow-y-auto px-6 py-4"><div className="my-auto space-y-4">
             {step === 1 && (
               <>
-                <p className="text-on-surface-variant">Plug your Android device into this computer with a USB data cable.</p>
-                <div className="flex items-center justify-between rounded-lg border border-outline-variant bg-surface px-3 py-2">
+                <p className="text-muted-foreground">Plug your Android device into this computer with a USB data cable.</p>
+                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
                   <div className="flex items-center gap-2">
-                    <Usb className="size-4 text-on-surface-variant" />
+                    <Usb className="size-4 text-muted-foreground" />
                     <div>
-                      <div className="text-on-surface">{usb ? usb.model : "Waiting for a USB device"}</div>
-                      <div className="font-mono text-[11px] text-on-surface-variant">{usb ? usb.serial : "Polling ADB"}</div>
+                      <div className="text-foreground">{usb ? usb.model : "Waiting for a USB device"}</div>
+                      <div className="font-mono text-[11px] text-muted-foreground">{usb ? usb.serial : "Polling ADB"}</div>
                     </div>
                   </div>
                   {!usb && <LoaderCircle className="size-4 animate-spin text-primary" />}
                 </div>
                 {/* surface-container-high on the card, on-surface text: >= 4.5:1 (measured in the notes). */}
-                <div className="rounded-xl bg-surface-high px-4 py-3 text-sm leading-relaxed text-on-surface">
+                <div className="rounded-lg bg-muted px-3 py-2 text-xs leading-relaxed text-foreground">
                   <div className="mb-1 font-medium">Nothing showing up?</div>
                   <ul className="list-inside list-disc space-y-1">
                     <li>Use a USB cable that carries data, not a charge-only one.</li>
@@ -319,7 +313,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
             {step === 2 && (
               <>
-                <p className="text-on-surface-variant">
+                <p className="text-muted-foreground">
                   The device is connected but has not authorized this computer
                   {usb ? <> (state: <span className="font-mono text-warning">{usb.state}</span>)</> : null}.
                 </p>
@@ -331,10 +325,10 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                   ]}
                 />
                 <div className="flex items-center gap-2">
-                  <Button onClick={openDevOptions} icon={<ExternalLink className="size-4" />}>
+                  <Button size="sm" variant="secondary" onClick={openDevOptions}><ExternalLink />
                     Open Developer options on device
                   </Button>
-                  <Button variant="text" onClick={poll} icon={<RefreshCw className="size-4" />}>
+                  <Button size="sm" variant="ghost" onClick={poll}><RefreshCw />
                     Check again
                   </Button>
                 </div>
@@ -347,24 +341,21 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
             {step === 3 && (
               <>
-                <p className="text-on-surface-variant">
+                <p className="text-muted-foreground">
                   Installing the UScreen app over USB{hostVersion ? ` (build ${hostVersion})` : ""}.
                 </p>
-                <div className="flex items-center gap-3 rounded-lg border border-outline-variant bg-surface px-3 py-3">
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-3">
                   {install.state === "running" && <LoaderCircle className="size-4 animate-spin text-primary" />}
                   {install.state === "ok" && <Check className="size-4 text-success" />}
-                  {install.state === "failed" && <X className="size-4 text-error" />}
-                  {install.state === "idle" && <Smartphone className="size-4 text-on-surface-variant" />}
-                  <span className="text-on-surface">
+                  {install.state === "failed" && <X className="size-4 text-destructive" />}
+                  {install.state === "idle" && <Smartphone className="size-4 text-muted-foreground" />}
+                  <span className="text-foreground">
                     {install.state === "idle" ? "Waiting for an authorized device" : install.message}
                   </span>
                 </div>
                 {install.state === "failed" && (
-                  <Button
-                    variant="filled"
-                    onClick={() => usb && runInstall(usb.serial)}
-                    disabled={!usb || usb.state !== "device"}
-                  >
+                  <Button size="sm" onClick={() => usb && runInstall(usb.serial)}
+                    disabled={!usb || usb.state !== "device"}>
                     Retry install
                   </Button>
                 )}
@@ -380,30 +371,30 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                     <>Tap <b>Pair device with QR code</b> and scan the code below.</>,
                   ]}
                 />
-                <div className="flex gap-4 rounded-lg border border-outline-variant bg-surface p-3">
+                <div className="flex gap-4 rounded-lg border border-border bg-background p-3">
                   <div className="flex size-[164px] shrink-0 items-center justify-center rounded-lg bg-white p-2">
                     {qr ? (
                       <QRCodeSVG value={qr.qr_payload} size={148} level="M" fgColor="#111318" bgColor="#ffffff" />
                     ) : (
-                      <LoaderCircle className="size-5 animate-spin text-surface" />
+                      <LoaderCircle className="size-5 animate-spin text-background" />
                     )}
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col justify-between">
                     <div className="space-y-2">
                       <div>
-                        <div className="text-[11px] text-on-surface-variant">Pairing code</div>
-                        <div className="font-mono text-lg tracking-widest text-on-surface">{qr?.pairing_code ?? "------"}</div>
+                        <div className="text-[11px] text-muted-foreground">Pairing code</div>
+                        <div className="font-mono text-lg tracking-widest text-foreground">{qr?.pairing_code ?? "------"}</div>
                       </div>
                       <div>
-                        <div className="text-[11px] text-on-surface-variant">Service</div>
-                        <div className="truncate font-mono text-[11px] text-on-surface-variant">{qr?.service_name ?? "-"}</div>
+                        <div className="text-[11px] text-muted-foreground">Service</div>
+                        <div className="truncate font-mono text-[11px] text-muted-foreground">{qr?.service_name ?? "-"}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px] text-on-surface-variant">
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       {pairingActive || pairEvent?.kind === "searching" ? (
                         <LoaderCircle className="size-3 animate-spin text-primary" />
                       ) : null}
-                      <span className={cx(pairEvent?.kind === "error" && "text-error", pairEvent?.kind === "timeout" && "text-warning")}>
+                      <span className={cn(pairEvent?.kind === "error" && "text-destructive", pairEvent?.kind === "timeout" && "text-warning")}>
                         {pairEvent?.message ?? "Starting"}
                       </span>
                     </div>
@@ -411,17 +402,17 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <Button variant="text" onClick={openWirelessSettings} icon={<ExternalLink className="size-4" />}>
+                  <Button size="sm" variant="ghost" onClick={openWirelessSettings}><ExternalLink />
                     Open Developer options on device
                   </Button>
-                  <Button variant="text" onClick={() => setManualOpen((v) => !v)}>
+                  <Button size="sm" variant="ghost" onClick={() => setManualOpen((v) => !v)}>
                     {manualOpen ? "Hide manual pairing" : "Pair with a code instead"}
                   </Button>
                 </div>
 
                 {manualOpen && (
-                  <div className="space-y-2 rounded-lg border border-outline-variant bg-surface p-3">
-                    <p className="text-[11px] text-on-surface-variant">
+                  <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+                    <p className="text-[11px] text-muted-foreground">
                       On the device choose <b>Pair device with pairing code</b>, then enter the address and code it
                       shows. The connect address is the IP and port on the main Wireless debugging screen; leave it
                       empty to look it up automatically.
@@ -447,22 +438,18 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                     </div>
                     <TextInput
                       aria-label="Connect address"
-                      className={cx("w-full font-mono", needConnect && "border-primary")}
+                      className={cn("w-full font-mono", needConnect && "border-primary")}
                       placeholder={needConnect ? "Connect IP:port (required)" : "Connect IP:port (optional)"}
                       value={connectAddr}
                       onChange={(v) => setConnectAddr(v)}
                     />
                     <div className="flex items-center gap-3">
-                      <Button
-                        variant="filled"
-                        loading={pairBusy}
-                        icon={<Wifi className="size-4" />}
+                      <Button size="sm"
                         onClick={manualPair}
                         disabled={
                           pairBusy ||
                           (needConnect ? !connectAddr.trim() : !pairAddr.trim() || pairCode.length !== 6)
-                        }
-                      >
+                        }><Wifi />
                         {needConnect ? "Connect" : "Pair"}
                       </Button>
                     </div>
@@ -485,7 +472,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                 </Note>
 
                 <div className="space-y-2">
-                  <div className="text-on-surface">How do you usually connect this device?</div>
+                  <div className="text-foreground">How do you usually connect this device?</div>
                   <div role="radiogroup" aria-label="Preferred connection" className="grid grid-cols-2 gap-2">
                     {(
                       [
@@ -503,11 +490,11 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                           aria-checked={on}
                           disabled={disabled}
                           onClick={() => setTransport(id)}
-                          className={cx(
+                          className={cn(
                             "rounded-lg border p-3 text-left transition-colors disabled:opacity-40",
                             on
-                              ? "border-primary bg-secondary-container text-on-secondary-container"
-                              : "border-outline-variant bg-surface text-on-surface hover:bg-surface-high",
+                              ? "border-primary bg-secondary text-secondary-foreground"
+                              : "border-border bg-background text-foreground hover:bg-muted",
                           )}
                         >
                           <div className="flex items-center gap-2 font-medium">
@@ -524,7 +511,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                 </div>
 
                 <div className="space-y-1">
-                  <label htmlFor="wizard-nick" className="text-on-surface-variant">
+                  <label htmlFor="wizard-nick" className="text-muted-foreground">
                     Nickname (optional)
                   </label>
                   <TextInput
@@ -542,40 +529,39 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
           </div>
 
           <footer className="flex items-center justify-between px-6 pb-6 pt-2">
-            <Button variant="text" onClick={() => onOpenChange(false)}>
+            <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
 
             <div className="flex items-center gap-2">
               {step > 1 && step < 5 && (
-                <Button variant="text" onClick={() => setStep((s) => (s - 1) as Step)} icon={<ChevronLeft className="size-4" />}>
+                <Button size="sm" variant="ghost" onClick={() => setStep((s) => (s - 1) as Step)}><ChevronLeft />
                   Back
                 </Button>
               )}
               {step === 3 && install.state !== "ok" && (
-                <Button variant="text" onClick={() => setStep(4)}>
+                <Button size="sm" variant="ghost" onClick={() => setStep(4)}>
                   Skip install
                 </Button>
               )}
               {step === 4 && (
-                <Button variant="text" onClick={() => setStep(5)}>
+                <Button size="sm" variant="ghost" onClick={() => setStep(5)}>
                   Skip, use USB only
                 </Button>
               )}
               {step < 5 ? (
                 /* Visible from the first screen, disabled until this step has what it needs. */
-                <Button variant="filled" onClick={goNext} disabled={!nextEnabled}>
+                <Button size="sm" onClick={goNext} disabled={!nextEnabled}>
                   Next
                 </Button>
               ) : (
-                <Button variant="filled" onClick={finish} disabled={saving || !device} icon={<Check className="size-4" />}>
+                <Button size="sm" onClick={finish} disabled={saving || !device}><Check />
                   Save device
                 </Button>
               )}
             </div>
           </footer>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+      </DialogContent>
+    </Dialog>
   );
 }

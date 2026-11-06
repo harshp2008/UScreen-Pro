@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
-import { Button, Segmented, Select, TextInput } from "../components/ui/controls";
+import { Button } from "@/components/ui/button";
+import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow } from "../components/ui/layout";
 import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL } from "../lib/options";
 import type { AppConfig } from "../lib/types";
@@ -17,7 +18,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
   return (
     <div className="w-full space-y-2">
       <PageHeader title="Settings">
-        <Button variant="filled" disabled={!dirty} onClick={onSave} icon={<Check className="size-4" />}>
+        <Button size="sm" disabled={!dirty} onClick={onSave}><Check />
           Save
         </Button>
       </PageHeader>
@@ -44,7 +45,6 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           min={5000}
           max={60000}
           step={1000}
-          formatValue={(v) => `${Math.round(v / 1000)} Mbps`}
           onChange={(bitrate) => onChange({ bitrate })}
         />
         <SettingRow label="Stream detail" tip="Full sends every pixel; Half renders at half resolution for the lowest latency.">
@@ -94,7 +94,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
                 value={c.width}
                 onChange={(v) => onChange({ width: Number(v) })}
               />
-              <span className="text-on-surface-variant">x</span>
+              <span className="text-muted-foreground">x</span>
               <TextInput
                 type="number"
                 aria-label="Height"

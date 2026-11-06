@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import { useRef, useState } from "react";
 import { AppLockList } from "../components/ui/AppLockList";
-import { Button } from "../components/ui/controls";
+import { Button } from "@/components/ui/button";
 import { PageHeader, Section, SwitchRow } from "../components/ui/layout";
 import type { AppConfig } from "../lib/types";
 
@@ -31,7 +31,7 @@ export function Advanced({ config: c, dirty, onChange, onSave }: Props) {
   return (
     <div className="w-full space-y-2">
       <PageHeader title="Advanced">
-        <Button variant="filled" disabled={!dirty} onClick={onSave} icon={<Check className="size-4" />}>
+        <Button size="sm" disabled={!dirty} onClick={onSave}><Check />
           Save
         </Button>
       </PageHeader>
@@ -45,7 +45,7 @@ export function Advanced({ config: c, dirty, onChange, onSave }: Props) {
         />
         {enabled && (
           <div className="px-3 py-3">
-            <p className="mb-2 text-xs text-on-surface-variant">
+            <p className="mb-2 text-xs text-muted-foreground">
               Application IDs pinned to the virtual display, for example org.gnome.Nautilus or gimp.
             </p>
             <AppLockList apps={c.locked_apps} onChange={(locked_apps) => onChange({ locked_apps })} />

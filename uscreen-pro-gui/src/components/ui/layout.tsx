@@ -1,35 +1,29 @@
-import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-import { PlainTooltip } from "@bug-on/m3-expressive/feedback";
 import { Info } from "lucide-react";
 import type { ReactNode } from "react";
-import { QUALITY_MAX, QUALITY_MIN, qualityLabel } from "../../lib/options";
-import { Slider, Switch, cx } from "./controls";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { QUALITY_MAX, QUALITY_MIN, qualityLabel } from "@/lib/options";
+import { cn } from "@/lib/utils";
+import { Slider } from "./controls";
 
-export const TooltipProvider = TooltipPrimitive.Provider;
+export const TooltipProvider = UiTooltipProvider;
 
 export function InfoTip({ text }: { text: string }) {
   return (
-    <TooltipPrimitive.Root delayDuration={150}>
-      <TooltipPrimitive.Trigger asChild>
+    <Tooltip delayDuration={150}>
+      <TooltipTrigger asChild>
         <button
           type="button"
           aria-label={text}
-          className="inline-flex size-3.5 items-center justify-center rounded-full text-on-surface-variant opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          className="inline-flex size-3.5 items-center justify-center rounded-full text-muted-foreground opacity-50 transition-opacity hover:opacity-100 focus-visible:opacity-100"
         >
           <Info className="size-3" />
         </button>
-      </TooltipPrimitive.Trigger>
-      <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content
-          side="top"
-          align="start"
-          sideOffset={4}
-          className="z-[70]"
-        >
-          <PlainTooltip maxWidth={256}>{text}</PlainTooltip>
-        </TooltipPrimitive.Content>
-      </TooltipPrimitive.Portal>
-    </TooltipPrimitive.Root>
+      </TooltipTrigger>
+      <TooltipContent side="top" align="start" className="max-w-64 text-xs">
+        {text}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -58,7 +52,7 @@ export interface Override {
 function OverrideToggle({ override, label }: { override: Override; label: string }) {
   return (
     <div className="flex items-center gap-2" title="Override the global value for this device">
-      <Switch label={`Override ${label}`} checked={override.enabled} onCheckedChange={override.onChange} />
+      <Switch aria-label={`Override ${label}`} checked={override.enabled} onCheckedChange={override.onChange} />
     </div>
   );
 }
@@ -86,7 +80,7 @@ export function SettingRow({
 }) {
   const showControl = !override || override.enabled;
   return (
-    <div className="flex min-h-12 items-center justify-between gap-4 px-3">
+    <div className="flex min-h-10 items-center justify-between gap-4 px-3">
       <Label label={label} tip={tip} />
       <div className="flex shrink-0 items-center gap-3">
         {showControl ? (
@@ -110,7 +104,6 @@ export function SliderRow({
   max,
   step,
   onChange,
-  formatValue,
   override,
 }: {
   label: string;
@@ -121,22 +114,21 @@ export function SliderRow({
   max: number;
   step?: number;
   onChange: (v: number) => void;
-  formatValue?: (v: number) => string;
   override?: Override;
 }) {
   const active = !override || override.enabled;
   return (
-    <div className="flex min-h-12 items-center justify-between gap-4 px-3">
+    <div className="flex min-h-10 items-center justify-between gap-4 px-3">
       <div className="flex min-w-0 flex-col">
         <Label label={label} tip={tip} />
-        <span className={cx("truncate text-xs font-medium", active ? "text-primary" : "text-on-surface-variant")}>
+        <span className={cn("truncate text-xs font-medium", active ? "text-primary" : "text-on-surface-variant")}>
           {active ? valueText : override.inherited}
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-3">
         {active && (
           <div className="w-72">
-            <Slider label={label} value={value} min={min} max={max} step={step} formatValue={formatValue} onValueChange={onChange} />
+            <Slider label={label} value={value} min={min} max={max} step={step} onValueChange={onChange} />
           </div>
         )}
         {override && <OverrideToggle override={override} label={label} />}
@@ -160,7 +152,7 @@ export function SwitchRow({
 }) {
   return (
     <SettingRow label={label} tip={tip} override={override}>
-      <Switch label={label} checked={checked} onCheckedChange={onChange} />
+      <Switch aria-label={label} checked={checked} onCheckedChange={onChange} />
     </SettingRow>
   );
 }
@@ -169,7 +161,7 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   return (
     <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-baseline gap-2">
-        <h2 className="truncate text-2xl font-normal leading-8 text-on-surface">{title}</h2>
+        <h2 className="truncate text-xl font-medium leading-8 text-on-surface">{title}</h2>
         {subtitle && <span className="truncate font-mono text-[11px] text-on-surface-variant">{subtitle}</span>}
       </div>
       <div className="flex items-center gap-2">{children}</div>
@@ -197,7 +189,6 @@ export function QualityRow({
       min={QUALITY_MIN}
       max={QUALITY_MAX}
       step={1}
-      formatValue={(v) => `CRF ${v}`}
       onChange={onChange}
       override={override}
     />

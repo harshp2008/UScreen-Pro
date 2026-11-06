@@ -1,14 +1,15 @@
-import { Chip } from "@bug-on/m3-expressive/forms";
-import { Plus } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import { useState } from "react";
-import { Button, TextInput } from "./controls";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { TextInput } from "./controls";
 
 /** Reverse-DNS style IDs and plain binary names: letters, digits, dot, dash, underscore. */
 const APP_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 /**
  * Editable list of application IDs: a field plus "Add", and one removable chip per ID in a
- * vertical list below. The list is a real array end to end (no comma-separated string).
+ * wrapping row below. The list is a real array end to end (no comma-separated string).
  */
 export function AppLockList({ apps, onChange }: { apps: string[]; onChange: (apps: string[]) => void }) {
   const [draft, setDraft] = useState("");
@@ -43,22 +44,29 @@ export function AppLockList({ apps, onChange }: { apps: string[]; onChange: (app
             }
           }}
         />
-        <Button variant="tonal" disabled={!draft.trim()} onClick={add} icon={<Plus className="size-4" />}>
+        <Button variant="secondary" size="sm" disabled={!draft.trim()} onClick={add}>
+          <Plus />
           Add
         </Button>
       </div>
-      {error && <p className="px-1 text-xs text-error">{error}</p>}
+      {error && <p className="px-1 text-xs text-destructive">{error}</p>}
       {apps.length === 0 ? (
-        <p className="px-1 text-xs text-on-surface-variant">No applications locked yet.</p>
+        <p className="px-1 text-xs text-muted-foreground">No applications locked yet.</p>
       ) : (
-        <ul className="flex flex-col items-start gap-2" aria-label="Locked applications">
+        <ul className="flex flex-wrap gap-1.5" aria-label="Locked applications">
           {apps.map((id) => (
             <li key={id}>
-              <Chip
-                variant="input"
-                label={<span className="font-mono">{id}</span>}
-                onRemove={() => onChange(apps.filter((a) => a !== id))}
-              />
+              <Badge variant="secondary" className="gap-1 py-0.5 pl-2.5 pr-1 font-mono text-xs font-normal">
+                {id}
+                <button
+                  type="button"
+                  aria-label={`Remove ${id}`}
+                  onClick={() => onChange(apps.filter((a) => a !== id))}
+                  className="inline-flex size-4 items-center justify-center rounded-full hover:bg-foreground/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <X className="size-3" />
+                </button>
+              </Badge>
             </li>
           ))}
         </ul>
