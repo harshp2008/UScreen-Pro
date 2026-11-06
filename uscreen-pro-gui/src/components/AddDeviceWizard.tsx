@@ -1,6 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Check, ChevronLeft, ExternalLink, LoaderCircle, RefreshCw, Smartphone, Usb, Wifi, X } from "lucide-react";
+import {
+  Check,
+  ChevronLeft,
+  ExternalLink,
+  Info,
+  LoaderCircle,
+  MousePointerClick,
+  Settings,
+  Smartphone,
+  ToggleRight,
+  Usb,
+  Wifi,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "../lib/toast";
@@ -43,6 +57,35 @@ function Instructions({ items }: { items: ReactNode[] }) {
             {i + 1}
           </span>
           <span>{item}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+const DEBUG_STEPS: { icon: LucideIcon; text: ReactNode }[] = [
+  { icon: Settings, text: <>Open <b>Settings</b> on your device.</> },
+  { icon: Info, text: <>Go to <b>About Phone</b> (or About Tablet).</> },
+  { icon: MousePointerClick, text: <>Tap <b>Build Number</b> 7 times until it says &lsquo;You are a developer&rsquo;.</> },
+  { icon: ToggleRight, text: <>Go back and open <b>Developer Options</b>, then toggle <b>USB Debugging</b> ON.</> },
+];
+
+/** Vertical timeline: a large icon per step joined by a rail. */
+function DebugTimeline() {
+  return (
+    <ol>
+      {DEBUG_STEPS.map(({ icon: Icon, text }, i) => (
+        <li key={i} className="flex gap-3">
+          <div className="flex flex-col items-center">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
+              <Icon className="size-5" />
+            </span>
+            {i < DEBUG_STEPS.length - 1 && <span className="my-1 w-px flex-1 bg-border" />}
+          </div>
+          <div className={cn("min-w-0 flex-1 pt-2.5 leading-snug text-foreground", i < DEBUG_STEPS.length - 1 && "pb-6")}>
+            <span className="mr-1.5 font-mono text-[11px] text-muted-foreground">{i + 1}.</span>
+            {text}
+          </div>
         </li>
       ))}
     </ol>
@@ -98,11 +141,10 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
     if (usb) setDevice(usb);
   }, [usb]);
 
-  /* Steps 1 and 2 advance on their own as the ADB state changes. */
+  /* Step 1 advances on its own; step 2 shows the live authorization status and waits for Next. */
   useEffect(() => {
     if (!open) return;
     if (step === 1 && usb) setStep(usb.state === "device" ? 3 : 2);
-    else if (step === 2 && usb?.state === "device") setStep(3);
     else if (step === 2 && !usb) setStep(1);
   }, [open, step, usb]);
 
@@ -301,29 +343,36 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
             {step === 2 && (
               <>
-                <p className="text-muted-foreground">
-                  The device is connected but has not authorized this computer
-                  {usb ? <> (state: <span className="font-mono text-warning">{usb.state}</span>)</> : null}.
-                </p>
-                <Instructions
-                  items={[
-                    <>Unlock the device and look for the <b>Allow USB debugging?</b> prompt.</>,
-                    <>Tick <b>Always allow from this computer</b>, then tap <b>Allow</b>.</>,
-                    <>No prompt? Open Developer options and toggle <b>USB debugging</b> off and on.</>,
-                  ]}
-                />
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="secondary" onClick={openDevOptions}><ExternalLink />
-                    Open Developer options on device
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={poll}><RefreshCw />
-                    Check again
-                  </Button>
+                <DebugTimeline />
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5",
+                    usb?.state === "device" ? "bg-success/15 text-success" : "bg-muted text-foreground",
+                  )}
+                >
+                  {usb?.state === "device" ? (
+                    <Check className="size-4 shrink-0" />
+                  ) : (
+                    <LoaderCircle className="size-4 shrink-0 animate-spin text-primary" />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium">
+                      {usb?.state === "device" ? "Device authorized" : "Waiting for authorization..."}
+                    </div>
+                    {usb?.state !== "device" && (
+                      <div className="text-[11px] text-muted-foreground">
+                        Tap <b>Allow</b> on the &ldquo;Allow USB debugging?&rdquo; prompt.
+                      </div>
+                    )}
+                  </div>
+                  {usb?.state !== "device" && (
+                    <Button size="sm" variant="ghost" onClick={openDevOptions}><ExternalLink />
+                      Open on device
+                    </Button>
+                  )}
                 </div>
-                <Note tone="warning">
-                  Android only accepts ADB commands from authorized computers, so the button above can fail while the
-                  state is unauthorized. If it does, follow the steps by hand. This screen continues automatically.
-                </Note>
               </>
             )}
 

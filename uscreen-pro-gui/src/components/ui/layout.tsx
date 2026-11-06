@@ -93,7 +93,10 @@ export function SettingRow({
   );
 }
 
-/** Label (+ tip) and live value on the left, the native slider on the right: one 48dp row. */
+/**
+ * Desktop slider row. Top: label (left) and live value (right). Middle: full-width slider.
+ * Bottom: min label (left) and max label (right).
+ */
 export function SliderRow({
   label,
   tip,
@@ -104,6 +107,8 @@ export function SliderRow({
   step,
   onChange,
   override,
+  minLabel,
+  maxLabel,
 }: {
   label: string;
   tip?: string;
@@ -114,21 +119,30 @@ export function SliderRow({
   step?: number;
   onChange: (v: number) => void;
   override?: Override;
+  minLabel?: string;
+  maxLabel?: string;
 }) {
   const active = !override || override.enabled;
   return (
-    <div className="flex min-h-10 items-center justify-between gap-4 px-3">
-      <Label label={label} tip={tip} />
-      <div className="flex shrink-0 items-center gap-3">
-        {active ? (
-          <div className="w-72">
-            <Slider label={label} value={value} min={min} max={max} step={step} formatValue={formatValue} onValueChange={onChange} />
-          </div>
-        ) : (
-          <span className="text-[11px] text-muted-foreground">{override?.inherited}</span>
-        )}
-        {override && <OverrideToggle override={override} label={label} />}
+    <div className="space-y-1.5 px-3 py-2.5">
+      <div className="flex min-h-6 items-center justify-between gap-4">
+        <Label label={label} tip={tip} />
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-xs font-medium tabular-nums text-foreground">
+            {active ? formatValue(value) : <span className="text-muted-foreground">{override?.inherited}</span>}
+          </span>
+          {override && <OverrideToggle override={override} label={label} />}
+        </div>
       </div>
+      {active && (
+        <>
+          <Slider label={label} value={value} min={min} max={max} step={step} onValueChange={onChange} />
+          <div className="flex justify-between text-[11px] text-muted-foreground">
+            <span>{minLabel ?? formatValue(min)}</span>
+            <span>{maxLabel ?? formatValue(max)}</span>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -180,7 +194,9 @@ export function QualityRow({
     <SliderRow
       label="Quality"
       tip="Encoder CRF: lower is sharper and heavier. 12-15 maximum sharpness, 16-20 balanced (default 18), 21-25 efficient, 26+ low bandwidth."
-      formatValue={(v) => `${v} · ${qualityLabel(v)}`}
+      formatValue={(v) => `${v} — ${qualityLabel(v)}`}
+      minLabel="Sharper"
+      maxLabel="Smaller"
       value={crf}
       min={QUALITY_MIN}
       max={QUALITY_MAX}

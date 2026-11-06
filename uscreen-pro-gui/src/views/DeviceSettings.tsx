@@ -129,7 +129,7 @@ export function DeviceSettings({
         <QualityRow
           quality={p.quality ?? g.quality}
           onChange={(quality) => onChange({ quality })}
-          override={ov("quality", g.quality, `${g.quality} · ${qualityLabel(g.quality)}`)}
+          override={ov("quality", g.quality, `${g.quality} — ${qualityLabel(g.quality)}`)}
         />
         <SliderRow
           label="Bitrate ceiling"

@@ -3,7 +3,7 @@
  * (option arrays, string values, single-value sliders) so call sites stay terse; every control
  * is the shadcn component, sized for a dense desktop layout.
  */
-import { useEffect, useState, type KeyboardEventHandler } from "react";
+import type { KeyboardEventHandler } from "react";
 import type { Option } from "@/lib/options";
 import { Input } from "@/components/ui/input";
 import { Select as UiSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -43,12 +43,7 @@ export function Select({
   );
 }
 
-/**
- * shadcn Slider with a value tooltip: an absolutely positioned bubble that follows the thumb's
- * percentage offset and shows while the pointer is over the slider, a drag is active, or the
- * thumb has keyboard focus. The thumb is 16px wide and Radix keeps its centre inside the track, so
- * the offset is corrected by (0.5 - pct) * 16px.
- */
+/** Plain shadcn Slider (with step marks) adapted to a single numeric value. */
 export function Slider({
   value,
   min,
@@ -56,7 +51,6 @@ export function Slider({
   step = 1,
   onValueChange,
   label,
-  formatValue,
 }: {
   value: number;
   min: number;
@@ -64,57 +58,17 @@ export function Slider({
   step?: number;
   onValueChange: (v: number) => void;
   label: string;
-  formatValue?: (v: number) => string;
 }) {
-  const [hover, setHover] = useState(false);
-  const [focus, setFocus] = useState(false);
-  const [drag, setDrag] = useState(false);
-
-  useEffect(() => {
-    if (!drag) return;
-    const end = () => setDrag(false);
-    window.addEventListener("pointerup", end);
-    window.addEventListener("pointercancel", end);
-    return () => {
-      window.removeEventListener("pointerup", end);
-      window.removeEventListener("pointercancel", end);
-    };
-  }, [drag]);
-
-  const pct = (Math.min(max, Math.max(min, value)) - min) / (max - min);
-  const show = hover || focus || drag;
-
   return (
-    <div
-      className="relative w-full"
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
-      onPointerDown={() => setDrag(true)}
-      onFocus={() => setFocus(true)}
-      onBlur={() => setFocus(false)}
-    >
-      <div
-        role="presentation"
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute -top-7 z-20 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs font-medium text-background shadow transition-opacity",
-          show ? "opacity-100" : "opacity-0",
-        )}
-        style={{ left: `calc(${pct * 100}% + ${(0.5 - pct) * 16}px)` }}
-      >
-        {formatValue ? formatValue(value) : value}
-        <span className="absolute -bottom-1 left-1/2 size-2 -translate-x-1/2 rotate-45 bg-foreground" />
-      </div>
-      <UiSlider
-        aria-label={label}
-        value={[value]}
-        min={min}
-        max={max}
-        step={step}
-        marks
-        onValueChange={([v]) => onValueChange(v)}
-      />
-    </div>
+    <UiSlider
+      aria-label={label}
+      value={[value]}
+      min={min}
+      max={max}
+      step={step}
+      marks
+      onValueChange={([v]) => onValueChange(v)}
+    />
   );
 }
 
