@@ -238,16 +238,18 @@ export default function App() {
               </div>
             </div>
 
-            <footer className="flex h-8 shrink-0 items-center justify-between border-t border-outline-variant bg-surface px-4 text-[11px] text-on-surface-variant">
+            {/* The daemon state lives in the sidebar card; the status bar only carries build info. */}
+            <footer className="flex shrink-0 items-center justify-between px-4 pb-4 pt-2 text-xs text-on-surface-variant">
               <span className="flex items-center gap-2">
-                <span className={`size-1.5 rounded-full ${status?.is_running ? "bg-success" : "bg-error"}`} />
-                {status?.is_running ? "Daemon running" : "Daemon stopped"}
+                UScreen Pro
                 {busy && <RefreshCw className="size-3 animate-spin" />}
               </span>
               <span className="flex items-center gap-2 font-mono">
                 {status?.host_version ?? "-"}
                 {status?.is_dirty && (
-                  <span className="rounded-[2px] bg-warning-container px-1 text-[10px] text-warning">dirty</span>
+                  <span className="rounded-full bg-tertiary-container px-2 py-0.5 font-sans text-[11px] text-on-tertiary-container">
+                    dirty
+                  </span>
                 )}
               </span>
             </footer>

@@ -6,6 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import type { AdbEntry, ManualPairResult, PairingEvent, QrPairingSession } from "../lib/types";
+import { IconButton } from "@bug-on/m3-expressive/buttons";
 import { Button, TextInput, cx } from "./ui/controls";
 
 const STEPS = ["Connect", "Debugging", "Install", "Wireless", "Finish"] as const;
@@ -24,12 +25,12 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 function Note({ tone = "neutral", children }: { tone?: "neutral" | "warning" | "error" | "success"; children: ReactNode }) {
   const tones = {
-    neutral: "bg-surface-high text-on-surface-variant",
+    neutral: "bg-surface-high text-on-surface",
     warning: "bg-warning-container text-warning",
     error: "bg-error-container text-error",
     success: "bg-success-container text-success",
   };
-  return <div className={cx("rounded px-3 py-2 text-[11px] leading-snug", tones[tone])}>{children}</div>;
+  return <div className={cx("rounded-xl px-4 py-3 text-sm leading-relaxed", tones[tone])}>{children}</div>;
 }
 
 function Instructions({ items }: { items: ReactNode[] }) {
@@ -174,7 +175,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
     try {
       toast.info(await invoke<string>("open_developer_options", { serial: device?.serial ?? null }));
     } catch (e) {
-      toast.error(`The tablet refused the command: ${errText(e)}`);
+      toast.error(`The device refused the command: ${errText(e)}`);
     }
   }
 
@@ -243,33 +244,45 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
   const pairingActive = pairEvent?.kind === "pairing";
 
+  /* Next is always shown; each step enables it once its own condition holds. */
+  const deviceConnected = usb !== null;
+  const nextEnabled =
+    step === 1 ? deviceConnected : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : step === 4 ? wifiEndpoint !== null : false;
+  const goNext = () => {
+    if (step === 1 && usb) setStep(usb.state === "device" ? 3 : 2);
+    else if (step === 2 || step === 3 || step === 4) setStep((step + 1) as Step);
+  };
+
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[520px] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-outline-variant bg-card text-xs"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[480px] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-3xl bg-card text-sm"
         >
-          <header className="flex items-center justify-between px-4 pb-2 pt-3">
-            <DialogPrimitive.Title className="text-sm font-medium text-on-surface">Add device</DialogPrimitive.Title>
-            <DialogPrimitive.Close aria-label="Close" className="rounded p-1 text-on-surface-variant hover:bg-surface-high hover:text-on-surface">
-              <X className="size-4" />
+          <header className="flex items-center justify-between px-6 pb-2 pt-4">
+            <DialogPrimitive.Title className="text-2xl font-normal leading-8 text-on-surface">Add device</DialogPrimitive.Title>
+            <DialogPrimitive.Close asChild>
+              <IconButton aria-label="Close" size="xs" colorStyle="standard" className="text-on-surface-variant">
+                <X className="size-5" />
+              </IconButton>
             </DialogPrimitive.Close>
           </header>
 
-          <ol className="flex gap-1 px-4 pb-3">
+          <ol className="flex gap-2 px-6 pb-4 pt-2">
             {STEPS.map((label, i) => {
               const n = i + 1;
               return (
                 <li key={label} className="flex-1">
                   <div
                     className={cx(
-                      "h-1 rounded-[2px]",
-                      n < step ? "bg-success" : n === step ? "bg-primary" : "bg-surface-highest",
+                      "h-1 rounded-full transition-colors",
+                      n <= step ? "bg-primary" : "bg-surface-highest",
                     )}
                   />
-                  <div className={cx("mt-1 text-[10px]", n === step ? "text-on-surface" : "text-on-surface-variant")}>
+                  <div className={cx("mt-2 text-xs", n === step ? "font-medium text-on-surface" : "text-on-surface-variant")}>
                     {n}. {label}
                   </div>
                 </li>
@@ -277,7 +290,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
             })}
           </ol>
 
-          <div className="min-h-[280px] flex-1 space-y-3 overflow-y-auto border-t border-outline-variant px-4 py-4">
+          <div className="flex min-h-[260px] flex-1 flex-col overflow-y-auto px-6 py-4"><div className="my-auto space-y-4">
             {step === 1 && (
               <>
                 <p className="text-on-surface-variant">Plug your Android device into this computer with a USB data cable.</p>
@@ -291,11 +304,12 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                   </div>
                   {!usb && <LoaderCircle className="size-4 animate-spin text-primary" />}
                 </div>
-                <div className="rounded bg-surface-high px-3 py-2 text-[11px] leading-snug text-on-surface-variant">
-                  <div className="mb-1 font-medium text-on-surface">Nothing showing up?</div>
+                {/* surface-container-high on the card, on-surface text: >= 4.5:1 (measured in the notes). */}
+                <div className="rounded-xl bg-surface-high px-4 py-3 text-sm leading-relaxed text-on-surface">
+                  <div className="mb-1 font-medium">Nothing showing up?</div>
                   <ul className="list-inside list-disc space-y-1">
                     <li>Use a USB cable that carries data, not a charge-only one.</li>
-                    <li>Unlock the tablet screen and accept any USB prompt.</li>
+                    <li>Unlock the device screen and accept any USB prompt.</li>
                     <li>If USB debugging was never enabled: Settings, About phone, tap Build number seven times.</li>
                     <li>Then turn on USB debugging under Developer options.</li>
                   </ul>
@@ -311,14 +325,14 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                 </p>
                 <Instructions
                   items={[
-                    <>Unlock the tablet and look for the <b>Allow USB debugging?</b> prompt.</>,
+                    <>Unlock the device and look for the <b>Allow USB debugging?</b> prompt.</>,
                     <>Tick <b>Always allow from this computer</b>, then tap <b>Allow</b>.</>,
                     <>No prompt? Open Developer options and toggle <b>USB debugging</b> off and on.</>,
                   ]}
                 />
                 <div className="flex items-center gap-2">
                   <Button onClick={openDevOptions} icon={<ExternalLink className="size-4" />}>
-                    Open Developer options on tablet
+                    Open Developer options on device
                   </Button>
                   <Button variant="text" onClick={poll} icon={<RefreshCw className="size-4" />}>
                     Check again
@@ -361,7 +375,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
               <>
                 <Instructions
                   items={[
-                    <>Connect the tablet to the <b>same Wi-Fi network</b> as this computer.</>,
+                    <>Connect the device to the <b>same Wi-Fi network</b> as this computer.</>,
                     <>Open <b>Developer options, Wireless debugging</b> and switch it on.</>,
                     <>Tap <b>Pair device with QR code</b> and scan the code below.</>,
                   ]}
@@ -398,7 +412,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
                 <div className="flex items-center justify-between">
                   <Button variant="text" onClick={openWirelessSettings} icon={<ExternalLink className="size-4" />}>
-                    Open Developer options on tablet
+                    Open Developer options on device
                   </Button>
                   <Button variant="text" onClick={() => setManualOpen((v) => !v)}>
                     {manualOpen ? "Hide manual pairing" : "Pair with a code instead"}
@@ -408,7 +422,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                 {manualOpen && (
                   <div className="space-y-2 rounded-lg border border-outline-variant bg-surface p-3">
                     <p className="text-[11px] text-on-surface-variant">
-                      On the tablet choose <b>Pair device with pairing code</b>, then enter the address and code it
+                      On the device choose <b>Pair device with pairing code</b>, then enter the address and code it
                       shows. The connect address is the IP and port on the main Wireless debugging screen; leave it
                       empty to look it up automatically.
                     </p>
@@ -475,7 +489,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                   <div role="radiogroup" aria-label="Preferred connection" className="grid grid-cols-2 gap-2">
                     {(
                       [
-                        { id: "usb", title: "USB cable", desc: "Lowest latency, charges the tablet", icon: Usb },
+                        { id: "usb", title: "USB cable", desc: "Lowest latency, charges the device", icon: Usb },
                         { id: "wifi", title: "Wi-Fi", desc: "No cable needed", icon: Wifi },
                       ] as const
                     ).map(({ id, title, desc, icon: Icon }) => {
@@ -525,29 +539,35 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
             )}
           </div>
 
-          <footer className="flex items-center justify-between border-t border-outline-variant px-4 py-3">
-            {step > 1 && step < 5 ? (
-              <Button variant="text" onClick={() => setStep((s) => (s - 1) as Step)} icon={<ChevronLeft className="size-4" />}>
-                Back
-              </Button>
-            ) : (
-              <Button variant="text" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-            )}
+          </div>
+
+          <footer className="flex items-center justify-between px-6 pb-6 pt-2">
+            <Button variant="text" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
 
             <div className="flex items-center gap-2">
+              {step > 1 && step < 5 && (
+                <Button variant="text" onClick={() => setStep((s) => (s - 1) as Step)} icon={<ChevronLeft className="size-4" />}>
+                  Back
+                </Button>
+              )}
               {step === 3 && install.state !== "ok" && (
                 <Button variant="text" onClick={() => setStep(4)}>
                   Skip install
                 </Button>
               )}
               {step === 4 && (
-                <Button variant="tonal" onClick={() => setStep(5)}>
+                <Button variant="text" onClick={() => setStep(5)}>
                   Skip, use USB only
                 </Button>
               )}
-              {step === 5 && (
+              {step < 5 ? (
+                /* Visible from the first screen, disabled until this step has what it needs. */
+                <Button variant="filled" onClick={goNext} disabled={!nextEnabled}>
+                  Next
+                </Button>
+              ) : (
                 <Button variant="filled" onClick={finish} disabled={saving || !device} icon={<Check className="size-4" />}>
                   Save device
                 </Button>

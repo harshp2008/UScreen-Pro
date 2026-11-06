@@ -1,7 +1,8 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { IconButton } from "@bug-on/m3-expressive/buttons";
-import { Minus, Monitor, Moon, Square, Sun, X, Copy } from "lucide-react";
+import { Minus, Moon, Square, Sun, X, Copy } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import appIcon from "../assets/uscreen-pro.svg";
 import { cx } from "./ui/controls";
 
 function WindowButton({
@@ -56,10 +57,10 @@ export function TitleBar({ dark, onToggleTheme }: { dark: boolean; onToggleTheme
   return (
     <header
       data-tauri-drag-region
-      className="flex h-9 shrink-0 select-none items-center justify-between border-b border-outline-variant bg-surface pl-3 pr-1"
+      className="flex h-9 shrink-0 select-none items-center justify-between bg-transparent pl-4 pr-2"
     >
       <div className="pointer-events-none flex items-center gap-2">
-        <Monitor className="size-4 text-primary" />
+        <img src={appIcon} alt="" className="size-5" draggable={false} />
         <span className="text-xs font-semibold text-on-surface">UScreen Pro</span>
       </div>
       <div className="flex items-center gap-1">

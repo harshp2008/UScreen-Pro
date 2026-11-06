@@ -50,6 +50,7 @@ export function Select({
   return (
     <M3Select
       aria-label={label}
+      label={label}
       dense
       variant="outlined"
       value={value}
@@ -90,7 +91,7 @@ export function Slider({
       max={max}
       step={step}
       onValueChange={onValueChange}
-      className="w-full"
+      className="m3-round-thumb w-full"
     />
   );
 }
@@ -167,6 +168,7 @@ export function TextInput({
       type={type}
       noSpinner
       aria-label={ariaLabel ?? placeholder ?? "Value"}
+      label={ariaLabel}
       placeholder={placeholder}
       disabled={disabled}
       value={String(value)}

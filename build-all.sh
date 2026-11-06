@@ -110,6 +110,37 @@ for pair in "uscreen-pro-gui:$BIN_DIR/uscreen-pro-gui" "uscreen:$BIN_DIR/uscreen
     fi
 done
 
+# 6. Desktop integration: launcher icon (hicolor theme) and .desktop entry, so the dock and the
+#    app grid show the UScreen Pro icon instead of a generic one.
+echo ""
+echo "==> Installing launcher icon and desktop entry..."
+ICON_SRC="$SCRIPT_DIR/uscreen-pro-gui/src-tauri/icons"
+ICON_ROOT="$HOME/.local/share/icons/hicolor"
+APPS_DIR="$HOME/.local/share/applications"
+mkdir -p "$APPS_DIR"
+for pair in "32:32x32.png" "64:64x64.png" "128:128x128.png" "256:128x128@2x.png" "512:icon.png"; do
+    size="${pair%%:*}"
+    file="${pair#*:}"
+    mkdir -p "$ICON_ROOT/${size}x${size}/apps"
+    cp --remove-destination "$ICON_SRC/$file" "$ICON_ROOT/${size}x${size}/apps/uscreen-pro.png"
+done
+cat > "$APPS_DIR/uscreen-pro.desktop" <<DESKTOP
+[Desktop Entry]
+Type=Application
+Name=UScreen Pro
+Comment=Use your Android device as a USB second display
+Exec=$BIN_DIR/uscreen-pro-gui
+Icon=uscreen-pro
+StartupWMClass=uscreen-pro-gui
+Terminal=false
+Categories=Utility;Settings;
+Keywords=display;tablet;second screen;monitor;
+DESKTOP
+command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -q -t -f "$ICON_ROOT" 2>/dev/null || true
+command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$APPS_DIR" 2>/dev/null || true
+if command -v desktop-file-validate >/dev/null 2>&1; then desktop-file-validate "$APPS_DIR/uscreen-pro.desktop" && echo "  ✓ $APPS_DIR/uscreen-pro.desktop (valid)"; else echo "  ✓ $APPS_DIR/uscreen-pro.desktop"; fi
+cmp -s "$ICON_SRC/icon.png" "$ICON_ROOT/512x512/apps/uscreen-pro.png" && echo "  ✓ $ICON_ROOT/512x512/apps/uscreen-pro.png" || { echo "  ✗ icon install mismatch" >&2; exit 1; }
+
 echo ""
 echo "=========================================================="
 echo "  ✓ All Deliverables Assembled in dist/"

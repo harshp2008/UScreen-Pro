@@ -1,26 +1,18 @@
 @import "tailwindcss";
 @import "@bug-on/m3-expressive/index.css";
+@import "./theme.css";
 @import "../node_modules/sonner/dist/styles.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Colors come from @bug-on/m3-expressive/index.css: the library's baseline MD3 scheme (seed #6750A4),
- * light on :root and dark on .dark, as --md-sys-color-* roles. The names below alias those roles so
- * the app's layout utilities (bg-card, text-on-surface-variant, ...) read the same single source.
- * One seed means one accent: primary for actions, secondary-container for selection, nothing else.
+ * Colors: theme.css writes the Emerald scheme (seed #10B981) into the library's --md-sys-color-*
+ * roles. The names below alias those roles for the app's own layout utilities.
+ * One seed, one accent: primary for actions, secondary-container for selection.
  *
- *   dark : background #141218, card = container-low #1D1B20, field = container #211F26,
- *          text #E6E1E5, secondary text #CAC4D0
- *   light: background #FEF7FF, card = container     #F3EDF7, field = container-high #ECE6F0,
- *          text #1D1B20, secondary text #49454F, primary #6750A4 on #FFFFFF
+ *   dark : card = container-low  #0E2A1C, field = container      #123424
+ *   light: card = container      #E8F5EE, field = container-high  #DCEDE3
  */
-:root:not(.dark) {
-  /* Spec text color for light mode (the library ships the older #1C1B1F). */
-  --md-sys-color-on-surface: #1d1b20;
-  --md-sys-color-on-background: #1d1b20;
-}
-
 :root {
   --app-card: var(--md-sys-color-surface-container);
   --app-field: var(--md-sys-color-surface-container-high);
@@ -68,6 +60,27 @@
   --color-warning-container: var(--app-warning-container);
   --color-error: var(--md-sys-color-error);
   --color-error-container: var(--md-sys-color-error-container);
+  --color-on-error-container: var(--md-sys-color-on-error-container);
+  --color-tertiary-container: var(--md-sys-color-tertiary-container);
+  --color-on-tertiary-container: var(--md-sys-color-on-tertiary-container);
+  --color-surface-container-high: var(--md-sys-color-surface-container-high);
+}
+
+/*
+ * Slider handle: a 20dp circle that grows to 26dp while the slider is pressed or focused.
+ * The library ships a 4dp pill handle; it is reshaped here (the library animates the pill's width
+ * on press, so the size is pinned with !important) and the scale spring replaces that squeeze.
+ */
+.m3-round-thumb [role="slider"] {
+  width: 20px !important;
+  height: 20px !important;
+  border-radius: 9999px !important;
+  box-shadow: 0 0 0 4px var(--app-card);
+  transition: scale 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.m3-round-thumb:active [role="slider"],
+.m3-round-thumb [role="slider"]:focus-visible {
+  scale: 1.3;
 }
 
 @layer base {

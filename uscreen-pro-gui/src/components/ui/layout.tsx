@@ -14,9 +14,9 @@ export function InfoTip({ text }: { text: string }) {
         <button
           type="button"
           aria-label={text}
-          className="inline-flex size-4 items-center justify-center rounded-full text-on-surface-variant opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
+          className="inline-flex size-3.5 items-center justify-center rounded-full text-on-surface-variant opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
         >
-          <Info className="size-3.5" />
+          <Info className="size-3" />
         </button>
       </TooltipPrimitive.Trigger>
       <TooltipPrimitive.Portal>
@@ -175,7 +175,7 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   return (
     <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-baseline gap-2">
-        <h2 className="truncate text-base font-semibold text-on-surface">{title}</h2>
+        <h2 className="truncate text-2xl font-normal leading-8 text-on-surface">{title}</h2>
         {subtitle && <span className="truncate font-mono text-[11px] text-on-surface-variant">{subtitle}</span>}
       </div>
       <div className="flex items-center gap-2">{children}</div>

@@ -26,21 +26,18 @@ export function Health({ status, onRestartAdb }: { status: DaemonStatus; onResta
       </PageHeader>
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3">
-        <Card label="Daemon process">
-          <Dot ok={status.is_running} />
-          {status.is_running ? `Running, PID ${status.pid}` : "Not running"}
-        </Card>
-        <Card label="Control socket">
-          <Dot ok={status.control_connected} />
-          {status.control_connected ? "Connected" : "Offline"}
-        </Card>
-        <Card label="Socket path">
-          <span className="font-mono text-xs font-normal">{status.control_socket}</span>
+        {/* One card for daemon + control channel; the sidebar owns the start/stop action. */}
+        <Card label="Daemon">
+          <Dot ok={status.is_running && status.control_connected} />
+          {status.is_running
+            ? `Running, PID ${status.pid}, control ${status.control_connected ? "connected" : "offline"}`
+            : "Not running"}
+          <span className="w-full font-mono text-xs font-normal text-on-surface-variant">{status.control_socket}</span>
         </Card>
         <Card label="Build">
           <span className="font-mono">{status.host_version}</span>
           {status.is_dirty && (
-            <span className="rounded-[2px] bg-warning-container px-2 py-1 text-[10px] text-warning">dirty</span>
+            <span className="rounded-full bg-tertiary-container px-2 py-0.5 text-[11px] font-normal text-on-tertiary-container">dirty</span>
           )}
         </Card>
       </div>
