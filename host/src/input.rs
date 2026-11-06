@@ -1868,7 +1868,7 @@ mod tests {
     fn frames(path: &std::path::Path) -> Vec<Vec<(u16, u16, i32)>> {
         let bytes = std::fs::read(path).unwrap();
         let (mut all, mut frame) = (Vec::new(), Vec::new());
-        for ev in bytes.chunks_exact(std::mem::size_of::<LinuxInputEvent>()) {
+        for ev in bytes.as_chunks::<{ std::mem::size_of::<LinuxInputEvent>() }>().0 {
             let kind = u16::from_ne_bytes(ev[16..18].try_into().unwrap());
             let code = u16::from_ne_bytes(ev[18..20].try_into().unwrap());
             let value = i32::from_ne_bytes(ev[20..24].try_into().unwrap());

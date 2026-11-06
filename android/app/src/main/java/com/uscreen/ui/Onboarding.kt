@@ -7,14 +7,22 @@ import android.hardware.usb.UsbManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,28 +32,40 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Monitor
+import androidx.compose.material.icons.filled.PriorityHigh
+import androidx.compose.material.icons.filled.Usb
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -58,20 +78,10 @@ import com.uscreen.VideoReceiver
 import kotlinx.coroutines.delay
 
 /**
- * High-level onboarding prerequisites progression state.
+ * Evaluates whether Developer Options are unlocked system-wide.
  */
-enum class OnboardingStep {
-    DEVELOPER_OPTIONS_DISABLED,
-    USB_DEBUGGING_DISABLED,
-    WAITING_FOR_HOST
-}
-
-/**
- * Query Android system settings to evaluate if Developer Options and USB/Wireless
- * debugging are enabled.
- */
-fun getOnboardingStep(context: Context): OnboardingStep {
-    val devEnabled = try {
+fun isDevOptionsEnabled(context: Context): Boolean {
+    return try {
         Settings.Global.getInt(
             context.contentResolver,
             Settings.Global.DEVELOPMENT_SETTINGS_ENABLED,
@@ -80,30 +90,40 @@ fun getOnboardingStep(context: Context): OnboardingStep {
     } catch (_: Exception) {
         true
     }
-    if (!devEnabled) return OnboardingStep.DEVELOPER_OPTIONS_DISABLED
+}
 
-    val adbEnabled = try {
-        val usbAdb = Settings.Global.getInt(
+/**
+ * Evaluates whether USB Debugging (adb) is currently enabled.
+ */
+fun isUsbAdbEnabled(context: Context): Boolean {
+    return try {
+        Settings.Global.getInt(
             context.contentResolver,
             Settings.Global.ADB_ENABLED,
             0
         ) != 0
-        val wifiAdb = Settings.Global.getInt(
+    } catch (_: Exception) {
+        true
+    }
+}
+
+/**
+ * Evaluates whether Wireless Debugging (adb over TLS / Wi-Fi) is enabled.
+ */
+fun isWifiAdbEnabled(context: Context): Boolean {
+    return try {
+        Settings.Global.getInt(
             context.contentResolver,
             "adb_wifi_enabled",
             0
         ) != 0
-        usbAdb || wifiAdb
     } catch (_: Exception) {
-        true
+        false
     }
-    if (!adbEnabled) return OnboardingStep.USB_DEBUGGING_DISABLED
-
-    return OnboardingStep.WAITING_FOR_HOST
 }
 
 /**
- * Check whether a physical USB cable connection is currently established with a host workstation.
+ * Checks whether physical USB connection to host is established.
  */
 fun checkUsbConnected(context: Context): Boolean {
     val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
@@ -122,7 +142,7 @@ fun checkUsbConnected(context: Context): Boolean {
 }
 
 /**
- * Check whether the device is connected to a local Wi-Fi access point.
+ * Checks whether device is connected to local Wi-Fi.
  */
 fun checkWifiConnected(context: Context): Boolean {
     val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
@@ -178,75 +198,141 @@ fun evaluateDiagnostic(
 }
 
 /**
- * Interactive checklist row inside the Troubleshooter Bottom Sheet.
- * Displays step name, description, pass/fail status indicator, and optional action button.
+ * Step navigation indicator pill row.
  */
 @Composable
-fun TroubleshootCheckItem(
+fun StepIndicator(currentStep: Int, totalSteps: Int = 4) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.padding(vertical = 12.dp)
+    ) {
+        for (i in 0 until totalSteps) {
+            val isActive = i == currentStep
+            val isDone = i < currentStep
+            Box(
+                modifier = Modifier
+                    .size(if (isActive) 24.dp else 12.dp, 12.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(
+                        when {
+                            isActive -> Accent
+                            isDone -> Ok
+                            else -> Color(0xFF33334D)
+                        }
+                    )
+            )
+        }
+    }
+}
+
+/**
+ * Status checklist row used inside the wizard screens.
+ */
+@Composable
+fun StatusItemCard(
     title: String,
-    detail: String,
-    passed: Boolean,
+    description: String,
+    isPassed: Boolean,
     actionButtonText: String? = null,
     onActionClick: (() -> Unit)? = null
 ) {
-    Column(
+    Card(
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isPassed) Color(0x3310B981) else Color(0x332A2A3D)
+        ),
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0x332A2A3D))
-            .padding(12.dp)
+            .padding(vertical = 6.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = if (passed) "✓" else "✗",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (passed) Ok else Color(0xFFEF5350),
-                modifier = Modifier.padding(end = 12.dp)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                Text(detail, fontSize = 12.sp, color = Color(0xFFB0B0C0))
-            }
-        }
-        if (!passed && actionButtonText != null && onActionClick != null) {
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = onActionClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                modifier = Modifier.padding(start = 28.dp)
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(actionButtonText, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = if (isPassed) Ok else Color(0xFF55556A),
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isPassed) Icons.Default.Check else Icons.Default.PriorityHigh,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = title,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = description,
+                        fontSize = 12.sp,
+                        color = if (isPassed) Color(0xFFD1FAE5) else Muted
+                    )
+                }
+            }
+
+            if (!isPassed && actionButtonText != null && onActionClick != null) {
+                Spacer(Modifier.height(10.dp))
+                Button(
+                    onClick = onActionClick,
+                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 40.dp)
+                ) {
+                    Text(actionButtonText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
             }
         }
     }
 }
 
 /**
- * Primary onboarding and connection waiting screen.
- *
- * Guides the user through unlocking Developer Options, enabling USB/Wireless debugging,
- * monitoring connection progress, and launching the interactive Troubleshooter wizard.
+ * 4-Screen Guided Onboarding Wizard & Connection Monitor.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun OnboardingScreen(
     videoReceiver: VideoReceiver?,
-    touchCapture: TouchCapture?,
+    @Suppress("UNUSED_PARAMETER") touchCapture: TouchCapture?,
     prefs: Prefs?,
-    isConnected: Boolean
+    @Suppress("UNUSED_PARAMETER") isConnected: Boolean,
+    forceReviewMode: Boolean = false,
+    onDismissReviewMode: () -> Unit = {}
 ) {
     val context = LocalContext.current
-    var step by remember { mutableStateOf(getOnboardingStep(context)) }
+    var hasCompletedOnboarding by remember {
+        mutableStateOf(prefs?.hasCompletedOnboarding ?: false)
+    }
+    var currentStep by remember { mutableIntStateOf(0) }
+
+    // Live status polling
+    var devOptionsOn by remember { mutableStateOf(isDevOptionsEnabled(context)) }
+    var usbAdbOn by remember { mutableStateOf(isUsbAdbEnabled(context)) }
+    var wifiAdbOn by remember { mutableStateOf(isWifiAdbEnabled(context)) }
     var usbPlugged by remember { mutableStateOf(checkUsbConnected(context)) }
-    var wifiOn by remember { mutableStateOf(checkWifiConnected(context)) }
+    var wifiConnected by remember { mutableStateOf(checkWifiConnected(context)) }
     var showHelpWizard by remember { mutableStateOf(false) }
     var dynamicDiagnostic by remember { mutableStateOf<String?>(null) }
-    var secondsWaiting by remember { mutableStateOf(0) }
+    var secondsWaiting by remember { mutableIntStateOf(0) }
     val preferredTransport = prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO
+
+    // Reset step to 0 when entering review mode
+    LaunchedEffect(forceReviewMode) {
+        if (forceReviewMode) {
+            currentStep = 0
+        }
+    }
 
     LaunchedEffect(videoReceiver) {
         videoReceiver?.onDiagnosticUpdate = { diag ->
@@ -258,284 +344,593 @@ fun OnboardingScreen(
 
     LaunchedEffect(Unit) {
         while (true) {
-            step = getOnboardingStep(context)
+            devOptionsOn = isDevOptionsEnabled(context)
+            usbAdbOn = isUsbAdbEnabled(context)
+            wifiAdbOn = isWifiAdbEnabled(context)
             usbPlugged = checkUsbConnected(context)
-            wifiOn = checkWifiConnected(context)
+            wifiConnected = checkWifiConnected(context)
             secondsWaiting += 1
             delay(1000)
         }
     }
 
+    val showWizard = !hasCompletedOnboarding || forceReviewMode
+
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF0D0D14), Color(0xFF14142A), Color(0xFF0D0D14))
-                )
-            ),
+            .background(Surface0),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(24.dp)
-        ) {
-            Text(
-                text = "UScreen",
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = "USB & Wireless Display",
-                fontSize = 15.sp,
-                color = AccentSoft
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-
-            when (step) {
-                OnboardingStep.DEVELOPER_OPTIONS_DISABLED -> {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0x8C1A1A2A)),
-                        modifier = Modifier.fillMaxWidth(0.85f)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "Developer Options Required",
-                                fontSize = 18.sp,
-                                color = Warn,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "UScreen communicates with your PC via Android USB/Wi-Fi debugging. " +
-                                    "Tap 'Build number' 7 times in About Device to unlock Developer options.",
-                                fontSize = 13.sp,
-                                lineHeight = 20.sp,
-                                color = Color(0xFFB0B0C0),
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(18.dp))
-                            Button(
-                                onClick = {
-                                    try {
-                                        context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS))
-                                    } catch (_: Exception) {
-                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Accent)
-                            ) {
-                                Text("Open About Device", color = Color.White, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-                OnboardingStep.USB_DEBUGGING_DISABLED -> {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0x8C1A1A2A)),
-                        modifier = Modifier.fillMaxWidth(0.85f)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "Enable USB / Wireless Debugging",
-                                fontSize = 18.sp,
-                                color = Warn,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "Developer options are enabled, but debugging is turned off. " +
-                                    "Please turn on 'USB debugging' or 'Wireless debugging' to allow your PC to connect.",
-                                fontSize = 13.sp,
-                                lineHeight = 20.sp,
-                                color = Color(0xFFB0B0C0),
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(18.dp))
-                            Button(
-                                onClick = {
-                                    try {
-                                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
-                                    } catch (_: Exception) {
-                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Accent)
-                            ) {
-                                Text("Open Developer Options", color = Color.White, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-                OnboardingStep.WAITING_FOR_HOST -> {
-                    val (diagState, diagMessage) = evaluateDiagnostic(
-                        usbPlugged = usbPlugged,
-                        wifiOn = wifiOn,
-                        preferredTransport = preferredTransport,
-                        dynamicDiagnostic = dynamicDiagnostic,
-                        secondsWaiting = secondsWaiting
-                    )
-
-                    CircularProgressIndicator(
-                        color = Accent,
-                        strokeWidth = 4.dp,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = diagMessage,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                        color = if (diagState == DiagnosticState.CONNECTING) Color(0xFFB0B0C0) else Warn,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 32.dp)
-                    )
-                    Spacer(modifier = Modifier.height(28.dp))
-                    OutlinedButton(
-                        onClick = { showHelpWizard = true },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentSoft)
-                    ) {
-                        Text("Help Me Fix It 🛠", fontSize = 13.sp)
-                    }
-                }
-            }
-        }
-
-        if (showHelpWizard) {
-            val devOn = step != OnboardingStep.DEVELOPER_OPTIONS_DISABLED
-            val adbOn = step == OnboardingStep.WAITING_FOR_HOST
-            val transportOk = when (preferredTransport) {
-                Prefs.TRANSPORT_USB -> usbPlugged
-                Prefs.TRANSPORT_WIFI -> wifiOn
-                else -> usbPlugged || wifiOn
-            }
-
-            LaunchedEffect(transportOk, devOn, adbOn) {
-                if (transportOk && devOn && adbOn) {
-                    videoReceiver?.restartSocket()
-                    touchCapture?.connect()
-                }
-            }
-
-            LaunchedEffect(isConnected) {
-                if (isConnected) {
-                    showHelpWizard = false
-                }
-            }
-
-            ModalBottomSheet(
-                onDismissRequest = { showHelpWizard = false },
-                containerColor = Color(0xFF16161F)
+        if (showWizard) {
+            // 4-Step Guided Onboarding Wizard
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 28.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
             ) {
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 24.dp, vertical = 12.dp)
-                    ) {
-                        Text(
-                            "Connection Troubleshooter",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Let's verify each requirement step-by-step:",
-                            fontSize = 13.sp,
-                            color = Color(0xFF9A9AB0)
-                        )
-                        Spacer(Modifier.height(16.dp))
+                // Header
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = "UScreen Pro",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Step ${currentStep + 1} of 4",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = AccentSoft
+                    )
+                    StepIndicator(currentStep = currentStep, totalSteps = 4)
+                }
 
-                        val (tTitle, tDetail) = when (preferredTransport) {
-                            Prefs.TRANSPORT_USB -> "1. USB Cable Connection" to (
-                                if (usbPlugged) "USB cable is securely detected." else "No USB cable detected. Please connect your USB cable."
-                            )
-                            Prefs.TRANSPORT_WIFI -> "1. Wi-Fi Connection" to (
-                                if (wifiOn) "Connected to Wi-Fi network." else "Wi-Fi is disconnected. Please connect to Wi-Fi."
-                            )
-                            else -> "1. Network Transport" to when {
-                                usbPlugged && wifiOn -> "USB and Wi-Fi connected."
-                                usbPlugged -> "USB cable is securely detected."
-                                wifiOn -> "Connected to Wi-Fi network."
-                                else -> "No USB or Wi-Fi connection detected. Connect cable or Wi-Fi."
+                // Wizard Step Body with Smooth Horizontal Animation
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    AnimatedContent(
+                        targetState = currentStep,
+                        transitionSpec = {
+                            if (targetState > initialState) {
+                                (slideInHorizontally { width -> width } + fadeIn(tween(300))).togetherWith(
+                                    slideOutHorizontally { width -> -width } + fadeOut(tween(300))
+                                )
+                            } else {
+                                (slideInHorizontally { width -> -width } + fadeIn(tween(300))).togetherWith(
+                                    slideOutHorizontally { width -> width } + fadeOut(tween(300))
+                                )
+                            }
+                        },
+                        label = "WizardStepTransition"
+                    ) { step ->
+                        when (step) {
+                            // SCREEN 1: Welcome & Intro
+                            0 -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color(0x334F46E5),
+                                        modifier = Modifier.size(72.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Monitor,
+                                                contentDescription = null,
+                                                tint = Color(0xFF818CF8),
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(16.dp))
+                                    Text(
+                                        text = "High-Performance Linux Display",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(Modifier.height(10.dp))
+                                    Text(
+                                        text = "Turn your Android tablet into a blazing-fast secondary monitor " +
+                                                "and pressure-sensitive graphics tablet for Linux with zero lag.",
+                                        fontSize = 14.sp,
+                                        lineHeight = 22.sp,
+                                        color = Muted,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                    )
+                                    Spacer(Modifier.height(20.dp))
+
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = Color(0x8C1A1A2A)),
+                                        shape = RoundedCornerShape(8.dp),
+                                        modifier = Modifier.fillMaxWidth(0.9f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Text("Key Capabilities", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = AccentSoft)
+                                            Spacer(Modifier.height(8.dp))
+                                            Text("• Hardware H.264 & HEVC ultra-low latency streaming", fontSize = 12.sp, color = Color.White)
+                                            Spacer(Modifier.height(4.dp))
+                                            Text("• S-Pen / Stylus pressure & tilt input via uinput", fontSize = 12.sp, color = Color.White)
+                                            Spacer(Modifier.height(4.dp))
+                                            Text("• Seamless USB cable & high-speed Wi-Fi pairing", fontSize = 12.sp, color = Color.White)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // SCREEN 2: Enable USB Debugging
+                            1 -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = if (devOptionsOn && usbAdbOn) Color(0x3310B981) else Color(0x33F59E0B),
+                                        modifier = Modifier.size(64.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = if (devOptionsOn && usbAdbOn) Icons.Default.Check else Icons.Default.Usb,
+                                                contentDescription = null,
+                                                tint = if (devOptionsOn && usbAdbOn) Ok else Warn,
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(14.dp))
+                                    Text(
+                                        text = "Enable USB Debugging",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        text = "UScreen establishes its secure virtual display tunnel via Android ADB.",
+                                        fontSize = 13.sp,
+                                        color = Muted,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(Modifier.height(18.dp))
+
+                                    StatusItemCard(
+                                        title = "1. Developer Options",
+                                        description = if (devOptionsOn) "Developer Options are unlocked." else "Tap 'Build number' 7 times in About Device.",
+                                        isPassed = devOptionsOn,
+                                        actionButtonText = if (!devOptionsOn) "Open About Device" else null,
+                                        onActionClick = {
+                                            try {
+                                                context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS))
+                                            } catch (_: Exception) {
+                                                context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                            }
+                                        }
+                                    )
+
+                                    StatusItemCard(
+                                        title = "2. USB Debugging",
+                                        description = if (usbAdbOn) "USB Debugging is enabled." else "Turn on 'USB debugging' in Developer Options.",
+                                        isPassed = usbAdbOn,
+                                        actionButtonText = if (!usbAdbOn) "Open Developer Options" else null,
+                                        onActionClick = {
+                                            try {
+                                                context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                                            } catch (_: Exception) {
+                                                context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+
+                            // SCREEN 3: Enable Wireless Debugging
+                            2 -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = if (wifiAdbOn || (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && usbAdbOn)) Color(0x3310B981) else Color(0x333B82F6),
+                                        modifier = Modifier.size(64.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = if (wifiAdbOn) Icons.Default.Check else Icons.Default.Wifi,
+                                                contentDescription = null,
+                                                tint = if (wifiAdbOn) Ok else AccentSoft,
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(14.dp))
+                                    Text(
+                                        text = "Enable Wireless Debugging",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(Modifier.height(6.dp))
+                                    Text(
+                                        text = "For untethered wireless streaming, enable Wireless Debugging or scan the QR code on your PC.",
+                                        fontSize = 13.sp,
+                                        color = Muted,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(Modifier.height(18.dp))
+
+                                    StatusItemCard(
+                                        title = "Wi-Fi Network",
+                                        description = if (wifiConnected) "Tablet is connected to local Wi-Fi." else "Connect to the same Wi-Fi network as your PC.",
+                                        isPassed = wifiConnected,
+                                        actionButtonText = if (!wifiConnected) "Open Wi-Fi Settings" else null,
+                                        onActionClick = {
+                                            try {
+                                                context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
+                                            } catch (_: Exception) {
+                                                context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                            }
+                                        }
+                                    )
+
+                                    val isAndroid11Plus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                                    StatusItemCard(
+                                        title = if (isAndroid11Plus) "Wireless Debugging (Android 11+)" else "USB Pairing Mode (Legacy)",
+                                        description = when {
+                                            wifiAdbOn -> "Wireless Debugging is active and listening for connections."
+                                            isAndroid11Plus -> "Turn on 'Wireless debugging' in Developer Options to pair wirelessly."
+                                            else -> "Plug in USB once to automatically initialize wireless TCP mode."
+                                        },
+                                        isPassed = wifiAdbOn || (!isAndroid11Plus && usbPlugged),
+                                        actionButtonText = if (!wifiAdbOn && isAndroid11Plus) "Open Wireless Debugging" else null,
+                                        onActionClick = {
+                                            try {
+                                                context.startActivity(Intent("android.settings.WIRELESS_DEBUGGING_SETTINGS"))
+                                            } catch (_: Exception) {
+                                                try {
+                                                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
+                                                } catch (_: Exception) {
+                                                    context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                                                }
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+
+                            // SCREEN 4: Ready
+                            3 -> {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(vertical = 12.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = Color(0x3310B981),
+                                        modifier = Modifier.size(80.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = Ok,
+                                                modifier = Modifier.size(48.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(Modifier.height(18.dp))
+                                    Text(
+                                        text = "You're All Set!",
+                                        fontSize = 26.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        text = "Your tablet is fully prepared. Connect via USB cable or launch " +
+                                                "UScreen Pro on your Linux workstation to begin streaming.",
+                                        fontSize = 14.sp,
+                                        lineHeight = 22.sp,
+                                        color = Color(0xFFD1D1E0),
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.padding(horizontal = 16.dp)
+                                    )
+                                    Spacer(Modifier.height(24.dp))
+
+                                    // Quick checklist summary
+                                    Card(
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = CardDefaults.cardColors(containerColor = Color(0x8C1A1A2A)),
+                                        modifier = Modifier.fillMaxWidth(0.9f)
+                                    ) {
+                                        Column(modifier = Modifier.padding(16.dp)) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = if (usbAdbOn) Icons.Default.Check else Icons.Default.PriorityHigh,
+                                                    contentDescription = null,
+                                                    tint = if (usbAdbOn) Ok else Warn,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("USB Debugging: ${if (usbAdbOn) "Active" else "Pending"}", fontSize = 13.sp, color = Color.White)
+                                            }
+                                            Spacer(Modifier.height(6.dp))
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = if (wifiAdbOn) Icons.Default.Check else Icons.Default.PriorityHigh,
+                                                    contentDescription = null,
+                                                    tint = if (wifiAdbOn) Ok else Subtle,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("Wireless Debugging: ${if (wifiAdbOn) "Active" else "Available"}", fontSize = 13.sp, color = Color.White)
+                                            }
+                                            Spacer(Modifier.height(6.dp))
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = Ok,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                                Spacer(Modifier.width(8.dp))
+                                                Text("Transport: ${if (usbPlugged) "USB Cable Detected" else if (wifiConnected) "Wi-Fi Connected" else "None"}", fontSize = 13.sp, color = Color.White)
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
+                    }
+                }
 
-                        TroubleshootCheckItem(
-                            title = tTitle,
-                            detail = tDetail,
-                            passed = transportOk,
-                            actionButtonText = if (!transportOk && preferredTransport == Prefs.TRANSPORT_WIFI) "Open Wi-Fi Settings" else null,
-                            onActionClick = if (!transportOk && preferredTransport == Prefs.TRANSPORT_WIFI) {
-                                {
+                // Wizard Bottom Navigation Bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (currentStep > 0) {
+                        OutlinedButton(
+                            onClick = { currentStep -= 1 },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Muted)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowBack,
+                                    contentDescription = null,
+                                    tint = Muted,
+                                    modifier = Modifier.size(16.dp).padding(end = 4.dp)
+                                )
+                                Text("Back", fontSize = 14.sp)
+                            }
+                        }
+                    } else {
+                        Spacer(Modifier.width(80.dp))
+                    }
+
+                    if (currentStep < 3) {
+                        Button(
+                            onClick = { currentStep += 1 },
+                            colors = ButtonDefaults.buttonColors(containerColor = Accent)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Next", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                Icon(
+                                    imageVector = Icons.Default.ArrowForward,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp).padding(start = 4.dp)
+                                )
+                            }
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                prefs?.hasCompletedOnboarding = true
+                                hasCompletedOnboarding = true
+                                if (forceReviewMode) {
+                                    onDismissReviewMode()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Ok),
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp).padding(end = 4.dp)
+                                )
+                                Text("Done", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            // Normal Waiting for Desktop Connection Screen
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Text(
+                    text = "UScreen",
+                    fontSize = 42.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+                Text(
+                    text = "USB & Wireless Display",
+                    fontSize = 15.sp,
+                    color = AccentSoft
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+
+                CircularProgressIndicator(
+                    color = Accent,
+                    strokeWidth = 4.dp,
+                    modifier = Modifier.size(48.dp)
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+
+                val (diagState, diagMessage) = evaluateDiagnostic(
+                    usbPlugged = usbPlugged,
+                    wifiOn = wifiConnected,
+                    preferredTransport = preferredTransport,
+                    dynamicDiagnostic = dynamicDiagnostic,
+                    secondsWaiting = secondsWaiting
+                )
+
+                Text(
+                    text = diagMessage,
+                    fontSize = 14.sp,
+                    lineHeight = 20.sp,
+                    color = if (diagState == DiagnosticState.CONNECTING) Muted else Warn,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 32.dp)
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+
+                OutlinedButton(
+                    onClick = { showHelpWizard = true },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentSoft)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Build,
+                            contentDescription = null,
+                            tint = AccentSoft,
+                            modifier = Modifier.size(16.dp).padding(end = 6.dp)
+                        )
+                        Text("Help Me Fix It", fontSize = 13.sp)
+                    }
+                }
+            }
+
+            // Troubleshooter Bottom Sheet
+            if (showHelpWizard) {
+                val transportOk = when (preferredTransport) {
+                    Prefs.TRANSPORT_USB -> usbPlugged
+                    Prefs.TRANSPORT_WIFI -> wifiConnected
+                    else -> usbPlugged || wifiConnected
+                }
+
+                ModalBottomSheet(
+                    onDismissRequest = { showHelpWizard = false },
+                    containerColor = SurfaceLow
+                ) {
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn() + expandVertically(),
+                        exit = fadeOut() + shrinkVertically()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 24.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                "Connection Troubleshooter",
+                                fontSize = 20.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Let's verify each requirement step-by-step:",
+                                fontSize = 13.sp,
+                                color = Subtle
+                            )
+                            Spacer(Modifier.height(16.dp))
+
+                            StatusItemCard(
+                                title = "1. Network Transport",
+                                description = if (transportOk) "Physical or wireless transport active." else "Please connect USB cable or Wi-Fi.",
+                                isPassed = transportOk,
+                                actionButtonText = if (!transportOk) "Open Wi-Fi Settings" else null,
+                                onActionClick = {
                                     try {
                                         context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
                                     } catch (_: Exception) {
                                         context.startActivity(Intent(Settings.ACTION_SETTINGS))
                                     }
                                 }
-                            } else null
-                        )
-                        Spacer(Modifier.height(12.dp))
+                            )
 
-                        TroubleshootCheckItem(
-                            title = "2. Developer Options",
-                            detail = if (devOn) "Developer options enabled." else "Disabled. Must tap Build number 7 times in About Device.",
-                            passed = devOn,
-                            actionButtonText = if (!devOn) "Open About Device" else null,
-                            onActionClick = if (!devOn) {
-                                {
+                            StatusItemCard(
+                                title = "2. Developer Options",
+                                description = if (devOptionsOn) "Developer options enabled." else "Disabled. Must tap Build number 7 times in About Device.",
+                                isPassed = devOptionsOn,
+                                actionButtonText = if (!devOptionsOn) "Open About Device" else null,
+                                onActionClick = {
                                     try {
                                         context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS))
                                     } catch (_: Exception) {
                                         context.startActivity(Intent(Settings.ACTION_SETTINGS))
                                     }
                                 }
-                            } else null
-                        )
-                        Spacer(Modifier.height(12.dp))
+                            )
 
-                        TroubleshootCheckItem(
-                            title = "3. USB / Wireless Debugging",
-                            detail = if (adbOn) "Debugging is enabled." else "Disabled. Must toggle USB or Wireless debugging in Developer Options.",
-                            passed = adbOn,
-                            actionButtonText = if (!adbOn) "Open Developer Options" else null,
-                            onActionClick = if (!adbOn) {
-                                {
+                            StatusItemCard(
+                                title = "3. USB / Wireless Debugging",
+                                description = if (usbAdbOn || wifiAdbOn) "Debugging is enabled." else "Disabled. Must toggle USB or Wireless debugging in Developer Options.",
+                                isPassed = usbAdbOn || wifiAdbOn,
+                                actionButtonText = if (!usbAdbOn && !wifiAdbOn) "Open Developer Options" else null,
+                                onActionClick = {
                                     try {
                                         context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
                                     } catch (_: Exception) {
                                         context.startActivity(Intent(Settings.ACTION_SETTINGS))
                                     }
                                 }
-                            } else null
-                        )
+                            )
 
-                        Spacer(Modifier.height(20.dp))
-                        Text(
-                            text = if (transportOk && devOn && adbOn) "All checks passed! Connecting to PC..." else "Once all items show a green checkmark, UScreen will connect automatically.",
-                            fontSize = 12.sp,
-                            color = if (transportOk && devOn && adbOn) AccentSoft else Color(0xFF9A9AB0),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(16.dp))
+                            Spacer(Modifier.height(20.dp))
+                            Button(
+                                onClick = {
+                                    showHelpWizard = false
+                                    currentStep = 0
+                                    hasCompletedOnboarding = false
+                                    prefs?.hasCompletedOnboarding = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Restart Full Setup Wizard", fontSize = 13.sp)
+                            }
+                            Spacer(Modifier.height(16.dp))
+                        }
                     }
                 }
             }

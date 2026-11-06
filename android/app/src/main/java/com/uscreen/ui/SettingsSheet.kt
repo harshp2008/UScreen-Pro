@@ -26,11 +26,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -90,6 +98,7 @@ fun SettingsSheet(
     onKeepDisplayAliveWhenLockedChange: (Boolean) -> Unit = {},
     preferredTransport: Int = Prefs.TRANSPORT_AUTO,
     onPreferredTransportChange: (Int) -> Unit = {},
+    onReviewSetupGuide: () -> Unit = {},
     onExitApp: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
@@ -101,7 +110,7 @@ fun SettingsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        containerColor = Color(0xFF16161F)
+        containerColor = SurfaceLow
     ) {
         Column(
             modifier = Modifier
@@ -121,7 +130,7 @@ fun SettingsSheet(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(8.dp))
                         .background(Color(0x3350507A))
                         .clickable { onOpenUpdate() }
                         .padding(12.dp)
@@ -131,7 +140,7 @@ fun SettingsSheet(
                         Text(
                             "Tap to open the release page. Update the desktop side too — they ship together.",
                             fontSize = 11.sp,
-                            color = Color(0xFF9A9AB0)
+                            color = Subtle
                         )
                     }
                 }
@@ -144,12 +153,12 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Graphics tablet", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+                    Text("Graphics tablet", fontSize = 14.sp, color = Muted)
                     Text(
                         "Draw on the computer's own screen with the pen, " +
                             "instead of showing a second screen here",
                         fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
+                        color = Subtle
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -167,11 +176,11 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Rotate automatically", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+                    Text("Rotate automatically", fontSize = 14.sp, color = Muted)
                     Text(
                         "Follow the tilt sensor between the two landscape directions",
                         fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
+                        color = Subtle
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -206,13 +215,13 @@ fun SettingsSheet(
                 Text(
                     "Camera down is the usual way to hold it for drawing.",
                     fontSize = 11.sp,
-                    color = Color(0xFF6A6A7E)
+                    color = Subtle
                 )
             }
             Spacer(Modifier.height(20.dp))
 
             // Preferred Transport selector
-            Text("Preferred transport", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+            Text("Preferred transport", fontSize = 14.sp, color = Muted)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
@@ -238,7 +247,7 @@ fun SettingsSheet(
                     else -> "Automatically use USB when plugged in, falling back to Wi-Fi."
                 },
                 fontSize = 11.sp,
-                color = Color(0xFF6A6A7E)
+                color = Subtle
             )
             Spacer(Modifier.height(20.dp))
 
@@ -248,11 +257,11 @@ fun SettingsSheet(
             val localIp = remember { getLocalWifiIp(context) }
 
             Surface(
-                color = Color(0xFF1E1E2C),
-                shape = RoundedCornerShape(10.dp),
+                color = SurfaceMid,
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .clickable { guideExpanded = !guideExpanded }
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
@@ -260,17 +269,23 @@ fun SettingsSheet(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = null,
+                            tint = AccentSoft,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
                         Text(
-                            text = "🔗 Pairing Setup Guide",
+                            text = "Pairing Setup Guide",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
                             color = Color.White,
                             modifier = Modifier.weight(1f)
                         )
-                        Text(
-                            text = if (guideExpanded) "▲" else "▼",
-                            fontSize = 13.sp,
-                            color = Color(0xFF9A9AB0)
+                        Icon(
+                            imageVector = if (guideExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = if (guideExpanded) "Collapse" else "Expand",
+                            tint = Subtle
                         )
                     }
 
@@ -285,7 +300,7 @@ fun SettingsSheet(
                                     text = "Secure Wi-Fi Pairing (Android 11+):",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF64B5F6)
+                                    color = AccentSoft
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
@@ -293,7 +308,7 @@ fun SettingsSheet(
                                            "2. Tap 'Pair device with pairing code'.\n" +
                                            "3. Enter the 6-digit code in the UScreen PC app.",
                                     fontSize = 12.sp,
-                                    color = Color(0xFFD0D0E0),
+                                    color = Muted,
                                     lineHeight = 18.sp
                                 )
                             } else {
@@ -301,7 +316,7 @@ fun SettingsSheet(
                                     text = "Legacy Wi-Fi Pairing (Android <11):",
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFB74D)
+                                    color = Warn
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
@@ -309,7 +324,7 @@ fun SettingsSheet(
                                            "2. Plug in the USB cable once.\n" +
                                            "3. The PC will auto-enable Wi-Fi ADB.",
                                     fontSize = 12.sp,
-                                    color = Color(0xFFD0D0E0),
+                                    color = Muted,
                                     lineHeight = 18.sp
                                 )
                             }
@@ -324,10 +339,18 @@ fun SettingsSheet(
                                         clipboard.setPrimaryClip(clip)
                                         Toast.makeText(context, "Copied IP: $text", Toast.LENGTH_SHORT).show()
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C3E)),
+                                    colors = ButtonDefaults.buttonColors(containerColor = SurfaceHigh),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                 ) {
-                                    Text("📋 Copy IP & Port", fontSize = 12.sp, color = Color.White)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.ContentCopy,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.padding(end = 4.dp)
+                                        )
+                                        Text("Copy IP & Port", fontSize = 12.sp, color = Color.White)
+                                    }
                                 }
 
                                 Button(
@@ -341,7 +364,35 @@ fun SettingsSheet(
                                     colors = ButtonDefaults.buttonColors(containerColor = Accent),
                                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                                 ) {
-                                    Text("⚙ Open Developer Options", fontSize = 12.sp, color = Color.White)
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Settings,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.padding(end = 4.dp)
+                                        )
+                                        Text("Open Developer Options", fontSize = 12.sp, color = Color.White)
+                                    }
+                                }
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+                            Button(
+                                onClick = {
+                                    onReviewSetupGuide()
+                                    onDismiss()
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.MenuBook,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.padding(end = 6.dp)
+                                    )
+                                    Text("Review Setup Guide (4-Step Wizard)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                 }
                             }
                         }
@@ -354,7 +405,7 @@ fun SettingsSheet(
                 Text(
                     "Bitrate: ${bitrateMbps.roundToInt()} Mbps",
                     fontSize = 14.sp,
-                    color = Color(0xFFB0B0C0)
+                    color = Muted
                 )
                 Slider(
                     value = bitrateMbps,
@@ -368,11 +419,11 @@ fun SettingsSheet(
                     "20 Mbps is plenty for text and UI. Going higher does not look sharper once " +
                         "the USB link is saturated — it only adds delay.",
                     fontSize = 11.sp,
-                    color = Color(0xFF6A6A7E)
+                    color = Subtle
                 )
                 Spacer(Modifier.height(20.dp))
 
-                Text("Frame rate", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+                Text("Frame rate", fontSize = 14.sp, color = Muted)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(30, 60, 90).forEach { f ->
@@ -395,11 +446,11 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Show stats overlay", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+                    Text("Show stats overlay", fontSize = 14.sp, color = Muted)
                     Text(
                         "FPS and bandwidth in the corner",
                         fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
+                        color = Subtle
                     )
                 }
                 Switch(
@@ -415,12 +466,12 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Black screen in graphics tablet mode", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+                    Text("Black screen in graphics tablet mode", fontSize = 14.sp, color = Muted)
                     Text(
                         "Nothing is streamed there, so the screen goes black a few seconds after " +
                             "it starts instead of showing the same text for hours",
                         fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
+                        color = Subtle
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -437,11 +488,11 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Touch input", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+                    Text("Touch input", fontSize = 14.sp, color = Muted)
                     Text(
                         "Off sends only the pen, which keeps a resting hand from doing anything",
                         fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
+                        color = Subtle
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -458,11 +509,11 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Enable Immersive Mode (Hide Settings Button)", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+                    Text("Enable Immersive Mode (Hide Settings Button)", fontSize = 14.sp, color = Muted)
                     Text(
                         "Hides the gear button and maps the Android Back button to open settings",
                         fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
+                        color = Subtle
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -479,11 +530,11 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Keep connected in background", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+                    Text("Keep connected in background", fontSize = 14.sp, color = Muted)
                     Text(
                         "Maintain stream and touch connection when switched away. Consumes more battery.",
                         fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
+                        color = Subtle
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -500,11 +551,11 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Keep display alive when locked", fontSize = 14.sp, color = Color(0xFFB0B0C0))
+                    Text("Keep display alive when locked", fontSize = 14.sp, color = Muted)
                     Text(
                         "Hold system WakeLock while locked. Note: secure keyguard disables touch input until unlocked.",
                         fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
+                        color = Subtle
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -531,7 +582,7 @@ fun SettingsSheet(
                 Text(
                     "Applying restarts the stream for a moment.",
                     fontSize = 11.sp,
-                    color = Color(0xFF6A6A7E),
+                    color = Subtle,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -542,7 +593,7 @@ fun SettingsSheet(
                 OutlinedButton(
                     onClick = onExitApp,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B6B))
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = ErrorTone)
                 ) {
                     Text("Exit UScreen", fontSize = 14.sp)
                 }
@@ -555,7 +606,7 @@ fun SettingsSheet(
             Text(
                 text = "UScreen Build: $displayVer",
                 fontSize = 11.sp,
-                color = if (isDirtyVer) Color(0xFFFFB74D) else Color(0xFF6A6A7E),
+                color = if (isDirtyVer) Warn else Subtle,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
             )

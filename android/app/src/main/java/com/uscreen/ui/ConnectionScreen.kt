@@ -22,9 +22,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -90,16 +94,16 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
                     "The pen drives your computer's screen.\n" +
                         "Touch input is sent back; no video is streamed here.",
                     fontSize = 14.sp,
-                    color = Color(0xFFB0B0C0),
+                    color = Muted,
                     textAlign = TextAlign.Center
                 )
                 if (blankAfterSeconds > 0) {
                     Spacer(Modifier.height(18.dp))
                     Text(
                         "The screen goes black in a few seconds to spare OLED panels. " +
-                            "Settings are behind the faint ⚙ in the corner.",
+                            "Settings are behind the gear icon in the corner.",
                         fontSize = 12.sp,
-                        color = Color(0xFF6A6A7E),
+                        color = Subtle,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -140,6 +144,7 @@ fun UScreenMain(
     var keepConnectedInBackground by remember { mutableStateOf(prefs?.keepConnectedInBackground ?: false) }
     var keepDisplayAliveWhenLocked by remember { mutableStateOf(prefs?.keepDisplayAliveWhenLocked ?: true) }
     var preferredTransport by remember { mutableStateOf(prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO) }
+    var forceReviewMode by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val activity = context as? MainActivity
@@ -211,16 +216,20 @@ fun UScreenMain(
         }
 
         AnimatedVisibility(
-            visible = !isConnected && !penOnly,
+            visible = (!isConnected && !penOnly) || forceReviewMode,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(if (forceReviewMode) 100f else 0f)
         ) {
             OnboardingScreen(
                 videoReceiver = videoReceiver,
                 touchCapture = touchCapture,
                 prefs = prefs,
-                isConnected = isConnected
+                isConnected = isConnected,
+                forceReviewMode = forceReviewMode,
+                onDismissReviewMode = { forceReviewMode = false }
             )
         }
 
@@ -235,7 +244,7 @@ fun UScreenMain(
                 Text(
                     text = "%.0f fps   %.1f Mbps".format(fps, mbps),
                     fontSize = 12.sp,
-                    color = Color(0xFFB0B0C0),
+                    color = Muted,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
                 )
             }
@@ -258,8 +267,14 @@ fun UScreenMain(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    Icon(
+                        imageVector = Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Warn,
+                        modifier = Modifier.size(16.dp).padding(end = 6.dp)
+                    )
                     Text(
-                        text = "⚠ Host version mismatch (Host: ${hostVersion ?: "unknown"}, Device: ${BuildConfig.GIT_VERSION_STRING}). Please update on PC.",
+                        text = "Host version mismatch (Host: ${hostVersion ?: "unknown"}, Device: ${BuildConfig.GIT_VERSION_STRING}). Please update on PC.",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
@@ -277,13 +292,24 @@ fun UScreenMain(
                     .align(Alignment.TopCenter)
                     .padding(top = if (isMismatch) 48.dp else 16.dp)
             ) {
-                Text(
-                    text = "🔒 Device Locked — Touch Disabled",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.size(6.dp))
+                    Text(
+                        text = "Device Locked — Touch Disabled",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                }
             }
         }
 
@@ -296,12 +322,17 @@ fun UScreenMain(
                     .padding(10.dp)
                     .size(38.dp)
                     .alpha(if (penOnly && blankInPenMode) 0.18f else if (isConnected) 0.35f else 0.9f)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xAA20202C))
                     .clickable { showSettings = true },
                 contentAlignment = Alignment.Center
             ) {
-                Text("⚙", fontSize = 18.sp, color = Color.White)
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
             }
         }
 
@@ -310,7 +341,7 @@ fun UScreenMain(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 24.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xCC20202C))
                     .clickable {
                         context.startActivity(
@@ -331,7 +362,7 @@ fun UScreenMain(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(24.dp)
-                    .clip(RoundedCornerShape(14.dp))
+                    .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xE620202C))
                     .padding(16.dp)
             ) {
@@ -340,7 +371,7 @@ fun UScreenMain(
                     Text(
                         "If it replaced a second monitor for you, a star on GitHub or a compatibility " +
                             "report helps other Linux users find it. This note appears only once.",
-                        fontSize = 12.sp, color = Color(0xFFB0B0C0)
+                        fontSize = 12.sp, color = Muted
                     )
                     Row(modifier = Modifier.padding(top = 10.dp)) {
                         Text(
@@ -362,7 +393,7 @@ fun UScreenMain(
                         Text(
                             "Dismiss",
                             fontSize = 13.sp,
-                            color = Color(0xFF9A9AB0),
+                            color = Subtle,
                             modifier = Modifier.clickable { onDismissThanks() }
                         )
                     }
@@ -440,6 +471,9 @@ fun UScreenMain(
                         else -> "auto"
                     }
                     touchCapture?.sendPreferredTransport(transStr)
+                },
+                onReviewSetupGuide = {
+                    forceReviewMode = true
                 },
                 onExitApp = {
                     activity?.finish()

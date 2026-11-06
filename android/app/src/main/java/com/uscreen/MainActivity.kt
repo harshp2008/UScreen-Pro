@@ -63,10 +63,8 @@ class MainActivity : ComponentActivity() {
 
     fun applyLockScreenFlags() {
         val keepAlive = prefs.keepDisplayAliveWhenLocked
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(keepAlive)
-            setTurnScreenOn(keepAlive)
-        }
+        setShowWhenLocked(keepAlive)
+        setTurnScreenOn(keepAlive)
         if (keepAlive) {
             @Suppress("DEPRECATION")
             window.addFlags(

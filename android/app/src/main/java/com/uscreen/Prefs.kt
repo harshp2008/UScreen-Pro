@@ -120,4 +120,11 @@ class Prefs(context: Context) {
     var keepDisplayAliveWhenLocked: Boolean
         get() = sp.getBoolean("keep_display_alive_when_locked", true)
         set(v) = sp.edit().putBoolean("keep_display_alive_when_locked", v).apply()
+
+    /**
+     * Whether the user has completed the 4-step onboarding wizard.
+     */
+    var hasCompletedOnboarding: Boolean
+        get() = sp.getBoolean("has_completed_onboarding", false)
+        set(v) = sp.edit().putBoolean("has_completed_onboarding", v).apply()
 }
