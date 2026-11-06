@@ -1,11 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Toaster, toast } from "sonner";
 import { AddDeviceWizard } from "./components/AddDeviceWizard";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { TooltipProvider } from "./components/ui/layout";
+import { Notifications, toast } from "./lib/toast";
 import type { AppConfig, DaemonStatus, TabletProfile, View } from "./lib/types";
 import { DeviceSettings } from "./views/DeviceSettings";
 import { Advanced } from "./views/Advanced";
@@ -182,8 +182,7 @@ export default function App() {
   return (
     <TooltipProvider>
       <div className="flex h-full w-full flex-col overflow-hidden bg-surface text-on-surface">
-        {/* Sits above the 52px status bar so a toast never covers the version. */}
-        <Toaster theme={dark ? "dark" : "light"} position="bottom-right" offset={{ right: 16, bottom: 64 }} mobileOffset={{ right: 16, bottom: 64 }} />
+        <Notifications />
         <AddDeviceWizard
           open={wizardOpen}
           onOpenChange={setWizardOpen}

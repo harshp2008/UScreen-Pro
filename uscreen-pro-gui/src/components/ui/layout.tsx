@@ -86,7 +86,7 @@ export function SettingRow({
 }) {
   const showControl = !override || override.enabled;
   return (
-    <div className="flex min-h-9 items-center justify-between gap-4 px-3 py-1">
+    <div className="flex min-h-12 items-center justify-between gap-4 px-3">
       <Label label={label} tip={tip} />
       <div className="flex shrink-0 items-center gap-3">
         {showControl ? (
@@ -100,7 +100,7 @@ export function SettingRow({
   );
 }
 
-/** Label, tip and the live value in one line; full-width track (optionally dotted) underneath. */
+/** Label (+ tip) and live value on the left, the native slider on the right: one 48dp row. */
 export function SliderRow({
   label,
   tip,
@@ -109,46 +109,38 @@ export function SliderRow({
   min,
   max,
   step,
-  ticks,
   onChange,
+  formatValue,
   override,
-  ends,
 }: {
   label: string;
   tip?: string;
-  ends?: [string, string];
   valueText: string;
   value: number;
   min: number;
   max: number;
   step?: number;
-  ticks?: boolean;
   onChange: (v: number) => void;
+  formatValue?: (v: number) => string;
   override?: Override;
 }) {
   const active = !override || override.enabled;
   return (
-    <div className="px-3 py-2">
-      <div className="flex min-h-6 items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <Label label={label} tip={tip} />
-          <span className={cx("truncate font-medium", active ? "text-primary" : "text-on-surface-variant")}>
-            {active ? valueText : override.inherited}
-          </span>
-        </div>
+    <div className="flex min-h-12 items-center justify-between gap-4 px-3">
+      <div className="flex min-w-0 flex-col">
+        <Label label={label} tip={tip} />
+        <span className={cx("truncate text-xs font-medium", active ? "text-primary" : "text-on-surface-variant")}>
+          {active ? valueText : override.inherited}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        {active && (
+          <div className="w-72">
+            <Slider label={label} value={value} min={min} max={max} step={step} formatValue={formatValue} onValueChange={onChange} />
+          </div>
+        )}
         {override && <OverrideToggle override={override} label={label} />}
       </div>
-      {active && (
-        <>
-          <Slider label={label} value={value} min={min} max={max} step={step} ticks={ticks} onValueChange={onChange} />
-          {ends && (
-            <div className="flex justify-between text-[11px] text-on-surface-variant">
-              <span>{ends[0]}</span>
-              <span>{ends[1]}</span>
-            </div>
-          )}
-        </>
-      )}
     </div>
   );
 }
@@ -205,8 +197,7 @@ export function QualityRow({
       min={QUALITY_MIN}
       max={QUALITY_MAX}
       step={1}
-      ticks
-      ends={["Sharper", "Smaller"]}
+      formatValue={(v) => `CRF ${v}`}
       onChange={onChange}
       override={override}
     />

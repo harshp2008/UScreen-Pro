@@ -136,7 +136,7 @@ export function DeviceSettings({
           min={5000}
           max={60000}
           step={1000}
-          ticks
+          formatValue={(v) => `${Math.round(v / 1000)} Mbps`}
           onChange={(bitrate) => onChange({ bitrate })}
           override={ov("bitrate", g.bitrate, `${Math.round(g.bitrate / 1000)} Mbps`)}
         />

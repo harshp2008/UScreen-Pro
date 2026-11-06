@@ -44,8 +44,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           min={5000}
           max={60000}
           step={1000}
-          ticks
-          ends={["5 Mbps", "60 Mbps"]}
+          formatValue={(v) => `${Math.round(v / 1000)} Mbps`}
           onChange={(bitrate) => onChange({ bitrate })}
         />
         <SettingRow label="Stream detail" tip="Full sends every pixel; Half renders at half resolution for the lowest latency.">

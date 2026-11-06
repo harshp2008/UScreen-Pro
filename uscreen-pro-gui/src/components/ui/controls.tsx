@@ -56,15 +56,17 @@ export function Select({
       options={options}
       disabled={disabled}
       onChange={onValueChange}
-      inputClassName="!text-[13px]"
-      className={cx("rounded-[4px] bg-field", className ?? "w-64")}
+      inputClassName="text-xs"
+      menuClassName="text-xs"
+      showDividers={false}
+      className={className ?? "w-64"}
     />
   );
 }
 
 /* ---------------------------------------------------------------- Slider */
 
-/** Bare track + handle. Label and value live in `SliderRow`, never inside the track. */
+/** Native slider: xs track, 4dp handle, Inverse-Surface value bubble while dragging. */
 export function Slider({
   value,
   min,
@@ -72,7 +74,7 @@ export function Slider({
   step = 1,
   onValueChange,
   label,
-  ticks = false,
+  formatValue,
 }: {
   value: number;
   min: number;
@@ -80,8 +82,7 @@ export function Slider({
   step?: number;
   onValueChange: (v: number) => void;
   label: string;
-  /** Dots on the track, one per step. */
-  ticks?: boolean;
+  formatValue?: (v: number) => string;
 }) {
   return (
     <M3Slider
@@ -92,10 +93,10 @@ export function Slider({
       min={min}
       max={max}
       step={step}
-      showTicks={ticks}
-      showValueIndicator={false}
+      showValueIndicator
+      formatValue={formatValue}
       onValueChange={onValueChange}
-      className="m3-round-thumb w-full"
+      className="w-full"
     />
   );
 }
@@ -183,17 +184,30 @@ export function TextInput({
       min={min === undefined ? undefined : String(min)}
       max={max === undefined ? undefined : String(max)}
       step={step === undefined ? undefined : String(step)}
-      className={cx("rounded-[4px] bg-field", className ?? "w-52")}
-      inputClassName={cx("!text-[13px]", mono && "font-mono")}
+      className={className ?? "w-52"}
+      inputClassName={cx("text-xs", mono && "font-mono")}
     />
   );
 }
 
 /* ---------------------------------------------------------------- Button */
 
-type Variant = "filled" | "tonal" | "text" | "danger";
+type Variant = "filled" | "tonal" | "text" | "danger" | "error";
 
-const COLOR_STYLE = { filled: "filled", tonal: "tonal", text: "text", danger: "text" } as const;
+const COLOR_STYLE = { filled: "filled", tonal: "tonal", text: "text", danger: "text", error: "filled" } as const;
+
+/*
+ * The library's Button ships a press ripple but no hover layer (BUTTON_COLOR_TOKENS has no hover
+ * classes). These are the same hover/active tokens the library applies to its own filled and
+ * tonal toggle buttons, passed through the documented `className` prop.
+ */
+const STATE_LAYER: Record<Variant, string> = {
+  filled: "hover:brightness-95 active:brightness-90",
+  tonal: "hover:brightness-95 active:brightness-90",
+  error: "bg-m3-error text-m3-on-error hover:brightness-90 active:brightness-85",
+  text: "hover:bg-m3-primary/8 active:bg-m3-primary/12",
+  danger: "text-m3-error hover:bg-m3-error/8 active:bg-m3-error/12",
+};
 
 /**
  * Library Button. Default shape is the expressive pill that springs to a rounded square on press.
@@ -215,7 +229,7 @@ export function Button({
       colorStyle={COLOR_STYLE[variant]}
       size={size}
       icon={icon}
-      className={cx(variant === "danger" && "text-error", className)}
+      className={cx(STATE_LAYER[variant], className)}
       {...props}
     />
   );

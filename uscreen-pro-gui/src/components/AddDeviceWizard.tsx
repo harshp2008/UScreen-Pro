@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Check, ChevronLeft, ExternalLink, LoaderCircle, RefreshCw, Smartphone, Usb, Wifi, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { toast } from "sonner";
+import { toast } from "../lib/toast";
 import type { AdbEntry, ManualPairResult, PairingEvent, QrPairingSession } from "../lib/types";
 import { IconButton } from "@bug-on/m3-expressive/buttons";
 import { Button, TextInput, cx } from "./ui/controls";
