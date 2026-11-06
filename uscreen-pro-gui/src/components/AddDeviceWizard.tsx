@@ -107,6 +107,8 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
   const [install, setInstall] = useState<{ state: InstallState; message: string }>({ state: "idle", message: "" });
 
+  const [wireless, setWireless] = useState<{ state: InstallState; message: string }>({ state: "idle", message: "" });
+
   const [qr, setQr] = useState<QrPairingSession | null>(null);
   const [pairEvent, setPairEvent] = useState<PairingEvent | null>(null);
   const [wirelessOpen, setWirelessOpen] = useState(false);
@@ -163,6 +165,18 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
     }
   }, []);
 
+  /* Once installed, switch the device to wireless mode over the same cable. */
+  const runBootstrap = useCallback(async (serial: string) => {
+    setWireless({ state: "running", message: "Configuring wireless mode over USB..." });
+    try {
+      const endpoint = await invoke<string>("bootstrap_wireless_over_usb", { serial });
+      setWifiEndpoint(endpoint);
+      setWireless({ state: "ok", message: `Wireless mode ready at ${endpoint}` });
+    } catch (e) {
+      setWireless({ state: "failed", message: errText(e) });
+    }
+  }, []);
+
   /* Step 3 installs as soon as the device is authorized, then moves on. */
   useEffect(() => {
     if (step !== 3 || installStarted.current || usb?.state !== "device") return;
@@ -171,10 +185,16 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
   }, [step, usb, runInstall]);
 
   useEffect(() => {
-    if (step !== 3 || install.state !== "ok") return;
+    if (step !== 3 || install.state !== "ok" || wireless.state !== "idle" || !usb) return;
+    void runBootstrap(usb.serial);
+  }, [step, install.state, wireless.state, usb, runBootstrap]);
+
+  /* Wireless configured: the config is filled in, so skip straight to Finish. */
+  useEffect(() => {
+    if (step !== 3 || wireless.state !== "ok") return;
     const t = setTimeout(() => setStep(4), 700);
     return () => clearTimeout(t);
-  }, [step, install.state]);
+  }, [step, wireless.state]);
 
   /* A QR session lives only while the QR tab is on screen. */
   useEffect(() => {
@@ -299,7 +319,8 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
   const pairingActive = pairEvent?.kind === "pairing";
 
   /* Next is always shown on USB steps; each step enables it once its own condition holds. */
-  const nextEnabled = step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : false;
+  const nextEnabled =
+    step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" && (wireless.state === "ok" || wireless.state === "failed") : false;
   const goNext = () => {
     if (step === 1 || step === 2 || step === 3) setStep((step + 1) as Step);
   };
@@ -579,6 +600,23 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                     Retry install
                   </Button>
                 )}
+                {install.state === "ok" && (
+                  <div role="status" aria-live="polite" className="flex items-center gap-3 rounded-lg border border-border bg-background px-3 py-3">
+                    {wireless.state === "running" && <LoaderCircle className="size-4 animate-spin text-primary" />}
+                    {wireless.state === "ok" && <Check className="size-4 text-success" />}
+                    {wireless.state === "failed" && <AlertTriangle className="size-4 text-warning" />}
+                    {wireless.state === "idle" && <Wifi className="size-4 text-muted-foreground" />}
+                    <span className="min-w-0 text-foreground">
+                      {wireless.state === "idle" ? "Configuring wireless mode over USB..." : wireless.message}
+                    </span>
+                  </div>
+                )}
+                {wireless.state === "failed" && (
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="secondary" onClick={() => usb && runBootstrap(usb.serial)}>Retry wireless setup</Button>
+                    <span className="text-[11px] text-muted-foreground">Or continue with USB only.</span>
+                  </div>
+                )}
               </>
             )}
 
@@ -587,10 +625,10 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                 <Note tone="success">
                   {wifiEndpoint ? (
                     <>
-                      Paired and connected over Wi-Fi at <span className="font-mono">{wifiEndpoint}</span>.
+                      Connected over Wi-Fi at <span className="font-mono">{wifiEndpoint}</span>.
                     </>
                   ) : (
-                    <>Set up over USB. The host enables wireless mode on its own while the cable is plugged in.</>
+                    <>Set up over USB. Wireless mode could not be configured; you can retry from Device tools later.</>
                   )}
                 </Note>
 

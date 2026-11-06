@@ -31,3 +31,13 @@ No Tailscale code exists in the GUI or host (only mentioned in doc 26), so nothi
 APK note). QR discovery has a hard 30 s limit and emits `mdns_timeout`; the UI shows the warning and switches to Manual Pairing
 (`wizard_mdns_timeout.png`). Manual Pairing needs pairing IP:Port, 6-digit code and Connect IP:Port. Wireless success jumps to Finish via the new `wireless_device_info` command.
 Not tested: a real QR or manual pairing with a tablet, and the USB install steps (the tablet was already set up).
+
+## Follow-up: USB wireless bootstrap, restart tunnels, Reinstall queue
+- `RESTART` now also re-asserts `adb reverse` for the restarted slot (graceful SIGTERM, wait, SIGKILL fallback was already in `terminate()`).
+- Re-verified after redeploy with two devices attached: pause froze only the tablet's pipeline (`TNl/TNLl`, the phone's stayed `S`); a GUI encoder change respawned both pipelines with new PIDs (`46/ps_encoder_change.png`).
+- **USB bootstrap.** The requested design (Android app reports IP, pairing port and 6-digit code over the USB socket, host runs `adb pair`) is not
+  possible: Android exposes no API for the pairing code or port, and they exist only while the system pairing dialog is open. It is also unnecessary, because over USB the
+  host already has an authorized adb shell. `bootstrap_wireless_over_usb` (src-tauri/src/pairing.rs) enables `adb_wifi_enabled`, reads the wlan0 IP, connects to the mDNS TLS port,
+  and falls back to `adb tcpip 5555` + `adb connect` when mDNS is blocked. The wizard runs it after the install, shows "Configuring wireless mode over USB...", then skips to Finish with the address filled in.
+  Verified on the tablet: connected at 192.168.1.101:5555 (tcpip fallback, `46/wizard_finish_autofilled.png`). No Android change was made.
+- **Reinstall UI.** Installs run through a single promise chain in App.tsx; the active device shows a spinner and "Reinstalling...", the others "Waiting..." (`46/reinstall_spinner_queue.png`).

@@ -199,6 +199,32 @@ export default function App() {
       await fetchStatus();
     }, "Control failed");
 
+  /*
+   * APK installs run one at a time. A click while another install is running marks that device
+   * "queued"; the chain below starts it when the previous install settles.
+   */
+  const [installs, setInstalls] = useState<Record<string, "queued" | "running">>({});
+  const installChain = useRef<Promise<void>>(Promise.resolve());
+  const queueInstall = (target: string) => {
+    if (installs[target]) return;
+    setInstalls((m) => ({ ...m, [target]: "queued" }));
+    installChain.current = installChain.current.then(async () => {
+      setInstalls((m) => ({ ...m, [target]: "running" }));
+      try {
+        await invoke("install_apk_on_device", { serial: target });
+        toast.success(`App installed on ${target}`);
+      } catch (e) {
+        toast.error(`Install failed on ${target}: ${errText(e)}`);
+      } finally {
+        setInstalls((m) => {
+          const { [target]: _done, ...rest } = m;
+          return rest;
+        });
+        await fetchStatus();
+      }
+    });
+  };
+
   const installApk = (target: string | null = serial) =>
     guarded(async () => {
       if (!target) return;
@@ -279,7 +305,7 @@ export default function App() {
                 {view === "advanced" && config && (
                   <Advanced config={config} dirty={dirty} onChange={patchConfig} onSave={saveConfig} />
                 )}
-                {view === "health" && status && <Health status={status} onRestartAdb={restartAdb} onInstallApk={(s) => installApk(s)} />}
+                {view === "health" && status && <Health status={status} onRestartAdb={restartAdb} installs={installs} onInstallApk={queueInstall} />}
                 {serial && profile && config && (
                   <DeviceSettings
                     key={serial}

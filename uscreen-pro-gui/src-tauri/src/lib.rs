@@ -31,6 +31,7 @@ pub fn run() {
             pairing::cancel_qr_pairing,
             pairing::manual_adb_pair,
             pairing::manual_adb_connect,
+            pairing::bootstrap_wireless_over_usb,
         ])
         .run(tauri::generate_context!())
         .expect("error while running UScreen Pro application");

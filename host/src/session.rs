@@ -881,6 +881,9 @@ pub async fn adb_monitor(
                             }
                             frozen_serials.retain(|f| f != &slot_0_active_serial && *f != hw && Some(f.as_str()) != serial.as_deref());
                             apply_profile_keys(&[serial.as_deref().unwrap_or(&slot_0_active_serial), &slot_0_active_serial, &hw], &settings_tx, true).await;
+                            if !is_fake_serial(&slot_0_active_serial) {
+                                let _ = setup_adb_forwarding(&slot_0_active_serial, video_port, input_port).await;
+                            }
                             restarted += 1;
                         }
                         let matches: Vec<(String, String, String)> = extras
@@ -893,6 +896,9 @@ pub async fn adb_monitor(
                             frozen_serials.retain(|f| *f != active && *f != hw && Some(f.as_str()) != serial.as_deref());
                             if let Some(sess) = extras.get(&hw) {
                                 apply_profile_keys(&[serial.as_deref().unwrap_or(&active), &active, &hw], &sess.settings_tx, true).await;
+                                if !is_fake_serial(&active) {
+                                    let _ = setup_adb_forwarding(&active, sess.video_port, sess.input_port).await;
+                                }
                                 restarted += 1;
                             }
                         }

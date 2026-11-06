@@ -227,3 +227,52 @@ pub async fn manual_adb_pair(
 pub async fn manual_adb_connect(endpoint: String) -> Result<String, String> {
     adb_connect(endpoint.trim()).await
 }
+
+/// IPv4 address of the device's Wi-Fi interface, read over its USB shell.
+async fn device_wlan_ip(serial: &str) -> Option<String> {
+    let out = adb::run(Some(serial), &["shell", "ip", "-f", "inet", "addr", "show", "wlan0"], Duration::from_secs(5))
+        .await
+        .ok()?;
+    String::from_utf8_lossy(&out.stdout).lines().find_map(|l| {
+        let l = l.trim();
+        let cidr = l.strip_prefix("inet ")?.split_whitespace().next()?;
+        Some(cidr.split_once('/').map_or(cidr, |(ip, _)| ip).to_string())
+    })
+}
+
+/// "Setup via USB": switch the plugged-in device to wireless debugging without any pairing
+/// code. Over USB the host already has an authorized adb shell, so it can enable Wireless
+/// debugging itself (`settings put global adb_wifi_enabled 1`), read the Wi-Fi IP, and connect
+/// to the TLS port advertised via mDNS. If mDNS is blocked it falls back to `adb tcpip 5555`,
+/// which needs no discovery at all. Returns the `ip:port` that `adb connect` accepted.
+#[tauri::command]
+pub async fn bootstrap_wireless_over_usb(serial: String) -> Result<String, String> {
+    let ip = device_wlan_ip(&serial)
+        .await
+        .ok_or("The device has no Wi-Fi address. Connect it to the same Wi-Fi network as this computer.")?;
+
+    // Preferred: Android 11+ Wireless debugging (TLS), port found through mDNS.
+    let _ = adb::run(Some(&serial), &["shell", "settings", "put", "global", "adb_wifi_enabled", "1"], Duration::from_secs(5)).await;
+    if let Some(endpoint) = discover_connect_endpoint(&ip, Duration::from_secs(8)).await
+        && let Ok(ep) = adb_connect(&endpoint).await
+    {
+        return Ok(ep);
+    }
+
+    // Fallback: classic adb-over-TCP, restarted by adbd on port 5555.
+    let out = adb::run(Some(&serial), &["tcpip", "5555"], Duration::from_secs(10)).await?;
+    let text = combined_of(&out);
+    if !out.status.success() && !text.contains("restarting in TCP mode") {
+        return Err(format!("adb tcpip failed: {text}"));
+    }
+    let endpoint = format!("{ip}:5555");
+    let mut last = String::new();
+    for _ in 0..5 {
+        tokio::time::sleep(Duration::from_millis(900)).await;
+        match adb_connect(&endpoint).await {
+            Ok(ep) => return Ok(ep),
+            Err(e) => last = e,
+        }
+    }
+    Err(format!("Could not connect to {endpoint}: {last}"))
+}

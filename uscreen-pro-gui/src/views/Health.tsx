@@ -1,4 +1,4 @@
-import { Download, RefreshCw } from "lucide-react";
+import { Clock, Download, LoaderCircle, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,10 +24,13 @@ export function Health({
   status,
   onRestartAdb,
   onInstallApk,
+  installs,
 }: {
   status: DaemonStatus;
   onRestartAdb: () => void;
   onInstallApk: (serial: string) => void;
+  /** Per-device install state: absent = idle. Installs run one at a time. */
+  installs: Record<string, "queued" | "running">;
 }) {
   const tools = status.devices.filter((d) => d.state === "device");
   return (
@@ -56,6 +59,7 @@ export function Health({
       <Section title="Device tools" hint="Act on a connected device over ADB">
         {tools.map((d) => {
           const mismatch = !!d.device_version && d.device_version !== status.host_version;
+          const job = installs[d.serial];
           return (
             <div key={d.serial} className="flex min-h-12 flex-wrap items-center justify-between gap-3 px-3 py-2">
               <div className="min-w-0">
@@ -65,11 +69,11 @@ export function Health({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="secondary" onClick={() => onInstallApk(d.serial)}>
-                  <RefreshCw />
-                  Force Reinstall APK
+                <Button size="sm" variant="secondary" onClick={() => onInstallApk(d.serial)} disabled={!!job} aria-busy={!!job}>
+                  {job === "running" ? <LoaderCircle className="animate-spin" /> : job === "queued" ? <Clock /> : <RefreshCw />}
+                  {job === "running" ? "Reinstalling..." : job === "queued" ? "Waiting..." : "Force Reinstall APK"}
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => onInstallApk(d.serial)} disabled={!mismatch}>
+                <Button size="sm" variant="secondary" onClick={() => onInstallApk(d.serial)} disabled={!mismatch || !!job}>
                   <Download />
                   Update APK
                 </Button>
