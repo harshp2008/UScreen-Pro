@@ -24,7 +24,7 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { TextInput } from "./ui/controls";
 
-const STEPS = ["Connect", "Debugging", "Install", "Wireless", "Finish"] as const;
+const STEPS = ["Prepare Device", "Connect USB", "Install", "Wireless", "Finish"] as const;
 type Step = 1 | 2 | 3 | 4 | 5;
 type InstallState = "idle" | "running" | "ok" | "failed";
 type Transport = "usb" | "wifi";
@@ -141,13 +141,6 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
     if (usb) setDevice(usb);
   }, [usb]);
 
-  /* Step 1 advances on its own; step 2 shows the live authorization status and waits for Next. */
-  useEffect(() => {
-    if (!open) return;
-    if (step === 1 && usb) setStep(usb.state === "device" ? 3 : 2);
-    else if (step === 2 && !usb) setStep(1);
-  }, [open, step, usb]);
-
   const runInstall = useCallback(async (serial: string) => {
     setInstall({ state: "running", message: "Installing over USB" });
     try {
@@ -201,14 +194,6 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
       void unlisten.then((fn) => fn());
     };
   }, [open]);
-
-  async function openDevOptions() {
-    try {
-      toast.info(await invoke<string>("open_developer_options", { serial: device?.serial ?? null }));
-    } catch (e) {
-      toast.error(`The device refused the command: ${errText(e)}`);
-    }
-  }
 
   async function openWirelessSettings() {
     try {
@@ -276,12 +261,10 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
   const pairingActive = pairEvent?.kind === "pairing";
 
   /* Next is always shown; each step enables it once its own condition holds. */
-  const deviceConnected = usb !== null;
   const nextEnabled =
-    step === 1 ? deviceConnected : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : step === 4 ? wifiEndpoint !== null : false;
+    step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : step === 4 ? wifiEndpoint !== null : false;
   const goNext = () => {
-    if (step === 1 && usb) setStep(usb.state === "device" ? 3 : 2);
-    else if (step === 2 || step === 3 || step === 4) setStep((step + 1) as Step);
+    if (step === 1 || step === 2 || step === 3 || step === 4) setStep((step + 1) as Step);
   };
 
   return (
@@ -315,9 +298,11 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
           </ol>
 
           <div className="flex min-h-[260px] flex-1 flex-col overflow-y-auto px-6 py-4"><div className="my-auto space-y-4">
-            {step === 1 && (
+            {step === 1 && <DebugTimeline />}
+
+            {step === 2 && (
               <>
-                <p className="text-muted-foreground">Plug your Android device into this computer with a USB data cable.</p>
+                <p className="text-muted-foreground">Plug your device into this computer with a USB data cable.</p>
                 <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
                   <div className="flex items-center gap-2">
                     <Usb className="size-4 text-muted-foreground" />
@@ -328,22 +313,6 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                   </div>
                   {!usb && <LoaderCircle className="size-4 animate-spin text-primary" />}
                 </div>
-                {/* surface-container-high on the card, on-surface text: >= 4.5:1 (measured in the notes). */}
-                <div className="rounded-lg bg-muted px-3 py-2 text-xs leading-relaxed text-foreground">
-                  <div className="mb-1 font-medium">Nothing showing up?</div>
-                  <ul className="list-inside list-disc space-y-1">
-                    <li>Use a USB cable that carries data, not a charge-only one.</li>
-                    <li>Unlock the device screen and accept any USB prompt.</li>
-                    <li>If USB debugging was never enabled: Settings, About phone, tap Build number seven times.</li>
-                    <li>Then turn on USB debugging under Developer options.</li>
-                  </ul>
-                </div>
-              </>
-            )}
-
-            {step === 2 && (
-              <>
-                <DebugTimeline />
                 <div
                   role="status"
                   aria-live="polite"
@@ -363,15 +332,10 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                     </div>
                     {usb?.state !== "device" && (
                       <div className="text-[11px] text-muted-foreground">
-                        Tap <b>Allow</b> on the &ldquo;Allow USB debugging?&rdquo; prompt.
+                        {usb ? <>Tap <b>Allow</b> on the &ldquo;Allow USB debugging?&rdquo; prompt.</> : "Plug in the cable and unlock the device."}
                       </div>
                     )}
                   </div>
-                  {usb?.state !== "device" && (
-                    <Button size="sm" variant="ghost" onClick={openDevOptions}><ExternalLink />
-                      Open on device
-                    </Button>
-                  )}
                 </div>
               </>
             )}

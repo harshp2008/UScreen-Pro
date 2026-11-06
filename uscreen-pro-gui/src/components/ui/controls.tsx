@@ -43,7 +43,7 @@ export function Select({
   );
 }
 
-/** Plain shadcn Slider (with step marks) adapted to a single numeric value. */
+/** Plain shadcn Slider adapted to a single numeric value. */
 export function Slider({
   value,
   min,
@@ -66,7 +66,6 @@ export function Slider({
       min={min}
       max={max}
       step={step}
-      marks
       onValueChange={([v]) => onValueChange(v)}
     />
   );
