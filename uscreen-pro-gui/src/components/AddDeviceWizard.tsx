@@ -116,6 +116,8 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
   const usb = entries.find((e) => !e.is_wifi) ?? null;
   const installStarted = useRef(false);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
 
   const poll = useCallback(async () => {
     try {
@@ -258,6 +260,21 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
     }
   }
 
+  const measureScroll = useCallback(() => {
+    const el = scrollerRef.current;
+    if (el) setMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 4);
+  }, []);
+
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    measureScroll();
+    const ro = new ResizeObserver(measureScroll);
+    ro.observe(el);
+    if (el.firstElementChild) ro.observe(el.firstElementChild);
+    return () => ro.disconnect();
+  }, [step, manualOpen, measureScroll]);
+
   const pairingActive = pairEvent?.kind === "pairing";
 
   /* Next is always shown; each step enables it once its own condition holds. */
@@ -297,40 +314,41 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
             })}
           </ol>
 
-          <div className="flex min-h-[260px] flex-1 flex-col overflow-y-auto px-6 py-4"><div className="my-auto space-y-4">
+          <div className="relative flex min-h-[260px] flex-1 flex-col overflow-hidden">
+          <div ref={scrollerRef} onScroll={measureScroll} className="flex flex-1 flex-col overflow-y-auto px-6 py-4"><div className="my-auto space-y-4">
             {step === 1 && <DebugTimeline />}
 
             {step === 2 && (
               <>
                 <p className="text-muted-foreground">Plug your device into this computer with a USB data cable.</p>
-                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <Usb className="size-4 text-muted-foreground" />
-                    <div>
-                      <div className="text-foreground">{usb ? usb.model : "Waiting for a USB device"}</div>
-                      <div className="font-mono text-[11px] text-muted-foreground">{usb ? usb.serial : "Polling ADB"}</div>
-                    </div>
-                  </div>
-                  {!usb && <LoaderCircle className="size-4 animate-spin text-primary" />}
-                </div>
+                {/* One box for the whole sequence: no device, device seen but unauthorized, authorized. */}
                 <div
                   role="status"
                   aria-live="polite"
                   className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5",
+                    "flex min-h-14 items-center justify-between gap-3 rounded-lg px-3 py-2.5",
                     usb?.state === "device" ? "bg-success/15 text-success" : "bg-muted text-foreground",
                   )}
                 >
-                  {usb?.state === "device" ? (
-                    <Check className="size-4 shrink-0" />
-                  ) : (
-                    <LoaderCircle className="size-4 shrink-0 animate-spin text-primary" />
-                  )}
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0">
                     <div className="font-medium">
-                      {usb?.state === "device" ? "Device authorized" : "Waiting for authorization..."}
+                      {!usb
+                        ? "Waiting for USB device..."
+                        : usb.state === "device"
+                          ? "Device authorized."
+                          : "Waiting for authorization on device..."}
                     </div>
+                    {usb && (
+                      <div className="truncate font-mono text-[11px] text-muted-foreground">
+                        {usb.model} · {usb.serial}
+                      </div>
+                    )}
                   </div>
+                  {usb?.state === "device" ? (
+                    <Check className="size-5 shrink-0" />
+                  ) : (
+                    <LoaderCircle className="size-5 shrink-0 animate-spin text-primary" />
+                  )}
                 </div>
                 <ul className="list-inside list-disc space-y-1 rounded-lg bg-muted/50 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
                   <li>Use a USB cable that supports data transfer (not a charge-only cable).</li>
@@ -528,6 +546,15 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
             )}
           </div>
 
+          </div>
+          {/* Fade at the bottom edge while there is more to scroll to. */}
+          <div
+            aria-hidden
+            className={cn(
+              "pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-background to-transparent transition-opacity",
+              moreBelow ? "opacity-100" : "opacity-0",
+            )}
+          />
           </div>
 
           <footer className="flex items-center justify-between px-6 pb-6 pt-2">

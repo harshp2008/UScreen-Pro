@@ -128,11 +128,13 @@ fun UScreenMain(
     videoReceiver: VideoReceiver? = null,
     touchCapture: TouchCapture? = null,
     onOrientationChange: (Int) -> Unit = {},
+    onStreamingChange: (Boolean) -> Unit = {},
     prefs: Prefs? = null,
     isDeviceLocked: Boolean = false,
     hostVersion: String? = null,
 ) {
     var isConnected by remember { mutableStateOf(false) }
+    LaunchedEffect(isConnected) { onStreamingChange(isConnected) }
     var fps by remember { mutableStateOf(0f) }
     var mbps by remember { mutableStateOf(0f) }
     var showSettings by remember { mutableStateOf(false) }

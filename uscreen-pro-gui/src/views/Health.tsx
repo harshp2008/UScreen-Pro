@@ -1,3 +1,4 @@
+import { Download, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,7 +20,16 @@ function Card({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-export function Health({ status, onRestartAdb }: { status: DaemonStatus; onRestartAdb: () => void }) {
+export function Health({
+  status,
+  onRestartAdb,
+  onInstallApk,
+}: {
+  status: DaemonStatus;
+  onRestartAdb: () => void;
+  onInstallApk: (serial: string) => void;
+}) {
+  const tools = status.devices.filter((d) => d.state === "device");
   return (
     <div className="w-full space-y-2">
       <PageHeader title="System health">
@@ -42,6 +52,35 @@ export function Health({ status, onRestartAdb }: { status: DaemonStatus; onResta
           )}
         </Card>
       </div>
+
+      <Section title="Device tools" hint="Act on a connected device over ADB">
+        {tools.map((d) => {
+          const mismatch = !!d.device_version && d.device_version !== status.host_version;
+          return (
+            <div key={d.serial} className="flex min-h-12 flex-wrap items-center justify-between gap-3 px-3 py-2">
+              <div className="min-w-0">
+                <div className="truncate text-foreground">{d.model}</div>
+                <div className="font-mono text-[11px] text-muted-foreground">
+                  {d.serial} · app {d.device_version ?? "not installed"}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="secondary" onClick={() => onInstallApk(d.serial)}>
+                  <RefreshCw />
+                  Force Reinstall APK
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => onInstallApk(d.serial)} disabled={!mismatch}>
+                  <Download />
+                  Update APK
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+        {tools.length === 0 && (
+          <div className="px-3 py-4 text-center text-muted-foreground">No authorized device connected.</div>
+        )}
+      </Section>
 
       <Section title="Devices">
         <div className="overflow-x-auto">

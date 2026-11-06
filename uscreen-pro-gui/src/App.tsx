@@ -32,6 +32,14 @@ function writeScroll(key: string, top: number) {
   }
 }
 
+/** JSON with sorted keys, so re-adding a key later does not look like an edit. */
+const stable = (v: unknown) =>
+  JSON.stringify(v, (_k, x) =>
+    x && typeof x === "object" && !Array.isArray(x)
+      ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b)))
+      : x,
+  );
+
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Fingerprint of the global settings only; per-device edits have their own Save button. */
@@ -45,6 +53,8 @@ export default function App() {
   const [status, setStatus] = useState<DaemonStatus | null>(null);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [savedConfig, setSavedConfig] = useState("");
+  /** Per-device fingerprints of what is on disk, to tell whether a device page has unsaved edits. */
+  const [savedProfiles, setSavedProfiles] = useState<Record<string, string>>({});
   const [autostart, setAutostart] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -82,6 +92,7 @@ export default function App() {
       const cfg = await invoke<AppConfig>("get_config");
       setConfig(cfg);
       setSavedConfig(globalsKey(cfg));
+      setSavedProfiles(Object.fromEntries(Object.entries(cfg.tablets).map(([k, v]) => [k, stable(v)])));
     } catch (e) {
       toast.error(`Could not load config: ${errText(e)}`);
     }
@@ -154,6 +165,9 @@ export default function App() {
   const profile: TabletProfile | null =
     serial && config ? (config.tablets[serial] ?? { label: device?.model ?? serial }) : null;
 
+  const profileDirty =
+    !!serial && !!profile && stable(profile) !== (savedProfiles[serial] ?? stable({ label: device?.model ?? serial }));
+
   const patchProfile = (patch: Partial<TabletProfile>) => {
     if (!serial) return;
     setConfig((c) =>
@@ -165,6 +179,7 @@ export default function App() {
     guarded(async () => {
       if (!serial || !profile) return;
       await invoke("save_device_profile", { serial, profile });
+      setSavedProfiles((m) => ({ ...m, [serial]: stable(profile) }));
       toast.success(`Saved ${profile.nickname || serial}`);
     }, "Save failed");
 
@@ -184,12 +199,12 @@ export default function App() {
       await fetchStatus();
     }, "Control failed");
 
-  const installApk = () =>
+  const installApk = (target: string | null = serial) =>
     guarded(async () => {
-      if (!serial) return;
+      if (!target) return;
       toast.loading("Installing app", { id: "apk" });
       try {
-        await invoke("install_apk_on_device", { serial });
+        await invoke("install_apk_on_device", { serial: target });
         toast.success("App installed", { id: "apk" });
       } catch (e) {
         toast.error(errText(e), { id: "apk" });
@@ -264,7 +279,7 @@ export default function App() {
                 {view === "advanced" && config && (
                   <Advanced config={config} dirty={dirty} onChange={patchConfig} onSave={saveConfig} />
                 )}
-                {view === "health" && status && <Health status={status} onRestartAdb={restartAdb} />}
+                {view === "health" && status && <Health status={status} onRestartAdb={restartAdb} onInstallApk={(s) => installApk(s)} />}
                 {serial && profile && config && (
                   <DeviceSettings
                     key={serial}
@@ -277,7 +292,8 @@ export default function App() {
                     onSave={saveProfile}
                     onDelete={deleteProfile}
                     onTogglePause={togglePause}
-                    onInstallApk={installApk}
+                    onInstallApk={() => installApk(serial)}
+                    dirty={profileDirty}
                   />
                 )}
               </div>

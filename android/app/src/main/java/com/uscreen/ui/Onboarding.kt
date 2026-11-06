@@ -8,6 +8,11 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
+import java.net.InetSocketAddress
+import java.net.Socket
+import java.net.SocketTimeoutException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedContent
@@ -62,6 +67,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -118,6 +124,30 @@ fun isWifiAdbEnabled(context: Context): Boolean {
             "adb_wifi_enabled",
             0
         ) != 0
+    } catch (_: Exception) {
+        false
+    }
+}
+
+/**
+ * Whether something on the UScreen host is actually answering on its video socket.
+ *
+ * Wireless Debugging being switched on says nothing about the host, so this opens the socket and
+ * sends nothing: the host stays silent until it sees a token, so a read that times out means a
+ * live listener, while a refused connect, a connect timeout or an immediate EOF (an adb reverse
+ * with nothing behind it) mean nobody is there.
+ */
+suspend fun probeHostSocket(host: String, port: Int): Boolean = withContext(Dispatchers.IO) {
+    try {
+        Socket().use { s ->
+            s.connect(InetSocketAddress(host, port), 1500)
+            s.soTimeout = 800
+            try {
+                s.getInputStream().read() != -1
+            } catch (_: SocketTimeoutException) {
+                true
+            }
+        }
     } catch (_: Exception) {
         false
     }
@@ -321,7 +351,7 @@ fun OnboardingScreen(
     videoReceiver: VideoReceiver?,
     @Suppress("UNUSED_PARAMETER") touchCapture: TouchCapture?,
     prefs: Prefs?,
-    @Suppress("UNUSED_PARAMETER") isConnected: Boolean,
+    isConnected: Boolean,
     forceReviewMode: Boolean = false,
     onDismissReviewMode: () -> Unit = {}
 ) {
@@ -337,6 +367,8 @@ fun OnboardingScreen(
     var wifiAdbOn by remember { mutableStateOf(isWifiAdbEnabled(context)) }
     var usbPlugged by remember { mutableStateOf(checkUsbConnected(context)) }
     var wifiConnected by remember { mutableStateOf(checkWifiConnected(context)) }
+    var hostReachable by remember { mutableStateOf(false) }
+    val streamLive by rememberUpdatedState(isConnected)
     var showHelpWizard by remember { mutableStateOf(false) }
     var dynamicDiagnostic by remember { mutableStateOf<String?>(null) }
     var secondsWaiting by remember { mutableIntStateOf(0) }
@@ -368,6 +400,17 @@ fun OnboardingScreen(
             delay(1000)
         }
     }
+
+    // Wireless is only "ready" once the host really answers, not merely because the toggle is on.
+    LaunchedEffect(wifiAdbOn, videoReceiver) {
+        while (true) {
+            hostReachable = streamLive || (
+                wifiAdbOn && probeHostSocket(videoReceiver?.host ?: VideoReceiver.HOST, videoReceiver?.port ?: VideoReceiver.PORT)
+            )
+            delay(3000)
+        }
+    }
+    val wifiReady = wifiAdbOn && hostReachable
 
     val showWizard = !hasCompletedOnboarding || forceReviewMode
 
@@ -571,14 +614,14 @@ fun OnboardingScreen(
                                 ) {
                                     Surface(
                                         shape = RoundedCornerShape(4.dp),
-                                        color = if (wifiAdbOn || (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && usbAdbOn)) Color(0x3310B981) else Color(0x333B82F6),
+                                        color = if (wifiReady || (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && usbAdbOn)) Color(0x3310B981) else Color(0x333B82F6),
                                         modifier = Modifier.size(64.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
-                                                imageVector = if (wifiAdbOn) Icons.Default.Check else Icons.Default.Wifi,
+                                                imageVector = if (wifiReady) Icons.Default.Check else Icons.Default.Wifi,
                                                 contentDescription = null,
-                                                tint = if (wifiAdbOn) Ok else AccentSoft,
+                                                tint = if (wifiReady) Ok else AccentSoft,
                                                 modifier = Modifier.size(32.dp)
                                             )
                                         }
@@ -618,11 +661,12 @@ fun OnboardingScreen(
                                     StatusItemCard(
                                         title = if (isAndroid11Plus) "Wireless Debugging (Android 11+)" else "USB Pairing Mode (Legacy)",
                                         description = when {
-                                            wifiAdbOn -> "Wireless Debugging is active and listening for connections."
+                                            wifiReady -> "Wireless Debugging: Ready"
+                                            wifiAdbOn -> "Wireless Debugging: Enabled, but not connected to host."
                                             isAndroid11Plus -> "Turn on 'Wireless debugging' in Developer Options to pair wirelessly."
                                             else -> "Plug in USB once to automatically initialize wireless TCP mode."
                                         },
-                                        isPassed = wifiAdbOn || (!isAndroid11Plus && usbPlugged),
+                                        isPassed = wifiReady || (!isAndroid11Plus && usbPlugged),
                                         actionButtonText = if (!wifiAdbOn && isAndroid11Plus) "Open Wireless Debugging" else null,
                                         onActionClick = {
                                             try {
@@ -702,13 +746,13 @@ fun OnboardingScreen(
                                             Spacer(Modifier.height(4.dp))
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Icon(
-                                                    imageVector = if (wifiAdbOn) Icons.Default.Check else Icons.Default.PriorityHigh,
+                                                    imageVector = if (wifiReady) Icons.Default.Check else Icons.Default.PriorityHigh,
                                                     contentDescription = null,
-                                                    tint = if (wifiAdbOn) Ok else Subtle,
+                                                    tint = if (wifiReady) Ok else Subtle,
                                                     modifier = Modifier.size(16.dp)
                                                 )
                                                 Spacer(Modifier.width(8.dp))
-                                                Text("Wireless Debugging: ${if (wifiAdbOn) "Active" else "Available"}", fontSize = 13.sp, color = OnSurface)
+                                                Text(if (wifiReady) "Wireless Debugging: Ready" else if (wifiAdbOn) "Wireless Debugging: Enabled, but not connected to host" else "Wireless Debugging: Available", fontSize = 13.sp, color = OnSurface)
                                             }
                                             Spacer(Modifier.height(4.dp))
                                             Row(verticalAlignment = Alignment.CenterVertically) {

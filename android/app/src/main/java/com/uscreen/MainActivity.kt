@@ -255,6 +255,10 @@ class MainActivity : ComponentActivity() {
                         touchCapture?.setSurfaceView(surfaceView)
                     },
                     onSurfaceDestroyed = { videoReceiver?.onSurfaceDestroyed() },
+                    onStreamingChange = { live ->
+                        streaming = live
+                        applyOrientation()
+                    },
                     onOrientationChange = { choice ->
                         prefs.orientation = choice
                         applyOrientation()
@@ -323,7 +327,16 @@ class MainActivity : ComponentActivity() {
      */
     private var tiltListener: android.view.OrientationEventListener? = null
 
+    /** True while video is flowing; only then is the picture pinned to landscape. */
+    private var streaming = false
+
     private fun applyOrientation() {
+        if (!streaming) {
+            // Onboarding and the waiting screen follow the device, so portrait works too.
+            stopTiltListener()
+            requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            return
+        }
         when (prefs.orientation) {
             Prefs.ORIENTATION_CAMERA_UP -> {
                 stopTiltListener()

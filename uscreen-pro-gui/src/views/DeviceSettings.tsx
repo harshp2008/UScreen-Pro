@@ -1,4 +1,6 @@
-import { AlertTriangle, Check, Download, Pause, Play, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Check, Pause, Play, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AppLockList } from "../components/ui/AppLockList";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
@@ -17,6 +19,8 @@ interface Props {
   onDelete: () => void;
   onTogglePause: () => void;
   onInstallApk: () => void;
+  /** True when the profile differs from what is saved. */
+  dirty: boolean;
 }
 
 export function DeviceSettings({
@@ -30,7 +34,9 @@ export function DeviceSettings({
   onDelete,
   onTogglePause,
   onInstallApk,
+  dirty,
 }: Props) {
+  const [confirmForget, setConfirmForget] = useState(false);
   /** Build the override toggle for a key: on seeds the global value, off clears the override. */
   function ov<K extends keyof TabletProfile>(key: K, seed: TabletProfile[K], inherited: string): Override {
     return {
@@ -55,10 +61,7 @@ export function DeviceSettings({
             {device?.paused ? "Resume" : "Pause"}
           </Button>
         )}
-        <Button size="sm" variant="secondary" onClick={onInstallApk} disabled={!online}><Download />
-          Push APK
-        </Button>
-        <Button size="sm" onClick={onSave}><Check />
+        <Button size="sm" onClick={onSave} disabled={!dirty}><Check />
           Save
         </Button>
       </PageHeader>
@@ -208,13 +211,40 @@ export function DeviceSettings({
         </SettingRow>
       </Section>
 
-      {device?.transport === "Disconnected" && (
-        <div className="flex justify-end">
-          <Button size="sm" variant="destructive" onClick={onDelete}><Trash2 />
-            Forget device
-          </Button>
-        </div>
-      )}
+      <div className="flex justify-end pt-2">
+        <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setConfirmForget(true)}>
+          <Trash2 />
+          Forget Device
+        </Button>
+      </div>
+
+      <Dialog open={confirmForget} onOpenChange={setConfirmForget}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Forget this device?</DialogTitle>
+            <DialogDescription>
+              {p.nickname?.trim() || device?.model || serial} and its saved settings will be removed from the
+              configuration. You can add it again with Add device.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setConfirmForget(false)}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                setConfirmForget(false);
+                onDelete();
+              }}
+            >
+              <Trash2 />
+              Forget Device
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
