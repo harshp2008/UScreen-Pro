@@ -9,7 +9,7 @@ function Dot({ ok }: { ok: boolean }) {
 
 function Card({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="min-w-0 rounded-lg border border-outline-variant bg-surface-container p-3">
+    <div className="min-w-0 rounded-lg border border-outline-variant bg-card p-3">
       <div className="text-[11px] text-on-surface-variant">{label}</div>
       <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 break-all text-[13px] font-medium text-on-surface">
         {children}
@@ -20,7 +20,7 @@ function Card({ label, children }: { label: string; children: ReactNode }) {
 
 export function Health({ status, onRestartAdb }: { status: DaemonStatus; onRestartAdb: () => void }) {
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-2">
       <PageHeader title="System health">
         <Button onClick={onRestartAdb}>Restart ADB</Button>
       </PageHeader>
@@ -40,7 +40,7 @@ export function Health({ status, onRestartAdb }: { status: DaemonStatus; onResta
         <Card label="Build">
           <span className="font-mono">{status.host_version}</span>
           {status.is_dirty && (
-            <span className="rounded-[2px] bg-warning-container px-1.5 py-0.5 text-[10px] text-warning">dirty</span>
+            <span className="rounded-[2px] bg-warning-container px-2 py-1 text-[10px] text-warning">dirty</span>
           )}
         </Card>
       </div>
@@ -73,7 +73,7 @@ export function Health({ status, onRestartAdb }: { status: DaemonStatus; onResta
               ))}
               {status.devices.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-3 py-4 text-center text-outline">
+                  <td colSpan={5} className="px-3 py-4 text-center text-on-surface-variant">
                     No devices known.
                   </td>
                 </tr>

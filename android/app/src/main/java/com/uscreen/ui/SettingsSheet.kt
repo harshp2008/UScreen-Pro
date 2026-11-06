@@ -37,8 +37,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
@@ -112,6 +115,9 @@ fun SettingsSheet(
         onDismissRequest = onDismiss,
         containerColor = SurfaceLow
     ) {
+      // Dense utility rows: calm (standard) motion and 40dp minimum touch targets, matching the desktop app.
+      CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
+      CalmMotion {
         Column(
             modifier = Modifier
                 .verticalScroll(rememberScrollState())
@@ -121,7 +127,7 @@ fun SettingsSheet(
                 "Settings",
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color.White
+                color = OnSurface
             )
             Spacer(Modifier.height(20.dp))
 
@@ -136,11 +142,11 @@ fun SettingsSheet(
                         .padding(12.dp)
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Update available: $updateAvailable", fontSize = 14.sp, color = Color.White)
+                        Text("Update available: $updateAvailable", fontSize = 14.sp, color = OnSurface)
                         Text(
                             "Tap to open the release page. Update the desktop side too — they ship together.",
                             fontSize = 11.sp,
-                            color = Subtle
+                            color = Muted
                         )
                     }
                 }
@@ -158,14 +164,14 @@ fun SettingsSheet(
                         "Draw on the computer's own screen with the pen, " +
                             "instead of showing a second screen here",
                         fontSize = 11.sp,
-                        color = Subtle
+                        color = Muted
                     )
                 }
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = penOnly,
                     onCheckedChange = onPenOnlyChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
+                    colors = SwitchDefaults.colors()
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -180,7 +186,7 @@ fun SettingsSheet(
                     Text(
                         "Follow the tilt sensor between the two landscape directions",
                         fontSize = 11.sp,
-                        color = Subtle
+                        color = Muted
                     )
                 }
                 Spacer(Modifier.width(12.dp))
@@ -191,7 +197,7 @@ fun SettingsSheet(
                             if (auto) Prefs.ORIENTATION_AUTO else Prefs.ORIENTATION_CAMERA_DOWN
                         )
                     },
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
+                    colors = SwitchDefaults.colors()
                 )
             }
             if (orientation != Prefs.ORIENTATION_AUTO) {
@@ -205,17 +211,14 @@ fun SettingsSheet(
                             selected = orientation == value,
                             onClick = { onOrientationChange(value) },
                             label = { Text(label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Accent,
-                                selectedLabelColor = Color.White
-                            )
+                            colors = FilterChipDefaults.filterChipColors()
                         )
                     }
                 }
                 Text(
                     "Camera down is the usual way to hold it for drawing.",
                     fontSize = 11.sp,
-                    color = Subtle
+                    color = Muted
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -233,10 +236,7 @@ fun SettingsSheet(
                         selected = preferredTransport == value,
                         onClick = { onPreferredTransportChange(value) },
                         label = { Text(label) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Accent,
-                            selectedLabelColor = Color.White
-                        )
+                        colors = FilterChipDefaults.filterChipColors()
                     )
                 }
             }
@@ -247,7 +247,7 @@ fun SettingsSheet(
                     else -> "Automatically use USB when plugged in, falling back to Wi-Fi."
                 },
                 fontSize = 11.sp,
-                color = Subtle
+                color = Muted
             )
             Spacer(Modifier.height(20.dp))
 
@@ -264,7 +264,7 @@ fun SettingsSheet(
                     .clip(RoundedCornerShape(8.dp))
                     .clickable { guideExpanded = !guideExpanded }
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.fillMaxWidth()
@@ -279,7 +279,7 @@ fun SettingsSheet(
                             text = "Pairing Setup Guide",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
+                            color = OnSurface,
                             modifier = Modifier.weight(1f)
                         )
                         Icon(
@@ -294,7 +294,7 @@ fun SettingsSheet(
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically()
                     ) {
-                        Column(modifier = Modifier.padding(top = 10.dp)) {
+                        Column(modifier = Modifier.padding(top = 8.dp)) {
                             if (isAndroid11Plus) {
                                 Text(
                                     text = "Secure Wi-Fi Pairing (Android 11+):",
@@ -329,7 +329,7 @@ fun SettingsSheet(
                                 )
                             }
 
-                            Spacer(Modifier.height(10.dp))
+                            Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(
                                     onClick = {
@@ -340,16 +340,16 @@ fun SettingsSheet(
                                         Toast.makeText(context, "Copied IP: $text", Toast.LENGTH_SHORT).show()
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = SurfaceHigh),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
                                             imageVector = Icons.Default.ContentCopy,
                                             contentDescription = null,
-                                            tint = Color.White,
+                                            tint = OnSurface,
                                             modifier = Modifier.padding(end = 4.dp)
                                         )
-                                        Text("Copy IP & Port", fontSize = 12.sp, color = Color.White)
+                                        Text("Copy IP & Port", fontSize = 12.sp, color = OnSurface)
                                     }
                                 }
 
@@ -361,36 +361,36 @@ fun SettingsSheet(
                                             Toast.makeText(context, "Developer options not enabled", Toast.LENGTH_SHORT).show()
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                                    colors = ButtonDefaults.buttonColors(),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
                                 ) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
                                             imageVector = Icons.Default.Settings,
                                             contentDescription = null,
-                                            tint = Color.White,
+                                            tint = OnSurface,
                                             modifier = Modifier.padding(end = 4.dp)
                                         )
-                                        Text("Open Developer Options", fontSize = 12.sp, color = Color.White)
+                                        Text("Open Developer Options", fontSize = 12.sp, color = OnSurface)
                                     }
                                 }
                             }
 
-                            Spacer(Modifier.height(10.dp))
-                            Button(
+                            Spacer(Modifier.height(8.dp))
+                            MorphButton(
                                 onClick = {
                                     onReviewSetupGuide()
                                     onDismiss()
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = Accent),
+                                colors = ButtonDefaults.buttonColors(),
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
                                         imageVector = Icons.Default.MenuBook,
                                         contentDescription = null,
-                                        tint = Color.White,
-                                        modifier = Modifier.padding(end = 6.dp)
+                                        tint = OnSurface,
+                                        modifier = Modifier.padding(end = 4.dp)
                                     )
                                     Text("Review Setup Guide (4-Step Wizard)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                                 }
@@ -413,13 +413,13 @@ fun SettingsSheet(
                     valueRange = (Prefs.MIN_BITRATE_KBPS / 1000).toFloat()..
                             (Prefs.MAX_BITRATE_KBPS / 1000).toFloat(),
                     steps = 10,
-                    colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent)
+                    colors = SliderDefaults.colors()
                 )
                 Text(
                     "20 Mbps is plenty for text and UI. Going higher does not look sharper once " +
                         "the USB link is saturated — it only adds delay.",
                     fontSize = 11.sp,
-                    color = Subtle
+                    color = Muted
                 )
                 Spacer(Modifier.height(20.dp))
 
@@ -431,10 +431,7 @@ fun SettingsSheet(
                             selected = fpsChoice == f,
                             onClick = { fpsChoice = f },
                             label = { Text("$f fps") },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Accent,
-                                selectedLabelColor = Color.White
-                            )
+                            colors = FilterChipDefaults.filterChipColors()
                         )
                     }
                 }
@@ -450,13 +447,13 @@ fun SettingsSheet(
                     Text(
                         "FPS and bandwidth in the corner",
                         fontSize = 11.sp,
-                        color = Subtle
+                        color = Muted
                     )
                 }
                 Switch(
                     checked = showStats,
                     onCheckedChange = onShowStatsChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
+                    colors = SwitchDefaults.colors()
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -471,14 +468,14 @@ fun SettingsSheet(
                         "Nothing is streamed there, so the screen goes black a few seconds after " +
                             "it starts instead of showing the same text for hours",
                         fontSize = 11.sp,
-                        color = Subtle
+                        color = Muted
                     )
                 }
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = blankPenOnly,
                     onCheckedChange = onBlankPenOnlyChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
+                    colors = SwitchDefaults.colors()
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -492,14 +489,14 @@ fun SettingsSheet(
                     Text(
                         "Off sends only the pen, which keeps a resting hand from doing anything",
                         fontSize = 11.sp,
-                        color = Subtle
+                        color = Muted
                     )
                 }
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = touchEnabled,
                     onCheckedChange = onTouchEnabledChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
+                    colors = SwitchDefaults.colors()
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -513,14 +510,14 @@ fun SettingsSheet(
                     Text(
                         "Hides the gear button and maps the Android Back button to open settings",
                         fontSize = 11.sp,
-                        color = Subtle
+                        color = Muted
                     )
                 }
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = immersiveModeEnabled,
                     onCheckedChange = onImmersiveModeEnabledChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
+                    colors = SwitchDefaults.colors()
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -534,14 +531,14 @@ fun SettingsSheet(
                     Text(
                         "Maintain stream and touch connection when switched away. Consumes more battery.",
                         fontSize = 11.sp,
-                        color = Subtle
+                        color = Muted
                     )
                 }
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = keepConnectedInBackground,
                     onCheckedChange = onKeepConnectedInBackgroundChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
+                    colors = SwitchDefaults.colors()
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -555,14 +552,14 @@ fun SettingsSheet(
                     Text(
                         "Hold system WakeLock while locked. Note: secure keyguard disables touch input until unlocked.",
                         fontSize = 11.sp,
-                        color = Subtle
+                        color = Muted
                     )
                 }
                 Spacer(Modifier.width(12.dp))
                 Switch(
                     checked = keepDisplayAliveWhenLocked,
                     onCheckedChange = onKeepDisplayAliveWhenLockedChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
+                    colors = SwitchDefaults.colors()
                 )
             }
             Spacer(Modifier.height(24.dp))
@@ -574,7 +571,7 @@ fun SettingsSheet(
                         onDismiss()
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Accent)
+                    colors = ButtonDefaults.buttonColors()
                 ) {
                     Text("Apply", fontSize = 16.sp, modifier = Modifier.padding(vertical = 4.dp))
                 }
@@ -582,7 +579,7 @@ fun SettingsSheet(
                 Text(
                     "Applying restarts the stream for a moment.",
                     fontSize = 11.sp,
-                    color = Subtle,
+                    color = Muted,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -611,5 +608,7 @@ fun SettingsSheet(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
             )
         }
+      }
+      }
     }
 }

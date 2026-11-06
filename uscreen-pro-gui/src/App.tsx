@@ -26,6 +26,7 @@ export default function App() {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [daemonBusy, setDaemonBusy] = useState<"starting" | "stopping" | null>(null);
+  // The library's baseline scheme is keyed on the `.dark` class (see styles.css); index.html sets it pre-paint.
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
 
   const toggleTheme = () => {
@@ -206,7 +207,7 @@ export default function App() {
           />
 
           <main className="flex min-w-0 flex-1 flex-col bg-surface">
-            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <div className="flex-1 overflow-y-auto p-4">
               <div className="mx-auto w-full max-w-5xl">
                 {view === "settings" && config && (
                   <GlobalSettings
@@ -237,7 +238,7 @@ export default function App() {
               </div>
             </div>
 
-            <footer className="flex h-8 shrink-0 items-center justify-between border-t border-outline-variant bg-surface-low px-4 text-[11px] text-on-surface-variant">
+            <footer className="flex h-8 shrink-0 items-center justify-between border-t border-outline-variant bg-surface px-4 text-[11px] text-on-surface-variant">
               <span className="flex items-center gap-2">
                 <span className={`size-1.5 rounded-full ${status?.is_running ? "bg-success" : "bg-error"}`} />
                 {status?.is_running ? "Daemon running" : "Daemon stopped"}

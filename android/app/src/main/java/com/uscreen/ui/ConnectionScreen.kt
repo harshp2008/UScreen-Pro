@@ -86,10 +86,10 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
                 Text(
                     "Graphics tablet mode",
                     fontSize = 20.sp,
-                    color = Color.White,
+                    color = OnSurface,
                     fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "The pen drives your computer's screen.\n" +
                         "Touch input is sent back; no video is streamed here.",
@@ -98,12 +98,12 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
                     textAlign = TextAlign.Center
                 )
                 if (blankAfterSeconds > 0) {
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(16.dp))
                     Text(
                         "The screen goes black in a few seconds to spare OLED panels. " +
                             "Settings are behind the gear icon in the corner.",
                         fontSize = 12.sp,
-                        color = Subtle,
+                        color = Muted,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -245,7 +245,7 @@ fun UScreenMain(
                     text = "%.0f fps   %.1f Mbps".format(fps, mbps),
                     fontSize = 12.sp,
                     color = Muted,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                 )
             }
         }
@@ -271,13 +271,13 @@ fun UScreenMain(
                         imageVector = Icons.Default.Warning,
                         contentDescription = null,
                         tint = Warn,
-                        modifier = Modifier.size(16.dp).padding(end = 6.dp)
+                        modifier = Modifier.size(16.dp).padding(end = 4.dp)
                     )
                     Text(
                         text = "Host version mismatch (Host: ${hostVersion ?: "unknown"}, Device: ${BuildConfig.GIT_VERSION_STRING}). Please update on PC.",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = OnSurface,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -294,20 +294,20 @@ fun UScreenMain(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(14.dp)
+                        tint = OnSurface,
+                        modifier = Modifier.size(12.dp)
                     )
-                    Spacer(Modifier.size(6.dp))
+                    Spacer(Modifier.size(4.dp))
                     Text(
                         text = "Device Locked — Touch Disabled",
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.White
+                        color = OnSurface
                     )
                 }
             }
@@ -319,8 +319,8 @@ fun UScreenMain(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(10.dp)
-                    .size(38.dp)
+                    .padding(8.dp)
+                    .size(36.dp)
                     .alpha(if (penOnly && blankInPenMode) 0.18f else if (isConnected) 0.35f else 0.9f)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xAA20202C))
@@ -330,8 +330,8 @@ fun UScreenMain(
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
+                    tint = OnSurface,
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
@@ -353,7 +353,7 @@ fun UScreenMain(
                     }
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text("Update $updateAvailable available", fontSize = 12.sp, color = Color.White)
+                Text("Update $updateAvailable available", fontSize = 12.sp, color = OnSurface)
             }
         }
 
@@ -367,13 +367,13 @@ fun UScreenMain(
                     .padding(16.dp)
             ) {
                 Column {
-                    Text("UScreen is working.", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    Text("UScreen is working.", fontSize = 15.sp, color = OnSurface, fontWeight = FontWeight.Bold)
                     Text(
                         "If it replaced a second monitor for you, a star on GitHub or a compatibility " +
                             "report helps other Linux users find it. This note appears only once.",
                         fontSize = 12.sp, color = Muted
                     )
-                    Row(modifier = Modifier.padding(top = 10.dp)) {
+                    Row(modifier = Modifier.padding(top = 8.dp)) {
                         Text(
                             "Open GitHub",
                             fontSize = 13.sp,
@@ -393,7 +393,7 @@ fun UScreenMain(
                         Text(
                             "Dismiss",
                             fontSize = 13.sp,
-                            color = Subtle,
+                            color = Muted,
                             modifier = Modifier.clickable { onDismissThanks() }
                         )
                     }

@@ -48,23 +48,20 @@ export function DeviceSettings({
   const mismatch = device?.device_version && hostVersion && device.device_version !== hostVersion;
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-2">
       <PageHeader
         title={p.nickname?.trim() || device?.model || serial}
         subtitle={`${serial}  ${device?.transport ?? "Saved"}`}
       >
         {online && (
-          <Button onClick={onTogglePause}>
-            {device?.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+          <Button onClick={onTogglePause} icon={device?.paused ? <Play className="size-4" /> : <Pause className="size-4" />}>
             {device?.paused ? "Resume" : "Pause"}
           </Button>
         )}
-        <Button onClick={onInstallApk} disabled={!online}>
-          <Download className="size-3.5" />
+        <Button onClick={onInstallApk} disabled={!online} icon={<Download className="size-4" />}>
           Push APK
         </Button>
-        <Button variant="filled" onClick={onSave}>
-          <Check className="size-3.5" />
+        <Button variant="filled" onClick={onSave} icon={<Check className="size-4" />}>
           Save
         </Button>
       </PageHeader>
@@ -87,7 +84,7 @@ export function DeviceSettings({
             aria-label="Nickname"
             placeholder={device?.model || serial}
             value={p.nickname ?? ""}
-            onChange={(e) => onChange({ nickname: e.target.value || undefined })}
+            onChange={(v) => onChange({ nickname: v || undefined })}
           />
         </SettingRow>
         <SettingRow label="Preferred transport" tip="Which link to use when both USB and Wi-Fi are available.">
@@ -105,7 +102,7 @@ export function DeviceSettings({
             className="w-52 font-mono"
             placeholder="192.168.1.50:5555"
             value={p.wifi_address ?? ""}
-            onChange={(e) => onChange({ wifi_address: e.target.value || undefined })}
+            onChange={(v) => onChange({ wifi_address: v || undefined })}
           />
         </SettingRow>
       </Section>
@@ -191,25 +188,25 @@ export function DeviceSettings({
             className="w-64 font-mono"
             placeholder="org.gnome.Nautilus, gimp"
             value={(p.locked_apps ?? g.locked_apps).join(", ")}
-            onChange={(e) => onChange({ locked_apps: splitList(e.target.value) })}
+            onChange={(v) => onChange({ locked_apps: splitList(v) })}
           />
         </SettingRow>
         <SettingRow label="Resolution" tip="Leave at 0 x 0 to use the panel's own resolution.">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-2">
             <TextInput
               type="number"
               aria-label="Width"
               className="w-16 font-mono"
               value={p.width ?? 0}
-              onChange={(e) => onChange({ width: Number(e.target.value) })}
+              onChange={(v) => onChange({ width: Number(v) })}
             />
-            <span className="text-outline">x</span>
+            <span className="text-on-surface-variant">x</span>
             <TextInput
               type="number"
               aria-label="Height"
               className="w-16 font-mono"
               value={p.height ?? 0}
-              onChange={(e) => onChange({ height: Number(e.target.value) })}
+              onChange={(v) => onChange({ height: Number(v) })}
             />
           </div>
         </SettingRow>
@@ -217,8 +214,7 @@ export function DeviceSettings({
 
       {device?.transport === "Disconnected" && (
         <div className="flex justify-end">
-          <Button variant="danger" onClick={onDelete}>
-            <Trash2 className="size-3.5" />
+          <Button variant="danger" onClick={onDelete} icon={<Trash2 className="size-4" />}>
             Forget device
           </Button>
         </div>

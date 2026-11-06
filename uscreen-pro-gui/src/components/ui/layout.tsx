@@ -1,4 +1,5 @@
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
+import { PlainTooltip } from "@bug-on/m3-expressive/feedback";
 import { Info } from "lucide-react";
 import type { ReactNode } from "react";
 import { QUALITY_STOPS, nearestQualityIndex } from "../../lib/options";
@@ -13,7 +14,7 @@ export function InfoTip({ text }: { text: string }) {
         <button
           type="button"
           aria-label={text}
-          className="inline-flex size-4 items-center justify-center rounded-[2px] text-outline hover:text-on-surface"
+          className="inline-flex size-4 items-center justify-center rounded-full text-on-surface-variant opacity-40 transition-opacity hover:opacity-100 focus-visible:opacity-100"
         >
           <Info className="size-3.5" />
         </button>
@@ -23,9 +24,9 @@ export function InfoTip({ text }: { text: string }) {
           side="top"
           align="start"
           sideOffset={4}
-          className="z-[70] max-w-64 rounded border border-outline-variant bg-surface-highest px-2 py-1.5 text-[11px] leading-snug text-on-surface"
+          className="z-[70]"
         >
-          {text}
+          <PlainTooltip maxWidth={256}>{text}</PlainTooltip>
         </TooltipPrimitive.Content>
       </TooltipPrimitive.Portal>
     </TooltipPrimitive.Root>
@@ -35,12 +36,12 @@ export function InfoTip({ text }: { text: string }) {
 /** A titled group of rows. The card is the only container; rows are separated by hairlines. */
 export function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
   return (
-    <section className="space-y-1.5">
-      <div className="flex items-baseline justify-between px-1">
+    <section className="space-y-2">
+      <div className="flex items-baseline justify-between px-1 pt-2">
         <h3 className="text-xs font-semibold tracking-wide text-primary">{title}</h3>
-        {hint && <span className="text-[11px] text-outline">{hint}</span>}
+        {hint && <span className="text-[11px] text-on-surface-variant">{hint}</span>}
       </div>
-      <div className="divide-y divide-outline-variant/60 rounded-lg border border-outline-variant bg-surface-container">
+      <div className="divide-y divide-outline-variant/60 rounded-lg border border-outline-variant bg-card">
         {children}
       </div>
     </section>
@@ -56,7 +57,7 @@ export interface Override {
 
 function OverrideToggle({ override, label }: { override: Override; label: string }) {
   return (
-    <div className="flex items-center gap-1.5" title="Override the global value for this device">
+    <div className="flex items-center gap-2" title="Override the global value for this device">
       <Switch label={`Override ${label}`} checked={override.enabled} onCheckedChange={override.onChange} />
     </div>
   );
@@ -91,7 +92,7 @@ export function SettingRow({
         {showControl ? (
           children
         ) : (
-          <span className="text-[11px] text-outline">{override.inherited}</span>
+          <span className="text-[11px] text-on-surface-variant">{override.inherited}</span>
         )}
         {override && <OverrideToggle override={override} label={label} />}
       </div>
@@ -125,11 +126,11 @@ export function SliderRow({
 }) {
   const active = !override || override.enabled;
   return (
-    <div className="px-3 py-1.5">
+    <div className="px-3 py-2">
       <div className="flex min-h-6 items-center justify-between gap-4">
         <Label label={label} tip={tip} />
         <div className="flex shrink-0 items-center gap-3">
-          <span className={cx("font-mono text-[11px]", active ? "text-on-surface" : "text-outline")}>
+          <span className={cx("font-mono text-[11px]", active ? "text-on-surface" : "text-on-surface-variant")}>
             {active ? valueText : override.inherited}
           </span>
           {override && <OverrideToggle override={override} label={label} />}
@@ -139,7 +140,7 @@ export function SliderRow({
         <>
           <Slider label={label} value={value} min={min} max={max} step={step} onValueChange={onChange} />
           {ends && (
-            <div className="flex justify-between text-[10px] text-outline">
+            <div className="flex justify-between text-[10px] text-on-surface-variant">
               <span>{ends[0]}</span>
               <span>{ends[1]}</span>
             </div>
@@ -175,7 +176,7 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
     <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-baseline gap-2">
         <h2 className="truncate text-base font-semibold text-on-surface">{title}</h2>
-        {subtitle && <span className="truncate font-mono text-[11px] text-outline">{subtitle}</span>}
+        {subtitle && <span className="truncate font-mono text-[11px] text-on-surface-variant">{subtitle}</span>}
       </div>
       <div className="flex items-center gap-2">{children}</div>
     </div>

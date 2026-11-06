@@ -1,4 +1,5 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { IconButton } from "@bug-on/m3-expressive/buttons";
 import { Minus, Monitor, Moon, Square, Sun, X, Copy } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { cx } from "./ui/controls";
@@ -15,18 +16,16 @@ function WindowButton({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
+    <IconButton
       aria-label={label}
       title={label}
       onClick={onClick}
-      className={cx(
-        "flex h-9 w-11 items-center justify-center text-on-surface-variant transition-colors",
-        danger ? "hover:bg-error-container hover:text-error" : "hover:bg-surface-highest hover:text-on-surface",
-      )}
+      size="xs"
+      colorStyle="standard"
+      className={cx("text-on-surface-variant", danger && "hover:text-error")}
     >
       {children}
-    </button>
+    </IconButton>
   );
 }
 
@@ -57,13 +56,13 @@ export function TitleBar({ dark, onToggleTheme }: { dark: boolean; onToggleTheme
   return (
     <header
       data-tauri-drag-region
-      className="flex h-9 shrink-0 select-none items-center justify-between border-b border-outline-variant bg-surface-high pl-3"
+      className="flex h-9 shrink-0 select-none items-center justify-between border-b border-outline-variant bg-surface pl-3 pr-1"
     >
       <div className="pointer-events-none flex items-center gap-2">
         <Monitor className="size-4 text-primary" />
         <span className="text-xs font-semibold text-on-surface">UScreen Pro</span>
       </div>
-      <div className="flex items-center">
+      <div className="flex items-center gap-1">
         <WindowButton label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme}>
           {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
         </WindowButton>

@@ -35,10 +35,9 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
   }
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-2">
       <PageHeader title="Settings">
-        <Button variant="filled" disabled={!dirty} onClick={onSave}>
-          <Check className="size-3.5" />
+        <Button variant="filled" disabled={!dirty} onClick={onSave} icon={<Check className="size-4" />}>
           Save
         </Button>
       </PageHeader>
@@ -106,21 +105,21 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
         />
         {!c.auto_resolution && (
           <SettingRow label="Fixed resolution" tip="Width and height in pixels.">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <TextInput
                 type="number"
                 aria-label="Width"
                 className="w-16 font-mono"
                 value={c.width}
-                onChange={(e) => onChange({ width: Number(e.target.value) })}
+                onChange={(v) => onChange({ width: Number(v) })}
               />
-              <span className="text-outline">x</span>
+              <span className="text-on-surface-variant">x</span>
               <TextInput
                 type="number"
                 aria-label="Height"
                 className="w-16 font-mono"
                 value={c.height}
-                onChange={(e) => onChange({ height: Number(e.target.value) })}
+                onChange={(v) => onChange({ height: Number(v) })}
               />
             </div>
           </SettingRow>
@@ -171,7 +170,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
               className="w-64 font-mono"
               placeholder="org.gnome.Nautilus, gimp"
               value={c.locked_apps.join(", ")}
-              onChange={(e) => onChange({ locked_apps: splitList(e.target.value) })}
+              onChange={(v) => onChange({ locked_apps: splitList(v) })}
             />
           </SettingRow>
         )}

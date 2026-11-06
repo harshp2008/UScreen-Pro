@@ -1,79 +1,73 @@
 @import "tailwindcss";
+@import "@bug-on/m3-expressive/index.css";
 @import "../node_modules/sonner/dist/styles.css";
 
-/*
- * Material Design 3 (Expressive) dark scheme, tuned for a dense desktop utility:
- * flat tonal surfaces only, no gradients, no glows, no elevation shadows.
- */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /*
- * Material 3 Expressive tokens, indigo primary with a teal secondary.
- * Light values live on :root, dark values on .dark. Utilities (bg-surface, text-primary, ...)
- * read the --color-* variables, so switching the class re-themes everything.
- * Surfaces step through tonal containers for depth; there are no gradients, glows or shadows.
+ * Colors come from @bug-on/m3-expressive/index.css: the library's baseline MD3 scheme (seed #6750A4),
+ * light on :root and dark on .dark, as --md-sys-color-* roles. The names below alias those roles so
+ * the app's layout utilities (bg-card, text-on-surface-variant, ...) read the same single source.
+ * One seed means one accent: primary for actions, secondary-container for selection, nothing else.
+ *
+ *   dark : background #141218, card = container-low #1D1B20, field = container #211F26,
+ *          text #E6E1E5, secondary text #CAC4D0
+ *   light: background #FEF7FF, card = container     #F3EDF7, field = container-high #ECE6F0,
+ *          text #1D1B20, secondary text #49454F, primary #6750A4 on #FFFFFF
  */
-@theme {
+:root:not(.dark) {
+  /* Spec text color for light mode (the library ships the older #1C1B1F). */
+  --md-sys-color-on-surface: #1d1b20;
+  --md-sys-color-on-background: #1d1b20;
+}
+
+:root {
+  --app-card: var(--md-sys-color-surface-container);
+  --app-field: var(--md-sys-color-surface-container-high);
+  --app-success: #1b6b3a;
+  --app-success-container: #a7f5b8;
+  --app-warning: #7a5900;
+  --app-warning-container: #ffdf9f;
+}
+.dark {
+  --app-card: var(--md-sys-color-surface-container-low);
+  --app-field: var(--md-sys-color-surface-container);
+  --app-success: #8fd6a3;
+  --app-success-container: #1a3a27;
+  --app-warning: #f2c46d;
+  --app-warning-container: #3e2f0c;
+}
+
+@theme inline {
   --font-sans: "Roboto Flex", "Roboto", "Inter", "Segoe UI", system-ui, sans-serif;
   --font-mono: "Roboto Mono", "JetBrains Mono", ui-monospace, monospace;
 
-  --color-surface: #faf8ff;
-  --color-surface-low: #f4f3fa;
-  --color-surface-container: #eeedf4;
-  --color-surface-high: #e8e7ef;
-  --color-surface-highest: #e3e1e9;
+  --color-surface: var(--md-sys-color-surface);
+  --color-card: var(--app-card);
+  --color-field: var(--app-field);
+  --color-surface-low: var(--md-sys-color-surface-container-low);
+  --color-surface-container: var(--md-sys-color-surface-container);
+  --color-surface-high: var(--md-sys-color-surface-container-high);
+  --color-surface-highest: var(--md-sys-color-surface-container-highest);
 
-  --color-on-surface: #1a1b21;
-  --color-on-surface-variant: #45464f;
-  --color-outline: #767680;
-  --color-outline-variant: #c6c5d0;
+  --color-on-surface: var(--md-sys-color-on-surface);
+  --color-on-surface-variant: var(--md-sys-color-on-surface-variant);
+  --color-outline: var(--md-sys-color-outline);
+  --color-outline-variant: var(--md-sys-color-outline-variant);
 
-  --color-primary: #4355b9;
-  --color-on-primary: #ffffff;
-  --color-primary-container: #dde1ff;
-  --color-on-primary-container: #00105c;
+  --color-primary: var(--md-sys-color-primary);
+  --color-on-primary: var(--md-sys-color-on-primary);
+  --color-primary-container: var(--md-sys-color-primary-container);
+  --color-on-primary-container: var(--md-sys-color-on-primary-container);
+  --color-secondary-container: var(--md-sys-color-secondary-container);
+  --color-on-secondary-container: var(--md-sys-color-on-secondary-container);
 
-  --color-secondary: #006a60;
-  --color-on-secondary: #ffffff;
-  --color-secondary-container: #a0f2e4;
-  --color-on-secondary-container: #00201c;
-
-  --color-success: #1b6b3a;
-  --color-success-container: #a7f5b8;
-  --color-warning: #7a5900;
-  --color-warning-container: #ffdf9f;
-  --color-error: #ba1a1a;
-  --color-error-container: #ffdad6;
-}
-
-.dark {
-  --color-surface: #121318;
-  --color-surface-low: #1a1b21;
-  --color-surface-container: #1e1f25;
-  --color-surface-high: #292a2f;
-  --color-surface-highest: #34343a;
-
-  --color-on-surface: #e3e1e9;
-  --color-on-surface-variant: #c6c5d0;
-  --color-outline: #90909a;
-  --color-outline-variant: #46464f;
-
-  --color-primary: #b8c3ff;
-  --color-on-primary: #0a1b85;
-  --color-primary-container: #2d3ea1;
-  --color-on-primary-container: #dde1ff;
-
-  --color-secondary: #53dbc9;
-  --color-on-secondary: #003731;
-  --color-secondary-container: #005047;
-  --color-on-secondary-container: #a0f2e4;
-
-  --color-success: #8fd6a3;
-  --color-success-container: #1a3a27;
-  --color-warning: #f2c46d;
-  --color-warning-container: #3e2f0c;
-  --color-error: #ffb4ab;
-  --color-error-container: #5c1a14;
+  --color-success: var(--app-success);
+  --color-success-container: var(--app-success-container);
+  --color-warning: var(--app-warning);
+  --color-warning-container: var(--app-warning-container);
+  --color-error: var(--md-sys-color-error);
+  --color-error-container: var(--md-sys-color-error-container);
 }
 
 @layer base {
@@ -141,7 +135,7 @@
   background: var(--color-surface-high) !important;
   color: var(--color-on-surface) !important;
   border: 1px solid var(--color-outline-variant) !important;
-  border-radius: var(--radius-card) !important;
+  border-radius: 12px !important;
   box-shadow: none !important;
   font-size: 12px !important;
 }

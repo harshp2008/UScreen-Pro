@@ -34,7 +34,7 @@ function Note({ tone = "neutral", children }: { tone?: "neutral" | "warning" | "
 
 function Instructions({ items }: { items: ReactNode[] }) {
   return (
-    <ol className="space-y-1.5 text-on-surface-variant">
+    <ol className="space-y-2 text-on-surface-variant">
       {items.map((item, i) => (
         <li key={i} className="flex gap-2">
           <span className="flex size-4 shrink-0 items-center justify-center rounded-[2px] bg-surface-highest font-mono text-[10px] text-on-surface">
@@ -249,11 +249,11 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
-          className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[520px] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-outline-variant bg-surface-container text-xs"
+          className="fixed left-1/2 top-1/2 z-50 flex max-h-[92vh] w-[520px] max-w-[96vw] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-lg border border-outline-variant bg-card text-xs"
         >
           <header className="flex items-center justify-between px-4 pb-2 pt-3">
             <DialogPrimitive.Title className="text-sm font-medium text-on-surface">Add device</DialogPrimitive.Title>
-            <DialogPrimitive.Close aria-label="Close" className="rounded p-1 text-outline hover:bg-surface-high hover:text-on-surface">
+            <DialogPrimitive.Close aria-label="Close" className="rounded p-1 text-on-surface-variant hover:bg-surface-high hover:text-on-surface">
               <X className="size-4" />
             </DialogPrimitive.Close>
           </header>
@@ -269,7 +269,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                       n < step ? "bg-success" : n === step ? "bg-primary" : "bg-surface-highest",
                     )}
                   />
-                  <div className={cx("mt-1 text-[10px]", n === step ? "text-on-surface" : "text-outline")}>
+                  <div className={cx("mt-1 text-[10px]", n === step ? "text-on-surface" : "text-on-surface-variant")}>
                     {n}. {label}
                   </div>
                 </li>
@@ -281,17 +281,17 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
             {step === 1 && (
               <>
                 <p className="text-on-surface-variant">Plug your Android device into this computer with a USB data cable.</p>
-                <div className="flex items-center justify-between rounded-lg border border-outline-variant bg-surface px-3 py-2.5">
-                  <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-between rounded-lg border border-outline-variant bg-surface px-3 py-2">
+                  <div className="flex items-center gap-2">
                     <Usb className="size-4 text-on-surface-variant" />
                     <div>
                       <div className="text-on-surface">{usb ? usb.model : "Waiting for a USB device"}</div>
-                      <div className="font-mono text-[11px] text-outline">{usb ? usb.serial : "Polling ADB"}</div>
+                      <div className="font-mono text-[11px] text-on-surface-variant">{usb ? usb.serial : "Polling ADB"}</div>
                     </div>
                   </div>
                   {!usb && <LoaderCircle className="size-4 animate-spin text-primary" />}
                 </div>
-                <div className="rounded bg-surface-high px-3 py-2.5 text-[11px] leading-snug text-on-surface-variant">
+                <div className="rounded bg-surface-high px-3 py-2 text-[11px] leading-snug text-on-surface-variant">
                   <div className="mb-1 font-medium text-on-surface">Nothing showing up?</div>
                   <ul className="list-inside list-disc space-y-1">
                     <li>Use a USB cable that carries data, not a charge-only one.</li>
@@ -317,12 +317,10 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                   ]}
                 />
                 <div className="flex items-center gap-2">
-                  <Button onClick={openDevOptions}>
-                    <ExternalLink className="size-3.5" />
+                  <Button onClick={openDevOptions} icon={<ExternalLink className="size-4" />}>
                     Open Developer options on tablet
                   </Button>
-                  <Button variant="text" onClick={poll}>
-                    <RefreshCw className="size-3.5" />
+                  <Button variant="text" onClick={poll} icon={<RefreshCw className="size-4" />}>
                     Check again
                   </Button>
                 </div>
@@ -342,7 +340,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                   {install.state === "running" && <LoaderCircle className="size-4 animate-spin text-primary" />}
                   {install.state === "ok" && <Check className="size-4 text-success" />}
                   {install.state === "failed" && <X className="size-4 text-error" />}
-                  {install.state === "idle" && <Smartphone className="size-4 text-outline" />}
+                  {install.state === "idle" && <Smartphone className="size-4 text-on-surface-variant" />}
                   <span className="text-on-surface">
                     {install.state === "idle" ? "Waiting for an authorized device" : install.message}
                   </span>
@@ -379,15 +377,15 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                   <div className="flex min-w-0 flex-1 flex-col justify-between">
                     <div className="space-y-2">
                       <div>
-                        <div className="text-[11px] text-outline">Pairing code</div>
+                        <div className="text-[11px] text-on-surface-variant">Pairing code</div>
                         <div className="font-mono text-lg tracking-widest text-on-surface">{qr?.pairing_code ?? "------"}</div>
                       </div>
                       <div>
-                        <div className="text-[11px] text-outline">Service</div>
+                        <div className="text-[11px] text-on-surface-variant">Service</div>
                         <div className="truncate font-mono text-[11px] text-on-surface-variant">{qr?.service_name ?? "-"}</div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
+                    <div className="flex items-center gap-2 text-[11px] text-on-surface-variant">
                       {pairingActive || pairEvent?.kind === "searching" ? (
                         <LoaderCircle className="size-3 animate-spin text-primary" />
                       ) : null}
@@ -399,8 +397,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <Button variant="text" onClick={openWirelessSettings}>
-                    <ExternalLink className="size-3.5" />
+                  <Button variant="text" onClick={openWirelessSettings} icon={<ExternalLink className="size-4" />}>
                     Open Developer options on tablet
                   </Button>
                   <Button variant="text" onClick={() => setManualOpen((v) => !v)}>
@@ -422,7 +419,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                         placeholder="Pairing IP:port"
                         value={pairAddr}
                         disabled={needConnect}
-                        onChange={(e) => setPairAddr(e.target.value)}
+                        onChange={(v) => setPairAddr(v)}
                       />
                       <TextInput
                         aria-label="Pairing code"
@@ -431,7 +428,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                         maxLength={6}
                         value={pairCode}
                         disabled={needConnect}
-                        onChange={(e) => setPairCode(e.target.value.replace(/\D/g, ""))}
+                        onChange={(v) => setPairCode(v.replace(/\D/g, ""))}
                       />
                     </div>
                     <TextInput
@@ -439,18 +436,19 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                       className={cx("w-full font-mono", needConnect && "border-primary")}
                       placeholder={needConnect ? "Connect IP:port (required)" : "Connect IP:port (optional)"}
                       value={connectAddr}
-                      onChange={(e) => setConnectAddr(e.target.value)}
+                      onChange={(v) => setConnectAddr(v)}
                     />
                     <div className="flex items-center gap-3">
                       <Button
                         variant="filled"
+                        loading={pairBusy}
+                        icon={<Wifi className="size-4" />}
                         onClick={manualPair}
                         disabled={
                           pairBusy ||
                           (needConnect ? !connectAddr.trim() : !pairAddr.trim() || pairCode.length !== 6)
                         }
                       >
-                        {pairBusy ? <LoaderCircle className="size-3.5 animate-spin" /> : <Wifi className="size-3.5" />}
                         {needConnect ? "Connect" : "Pair"}
                       </Button>
                     </div>
@@ -472,7 +470,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                   )}
                 </Note>
 
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <div className="text-on-surface">How do you usually connect this device?</div>
                   <div role="radiogroup" aria-label="Preferred connection" className="grid grid-cols-2 gap-2">
                     {(
@@ -498,11 +496,11 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                               : "border-outline-variant bg-surface text-on-surface hover:bg-surface-high",
                           )}
                         >
-                          <div className="flex items-center gap-1.5 font-medium">
+                          <div className="flex items-center gap-2 font-medium">
                             <Icon className="size-4" />
                             {title}
                           </div>
-                          <div className="mt-0.5 text-[11px] opacity-80">
+                          <div className="mt-1 text-[11px] opacity-80">
                             {disabled ? "Pair over Wi-Fi first" : desc}
                           </div>
                         </button>
@@ -520,7 +518,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                     className="w-full"
                     placeholder={device?.model ?? "Tablet"}
                     value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
+                    onChange={(v) => setNickname(v)}
                   />
                 </div>
               </>
@@ -529,8 +527,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
           <footer className="flex items-center justify-between border-t border-outline-variant px-4 py-3">
             {step > 1 && step < 5 ? (
-              <Button variant="text" onClick={() => setStep((s) => (s - 1) as Step)}>
-                <ChevronLeft className="size-3.5" />
+              <Button variant="text" onClick={() => setStep((s) => (s - 1) as Step)} icon={<ChevronLeft className="size-4" />}>
                 Back
               </Button>
             ) : (
@@ -551,8 +548,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                 </Button>
               )}
               {step === 5 && (
-                <Button variant="filled" onClick={finish} disabled={saving || !device}>
-                  <Check className="size-3.5" />
+                <Button variant="filled" onClick={finish} disabled={saving || !device} icon={<Check className="size-4" />}>
                   Save device
                 </Button>
               )}

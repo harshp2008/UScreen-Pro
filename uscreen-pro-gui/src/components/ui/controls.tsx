@@ -1,8 +1,12 @@
-import * as SelectPrimitive from "@radix-ui/react-select";
-import * as SliderPrimitive from "@radix-ui/react-slider";
-import * as SwitchPrimitive from "@radix-ui/react-switch";
-import { Check, ChevronDown } from "lucide-react";
-import type { ButtonHTMLAttributes, InputHTMLAttributes } from "react";
+/**
+ * Thin adapters over @bug-on/m3-expressive. No control here draws its own chrome: every button,
+ * field, select, slider, switch and segmented group is the library component, so shape morphing,
+ * spring motion and state layers come from the library. The adapters only fix the density
+ * (xs / dense) and keep call sites terse.
+ */
+import { Button as M3Button, ButtonGroup } from "@bug-on/m3-expressive/buttons";
+import { Select as M3Select, Slider as M3Slider, Switch as M3Switch, TextField } from "@bug-on/m3-expressive/forms";
+import type { ReactNode } from "react";
 import type { Option } from "../../lib/options";
 
 /** Join class names, skipping falsy entries. */
@@ -23,29 +27,7 @@ export function Switch({
   disabled?: boolean;
   label: string;
 }) {
-  return (
-    <SwitchPrimitive.Root
-      aria-label={label}
-      checked={checked}
-      disabled={disabled}
-      onCheckedChange={onCheckedChange}
-      className={cx(
-        "relative h-[18px] w-8 shrink-0 rounded border transition-colors disabled:opacity-40",
-        checked
-          ? "border-secondary bg-secondary"
-          : "border-outline bg-surface-highest",
-      )}
-    >
-      <SwitchPrimitive.Thumb
-        className={cx(
-          "block h-3 rounded-[2px] transition-all",
-          checked
-            ? "ml-[16px] w-3 bg-on-secondary"
-            : "ml-[2px] w-2.5 bg-outline",
-        )}
-      />
-    </SwitchPrimitive.Root>
-  );
+  return <M3Switch ariaLabel={label} checked={checked} disabled={disabled} onCheckedChange={onCheckedChange} />;
 }
 
 /* ---------------------------------------------------------------- Select */
@@ -66,44 +48,17 @@ export function Select({
   className?: string;
 }) {
   return (
-    <SelectPrimitive.Root value={value} onValueChange={onValueChange} disabled={disabled}>
-      <SelectPrimitive.Trigger
-        aria-label={label}
-        className={cx(
-          "inline-flex h-7 items-center justify-between gap-2 rounded border border-outline-variant",
-          "bg-surface px-2 text-xs text-on-surface hover:border-outline",
-          "data-[state=open]:border-primary disabled:opacity-40",
-          className ?? "w-52",
-        )}
-      >
-        <SelectPrimitive.Value />
-        <SelectPrimitive.Icon>
-          <ChevronDown className="size-3.5 text-on-surface-variant" />
-        </SelectPrimitive.Icon>
-      </SelectPrimitive.Trigger>
-      <SelectPrimitive.Portal>
-        <SelectPrimitive.Content
-          position="popper"
-          sideOffset={4}
-          className="z-[60] max-h-64 min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-lg border border-outline-variant bg-surface-container py-1 text-xs text-on-surface"
-        >
-          <SelectPrimitive.Viewport>
-            {options.map((o) => (
-              <SelectPrimitive.Item
-                key={o.value}
-                value={o.value}
-                className="flex h-7 cursor-pointer items-center justify-between gap-3 px-2.5 outline-none data-[highlighted]:bg-surface-highest data-[state=checked]:text-secondary"
-              >
-                <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
-                <SelectPrimitive.ItemIndicator>
-                  <Check className="size-3.5" />
-                </SelectPrimitive.ItemIndicator>
-              </SelectPrimitive.Item>
-            ))}
-          </SelectPrimitive.Viewport>
-        </SelectPrimitive.Content>
-      </SelectPrimitive.Portal>
-    </SelectPrimitive.Root>
+    <M3Select
+      aria-label={label}
+      dense
+      variant="outlined"
+      value={value}
+      options={options}
+      disabled={disabled}
+      onChange={onValueChange}
+      inputClassName="!text-[13px]"
+      className={cx("rounded-[4px] bg-field", className ?? "w-64")}
+    />
   );
 }
 
@@ -126,20 +81,17 @@ export function Slider({
   label: string;
 }) {
   return (
-    <SliderPrimitive.Root
+    <M3Slider
       aria-label={label}
-      value={[value]}
+      size="xs"
+      variant="primary"
+      value={value}
       min={min}
       max={max}
       step={step}
-      onValueChange={([v]) => onValueChange(v)}
-      className="relative flex h-5 w-full touch-none items-center"
-    >
-      <SliderPrimitive.Track className="relative h-1 grow rounded-[2px] bg-surface-highest">
-        <SliderPrimitive.Range className="absolute h-full rounded-[2px] bg-primary" />
-      </SliderPrimitive.Track>
-      <SliderPrimitive.Thumb className="block h-4 w-1 rounded-[2px] bg-primary hover:opacity-80" />
-    </SliderPrimitive.Root>
+      onValueChange={onValueChange}
+      className="w-full"
+    />
   );
 }
 
@@ -157,50 +109,77 @@ export function Segmented({
   label: string;
 }) {
   return (
-    <div
-      role="radiogroup"
-      aria-label={label}
-      className="inline-flex h-7 overflow-hidden rounded border border-outline-variant"
-    >
-      {options.map((o, i) => {
-        const on = o.value === value;
-        return (
-          <button
-            key={o.value}
-            type="button"
-            role="radio"
-            aria-checked={on}
-            onClick={() => onValueChange(o.value)}
-            className={cx(
-              "flex items-center gap-1 px-2.5 text-xs transition-colors",
-              i > 0 && "border-l border-outline-variant",
-              on
-                ? "bg-secondary-container text-on-secondary-container"
-                : "text-on-surface-variant hover:bg-surface-high",
-            )}
-          >
-            {on && <Check className="size-3" />}
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
+    <ButtonGroup variant="connected" size="xs" aria-label={label} showCheck>
+      {options.map((o) => (
+        <M3Button
+          key={o.value}
+          value={o.value}
+          variant="toggle"
+          colorStyle="filled"
+          selected={o.value === value}
+          onClick={() => onValueChange(o.value)}
+        >
+          {o.label}
+        </M3Button>
+      ))}
+    </ButtonGroup>
   );
 }
 
 /* ----------------------------------------------------------------- Input */
 
-export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
+export function TextInput({
+  className,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  disabled,
+  onKeyDown,
+  "aria-label": ariaLabel,
+  inputMode,
+  min,
+  max,
+  step,
+  maxLength,
+  id,
+}: {
+  className?: string;
+  value: string | number;
+  onChange?: (value: string) => void;
+  type?: "text" | "number";
+  placeholder?: string;
+  disabled?: boolean;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement | HTMLTextAreaElement>;
+  "aria-label"?: string;
+  inputMode?: "text" | "numeric" | "decimal";
+  min?: number | string;
+  max?: number | string;
+  step?: number | string;
+  maxLength?: number;
+  id?: string;
+}) {
+  const mono = className?.includes("font-mono");
   return (
-    <input
-      type="text"
-      spellCheck={false}
-      {...props}
-      className={cx(
-        "h-7 rounded border border-outline-variant bg-surface px-2 text-xs text-on-surface",
-        "placeholder:text-outline hover:border-outline focus:border-primary focus:outline-none",
-        className ?? "w-52",
-      )}
+    <TextField
+      dense
+      variant="outlined"
+      type={type}
+      noSpinner
+      aria-label={ariaLabel ?? placeholder ?? "Value"}
+      placeholder={placeholder}
+      disabled={disabled}
+      value={String(value)}
+      onChange={(v) => onChange?.(v)}
+      onKeyDown={onKeyDown}
+      inputMode={inputMode}
+      maxLength={maxLength}
+      id={id}
+      min={min === undefined ? undefined : String(min)}
+      max={max === undefined ? undefined : String(max)}
+      step={step === undefined ? undefined : String(step)}
+      className={cx("rounded-[4px] bg-field", className ?? "w-52")}
+      inputClassName={cx("!text-[13px]", mono && "font-mono")}
     />
   );
 }
@@ -209,27 +188,30 @@ export function TextInput({ className, ...props }: InputHTMLAttributes<HTMLInput
 
 type Variant = "filled" | "tonal" | "text" | "danger";
 
-const VARIANTS: Record<Variant, string> = {
-  filled: "bg-primary text-on-primary hover:opacity-90 disabled:bg-surface-highest disabled:text-outline",
-  tonal: "bg-primary-container text-on-primary-container hover:opacity-90 disabled:opacity-40",
-  text: "text-primary hover:bg-surface-high disabled:text-outline",
-  danger: "text-error hover:bg-error-container disabled:opacity-40",
-};
+const COLOR_STYLE = { filled: "filled", tonal: "tonal", text: "text", danger: "text" } as const;
 
+/**
+ * Library Button. Default shape is the expressive pill that springs to a rounded square on press.
+ * Icons go through the `icon` slot (never as children) so the library can animate and swap them.
+ */
 export function Button({
   variant = "tonal",
   className,
+  icon,
+  size = "xs",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant }) {
+}: Omit<React.ComponentProps<typeof M3Button>, "colorStyle" | "variant" | "selected" | "icon"> & {
+  variant?: Variant;
+  icon?: ReactNode;
+}) {
   return (
-    <button
+    <M3Button
       type="button"
+      colorStyle={COLOR_STYLE[variant]}
+      size={size}
+      icon={icon}
+      className={cx(variant === "danger" && "text-error", className)}
       {...props}
-      className={cx(
-        "inline-flex h-7 items-center justify-center gap-1.5 rounded px-3 text-xs font-medium transition-[border-radius,background-color,opacity] duration-150 hover:rounded-lg",
-        VARIANTS[variant],
-        className,
-      )}
     />
   );
 }
