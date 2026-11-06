@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -7,7 +8,7 @@ import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { TooltipProvider } from "./components/ui/layout";
 import { Notifications, toast } from "./lib/toast";
-import type { AppConfig, DaemonStatus, TabletProfile, View } from "./lib/types";
+import type { AppConfig, DaemonStatus, ForgetReport, PipelineEvent, TabletProfile, View } from "./lib/types";
 import { DeviceSettings } from "./views/DeviceSettings";
 import { Advanced } from "./views/Advanced";
 import { GlobalSettings } from "./views/GlobalSettings";
@@ -56,9 +57,13 @@ export default function App() {
   /** Per-device fingerprints of what is on disk, to tell whether a device page has unsaved edits. */
   const [savedProfiles, setSavedProfiles] = useState<Record<string, string>>({});
   const [autostart, setAutostart] = useState(false);
-  const [wizardOpen, setWizardOpen] = useState(false);
+  /* null = closed. `serial` pins the wizard to the clicked new device; `reconfigure` re-runs only wireless setup. */
+  const [wizard, setWizard] = useState<{ serial?: string; reconfigure?: boolean } | null>(null);
+  const setWizardOpen = (open: boolean) => setWizard(open ? {} : null);
   const [busy, setBusy] = useState(false);
   const [daemonBusy, setDaemonBusy] = useState<"starting" | "stopping" | null>(null);
+  /** Devices whose ffmpeg/evdi_helper are being respawned; "*" means all of them. */
+  const [restarting, setRestarting] = useState<ReadonlySet<string>>(new Set());
   // The library's baseline scheme is keyed on the `.dark` class (see index.css); index.html sets it pre-paint.
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
 
@@ -98,18 +103,71 @@ export default function App() {
     }
   }, []);
 
+  /* Poll faster while something visible is in flight (an install or a restart). */
+  const busyDevices = (status?.devices ?? []).some((d) => d.install?.state === "queued" || d.install?.state === "installing");
+  const fastPoll = busyDevices || restarting.size > 0;
+
   useEffect(() => {
     void fetchConfig();
     void fetchStatus();
     invoke<boolean>("get_autostart_status").then(setAutostart).catch(() => {});
-    const timer = setInterval(fetchStatus, 3000);
-    return () => clearInterval(timer);
   }, [fetchConfig, fetchStatus]);
+
+  useEffect(() => {
+    const timer = setInterval(fetchStatus, fastPoll ? 1000 : 3000);
+    return () => clearInterval(timer);
+  }, [fetchStatus, fastPoll]);
+
+  /*
+   * The backend reports a settings-driven pipeline restart in two steps: `pipeline_restarting`
+   * when ffmpeg/evdi_helper are about to be killed, `pipeline_restarted` once the new stream has
+   * delivered a frame. The device card shows the spinner for exactly that window.
+   */
+  useEffect(() => {
+    const subs = [
+      listen<PipelineEvent>("pipeline_restarting", ({ payload }) => {
+        setRestarting((s) => new Set(s).add(payload.serial ?? "*"));
+      }),
+      listen<PipelineEvent>("pipeline_restarted", ({ payload }) => {
+        setRestarting((s) => {
+          const next = new Set(s);
+          if (payload.done) {
+            if (payload.serial === null) next.clear();
+            else next.delete(payload.serial);
+            next.delete("*");
+          } else if (payload.serial) next.delete(payload.serial);
+          return next;
+        });
+        if (payload.done) {
+          if (!payload.ok) toast.error(`Pipeline restart failed: ${payload.message}`);
+        } else if (payload.ok) toast.success(`Stream restarted: ${payload.message}`);
+        else toast.error(`Stream restart: ${payload.message}`);
+        void fetchStatus();
+      }),
+    ];
+    return () => {
+      subs.forEach((p) => void p.then((fn) => fn()).catch(() => {}));
+    };
+  }, [fetchStatus]);
+
+  /* Say how each queued install ended; the card itself only shows the live state. */
+  const lastInstall = useRef<Record<string, string>>({});
+  useEffect(() => {
+    for (const d of status?.devices ?? []) {
+      const now = d.install?.state ?? "";
+      const before = lastInstall.current[d.serial] ?? "";
+      if (now !== before && (now === "done" || now === "failed") && (before === "installing" || before === "queued")) {
+        if (now === "done") toast.success(`${d.model}: ${d.install?.detail || "app updated"}`);
+        else toast.error(`${d.model}: update failed. ${d.install?.detail ?? ""}`);
+      }
+      lastInstall.current[d.serial] = now;
+    }
+  }, [status]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.altKey)) return;
-      if (e.key === "n") setWizardOpen(true);
+      if (e.key === "n") setWizard({});
       else if (e.key === "1") setView("settings");
       else if (e.key === "2") setView("advanced");
       else if (e.key === "3") setView("health");
@@ -183,14 +241,20 @@ export default function App() {
       toast.success(`Saved ${profile.nickname || serial}`);
     }, "Save failed");
 
+  /* Forget: remove the profile, kill the session, adb disconnect, then drop the card at once. */
   const deleteProfile = () =>
     guarded(async () => {
       if (!serial) return;
-      await invoke("delete_device_profile", { serial });
-      await fetchConfig();
+      const report = await invoke<ForgetReport>("forget_device", { serial });
+      setStatus((s) => (s ? { ...s, devices: s.devices.filter((d) => d.serial !== serial) } : s));
       setView("settings");
-      toast.info("Device forgotten");
-    }, "Delete failed");
+      await Promise.all([fetchConfig(), fetchStatus()]);
+      toast.info(
+        report.disconnected.length > 0
+          ? `Device forgotten. ${report.disconnected.length} adb disconnect(s) run`
+          : "Device forgotten",
+      );
+    }, "Forget failed");
 
   const togglePause = () =>
     guarded(async () => {
@@ -199,44 +263,16 @@ export default function App() {
       await fetchStatus();
     }, "Control failed");
 
-  /*
-   * APK installs run one at a time. A click while another install is running marks that device
-   * "queued"; the chain below starts it when the previous install settles.
-   */
-  const [installs, setInstalls] = useState<Record<string, "queued" | "running">>({});
-  const installChain = useRef<Promise<void>>(Promise.resolve());
-  const queueInstall = (target: string) => {
-    if (installs[target]) return;
-    setInstalls((m) => ({ ...m, [target]: "queued" }));
-    installChain.current = installChain.current.then(async () => {
-      setInstalls((m) => ({ ...m, [target]: "running" }));
-      try {
-        await invoke("install_apk_on_device", { serial: target });
-        toast.success(`App installed on ${target}`);
-      } catch (e) {
-        toast.error(`Install failed on ${target}: ${errText(e)}`);
-      } finally {
-        setInstalls((m) => {
-          const { [target]: _done, ...rest } = m;
-          return rest;
-        });
-        await fetchStatus();
-      }
-    });
+  /* Both the Health buttons and the device page go through the daemon's install queue (two at a time). */
+  const queueInstall = async (target: string | null = serial) => {
+    if (!target) return;
+    try {
+      toast.info(`${await invoke<string>("queue_apk_install", { serial: target })}`);
+    } catch (e) {
+      toast.error(`Install failed on ${target}: ${errText(e)}`);
+    }
+    await fetchStatus();
   };
-
-  const installApk = (target: string | null = serial) =>
-    guarded(async () => {
-      if (!target) return;
-      toast.loading("Installing app", { id: "apk" });
-      try {
-        await invoke("install_apk_on_device", { serial: target });
-        toast.success("App installed", { id: "apk" });
-      } catch (e) {
-        toast.error(errText(e), { id: "apk" });
-      }
-      await fetchStatus();
-    }, "Install failed");
 
   const toggleDaemon = async () => {
     const running = status?.is_running ?? false;
@@ -262,11 +298,18 @@ export default function App() {
     <TooltipProvider>
       <div className="flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
         <Notifications dark={dark} />
-        {wizardOpen && (
+        {wizard && (
           <AddDeviceWizard
-            open={wizardOpen}
+            open
             onOpenChange={setWizardOpen}
             hostVersion={status?.host_version}
+            targetSerial={wizard.serial}
+            pairedSerials={Object.keys(config?.tablets ?? {})}
+            reconfigure={
+              wizard.reconfigure && wizard.serial && config?.tablets[wizard.serial]
+                ? { serial: wizard.serial, profile: config.tablets[wizard.serial] }
+                : undefined
+            }
             onDeviceAdded={async (added) => {
               await Promise.all([fetchStatus(), fetchConfig()]);
               setView({ device: added });
@@ -281,12 +324,13 @@ export default function App() {
             view={view}
             devices={status?.devices ?? []}
             config={config}
+            restarting={restarting}
             daemonRunning={status?.is_running ?? false}
             daemonPid={status?.pid}
             daemonBusy={daemonBusy}
             onToggleDaemon={toggleDaemon}
             onSelect={setView}
-            onAddDevice={() => setWizardOpen(true)}
+            onAddDevice={(target) => setWizard({ serial: target })}
           />
 
           <main className="flex min-w-0 flex-1 flex-col bg-background">
@@ -305,7 +349,7 @@ export default function App() {
                 {view === "advanced" && config && (
                   <Advanced config={config} dirty={dirty} onChange={patchConfig} onSave={saveConfig} />
                 )}
-                {view === "health" && status && <Health status={status} onRestartAdb={restartAdb} installs={installs} onInstallApk={queueInstall} />}
+                {view === "health" && status && <Health status={status} onRestartAdb={restartAdb} onInstallApk={queueInstall} />}
                 {serial && profile && config && (
                   <DeviceSettings
                     key={serial}
@@ -318,7 +362,8 @@ export default function App() {
                     onSave={saveProfile}
                     onDelete={deleteProfile}
                     onTogglePause={togglePause}
-                    onInstallApk={() => installApk(serial)}
+                    onInstallApk={() => queueInstall(serial)}
+                    onConfigureWireless={() => setWizard({ serial, reconfigure: true })}
                     dirty={profileDirty}
                   />
                 )}

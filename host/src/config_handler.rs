@@ -163,14 +163,80 @@ pub async fn run_control_server(
                     let _ = ctrl_tx.send(DaemonControlMsg::ListFrozen { resp: tx }).await;
                     let list = rx.await.unwrap_or_default().join(",");
                     let _ = writer.write_all(format!("OK {}\n", list).as_bytes()).await;
-                } else if cmd == "RESTART" || cmd.starts_with("RESTART ") {
-                    let serial = cmd.strip_prefix("RESTART").map(str::trim).filter(|s| !s.is_empty() && *s != "ALL").map(str::to_string);
+                } else if cmd == "RESTART"
+                    || cmd.starts_with("RESTART ")
+                    || cmd == "RESTART_WAIT"
+                    || cmd.starts_with("RESTART_WAIT ")
+                {
+                    let wait = cmd.starts_with("RESTART_WAIT");
+                    let rest = cmd.strip_prefix("RESTART_WAIT").or_else(|| cmd.strip_prefix("RESTART")).unwrap_or("");
+                    let serial = Some(rest.trim()).filter(|s| !s.is_empty() && *s != "ALL").map(str::to_string);
                     let (tx, rx) = oneshot::channel();
                     let _ = ctrl_tx
                         .send(DaemonControlMsg::RestartSession { serial, resp: tx })
                         .await;
                     let reply = match rx.await {
-                        Ok(Ok(n)) => format!("OK RESTARTED {}\n", n),
+                        Ok(Ok(slots)) => {
+                            // The tablet's "Settings updating..." overlay stays up until the new
+                            // encoder has delivered a frame (or 25 s pass), whoever is waiting.
+                            let watchers: Vec<_> = slots
+                                .iter()
+                                .cloned()
+                                .map(|slot| {
+                                    tokio::spawn(async move {
+                                        let live = crate::notices::wait_live(
+                                            slot.instance,
+                                            slot.generation_before,
+                                            std::time::Duration::from_secs(25),
+                                        )
+                                        .await;
+                                        crate::notices::release(slot.instance, crate::notices::settings_applied());
+                                        (slot, live)
+                                    })
+                                })
+                                .collect();
+                            if wait {
+                                let mut out = Vec::new();
+                                for w in watchers {
+                                    if let Ok((slot, live)) = w.await {
+                                        out.push(serde_json::json!({
+                                            "serial": slot.serial,
+                                            "instance": slot.instance,
+                                            "live_ms": live.map(|d| d.as_millis() as u64),
+                                        }));
+                                    }
+                                }
+                                format!("OK {}\n", serde_json::json!({ "restarted": out }))
+                            } else {
+                                format!("OK RESTARTED {}\n", slots.len())
+                            }
+                        }
+                        Ok(Err(e)) => format!("ERR {}\n", e),
+                        Err(_) => "ERR channel closed\n".to_string(),
+                    };
+                    let _ = writer.write_all(reply.as_bytes()).await;
+                } else if let Some(serial) = cmd.strip_prefix("INSTALL ") {
+                    let (tx, rx) = oneshot::channel();
+                    let _ = ctrl_tx
+                        .send(DaemonControlMsg::InstallApk { serial: serial.trim().to_string(), resp: tx })
+                        .await;
+                    let reply = match rx.await {
+                        Ok(Ok(msg)) => format!("OK {}\n", msg),
+                        Ok(Err(e)) => format!("ERR {}\n", e),
+                        Err(_) => "ERR channel closed\n".to_string(),
+                    };
+                    let _ = writer.write_all(reply.as_bytes()).await;
+                } else if cmd == "INSTALLS" {
+                    let _ = writer
+                        .write_all(format!("OK {}\n", crate::installer::snapshot_json()).as_bytes())
+                        .await;
+                } else if let Some(serial) = cmd.strip_prefix("FORGET ") {
+                    let (tx, rx) = oneshot::channel();
+                    let _ = ctrl_tx
+                        .send(DaemonControlMsg::ForgetDevice { serial: serial.trim().to_string(), resp: tx })
+                        .await;
+                    let reply = match rx.await {
+                        Ok(Ok(msg)) => format!("OK {}\n", msg),
                         Ok(Err(e)) => format!("ERR {}\n", e),
                         Err(_) => "ERR channel closed\n".to_string(),
                     };

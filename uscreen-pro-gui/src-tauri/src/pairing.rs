@@ -19,6 +19,8 @@ const CONNECT_TYPE: &str = "_adb-tls-connect._tcp";
 /// waiting longer than this only leaves the user staring at a spinner.
 const QR_TIMEOUT: Duration = Duration::from_secs(30);
 /// Event the frontend listens for when discovery gave up.
+/// Event carrying the current pairing step as plain text.
+pub const PAIR_PROGRESS: &str = "pair_progress";
 pub const MDNS_TIMEOUT_EVENT: &str = "mdns_timeout";
 const MDNS_TIMEOUT_MESSAGE: &str =
     "mDNS discovery timed out. Your Wi-Fi router may be blocking device discovery. Please use Manual Pairing.";
@@ -149,6 +151,8 @@ pub async fn initiate_qr_pairing(
         let start = Instant::now();
         let mut last_attempt: Option<String> = None;
 
+        adb::progress(Some(&app), PAIR_PROGRESS, None, "Starting ADB server");
+        let _ = adb::run(None, &["start-server"], Duration::from_secs(10)).await;
         emit(&app, "searching", "Waiting for the tablet to scan the QR code", None);
         while alive() && start.elapsed() < QR_TIMEOUT {
             // `adb mdns services` can itself hang for its full 5 s timeout, so cap each poll
@@ -164,9 +168,11 @@ pub async fn initiate_qr_pairing(
                 && last_attempt.as_deref() != Some(svc.addr.as_str())
             {
                 last_attempt = Some(svc.addr.clone());
+                adb::progress(Some(&app), PAIR_PROGRESS, None, "Pairing...");
                 emit(&app, "pairing", format!("Tablet found at {}, pairing", svc.addr), None);
                 match adb_pair(&svc.addr, &code).await {
                     Ok(_) => {
+                        adb::progress(Some(&app), PAIR_PROGRESS, None, "Connecting...");
                         let connect = match discover_connect_endpoint(svc.ip(), Duration::from_secs(10)).await {
                             Some(ep) => adb_connect(&ep).await.ok(),
                             None => None,
@@ -202,11 +208,15 @@ pub fn cancel_qr_pairing(state: State<'_, PairingState>) {
 /// discovered via mDNS when omitted).
 #[tauri::command]
 pub async fn manual_adb_pair(
+    app: AppHandle,
     pair_endpoint: String,
     code: String,
     connect_endpoint: Option<String>,
 ) -> Result<ManualPairResult, String> {
     let pair_endpoint = pair_endpoint.trim().to_string();
+    adb::progress(Some(&app), PAIR_PROGRESS, None, "Starting ADB server");
+    let _ = adb::run(None, &["start-server"], Duration::from_secs(10)).await;
+    adb::progress(Some(&app), PAIR_PROGRESS, None, "Pairing...");
     let message = adb_pair(&pair_endpoint, code.trim()).await?;
 
     let target = match connect_endpoint.map(|c| c.trim().to_string()).filter(|c| !c.is_empty()) {
@@ -217,7 +227,10 @@ pub async fn manual_adb_pair(
         }
     };
     let connect_endpoint = match target {
-        Some(ep) => Some(adb_connect(&ep).await?),
+        Some(ep) => {
+            adb::progress(Some(&app), PAIR_PROGRESS, None, "Connecting...");
+            Some(adb_connect(&ep).await?)
+        }
         None => None,
     };
     Ok(ManualPairResult { message, connect_endpoint })
@@ -246,17 +259,23 @@ async fn device_wlan_ip(serial: &str) -> Option<String> {
 /// to the TLS port advertised via mDNS. If mDNS is blocked it falls back to `adb tcpip 5555`,
 /// which needs no discovery at all. Returns the `ip:port` that `adb connect` accepted.
 #[tauri::command]
-pub async fn bootstrap_wireless_over_usb(serial: String) -> Result<String, String> {
+pub async fn bootstrap_wireless_over_usb(app: AppHandle, serial: String) -> Result<String, String> {
+    adb::require_serial(&serial)?;
+    let app = Some(&app);
+    adb::progress(app, PAIR_PROGRESS, Some(&serial), "Starting ADB server");
+    let _ = adb::run(None, &["start-server"], Duration::from_secs(10)).await;
+    adb::progress(app, PAIR_PROGRESS, Some(&serial), "Pairing...");
     let ip = device_wlan_ip(&serial)
         .await
         .ok_or("The device has no Wi-Fi address. Connect it to the same Wi-Fi network as this computer.")?;
 
     // Preferred: Android 11+ Wireless debugging (TLS), port found through mDNS.
     let _ = adb::run(Some(&serial), &["shell", "settings", "put", "global", "adb_wifi_enabled", "1"], Duration::from_secs(5)).await;
-    if let Some(endpoint) = discover_connect_endpoint(&ip, Duration::from_secs(8)).await
-        && let Ok(ep) = adb_connect(&endpoint).await
-    {
-        return Ok(ep);
+    if let Some(endpoint) = discover_connect_endpoint(&ip, Duration::from_secs(8)).await {
+        adb::progress(app, PAIR_PROGRESS, Some(&serial), "Connecting...");
+        if let Ok(ep) = adb_connect(&endpoint).await {
+            return Ok(ep);
+        }
     }
 
     // Fallback: classic adb-over-TCP, restarted by adbd on port 5555.
@@ -266,6 +285,7 @@ pub async fn bootstrap_wireless_over_usb(serial: String) -> Result<String, Strin
         return Err(format!("adb tcpip failed: {text}"));
     }
     let endpoint = format!("{ip}:5555");
+    adb::progress(app, PAIR_PROGRESS, Some(&serial), "Connecting...");
     let mut last = String::new();
     for _ in 0..5 {
         tokio::time::sleep(Duration::from_millis(900)).await;

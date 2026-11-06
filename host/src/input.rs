@@ -1442,8 +1442,27 @@ async fn handle_connection(
         .send(Message::Text(serde_json::to_string(&resp)?))
         .await?;
 
+    // Host-to-app notices (paused, settings updating, APK updating). A state that is still in
+    // force when the app connects is replayed first.
+    let (sticky, mut notice_rx) = crate::notices::subscribe(config.instance);
+    if let Some(text) = sticky {
+        ws_sender.send(Message::Text(text)).await?;
+    }
+
     loop {
         let msg = tokio::select! {
+            notice = notice_rx.recv() => {
+                match notice {
+                    Ok(text) => {
+                        if ws_sender.send(Message::Text(text)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+                continue;
+            }
             incoming = ws_receiver.next() => match incoming {
                 Some(m) => m,
                 None => break,

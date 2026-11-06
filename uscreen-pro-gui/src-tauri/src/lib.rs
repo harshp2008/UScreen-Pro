@@ -1,6 +1,7 @@
 mod adb;
 mod config;
 mod daemon;
+mod forget;
 mod pairing;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -12,11 +13,12 @@ pub fn run() {
             config::get_config,
             config::save_config,
             config::save_device_profile,
-            config::delete_device_profile,
+            forget::forget_device,
             daemon::get_daemon_status,
             daemon::pause_device,
             daemon::resume_device,
             daemon::restart_session,
+            daemon::queue_apk_install,
             daemon::launch_daemon,
             daemon::stop_daemon,
             daemon::get_autostart_status,

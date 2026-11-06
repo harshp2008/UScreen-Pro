@@ -27,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
@@ -42,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -50,10 +53,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import com.uscreen.BuildConfig
+import com.uscreen.HostNotice
 import com.uscreen.MainActivity
 import com.uscreen.Prefs
 import com.uscreen.TouchCapture
-import com.uscreen.UpdateCheck
 import com.uscreen.VideoReceiver
 import kotlinx.coroutines.delay
 
@@ -113,6 +116,94 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
 }
 
 /**
+ * Persistent cover shown after the host forgot this device. It stays until the host talks to the app
+ * again, and offers to uninstall the app (the system asks the user to confirm).
+ */
+@Composable
+fun UnpairedBanner() {
+    val context = LocalContext.current
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(300f)
+            .background(Color(0xE6000000))
+            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+            Text(
+                text = "Unpaired by Host. This device is no longer connected.",
+                fontSize = 22.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = OnSurface,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(20.dp))
+            Button(onClick = {
+                context.startActivity(
+                    Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }) {
+                Text("Uninstall App")
+            }
+        }
+    }
+}
+
+/**
+ * Full-screen, semi-transparent cover shown while the host says the stream is paused, its settings
+ * are being applied, or this app is being replaced. It swallows touches so nothing is sent to the
+ * host meanwhile. A "settings updating" or "updating" overlay clears itself after 45 s in case the
+ * host never says it is done.
+ */
+@Composable
+fun HostNoticeOverlay(notice: HostNotice?) {
+    var shown by remember { mutableStateOf(notice) }
+    LaunchedEffect(notice) {
+        shown = notice
+        if (notice != null && notice.kind != HostNotice.Kind.PAUSED) {
+            delay(45_000)
+            shown = null
+        }
+    }
+    AnimatedVisibility(
+        visible = shown != null,
+        enter = fadeIn(),
+        exit = fadeOut(),
+        modifier = Modifier.fillMaxSize().zIndex(200f)
+    ) {
+        val n = shown ?: notice
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xB3000000))
+                .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                if (n?.kind != HostNotice.Kind.PAUSED) {
+                    CircularProgressIndicator(color = OnSurface, modifier = Modifier.size(36.dp))
+                    Spacer(Modifier.height(16.dp))
+                }
+                Text(
+                    text = when (n?.kind) {
+                        HostNotice.Kind.PAUSED -> "Connection Paused by Host"
+                        HostNotice.Kind.SETTINGS -> "Settings updating..."
+                        HostNotice.Kind.UPDATING -> "Updating App... (Host: ${n?.host}, Device: ${n?.device})"
+                        null -> ""
+                    },
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = OnSurface,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+    }
+}
+
+/**
  * Root Composable orchestrating video rendering, touch capture, onboarding,
  * telemetry overlays, and settings sheet interactions.
  */
@@ -121,7 +212,6 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
 fun UScreenMain(
     onSurfaceReady: (SurfaceView) -> Unit,
     penOnly: Boolean = false,
-    updateAvailable: String? = null,
     showThanks: Boolean = false,
     onDismissThanks: () -> Unit = {},
     onSurfaceDestroyed: () -> Unit = {},
@@ -132,6 +222,8 @@ fun UScreenMain(
     prefs: Prefs? = null,
     isDeviceLocked: Boolean = false,
     hostVersion: String? = null,
+    hostNotice: HostNotice? = null,
+    unpairedByHost: Boolean = false,
 ) {
     var isConnected by remember { mutableStateOf(false) }
     LaunchedEffect(isConnected) { onStreamingChange(isConnected) }
@@ -315,6 +407,9 @@ fun UScreenMain(
             }
         }
 
+        HostNoticeOverlay(hostNotice)
+        if (unpairedByHost) UnpairedBanner()
+
         val showSettingsHandle = !immersiveOn || !isConnected
 
         if (showSettingsHandle) {
@@ -335,27 +430,6 @@ fun UScreenMain(
                     tint = OnSurface,
                     modifier = Modifier.size(16.dp)
                 )
-            }
-        }
-
-        if (updateAvailable != null && !isConnected && !penOnly && !showThanks) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xCC20202C))
-                    .clickable {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                Uri.parse(UpdateCheck.RELEASES_PAGE)
-                            )
-                        )
-                    }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Text("Update $updateAvailable available", fontSize = 12.sp, color = OnSurface)
             }
         }
 
@@ -406,15 +480,6 @@ fun UScreenMain(
         if (showSettings) {
             SettingsSheet(
                 prefs = prefs,
-                updateAvailable = updateAvailable,
-                onOpenUpdate = {
-                    context.startActivity(
-                        Intent(
-                            Intent.ACTION_VIEW,
-                            Uri.parse(UpdateCheck.RELEASES_PAGE)
-                        )
-                    )
-                },
                 penOnly = penOnly,
                 onPenOnlyChange = { wantPenOnly ->
                     touchCapture?.sendMode(wantPenOnly)

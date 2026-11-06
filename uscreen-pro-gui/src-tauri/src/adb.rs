@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::process::Output;
 use std::time::Duration;
+use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -16,6 +17,17 @@ pub struct ConnectedDevice {
     pub transport: String,
     pub paused: bool,
     pub device_version: Option<String>,
+    /// Has a `[tablets.<serial>]` entry in config.toml. Unpaired devices are "new devices".
+    pub paired: bool,
+    /// State of this device's job in the daemon's APK install queue, when it has one.
+    pub install: Option<InstallStatus>,
+}
+
+/// One job of the daemon's install queue: `queued`, `installing`, `done` or `failed`.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct InstallStatus {
+    pub state: String,
+    pub detail: String,
 }
 
 /// One line of `adb devices -l`, before USB/Wi-Fi entries of the same tablet are merged.
@@ -101,7 +113,11 @@ struct Group {
     all_serials: Vec<String>,
 }
 
-async fn ro_serial(serial: &str) -> Option<String> {
+pub(crate) fn norm_label(m: &str) -> String {
+    norm_model(m)
+}
+
+pub(crate) async fn ro_serial(serial: &str) -> Option<String> {
     let out = run(Some(serial), &["shell", "getprop", "ro.serialno"], Duration::from_millis(800))
         .await
         .ok()?;
@@ -204,6 +220,8 @@ pub async fn connected_devices(cfg: &AppConfig) -> Vec<ConnectedDevice> {
         } else {
             None
         };
+        let paired = g.all_serials.iter().any(|s| cfg.tablets.contains_key(s))
+            || cfg.tablets.contains_key(&g.primary_serial);
         devices.push(ConnectedDevice {
             serial: g.primary_serial,
             model: g.model,
@@ -211,6 +229,8 @@ pub async fn connected_devices(cfg: &AppConfig) -> Vec<ConnectedDevice> {
             transport: transport.into(),
             paused: false,
             device_version,
+            paired,
+            install: None,
         });
     }
 
@@ -235,6 +255,8 @@ pub async fn connected_devices(cfg: &AppConfig) -> Vec<ConnectedDevice> {
                 transport: "Disconnected".into(),
                 paused: false,
                 device_version: profile.app_version.clone(),
+                paired: true,
+                install: None,
             });
         }
     }
@@ -276,23 +298,69 @@ fn find_apk_path() -> Option<PathBuf> {
         .map(|(_, p)| p)
 }
 
-#[tauri::command]
-pub async fn install_apk_on_device(serial: String) -> Result<String, String> {
+/// One step of the wizard's USB work, shown verbatim on the wizard screens.
+#[derive(Serialize, Clone, Debug)]
+pub struct ProgressEvent {
+    pub serial: Option<String>,
+    pub message: String,
+}
+
+/// Tell the frontend what is happening right now (`install_progress` or `pair_progress`).
+pub fn progress(app: Option<&AppHandle>, event: &str, serial: Option<&str>, message: &str) {
+    if let Some(app) = app {
+        let _ = app.emit(event, ProgressEvent { serial: serial.map(str::to_string), message: message.to_string() });
+    }
+}
+
+/// Every adb call in the install path is pinned to one device with `-s`; an empty serial would make
+/// `run` drop the flag and hit whichever device adb picks, so it is refused outright.
+pub(crate) fn require_serial(serial: &str) -> Result<(), String> {
+    if serial.trim().is_empty() {
+        Err("No device serial given; refusing to run adb without -s".into())
+    } else {
+        Ok(())
+    }
+}
+
+/// Install the bundled APK on exactly `serial`. With `replace_existing` an already installed copy is
+/// removed first (the wizard does this so an APK signed with another key, e.g. a release of the
+/// original project, cannot block the install); the queue/update path keeps `-r` so app data survives.
+pub async fn install_apk(app: Option<&AppHandle>, serial: &str, replace_existing: bool) -> Result<String, String> {
+    require_serial(serial)?;
     let apk = find_apk_path()
         .ok_or("Could not find app-debug.apk. Run ./build-all.sh first.".to_string())?;
     let apk = apk.to_string_lossy().into_owned();
-    let out = run(
-        Some(&serial),
-        &["install", "-r", "-d", &apk],
-        Duration::from_secs(120),
-    )
-    .await?;
+    let ev = "install_progress";
+
+    if replace_existing {
+        let installed = run(Some(serial), &["shell", "pm", "path", "com.uscreen"], Duration::from_secs(8))
+            .await
+            .map(|o| stdout_of(&o).contains("package:"))
+            .unwrap_or(false);
+        if installed {
+            progress(app, ev, Some(serial), "Found old APK");
+            progress(app, ev, Some(serial), "Removing old APK");
+            let out = run(Some(serial), &["uninstall", "com.uscreen"], Duration::from_secs(30)).await?;
+            let text = combined_of(&out);
+            if !text.contains("Success") {
+                return Err(format!("Could not remove the old APK: {text}"));
+            }
+        }
+    }
+    progress(app, ev, Some(serial), "Installing new APK");
+    let out = run(Some(serial), &["install", "-r", "-d", &apk], Duration::from_secs(120)).await?;
     let text = combined_of(&out);
     if text.contains("Success") {
+        progress(app, ev, Some(serial), "APK installed");
         Ok("APK installed".into())
     } else {
         Err(format!("Install failed: {text}"))
     }
+}
+
+#[tauri::command]
+pub async fn install_apk_on_device(app: AppHandle, serial: String) -> Result<String, String> {
+    install_apk(Some(&app), &serial, true).await
 }
 
 /// `am start` exits 0 even when the activity is missing, so inspect its output.

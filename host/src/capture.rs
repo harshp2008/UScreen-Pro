@@ -1336,8 +1336,9 @@ impl CaptureManager {
                         (tx.clone(), self.codec_config.clone(), self.latency.clone());
                     let codec = Codec::from_encoder(&self.config.encoder);
                     let timing_shm = crate::runtime::timing_path_for(self.config.instance);
+                    let instance = self.config.instance;
                     tokio::spawn(async move {
-                        Self::read_loop(stdout, tx2, cc, lat, codec, timing_shm).await
+                        Self::read_loop(stdout, tx2, cc, lat, codec, timing_shm, instance).await
                     })
                 }
                 #[cfg(feature = "inproc-encoder")]
@@ -1629,7 +1630,10 @@ impl CaptureManager {
         latency: crate::latency::LatencyTracker,
         codec: Codec,
         timing_shm: std::path::PathBuf,
+        instance: u32,
     ) -> Result<()> {
+        // A restart is reported as finished only once this generation has delivered a frame.
+        let generation = crate::notices::encoder_started(instance);
         let mut buf = vec![0u8; 512 * 1024];
         let mut total: u64 = 0;
         let mut frames: u64 = 0;
@@ -1674,6 +1678,7 @@ impl CaptureManager {
             let now_us = crate::timing::now_monotonic_us();
             for data in access_units {
                 frames += 1;
+                crate::notices::frame_emitted(instance, generation);
                 if tx.receiver_count() > 0 {
                     let detailed = timing_reader
                         .as_ref()

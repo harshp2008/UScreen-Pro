@@ -34,6 +34,11 @@ class Prefs(context: Context) {
         const val TRANSPORT_WIFI = 2
     }
 
+    /** The host sent "unpaired" (Forget Device); cleared when the host greets this app again. */
+    var unpairedByHost: Boolean
+        get() = sp.getBoolean("unpaired_by_host", false)
+        set(v) = sp.edit().putBoolean("unpaired_by_host", v).apply()
+
     var preferredTransport: Int
         get() = sp.getInt("preferred_transport", TRANSPORT_AUTO)
         set(v) = sp.edit().putInt("preferred_transport", v).apply()

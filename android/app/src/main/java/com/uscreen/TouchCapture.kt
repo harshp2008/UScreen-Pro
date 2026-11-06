@@ -51,6 +51,12 @@ class TouchCapture {
     var onSettingsKnown: ((fps: Int, bitrateKbps: Int) -> Unit)? = null
     /** The computer's daemon Git version string, received on connect */
     var onHostVersionKnown: ((version: String) -> Unit)? = null
+    /** Host-pushed state that needs an overlay: paused, settings updating, app updating. null clears it. */
+    var onHostNotice: ((HostNotice?) -> Unit)? = null
+    /** The host forgot this device ({"type":"unpaired"}). */
+    var onUnpaired: (() -> Unit)? = null
+    /** The host sent a normal greeting/mode message: this app is paired. */
+    var onPairedGreeting: (() -> Unit)? = null
 
     @Volatile var currentPreferredTransport: String = "auto"
 
@@ -97,6 +103,8 @@ class TouchCapture {
     private val wsListener = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
             isConnected = true
+            // Anything still in force is replayed by the host right after the greeting.
+            onHostNotice?.invoke(null)
             Log.i(TAG, "Connected")
             // Authenticate before anything else. If we have no token yet the
             // host will drop us and relaunch the app with one, and the
@@ -139,6 +147,19 @@ class TouchCapture {
             // ignored, this channel is otherwise ours to talk on.
             try {
                 val o = JSONObject(text)
+                when (o.optString("type")) {
+                    "paused" -> { onHostNotice?.invoke(HostNotice(HostNotice.Kind.PAUSED)); return }
+                    "resumed" -> { onHostNotice?.invoke(null); return }
+                    "settings_updating" -> { onHostNotice?.invoke(HostNotice(HostNotice.Kind.SETTINGS)); return }
+                    "settings_applied" -> { onHostNotice?.invoke(null); return }
+                    "updating" -> {
+                        onHostNotice?.invoke(HostNotice(HostNotice.Kind.UPDATING, o.optString("host"), o.optString("device")))
+                        return
+                    }
+                    "update_done" -> { onHostNotice?.invoke(null); return }
+                    "unpaired" -> { onUnpaired?.invoke(); return }
+                }
+                if (o.has("codec") || o.has("host_version") || o.has("pen_only")) onPairedGreeting?.invoke()
                 if (o.has("codec")) {
                     onCodecKnown?.invoke(o.getString("codec"))
                 }
@@ -166,11 +187,13 @@ class TouchCapture {
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             isConnected = false
+            onHostNotice?.invoke(null)
             scheduleReconnect()
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             isConnected = false
+            onHostNotice?.invoke(null)
             Log.w(TAG, "Connection failed: ${t.message}")
             scheduleReconnect()
         }
@@ -758,4 +781,9 @@ class TouchCapture {
         webSocket = null
         isConnected = false
     }
+}
+
+/** A state the host announced over the input socket; the UI covers the screen with an overlay while it holds. */
+data class HostNotice(val kind: Kind, val host: String = "", val device: String = "") {
+    enum class Kind { PAUSED, SETTINGS, UPDATING }
 }

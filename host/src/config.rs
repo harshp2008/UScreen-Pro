@@ -77,6 +77,9 @@ pub struct TabletProfile {
     /// Preferred transport ("auto", "usb", "wifi") requested by the user or APK
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_transport: Option<String>,
+    /// `Some(false)` when wireless setup was skipped in the GUI wizard; `None` counts as configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wireless_configured: Option<bool>,
     /// Android API level (SDK int, e.g. 36)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_level: Option<u32>,
@@ -206,6 +209,11 @@ pub struct FileConfig {
     /// Automatically enable Wi-Fi ADB when a device is plugged in via USB.
     #[serde(default = "default_true")]
     pub auto_enable_wifi_adb: bool,
+    /// Stream any device that shows up on adb, and save a profile for it. Off by default: a
+    /// device is paired explicitly (GUI "Add device"), which creates its `[tablets.<serial>]`
+    /// entry. Until then it is a "new device" and the daemon leaves it alone.
+    #[serde(default)]
+    pub auto_pair_new_devices: bool,
     /// Protocol/daemon version.
     #[serde(default = "default_version")]
     pub version: String,
@@ -250,6 +258,7 @@ impl Default for FileConfig {
             locked_apps: Vec::new(),
             allow_legacy_fallback: false,
             auto_enable_wifi_adb: true,
+            auto_pair_new_devices: false,
         }
     }
 }
@@ -334,6 +343,14 @@ impl FileConfig {
             );
             self.position = "right".into();
         }
+    }
+
+    /// Whether a device has a saved profile, under its hardware serial or the adb serial it is
+    /// currently reached through (older profiles are keyed by `ip:port`).
+    pub fn is_paired(&self, hw_id: &str, serial: &str) -> bool {
+        self.auto_pair_new_devices
+            || self.tablets.contains_key(hw_id)
+            || self.tablets.contains_key(serial)
     }
 
     pub fn save(&self) -> Result<()> {

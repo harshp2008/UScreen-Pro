@@ -80,8 +80,6 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsSheet(
     prefs: Prefs?,
-    updateAvailable: String?,
-    onOpenUpdate: () -> Unit,
     penOnly: Boolean,
     onPenOnlyChange: (Boolean) -> Unit,
     showStats: Boolean,
@@ -130,28 +128,6 @@ fun SettingsSheet(
                 color = OnSurface
             )
             Spacer(Modifier.height(20.dp))
-
-            if (updateAvailable != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0x3350507A))
-                        .clickable { onOpenUpdate() }
-                        .padding(12.dp)
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Update available: $updateAvailable", fontSize = 14.sp, color = OnSurface)
-                        Text(
-                            "Tap to open the release page. Update the desktop side too — they ship together.",
-                            fontSize = 11.sp,
-                            color = Muted
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
 
             // Mode toggle: Graphics Tablet vs Screen
             Row(

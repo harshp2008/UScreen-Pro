@@ -49,12 +49,32 @@ pub enum DaemonControlMsg {
     /// kill and respawn its ffmpeg and evdi_helper processes with the resulting arguments.
     RestartSession {
         serial: Option<String>,
-        resp: oneshot::Sender<Result<usize, String>>,
+        resp: oneshot::Sender<Result<Vec<RestartedSlot>, String>>,
+    },
+    /// Queue an APK install (at most two run at once) on the device with this serial.
+    InstallApk {
+        serial: String,
+        resp: oneshot::Sender<Result<String, String>>,
+    },
+    /// The device was forgotten: stop its session now and drop everything held for it.
+    ForgetDevice {
+        serial: String,
+        resp: oneshot::Sender<Result<String, String>>,
     },
     /// Serials currently frozen by [`DaemonControlMsg::FreezeDevice`].
     ListFrozen {
         resp: oneshot::Sender<Vec<String>>,
     },
+}
+
+/// One pipeline that [`DaemonControlMsg::RestartSession`] respawned.
+#[derive(Clone, Debug)]
+pub struct RestartedSlot {
+    /// Hardware serial (the GUI's key) or, failing that, the active adb serial.
+    pub serial: String,
+    pub instance: u32,
+    /// Encoder generation before the restart; the restart is live once a newer one has a frame.
+    pub generation_before: u64,
 }
 
 /// Baseline configuration template used to spawn secondary tablet sessions on demand.
@@ -433,6 +453,22 @@ fn pipeline_fifo(
         .map(|s| capture::fifo_path_for(s.instance))
 }
 
+/// `(slot instance, hardware serial, active adb serial)` of the session serving `serial`.
+fn slot_of(
+    serial: &str,
+    slot_0_hw: Option<&str>,
+    slot_0_active: &str,
+    extras: &HashMap<String, ExtraSession>,
+) -> Option<(u32, String, String)> {
+    if slot_0_hw == Some(serial) || (!slot_0_active.is_empty() && slot_0_active == serial) {
+        return Some((0, slot_0_hw.unwrap_or(serial).to_string(), slot_0_active.to_string()));
+    }
+    extras
+        .values()
+        .find(|s| s.hw_id == serial || s.active_serial == serial)
+        .map(|s| (s.instance, s.hw_id.clone(), s.active_serial.clone()))
+}
+
 /// Send `sig` to the ffmpeg and evdi_helper belonging to capture FIFO `fifo`.
 async fn signal_pipeline(sig: &str, fifo: &str) {
     for pattern in [
@@ -469,6 +505,11 @@ pub async fn adb_monitor(
     let mut paused_serials: HashSet<String> = HashSet::new();
     // Devices whose pipeline is SIGSTOPped (user-facing Pause), keyed by the serial the GUI used.
     let mut frozen_serials: HashSet<String> = HashSet::new();
+    // Devices already compared against the host's version, keyed by hardware serial with the
+    // adb serial they were checked through. Leaving the adb list clears the entry, so the next
+    // connect (USB or Wi-Fi) is checked again.
+    let mut update_checked: HashMap<String, String> = HashMap::new();
+    let mut warned_unpaired: HashSet<String> = HashSet::new();
     let mut slot_0_hw: Option<String> = None;
     let mut slot_0_active_serial: String = String::new();
     let mut slot_0_transport: Transport = Transport::Usb;
@@ -527,10 +568,27 @@ pub async fn adb_monitor(
         }
 
         // Group ready devices by persistent hardware ID, honoring configured transport preference
-        let ready_devices: Vec<&DiscoveredDevice> =
-            all_devices.iter().filter(|d| d.state == "device").collect();
-        let mut physical_devices: HashMap<String, &DiscoveredDevice> = HashMap::new();
         let current_file_cfg = FileConfig::load();
+        // Only paired devices (those with a [tablets.<serial>] entry) get a session. Anything
+        // else is a "new device" that waits for the user to add it.
+        let ready_devices: Vec<&DiscoveredDevice> = all_devices
+            .iter()
+            .filter(|d| d.state == "device")
+            .filter(|d| {
+                let paired = is_fake_serial(&d.serial) || current_file_cfg.is_paired(&d.hw_id, &d.serial);
+                if !paired && warned_unpaired.insert(d.hw_id.clone()) {
+                    info!(
+                        "Device {} ({}) is connected but not paired; add it in the GUI (Add device) or set auto_pair_new_devices = true",
+                        d.hw_id, d.serial
+                    );
+                }
+                if paired {
+                    warned_unpaired.remove(&d.hw_id);
+                }
+                paired
+            })
+            .collect();
+        let mut physical_devices: HashMap<String, &DiscoveredDevice> = HashMap::new();
 
         for dev in ready_devices {
             let pref = current_file_cfg
@@ -605,6 +663,8 @@ pub async fn adb_monitor(
                 }
                 let _ = tablet_tx.send(false);
                 let _ = serial_tx.send(None);
+                crate::notices::forget(0);
+                frozen_serials.retain(|f| *f != *s0_hw && *f != slot_0_active_serial);
                 slot_0_hw = None;
                 slot_0_active_serial.clear();
             }
@@ -668,6 +728,8 @@ pub async fn adb_monitor(
                     teardown_adb_forwarding(&sess.active_serial, sess.video_port, sess.input_port)
                         .await;
                 }
+                crate::notices::forget(sess.instance);
+                frozen_serials.retain(|f| *f != hw_id && *f != sess.active_serial);
                 sess.stop_background();
             }
         }
@@ -776,6 +838,28 @@ pub async fn adb_monitor(
             }
         }
 
+        // 4. Version check for every paired device that just connected, USB or Wi-Fi, whether or
+        //    not it holds a slot: a mismatch queues `adb install -r` (two at a time).
+        update_checked.retain(|hw, _| physical_devices.contains_key(hw));
+        for (hw_id, dev) in &physical_devices {
+            if is_fake_serial(&dev.serial) || paused_serials.contains(&dev.serial) {
+                continue;
+            }
+            if update_checked.get(hw_id) == Some(&dev.serial) {
+                continue;
+            }
+            update_checked.insert(hw_id.clone(), dev.serial.clone());
+            let instance = slot_of(hw_id, slot_0_hw.as_deref(), &slot_0_active_serial, &extras).map(|s| s.0);
+            let req = crate::installer::Request {
+                hw: hw_id.clone(),
+                serial: dev.serial.clone(),
+                instance,
+            };
+            tokio::spawn(async move {
+                crate::installer::check_on_connect(req).await;
+            });
+        }
+
         let extra_relaunch = async {
             let notifies: Vec<_> = extras.values().map(|s| s.relaunch.clone()).collect();
             if notifies.is_empty() {
@@ -843,6 +927,9 @@ pub async fn adb_monitor(
                             Some(fifo) => {
                                 info!("Freezing pipeline of {} (SIGSTOP ffmpeg + evdi_helper)", serial);
                                 signal_pipeline("STOP", &fifo).await;
+                                if let Some((inst, _, _)) = slot_of(&serial, slot_0_hw.as_deref(), &slot_0_active_serial, &extras) {
+                                    crate::notices::set(inst, crate::notices::paused());
+                                }
                                 frozen_serials.insert(serial);
                                 let _ = resp.send(Ok(()));
                             }
@@ -856,6 +943,9 @@ pub async fn adb_monitor(
                             Some(fifo) => {
                                 info!("Thawing pipeline of {} (SIGCONT ffmpeg + evdi_helper)", serial);
                                 signal_pipeline("CONT", &fifo).await;
+                                if let Some((inst, _, _)) = slot_of(&serial, slot_0_hw.as_deref(), &slot_0_active_serial, &extras) {
+                                    crate::notices::release(inst, crate::notices::resumed());
+                                }
                                 frozen_serials.remove(&serial);
                                 let _ = resp.send(Ok(()));
                             }
@@ -869,7 +959,7 @@ pub async fn adb_monitor(
                         let _ = resp.send(frozen_serials.iter().cloned().collect());
                     }
                     DaemonControlMsg::RestartSession { serial, resp } => {
-                        let mut restarted = 0usize;
+                        let mut restarted: Vec<RestartedSlot> = Vec::new();
                         let want = |hw: Option<&str>, active: &str| match serial.as_deref() {
                             None => true,
                             Some(s) => hw == Some(s) || active == s,
@@ -880,30 +970,103 @@ pub async fn adb_monitor(
                                 signal_pipeline("CONT", &fifo).await;
                             }
                             frozen_serials.retain(|f| f != &slot_0_active_serial && *f != hw && Some(f.as_str()) != serial.as_deref());
+                            let generation_before = crate::notices::generation(0);
+                            crate::notices::set(0, crate::notices::settings_updating());
                             apply_profile_keys(&[serial.as_deref().unwrap_or(&slot_0_active_serial), &slot_0_active_serial, &hw], &settings_tx, true).await;
                             if !is_fake_serial(&slot_0_active_serial) {
                                 let _ = setup_adb_forwarding(&slot_0_active_serial, video_port, input_port).await;
                             }
-                            restarted += 1;
+                            restarted.push(RestartedSlot {
+                                serial: if hw.is_empty() { slot_0_active_serial.clone() } else { hw },
+                                instance: 0,
+                                generation_before,
+                            });
                         }
-                        let matches: Vec<(String, String, String)> = extras
+                        let matches: Vec<(String, String, String, u32)> = extras
                             .values()
                             .filter(|s| want(Some(s.hw_id.as_str()), &s.active_serial))
-                            .map(|s| (s.hw_id.clone(), s.active_serial.clone(), capture::fifo_path_for(s.instance)))
+                            .map(|s| (s.hw_id.clone(), s.active_serial.clone(), capture::fifo_path_for(s.instance), s.instance))
                             .collect();
-                        for (hw, active, fifo) in matches {
+                        for (hw, active, fifo, instance) in matches {
                             signal_pipeline("CONT", &fifo).await;
                             frozen_serials.retain(|f| *f != active && *f != hw && Some(f.as_str()) != serial.as_deref());
                             if let Some(sess) = extras.get(&hw) {
+                                let generation_before = crate::notices::generation(instance);
+                                crate::notices::set(instance, crate::notices::settings_updating());
                                 apply_profile_keys(&[serial.as_deref().unwrap_or(&active), &active, &hw], &sess.settings_tx, true).await;
                                 if !is_fake_serial(&active) {
                                     let _ = setup_adb_forwarding(&active, sess.video_port, sess.input_port).await;
                                 }
-                                restarted += 1;
+                                restarted.push(RestartedSlot { serial: hw, instance, generation_before });
                             }
                         }
-                        info!("Restart requested for {:?}: {} session(s) restarting", serial, restarted);
+                        info!("Restart requested for {:?}: {} session(s) restarting", serial, restarted.len());
                         let _ = resp.send(Ok(restarted));
+                    }
+                    DaemonControlMsg::InstallApk { serial, resp } => {
+                        let slot = slot_of(&serial, slot_0_hw.as_deref(), &slot_0_active_serial, &extras);
+                        let target = match &slot {
+                            Some((_, hw, active)) => Some((hw.clone(), active.clone())),
+                            None => physical_devices
+                                .values()
+                                .find(|d| d.hw_id == serial || d.serial == serial)
+                                .map(|d| (d.hw_id.clone(), d.serial.clone())),
+                        };
+                        let _ = resp.send(match target {
+                            Some((hw, adb_serial)) => {
+                                let queued = crate::installer::enqueue(crate::installer::Request {
+                                    hw: hw.clone(),
+                                    serial: adb_serial,
+                                    instance: slot.map(|s| s.0),
+                                });
+                                Ok(if queued { format!("queued {}", hw) } else { format!("{} already queued", hw) })
+                            }
+                            None => Err(format!("Device {} is not connected", serial)),
+                        });
+                    }
+                    DaemonControlMsg::ForgetDevice { serial, resp } => {
+                        let mut stopped = Vec::new();
+                        // Tell the app before its socket is torn down, then give the input task a
+                        // moment to push the message out (the app shows "Unpaired by Host").
+                        let notify_instance = if slot_0_hw.as_deref() == Some(serial.as_str()) || (!slot_0_active_serial.is_empty() && slot_0_active_serial == serial) {
+                            Some(0)
+                        } else {
+                            extras.values().find(|s| s.hw_id == serial || s.active_serial == serial).map(|s| s.instance)
+                        };
+                        if let Some(inst) = notify_instance {
+                            crate::notices::release(inst, crate::notices::unpaired());
+                            tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+                        }
+                        if slot_0_hw.as_deref() == Some(serial.as_str()) || (!slot_0_active_serial.is_empty() && slot_0_active_serial == serial) {
+                            if !is_fake_serial(&slot_0_active_serial) {
+                                teardown_adb_forwarding(&slot_0_active_serial, video_port, input_port).await;
+                            }
+                            let _ = tablet_tx.send(false);
+                            let _ = serial_tx.send(None);
+                            crate::notices::forget(0);
+                            stopped.push("slot 1".to_string());
+                            slot_0_hw = None;
+                            slot_0_active_serial.clear();
+                        } else if let Some(hw) = extras
+                            .values()
+                            .find(|s| s.hw_id == serial || s.active_serial == serial)
+                            .map(|s| s.hw_id.clone())
+                        {
+                            if let Some(sess) = extras.remove(&hw) {
+                                if !is_fake_serial(&sess.active_serial) {
+                                    teardown_adb_forwarding(&sess.active_serial, sess.video_port, sess.input_port).await;
+                                }
+                                crate::notices::forget(sess.instance);
+                                stopped.push(format!("slot {}", sess.instance + 1));
+                                sess.stop_background();
+                            }
+                        }
+                        frozen_serials.retain(|f| *f != serial);
+                        paused_serials.retain(|f| *f != serial);
+                        update_checked.remove(&serial);
+                        hw_cache.retain(|k, v| *k != serial && *v != serial);
+                        info!("Forgot device {}: stopped {:?}", serial, stopped);
+                        let _ = resp.send(Ok(if stopped.is_empty() { "no active session".to_string() } else { format!("stopped {}", stopped.join(", ")) }));
                     }
                     DaemonControlMsg::ResumeDevice { serial, resp } => {
                         info!("Received surgical RESUME request for device {}", serial);

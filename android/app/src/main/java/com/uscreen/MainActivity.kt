@@ -50,9 +50,10 @@ fun getLocalWifiIp(@Suppress("UNUSED_PARAMETER") context: Context? = null): Stri
 class MainActivity : ComponentActivity() {
     /// Mirrors the host's mode so the UI can say what is going on.
     private var penOnlyMode by mutableStateOf(false)
-    private var updateAvailable by mutableStateOf<String?>(null)
     private var hostVersion by mutableStateOf<String?>(null)
-    private var updateChecked = false
+    private var hostNotice by mutableStateOf<HostNotice?>(null)
+    /** Set when the host forgot this device; survives restarts until the host talks to us again. */
+    private var unpairedByHost by mutableStateOf(false)
     private var showThanks by mutableStateOf(false)
     private var videoReceiver: VideoReceiver? = null
     private var touchCapture: TouchCapture? = null
@@ -204,6 +205,21 @@ class MainActivity : ComponentActivity() {
                 if (penOnly) videoReceiver?.stop() else videoReceiver?.start()
             }
         }
+        touchCapture?.onHostNotice = { notice ->
+            runOnUiThread { hostNotice = notice }
+        }
+        unpairedByHost = prefs.unpairedByHost
+        touchCapture?.onUnpaired = {
+            prefs.unpairedByHost = true
+            runOnUiThread { unpairedByHost = true }
+        }
+        // A greeting from the host means we are paired again (or still), so the banner goes away.
+        touchCapture?.onPairedGreeting = {
+            if (prefs.unpairedByHost) {
+                prefs.unpairedByHost = false
+                runOnUiThread { unpairedByHost = false }
+            }
+        }
         touchCapture?.onHostVersionKnown = { hostVer ->
             runOnUiThread {
                 hostVersion = hostVer
@@ -242,7 +258,6 @@ class MainActivity : ComponentActivity() {
             UScreenTheme {
                 UScreenMain(
                     penOnly = penOnlyMode,
-                    updateAvailable = updateAvailable,
                     showThanks = showThanks,
                     onDismissThanks = { showThanks = false },
                     videoReceiver = videoReceiver,
@@ -250,6 +265,8 @@ class MainActivity : ComponentActivity() {
                     prefs = prefs,
                     isDeviceLocked = isDeviceLocked,
                     hostVersion = hostVersion,
+                    hostNotice = hostNotice,
+                    unpairedByHost = unpairedByHost,
                     onSurfaceReady = { surfaceView ->
                         videoReceiver?.setSurface(surfaceView)
                         touchCapture?.setSurfaceView(surfaceView)
@@ -500,14 +517,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
-        if (!updateChecked) {
-            updateChecked = true
-            val cur = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "0" } catch (_: Exception) { "0" }
-            Thread {
-                val found = UpdateCheck.newerThan(cur)
-                if (found != null) runOnUiThread { updateAvailable = found }
-            }.start()
-        }
         touchCapture?.connect()
         touchCapture?.sendPing()
     }

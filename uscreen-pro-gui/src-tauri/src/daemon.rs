@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
+use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -79,16 +80,106 @@ pub async fn resume_device(serial: String) -> Result<String, String> {
 
 /// Kill and respawn the ffmpeg and evdi_helper of one device (`None`: every device) so the
 /// settings saved in config.toml take effect. A no-op when the daemon is not running.
-pub async fn restart_pipeline(serial: Option<&str>) -> Result<String, String> {
+///
+/// Returns as soon as the restart has been requested. The UI is told through events: `pipeline_restarting`
+/// right away, then one `pipeline_restarted` per slot once the new encoder has delivered a frame
+/// (or `ok: false` after 25 s), then a final one with `done: true`.
+pub async fn restart_pipeline(app: &AppHandle, serial: Option<&str>) -> Result<String, String> {
     if !control_sock_path().exists() {
         return Ok("daemon not running; settings apply on next start".into());
     }
-    send_control_cmd(&format!("RESTART {}", serial.unwrap_or("ALL"))).await
+    let target = serial.map(str::to_string);
+    let _ = app.emit(
+        "pipeline_restarting",
+        PipelineEvent { serial: target.clone(), ok: true, live_ms: None, message: "restarting".into(), done: false },
+    );
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let cmd = format!("RESTART_WAIT {}", target.as_deref().unwrap_or("ALL"));
+        let reply = send_control_cmd(&cmd).await;
+        let mut slots = 0;
+        match reply {
+            Ok(text) => {
+                let parsed: Option<serde_json::Value> = text
+                    .strip_prefix("OK ")
+                    .and_then(|j| serde_json::from_str(j).ok());
+                for slot in parsed
+                    .as_ref()
+                    .and_then(|v| v["restarted"].as_array())
+                    .into_iter()
+                    .flatten()
+                {
+                    slots += 1;
+                    let live_ms = slot["live_ms"].as_u64();
+                    let _ = app.emit(
+                        "pipeline_restarted",
+                        PipelineEvent {
+                            serial: slot["serial"].as_str().map(str::to_string),
+                            ok: live_ms.is_some(),
+                            live_ms,
+                            message: match live_ms {
+                                Some(ms) => format!("stream live after {ms} ms"),
+                                None => "restarted, but no frame arrived within 25 s".into(),
+                            },
+                            done: false,
+                        },
+                    );
+                }
+                let _ = app.emit(
+                    "pipeline_restarted",
+                    PipelineEvent {
+                        serial: target,
+                        ok: true,
+                        live_ms: None,
+                        message: if slots == 0 { "no active session to restart".into() } else { format!("{slots} pipeline(s) restarted") },
+                        done: true,
+                    },
+                );
+            }
+            Err(e) => {
+                let _ = app.emit(
+                    "pipeline_restarted",
+                    PipelineEvent { serial: target, ok: false, live_ms: None, message: e, done: true },
+                );
+            }
+        }
+    });
+    Ok("restart requested".into())
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct PipelineEvent {
+    /// Device the event is about; `None` means every device.
+    pub serial: Option<String>,
+    pub ok: bool,
+    pub live_ms: Option<u64>,
+    pub message: String,
+    /// Last event of one restart request.
+    pub done: bool,
+}
+
+/// Stop the live session of a forgotten device. A no-op when the daemon is not running.
+pub async fn forget_session(serial: &str) -> Result<String, String> {
+    if !control_sock_path().exists() {
+        return Ok("daemon not running; no session to stop".into());
+    }
+    send_control_cmd(&format!("FORGET {serial}")).await
 }
 
 #[tauri::command]
-pub async fn restart_session(serial: String) -> Result<String, String> {
-    restart_pipeline(Some(&serial)).await
+pub async fn restart_session(app: AppHandle, serial: String) -> Result<String, String> {
+    restart_pipeline(&app, Some(&serial)).await
+}
+
+/// Ask the daemon to install the bundled APK on a device. The daemon owns the queue (two at a
+/// time), so the same job is shared by this button and the automatic update on reconnect. With
+/// no daemon running the install happens directly.
+#[tauri::command]
+pub async fn queue_apk_install(serial: String) -> Result<String, String> {
+    if !control_sock_path().exists() {
+        return adb::install_apk(None, &serial, false).await;
+    }
+    send_control_cmd(&format!("INSTALL {serial}")).await
 }
 
 #[tauri::command]
@@ -104,6 +195,16 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
     let cfg = config::load().await;
 
     let mut devices = adb::connected_devices(&cfg).await;
+    if control_connected
+        && let Ok(reply) = send_control_cmd("INSTALLS").await
+        && let Some(jobs) = reply
+            .strip_prefix("OK ")
+            .and_then(|j| serde_json::from_str::<std::collections::HashMap<String, adb::InstallStatus>>(j).ok())
+    {
+        for d in &mut devices {
+            d.install = jobs.get(&d.serial).cloned();
+        }
+    }
     if control_connected
         && let Ok(reply) = send_control_cmd("FROZEN").await
     {

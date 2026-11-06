@@ -6,6 +6,34 @@ export interface ConnectedDevice {
   transport: string;
   paused: boolean;
   device_version?: string;
+  /** Has a [tablets.<serial>] entry in config.toml; otherwise it is a "new device". */
+  paired: boolean;
+  /** This device's job in the daemon's APK install queue. */
+  install?: InstallStatus | null;
+}
+
+export interface InstallStatus {
+  state: "queued" | "installing" | "done" | "failed";
+  detail: string;
+}
+
+/** Emitted by the backend while a device's ffmpeg/evdi_helper are respawned. */
+export interface PipelineEvent {
+  /** Device the event is about; null means every device. */
+  serial: string | null;
+  ok: boolean;
+  live_ms?: number | null;
+  message: string;
+  /** Last event of one restart request. */
+  done: boolean;
+}
+
+export interface ForgetReport {
+  removed_profiles: string[];
+  session: string;
+  disconnected: string[];
+  pairing_records_removed: number;
+  notes: string[];
 }
 
 export interface AdbEntry {
@@ -42,6 +70,8 @@ export interface TabletProfile {
   locked_apps?: string[];
   app_version?: string;
   preferred_transport?: string;
+  /** false when the user skipped wireless setup in the wizard; absent on older profiles means configured. */
+  wireless_configured?: boolean;
 }
 
 export interface AppConfig {
@@ -97,4 +127,10 @@ export interface QrPairingSession {
 export interface ManualPairResult {
   message: string;
   connect_endpoint?: string | null;
+}
+
+/** `install_progress` / `pair_progress`: one human-readable step of the wizard's USB work. */
+export interface ProgressEvent {
+  serial?: string | null;
+  message: string;
 }

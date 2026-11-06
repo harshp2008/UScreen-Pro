@@ -40,6 +40,9 @@ pub struct TabletProfile {
     pub secure_port: Option<u16>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_transport: Option<String>,
+    /// `Some(false)` when the user skipped wireless setup; `None` (older profiles) counts as configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wireless_configured: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_level: Option<u32>,
     #[serde(flatten)]
@@ -167,32 +170,25 @@ fn profile_args_differ(a: Option<&TabletProfile>, b: &TabletProfile) -> bool {
 }
 
 #[tauri::command]
-pub async fn save_config(config: AppConfig) -> Result<(), String> {
+pub async fn save_config(app: tauri::AppHandle, config: AppConfig) -> Result<(), String> {
     let previous = load().await;
     store(&config).await?;
     // Placebo-settings fix: the daemon only read config.toml on tablet connect, so a save has
     // to tell it to respawn the pipelines of every device using the global values.
     if stream_args_differ(&previous, &config) {
-        crate::daemon::restart_pipeline(None).await?;
+        crate::daemon::restart_pipeline(&app, None).await?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub async fn save_device_profile(serial: String, profile: TabletProfile) -> Result<(), String> {
+pub async fn save_device_profile(app: tauri::AppHandle, serial: String, profile: TabletProfile) -> Result<(), String> {
     let mut cfg = load().await;
     let changed = profile_args_differ(cfg.tablets.get(&serial), &profile);
     cfg.tablets.insert(serial.clone(), profile);
     store(&cfg).await?;
     if changed {
-        crate::daemon::restart_pipeline(Some(&serial)).await?;
+        crate::daemon::restart_pipeline(&app, Some(&serial)).await?;
     }
     Ok(())
-}
-
-#[tauri::command]
-pub async fn delete_device_profile(serial: String) -> Result<(), String> {
-    let mut cfg = load().await;
-    cfg.tablets.remove(&serial);
-    store(&cfg).await
 }

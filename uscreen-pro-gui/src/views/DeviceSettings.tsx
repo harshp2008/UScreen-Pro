@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, Check, Pause, Play, Trash2 } from "lucide-react";
+import { AlertTriangle, Check, Pause, Play, Trash2, Wifi } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AppLockList } from "../components/ui/AppLockList";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,8 @@ interface Props {
   onDelete: () => void;
   onTogglePause: () => void;
   onInstallApk: () => void;
+  /** Re-open the Wireless Setup step for this device. */
+  onConfigureWireless: () => void;
   /** True when the profile differs from what is saved. */
   dirty: boolean;
 }
@@ -34,6 +36,7 @@ export function DeviceSettings({
   onDelete,
   onTogglePause,
   onInstallApk,
+  onConfigureWireless,
   dirty,
 }: Props) {
   const [confirmForget, setConfirmForget] = useState(false);
@@ -47,6 +50,8 @@ export function DeviceSettings({
   }
 
   const online = device?.state === "device";
+  /* Only an explicit false (wireless skipped in the wizard) locks the Wi-Fi controls; older profiles stay editable. */
+  const wirelessOff = p.wireless_configured === false;
   const mismatch = device?.device_version && hostVersion && device.device_version !== hostVersion;
 
   return (
@@ -78,6 +83,22 @@ export function DeviceSettings({
         </div>
       )}
 
+      {wirelessOff && (
+        <div
+          data-testid="wireless-not-configured"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-secondary px-4 py-3 text-secondary-foreground"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Wifi className="size-4 shrink-0" />
+            <span>Wireless is not set up for this device. It streams over USB only.</span>
+          </span>
+          <Button size="sm" onClick={onConfigureWireless}>
+            <Wifi />
+            Configure Wireless Mode
+          </Button>
+        </div>
+      )}
+
       <Section title="Identity">
         <SettingRow label="Nickname" tip="Shown in the sidebar instead of the model name.">
           <TextInput
@@ -93,12 +114,14 @@ export function DeviceSettings({
             value={p.preferred_transport ?? "auto"}
             options={TRANSPORTS}
             className="w-60"
+            disabled={wirelessOff}
             onValueChange={(preferred_transport) => onChange({ preferred_transport })}
           />
         </SettingRow>
         <SettingRow label="Wi-Fi address" tip="IP:port used for wireless streaming to this tablet.">
           <TextInput
             aria-label="Wi-Fi address"
+            disabled={wirelessOff}
             className="w-52 font-mono"
             placeholder="192.168.1.50:5555"
             value={p.wifi_address ?? ""}

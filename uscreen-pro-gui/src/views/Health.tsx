@@ -24,13 +24,10 @@ export function Health({
   status,
   onRestartAdb,
   onInstallApk,
-  installs,
 }: {
   status: DaemonStatus;
   onRestartAdb: () => void;
   onInstallApk: (serial: string) => void;
-  /** Per-device install state: absent = idle. Installs run one at a time. */
-  installs: Record<string, "queued" | "running">;
 }) {
   const tools = status.devices.filter((d) => d.state === "device");
   return (
@@ -59,7 +56,9 @@ export function Health({
       <Section title="Device tools" hint="Act on a connected device over ADB">
         {tools.map((d) => {
           const mismatch = !!d.device_version && d.device_version !== status.host_version;
-          const job = installs[d.serial];
+          /* The daemon's install queue (two at a time) is the source of truth for every device. */
+          const state = d.install?.state;
+          const job = state === "installing" ? "running" : state === "queued" ? "queued" : undefined;
           return (
             <div key={d.serial} className="flex min-h-12 flex-wrap items-center justify-between gap-3 px-3 py-2">
               <div className="min-w-0">
@@ -67,11 +66,16 @@ export function Health({
                 <div className="font-mono text-[11px] text-muted-foreground">
                   {d.serial} · app {d.device_version ?? "not installed"}
                 </div>
+                {d.install && (
+                  <div className={d.install.state === "failed" ? "text-[11px] text-destructive" : "text-[11px] text-warning"}>
+                    {d.model}: {d.install.state === "installing" ? "Installing..." : d.install.state === "queued" ? "Queued..." : d.install.state === "done" ? "Installed" : `Failed: ${d.install.detail}`}
+                  </div>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="secondary" onClick={() => onInstallApk(d.serial)} disabled={!!job} aria-busy={!!job}>
                   {job === "running" ? <LoaderCircle className="animate-spin" /> : job === "queued" ? <Clock /> : <RefreshCw />}
-                  {job === "running" ? "Reinstalling..." : job === "queued" ? "Waiting..." : "Force Reinstall APK"}
+                  {job === "running" ? "Installing..." : job === "queued" ? "Queued..." : "Force Reinstall APK"}
                 </Button>
                 <Button size="sm" variant="secondary" onClick={() => onInstallApk(d.serial)} disabled={!mismatch || !!job}>
                   <Download />
