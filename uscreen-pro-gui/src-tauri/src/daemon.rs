@@ -65,14 +65,30 @@ async fn send_control_cmd(cmd: &str) -> Result<String, String> {
     }
 }
 
+/// Pause: SIGSTOP the device's ffmpeg and evdi_helper (the daemon owns the PIDs).
 #[tauri::command]
 pub async fn pause_device(serial: String) -> Result<String, String> {
-    send_control_cmd(&format!("PAUSE {serial}")).await
+    send_control_cmd(&format!("FREEZE {serial}")).await
+}
+
+/// Resume: SIGCONT the same processes.
+#[tauri::command]
+pub async fn resume_device(serial: String) -> Result<String, String> {
+    send_control_cmd(&format!("THAW {serial}")).await
+}
+
+/// Kill and respawn the ffmpeg and evdi_helper of one device (`None`: every device) so the
+/// settings saved in config.toml take effect. A no-op when the daemon is not running.
+pub async fn restart_pipeline(serial: Option<&str>) -> Result<String, String> {
+    if !control_sock_path().exists() {
+        return Ok("daemon not running; settings apply on next start".into());
+    }
+    send_control_cmd(&format!("RESTART {}", serial.unwrap_or("ALL"))).await
 }
 
 #[tauri::command]
-pub async fn resume_device(serial: String) -> Result<String, String> {
-    send_control_cmd(&format!("RESUME {serial}")).await
+pub async fn restart_session(serial: String) -> Result<String, String> {
+    restart_pipeline(Some(&serial)).await
 }
 
 #[tauri::command]
@@ -87,6 +103,16 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
     let host_version = env!("GIT_VERSION_STRING").to_string();
     let cfg = config::load().await;
 
+    let mut devices = adb::connected_devices(&cfg).await;
+    if control_connected
+        && let Ok(reply) = send_control_cmd("FROZEN").await
+    {
+        let frozen: Vec<&str> = reply.trim_start_matches("OK").trim().split(',').filter(|s| !s.is_empty()).collect();
+        for d in &mut devices {
+            d.paused = frozen.contains(&d.serial.as_str());
+        }
+    }
+
     Ok(DaemonStatus {
         is_running,
         pid,
@@ -94,7 +120,7 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
         is_dirty: host_version.contains("-dirty"),
         host_version,
         control_socket: control_sock_path().to_string_lossy().into_owned(),
-        devices: adb::connected_devices(&cfg).await,
+        devices,
     })
 }
 

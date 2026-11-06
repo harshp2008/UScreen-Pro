@@ -338,3 +338,21 @@ pub async fn restart_adb_server() -> Result<String, String> {
     let out = run(None, &["start-server"], Duration::from_secs(10)).await?;
     Ok(combined_of(&out))
 }
+
+#[derive(Serialize, Clone, Debug)]
+pub struct WirelessDeviceInfo {
+    /// Hardware serial (`ro.serialno`), the key device profiles are stored under.
+    pub serial: String,
+    pub model: String,
+}
+
+/// Identify a device reached over `ip:port` by its hardware serial and model.
+#[tauri::command]
+pub async fn wireless_device_info(endpoint: String) -> Result<WirelessDeviceInfo, String> {
+    let serial = ro_serial(&endpoint).await.unwrap_or_else(|| endpoint.clone());
+    let model = run(Some(&endpoint), &["shell", "getprop", "ro.product.model"], Duration::from_secs(3))
+        .await
+        .map(|o| stdout_of(&o))
+        .unwrap_or_default();
+    Ok(WirelessDeviceInfo { serial, model: if model.is_empty() { endpoint } else { model } })
+}

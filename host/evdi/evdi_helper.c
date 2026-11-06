@@ -230,15 +230,19 @@ static void handle_signal(int sig) {
   g_running = 0;
 }
 
+/* Set from the SIGUSR2 handler, consumed by the writer thread under
+   g_swap_mutex. The handler must not call mark_all_dirty() itself: the writer
+   rotates the three dirty-mask pointers under that mutex, so a memset from
+   signal context can hit one mask twice and miss another, leaving stale rows
+   (artifacts) after a client reconnect. */
+static volatile sig_atomic_t g_full_refresh_req = 0;
+
 static void handle_throttle(int sig) {
   if (sig == SIGUSR1) {
     g_throttled = 1;
-    fprintf(stderr, "[evdi-helper] Throttled to 1 FPS (keep-alive standby)\n");
   } else if (sig == SIGUSR2) {
     g_throttled = 0;
-    mark_all_dirty();
-    fprintf(stderr, "[evdi-helper] Resumed normal FPS and triggered full "
-                    "keyframe refresh (client active)\n");
+    g_full_refresh_req = 1;
   }
 }
 
@@ -1207,6 +1211,10 @@ static void *writer_thread(void *arg) {
 
     /* 3. Extract the latest frame under lock */
     pthread_mutex_lock(&g_swap_mutex);
+    if (g_full_refresh_req) {
+      g_full_refresh_req = 0;
+      mark_all_dirty();
+    }
     if (!g_buffers_ready) {
       pthread_mutex_unlock(&g_swap_mutex);
       continue;
@@ -1622,6 +1630,12 @@ int main(int argc, char *argv[]) {
   }
   g_device_index = dev_idx;
   g_handle = handle;
+  /* true = the driver delivers the cursor as cursor_set/cursor_move events and
+     leaves it OUT of the grabbed framebuffer. false makes libevdi composite
+     the cursor into every grabbed frame (burned in, with ghosts when the
+     compositor stops repainting an idle output). Measured on the tablet in
+     experiments_and_findings/46: false => ~11 grabs/s and a cursor sprite in
+     the stream while the pointer moves; true => 0 grabs and a clean stream. */
   evdi_enable_cursor_events(handle, true);
 
   FILE *f = fopen(edid_path, "rb");

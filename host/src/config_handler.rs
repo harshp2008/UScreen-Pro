@@ -134,6 +134,47 @@ pub async fn run_control_server(
                             let _ = writer.write_all(b"ERR channel closed\n").await;
                         }
                     }
+                } else if let Some(serial) = cmd.strip_prefix("FREEZE ") {
+                    let serial = serial.trim().to_string();
+                    let (tx, rx) = oneshot::channel();
+                    let _ = ctrl_tx
+                        .send(DaemonControlMsg::FreezeDevice { serial: serial.clone(), resp: tx })
+                        .await;
+                    let reply = match rx.await {
+                        Ok(Ok(())) => format!("OK FROZEN {}\n", serial),
+                        Ok(Err(e)) => format!("ERR {}\n", e),
+                        Err(_) => "ERR channel closed\n".to_string(),
+                    };
+                    let _ = writer.write_all(reply.as_bytes()).await;
+                } else if let Some(serial) = cmd.strip_prefix("THAW ") {
+                    let serial = serial.trim().to_string();
+                    let (tx, rx) = oneshot::channel();
+                    let _ = ctrl_tx
+                        .send(DaemonControlMsg::ThawDevice { serial: serial.clone(), resp: tx })
+                        .await;
+                    let reply = match rx.await {
+                        Ok(Ok(())) => format!("OK THAWED {}\n", serial),
+                        Ok(Err(e)) => format!("ERR {}\n", e),
+                        Err(_) => "ERR channel closed\n".to_string(),
+                    };
+                    let _ = writer.write_all(reply.as_bytes()).await;
+                } else if cmd == "FROZEN" {
+                    let (tx, rx) = oneshot::channel();
+                    let _ = ctrl_tx.send(DaemonControlMsg::ListFrozen { resp: tx }).await;
+                    let list = rx.await.unwrap_or_default().join(",");
+                    let _ = writer.write_all(format!("OK {}\n", list).as_bytes()).await;
+                } else if cmd == "RESTART" || cmd.starts_with("RESTART ") {
+                    let serial = cmd.strip_prefix("RESTART").map(str::trim).filter(|s| !s.is_empty() && *s != "ALL").map(str::to_string);
+                    let (tx, rx) = oneshot::channel();
+                    let _ = ctrl_tx
+                        .send(DaemonControlMsg::RestartSession { serial, resp: tx })
+                        .await;
+                    let reply = match rx.await {
+                        Ok(Ok(n)) => format!("OK RESTARTED {}\n", n),
+                        Ok(Err(e)) => format!("ERR {}\n", e),
+                        Err(_) => "ERR channel closed\n".to_string(),
+                    };
+                    let _ = writer.write_all(reply.as_bytes()).await;
                 } else if cmd == "PING" {
                     let _ = writer.write_all(b"PONG\n").await;
                 } else {

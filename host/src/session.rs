@@ -34,6 +34,27 @@ pub enum DaemonControlMsg {
         serial: String,
         resp: oneshot::Sender<Result<(), String>>,
     },
+    /// User-facing pause: SIGSTOP the ffmpeg and evdi_helper processes of a device, leaving
+    /// every pipe, socket and the virtual display intact so SIGCONT continues instantly.
+    FreezeDevice {
+        serial: String,
+        resp: oneshot::Sender<Result<(), String>>,
+    },
+    /// Undo [`DaemonControlMsg::FreezeDevice`] with SIGCONT.
+    ThawDevice {
+        serial: String,
+        resp: oneshot::Sender<Result<(), String>>,
+    },
+    /// Re-read the saved config for one device (or every device when `serial` is `None`), then
+    /// kill and respawn its ffmpeg and evdi_helper processes with the resulting arguments.
+    RestartSession {
+        serial: Option<String>,
+        resp: oneshot::Sender<Result<usize, String>>,
+    },
+    /// Serials currently frozen by [`DaemonControlMsg::FreezeDevice`].
+    ListFrozen {
+        resp: oneshot::Sender<Vec<String>>,
+    },
 }
 
 /// Baseline configuration template used to spawn secondary tablet sessions on demand.
@@ -190,6 +211,7 @@ pub fn spawn_extra_session(
         stream_scale: cfg.stream_scale,
         ten_bit: cfg.ten_bit,
         keep_alive: cfg.keep_alive,
+        restart_nonce: 0,
     });
     let settings_tx_keep = settings_tx.clone();
     let mut cap = CaptureManager::new(cfg.clone());
@@ -305,8 +327,24 @@ pub fn spawn_extra_session(
 /// Pre-configuring these parameters before EVDI display initialization avoids the multi-second
 /// display flash and mode-switch pipeline rebuild that occurs if defaults are changed dynamically.
 pub async fn apply_tablet_profile(serial: &str, settings_tx: &watch::Sender<EncoderSettings>) {
+    apply_profile_keys(&[serial], settings_tx, false).await;
+}
+
+/// Recompute a slot's [`EncoderSettings`] from the saved config and publish them.
+///
+/// `keys` are the identifiers the device's profile may be stored under, in priority order. With
+/// no stored profile the global defaults apply. When `force` is set the settings are published
+/// even if identical, with a bumped `restart_nonce`, so the capture loop kills and respawns
+/// both ffmpeg and evdi_helper rather than waiting for a value to differ.
+async fn apply_profile_keys(
+    keys: &[&str],
+    settings_tx: &watch::Sender<EncoderSettings>,
+    force: bool,
+) {
+    let serial = keys.first().copied().unwrap_or_default();
     let mut cfg = FileConfig::load();
-    let Some(mut p) = cfg.tablets.get(serial).cloned() else {
+    let found = keys.iter().find_map(|k| cfg.tablets.get(*k).cloned());
+    let Some(mut p) = found.or_else(|| force.then(Default::default)) else {
         if !is_fake_serial(serial) {
             let label = tokio::process::Command::new("adb")
                 .args(["-s", serial, "shell", "getprop", "ro.product.model"])
@@ -320,7 +358,7 @@ pub async fn apply_tablet_profile(serial: &str, settings_tx: &watch::Sender<Enco
         }
         return;
     };
-    if p.label.trim().is_empty() && !is_fake_serial(serial) {
+    if p.label.trim().is_empty() && !is_fake_serial(serial) && !force {
         if let Ok(o) = tokio::process::Command::new("adb")
             .args(["-s", serial, "shell", "getprop", "ro.product.model"])
             .output()
@@ -356,12 +394,15 @@ pub async fn apply_tablet_profile(serial: &str, settings_tx: &watch::Sender<Enco
         .unwrap_or(cfg.encoder.clone());
     s.ten_bit = p.ten_bit.unwrap_or(cfg.ten_bit);
     s.keep_alive = p.keep_alive.unwrap_or(cfg.keep_alive);
+    if force {
+        s.restart_nonce = before.restart_nonce.wrapping_add(1);
+    }
 
     if before == s {
         return;
     }
     info!(
-        "Device profile applied for {} ({}): {}x{}@{}fps, encoder: {}, bitrate: {}k, quality: {}, scale: {}, 10-bit: {}",
+        "Device profile applied for {} ({}): {}x{}@{}fps, encoder: {}, bitrate: {}k, quality: {}, scale: {}, 10-bit: {}{}",
         p.display_name(serial),
         serial,
         s.width, s.height, s.fps,
@@ -370,8 +411,39 @@ pub async fn apply_tablet_profile(serial: &str, settings_tx: &watch::Sender<Enco
         s.quality,
         s.stream_scale,
         s.ten_bit,
+        if force { " (forced restart)" } else { "" },
     );
     let _ = settings_tx.send(s);
+}
+
+/// FIFO path identifying the capture pipeline serving `serial`, matched against the slot-0
+/// hardware id / active serial and every extra session.
+fn pipeline_fifo(
+    serial: &str,
+    slot_0_hw: Option<&str>,
+    slot_0_active: &str,
+    extras: &HashMap<String, ExtraSession>,
+) -> Option<String> {
+    if slot_0_hw == Some(serial) || (!slot_0_active.is_empty() && slot_0_active == serial) {
+        return Some(capture::fifo_path_for(0));
+    }
+    extras
+        .values()
+        .find(|s| s.hw_id == serial || s.active_serial == serial)
+        .map(|s| capture::fifo_path_for(s.instance))
+}
+
+/// Send `sig` to the ffmpeg and evdi_helper belonging to capture FIFO `fifo`.
+async fn signal_pipeline(sig: &str, fifo: &str) {
+    for pattern in [
+        format!("evdi_helper .*--capture-fifo {}( |$)", fifo),
+        format!("ffmpeg.*{}", fifo),
+    ] {
+        let _ = tokio::process::Command::new("pkill")
+            .args([&format!("-{sig}"), "-f", &pattern])
+            .status()
+            .await;
+    }
 }
 
 /// Central device supervision and session state machine loop.
@@ -395,6 +467,8 @@ pub async fn adb_monitor(
     ping_notify: Arc<Notify>,
 ) {
     let mut paused_serials: HashSet<String> = HashSet::new();
+    // Devices whose pipeline is SIGSTOPped (user-facing Pause), keyed by the serial the GUI used.
+    let mut frozen_serials: HashSet<String> = HashSet::new();
     let mut slot_0_hw: Option<String> = None;
     let mut slot_0_active_serial: String = String::new();
     let mut slot_0_transport: Transport = Transport::Usb;
@@ -763,6 +837,67 @@ pub async fn adb_monitor(
                                 .status().await;
                             let _ = resp.send(Ok(()));
                         }
+                    }
+                    DaemonControlMsg::FreezeDevice { serial, resp } => {
+                        match pipeline_fifo(&serial, slot_0_hw.as_deref(), &slot_0_active_serial, &extras) {
+                            Some(fifo) => {
+                                info!("Freezing pipeline of {} (SIGSTOP ffmpeg + evdi_helper)", serial);
+                                signal_pipeline("STOP", &fifo).await;
+                                frozen_serials.insert(serial);
+                                let _ = resp.send(Ok(()));
+                            }
+                            None => {
+                                let _ = resp.send(Err(format!("Device {} not found in active sessions", serial)));
+                            }
+                        }
+                    }
+                    DaemonControlMsg::ThawDevice { serial, resp } => {
+                        match pipeline_fifo(&serial, slot_0_hw.as_deref(), &slot_0_active_serial, &extras) {
+                            Some(fifo) => {
+                                info!("Thawing pipeline of {} (SIGCONT ffmpeg + evdi_helper)", serial);
+                                signal_pipeline("CONT", &fifo).await;
+                                frozen_serials.remove(&serial);
+                                let _ = resp.send(Ok(()));
+                            }
+                            None => {
+                                frozen_serials.remove(&serial);
+                                let _ = resp.send(Err(format!("Device {} not found in active sessions", serial)));
+                            }
+                        }
+                    }
+                    DaemonControlMsg::ListFrozen { resp } => {
+                        let _ = resp.send(frozen_serials.iter().cloned().collect());
+                    }
+                    DaemonControlMsg::RestartSession { serial, resp } => {
+                        let mut restarted = 0usize;
+                        let want = |hw: Option<&str>, active: &str| match serial.as_deref() {
+                            None => true,
+                            Some(s) => hw == Some(s) || active == s,
+                        };
+                        if !slot_0_active_serial.is_empty() && want(slot_0_hw.as_deref(), &slot_0_active_serial) {
+                            let hw = slot_0_hw.clone().unwrap_or_default();
+                            if let Some(fifo) = pipeline_fifo(&slot_0_active_serial, slot_0_hw.as_deref(), &slot_0_active_serial, &extras) {
+                                signal_pipeline("CONT", &fifo).await;
+                            }
+                            frozen_serials.retain(|f| f != &slot_0_active_serial && *f != hw && Some(f.as_str()) != serial.as_deref());
+                            apply_profile_keys(&[serial.as_deref().unwrap_or(&slot_0_active_serial), &slot_0_active_serial, &hw], &settings_tx, true).await;
+                            restarted += 1;
+                        }
+                        let matches: Vec<(String, String, String)> = extras
+                            .values()
+                            .filter(|s| want(Some(s.hw_id.as_str()), &s.active_serial))
+                            .map(|s| (s.hw_id.clone(), s.active_serial.clone(), capture::fifo_path_for(s.instance)))
+                            .collect();
+                        for (hw, active, fifo) in matches {
+                            signal_pipeline("CONT", &fifo).await;
+                            frozen_serials.retain(|f| *f != active && *f != hw && Some(f.as_str()) != serial.as_deref());
+                            if let Some(sess) = extras.get(&hw) {
+                                apply_profile_keys(&[serial.as_deref().unwrap_or(&active), &active, &hw], &sess.settings_tx, true).await;
+                                restarted += 1;
+                            }
+                        }
+                        info!("Restart requested for {:?}: {} session(s) restarting", serial, restarted);
+                        let _ = resp.send(Ok(restarted));
                     }
                     DaemonControlMsg::ResumeDevice { serial, resp } => {
                         info!("Received surgical RESUME request for device {}", serial);

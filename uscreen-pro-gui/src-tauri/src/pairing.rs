@@ -15,8 +15,13 @@ use tauri::{AppHandle, Emitter, State};
 
 const PAIRING_TYPE: &str = "_adb-tls-pairing._tcp";
 const CONNECT_TYPE: &str = "_adb-tls-connect._tcp";
-const QR_TIMEOUT: Duration = Duration::from_secs(180);
-const STALL_HINT_AFTER: Duration = Duration::from_secs(20);
+/// Hard limit on the `adb mdns services` discovery loop. Many routers drop multicast, so
+/// waiting longer than this only leaves the user staring at a spinner.
+const QR_TIMEOUT: Duration = Duration::from_secs(30);
+/// Event the frontend listens for when discovery gave up.
+pub const MDNS_TIMEOUT_EVENT: &str = "mdns_timeout";
+const MDNS_TIMEOUT_MESSAGE: &str =
+    "mDNS discovery timed out. Your Wi-Fi router may be blocking device discovery. Please use Manual Pairing.";
 
 #[derive(Serialize, Clone, Debug)]
 pub struct QrPairingSession {
@@ -142,13 +147,16 @@ pub async fn initiate_qr_pairing(
     tokio::spawn(async move {
         let alive = || counter.load(Ordering::SeqCst) == generation;
         let start = Instant::now();
-        let mut stall_sent = false;
         let mut last_attempt: Option<String> = None;
 
         emit(&app, "searching", "Waiting for the tablet to scan the QR code", None);
         while alive() && start.elapsed() < QR_TIMEOUT {
-            let hit = mdns_services()
+            // `adb mdns services` can itself hang for its full 5 s timeout, so cap each poll
+            // at whatever is left of the 30 s budget.
+            let remaining = QR_TIMEOUT.saturating_sub(start.elapsed());
+            let hit = tokio::time::timeout(remaining, mdns_services())
                 .await
+                .unwrap_or_default()
                 .into_iter()
                 .find(|s| s.kind == PAIRING_TYPE && s.name == name);
 
@@ -173,25 +181,11 @@ pub async fn initiate_qr_pairing(
                 }
             }
 
-            if !stall_sent && last_attempt.is_none() && start.elapsed() > STALL_HINT_AFTER {
-                stall_sent = true;
-                emit(
-                    &app,
-                    "stalled",
-                    "No pairing service seen yet. If the tablet shows a pairing code, use manual pairing; \
-                     some routers block mDNS multicast.",
-                    None,
-                );
-            }
             tokio::time::sleep(Duration::from_millis(800)).await;
         }
         if alive() {
-            emit(
-                &app,
-                "timeout",
-                "Timed out waiting for the tablet. Your network may block mDNS; use manual pairing.",
-                None,
-            );
+            let _ = app.emit(MDNS_TIMEOUT_EVENT, MDNS_TIMEOUT_MESSAGE);
+            emit(&app, "timeout", MDNS_TIMEOUT_MESSAGE, None);
         }
     });
 

@@ -365,6 +365,7 @@ async fn run_daemon(cli: Cli) -> Result<()> {
         stream_scale,
         ten_bit: file_cfg.ten_bit,
         keep_alive: file_cfg.keep_alive,
+        restart_nonce: 0,
     });
 
     let mut capture_mgr = capture::CaptureManager::new(cap_config);

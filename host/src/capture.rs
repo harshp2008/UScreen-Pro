@@ -129,6 +129,9 @@ pub struct EncoderSettings {
     pub stream_scale: u32,
     pub ten_bit: bool,
     pub keep_alive: bool,
+    /// Bumped by an explicit session restart. Any change makes the capture loop kill and
+    /// respawn both ffmpeg and evdi_helper, even when no other setting differs.
+    pub restart_nonce: u64,
 }
 
 /// Why the helper cannot get an EVDI device, in the words of someone who can
@@ -1113,11 +1116,14 @@ impl CaptureManager {
         // change can be detected as a mismatch rather than silently skewing.
         let mut encoder_mode: Option<(u32, u32)> = None;
         let mut is_throttled = false;
+        let mut applied_nonce = settings_rx.borrow().restart_nonce;
 
         loop {
             // Apply the latest runtime settings before (re)starting anything
             {
                 let s = settings_rx.borrow_and_update().clone();
+                let forced_restart = s.restart_nonce != applied_nonce;
+                applied_nonce = s.restart_nonce;
                 // The physical size is baked into the EDID alongside the mode,
                 // so a change there needs a fresh helper too.
                 let needs_helper_restart = (s.fps != self.config.fps
@@ -1125,7 +1131,8 @@ impl CaptureManager {
                     || s.height != self.config.height
                     || s.width_mm != self.config.width_mm
                     || s.height_mm != self.config.height_mm
-                    || s.stream_scale != self.config.stream_scale)
+                    || s.stream_scale != self.config.stream_scale
+                    || forced_restart)
                     && self.helper_child.is_some();
                 if needs_helper_restart {
                     // fps is baked into the helper's pacing, and the

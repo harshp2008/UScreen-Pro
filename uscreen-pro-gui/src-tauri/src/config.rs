@@ -153,16 +153,41 @@ pub async fn get_config() -> Result<AppConfig, String> {
     Ok(load().await)
 }
 
+/// Settings that change the arguments of ffmpeg or evdi_helper.
+fn stream_args_differ(a: &AppConfig, b: &AppConfig) -> bool {
+    (&a.encoder, a.fps, a.bitrate, a.quality, a.stream_scale, a.ten_bit, a.width, a.height)
+        != (&b.encoder, b.fps, b.bitrate, b.quality, b.stream_scale, b.ten_bit, b.width, b.height)
+}
+
+fn profile_args_differ(a: Option<&TabletProfile>, b: &TabletProfile) -> bool {
+    let key = |p: &TabletProfile| {
+        (p.encoder.clone(), p.fps, p.bitrate, p.quality, p.stream_scale, p.ten_bit, p.width, p.height, p.width_mm, p.height_mm)
+    };
+    a.map(key) != Some(key(b))
+}
+
 #[tauri::command]
 pub async fn save_config(config: AppConfig) -> Result<(), String> {
-    store(&config).await
+    let previous = load().await;
+    store(&config).await?;
+    // Placebo-settings fix: the daemon only read config.toml on tablet connect, so a save has
+    // to tell it to respawn the pipelines of every device using the global values.
+    if stream_args_differ(&previous, &config) {
+        crate::daemon::restart_pipeline(None).await?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
 pub async fn save_device_profile(serial: String, profile: TabletProfile) -> Result<(), String> {
     let mut cfg = load().await;
-    cfg.tablets.insert(serial, profile);
-    store(&cfg).await
+    let changed = profile_args_differ(cfg.tablets.get(&serial), &profile);
+    cfg.tablets.insert(serial.clone(), profile);
+    store(&cfg).await?;
+    if changed {
+        crate::daemon::restart_pipeline(Some(&serial)).await?;
+    }
+    Ok(())
 }
 
 #[tauri::command]

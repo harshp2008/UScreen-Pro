@@ -77,8 +77,13 @@ export interface AppConfig {
 
 export type View = "settings" | "advanced" | "health" | { device: string };
 
+export interface WirelessDeviceInfo {
+  serial: string;
+  model: string;
+}
+
 export interface PairingEvent {
-  kind: "searching" | "stalled" | "pairing" | "success" | "error" | "timeout";
+  kind: "searching" | "pairing" | "success" | "error" | "timeout";
   message: string;
   connect_endpoint?: string | null;
 }

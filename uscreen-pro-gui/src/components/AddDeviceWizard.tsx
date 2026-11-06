@@ -1,12 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
+  AlertTriangle,
   Check,
+  ChevronDown,
   ChevronLeft,
   ExternalLink,
+  KeyRound,
   Info,
   LoaderCircle,
   MousePointerClick,
+  QrCode,
   Settings,
   Smartphone,
   ToggleRight,
@@ -18,14 +22,17 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "../lib/toast";
-import type { AdbEntry, ManualPairResult, PairingEvent, QrPairingSession } from "../lib/types";
+import type { AdbEntry, ManualPairResult, PairingEvent, QrPairingSession, WirelessDeviceInfo } from "../lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { TextInput } from "./ui/controls";
 
-const STEPS = ["Prepare Device", "Connect USB", "Install", "Wireless", "Finish"] as const;
-type Step = 1 | 2 | 3 | 4 | 5;
+/* Step 0 is the landing screen; steps 1-4 are the USB flow (the wireless path jumps to Finish). */
+const STEPS = ["Prepare Device", "Connect USB", "Install", "Finish"] as const;
+type Step = 0 | 1 | 2 | 3 | 4;
+type WirelessTab = "qr" | "manual";
+type Via = "usb" | "wireless";
 type InstallState = "idle" | "running" | "ok" | "failed";
 type Transport = "usb" | "wifi";
 
@@ -93,7 +100,8 @@ function DebugTimeline() {
 }
 
 export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded }: Props) {
-  const [step, setStep] = useState<Step>(1);
+  const [step, setStep] = useState<Step>(0);
+  const [via, setVia] = useState<Via>("usb");
   const [entries, setEntries] = useState<AdbEntry[]>([]);
   const [device, setDevice] = useState<AdbEntry | null>(null);
 
@@ -101,11 +109,13 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
   const [qr, setQr] = useState<QrPairingSession | null>(null);
   const [pairEvent, setPairEvent] = useState<PairingEvent | null>(null);
-  const [manualOpen, setManualOpen] = useState(false);
+  const [wirelessOpen, setWirelessOpen] = useState(false);
+  const [tab, setTab] = useState<WirelessTab>("qr");
+  const [qrNonce, setQrNonce] = useState(0);
+  const [mdnsWarning, setMdnsWarning] = useState<string | null>(null);
   const [pairAddr, setPairAddr] = useState("");
   const [pairCode, setPairCode] = useState("");
   const [connectAddr, setConnectAddr] = useState("");
-  const [needConnect, setNeedConnect] = useState(false);
   const [pairBusy, setPairBusy] = useState(false);
   const [pairError, setPairError] = useState<string | null>(null);
 
@@ -140,8 +150,8 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
   }, [poll]);
 
   useEffect(() => {
-    if (usb) setDevice(usb);
-  }, [usb]);
+    if (usb && via === "usb") setDevice(usb);
+  }, [usb, via]);
 
   const runInstall = useCallback(async (serial: string) => {
     setInstall({ state: "running", message: "Installing over USB" });
@@ -166,10 +176,11 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
     return () => clearTimeout(t);
   }, [step, install.state]);
 
-  /* Step 4: a QR session lives only while that step is on screen. */
+  /* A QR session lives only while the QR tab is on screen. */
   useEffect(() => {
-    if (!open || step !== 4) return;
+    if (!open || step !== 0 || !wirelessOpen || tab !== "qr") return;
     let cancelled = false;
+    setMdnsWarning(null);
     invoke<QrPairingSession>("initiate_qr_pairing")
       .then((s) => !cancelled && setQr(s))
       .catch((e) => !cancelled && setPairError(`Could not start pairing: ${errText(e)}`));
@@ -179,23 +190,46 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
       setPairEvent(null);
       void invoke("cancel_qr_pairing");
     };
-  }, [open, step]);
+  }, [open, step, wirelessOpen, tab, qrNonce]);
+
+  /* Wireless pairing succeeded: identify the device and go straight to Finish. */
+  const finishWireless = useCallback(async (endpoint: string) => {
+    setWifiEndpoint(endpoint);
+    setTransport("wifi");
+    setVia("wireless");
+    try {
+      const info = await invoke<WirelessDeviceInfo>("wireless_device_info", { endpoint });
+      setDevice({ serial: info.serial, model: info.model, state: "device", is_wifi: true });
+    } catch (e) {
+      setDevice({ serial: endpoint, model: endpoint, state: "device", is_wifi: true });
+      console.error("wireless_device_info failed:", e);
+    }
+    setStep(4);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
-    const unlisten = listen<PairingEvent>("pairing_event", ({ payload }) => {
-      setPairEvent(payload);
-      if (payload.kind === "stalled" || payload.kind === "timeout" || payload.kind === "error") setManualOpen(true);
-      if (payload.kind === "success") {
-        setWifiEndpoint(payload.connect_endpoint ?? null);
-        setTransport(payload.connect_endpoint ? "wifi" : "usb");
-        setStep(5);
-      }
-    });
+    const subs = [
+      listen<PairingEvent>("pairing_event", ({ payload }) => {
+        setPairEvent(payload);
+        if (payload.kind === "success") {
+          if (payload.connect_endpoint) void finishWireless(payload.connect_endpoint);
+          else {
+            setPairError("Paired, but the connect address could not be found. Enter it under Manual Pairing.");
+            setTab("manual");
+          }
+        }
+      }),
+      /* Backend gave up on mDNS after 30 s: warn and move the user to Manual Pairing. */
+      listen<string>("mdns_timeout", ({ payload }) => {
+        setMdnsWarning(payload);
+        setTab("manual");
+      }),
+    ];
     return () => {
-      void unlisten.then((fn) => fn());
+      subs.forEach((p) => void p.then((fn) => fn()));
     };
-  }, [open]);
+  }, [open, finishWireless]);
 
   async function openWirelessSettings() {
     try {
@@ -209,26 +243,13 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
     setPairError(null);
     setPairBusy(true);
     try {
-      if (needConnect) {
-        const endpoint = await invoke<string>("manual_adb_connect", { endpoint: connectAddr });
-        setWifiEndpoint(endpoint);
-        setTransport("wifi");
-        setStep(5);
-        return;
-      }
       const res = await invoke<ManualPairResult>("manual_adb_pair", {
         pairEndpoint: pairAddr,
         code: pairCode,
-        connectEndpoint: connectAddr || null,
+        connectEndpoint: connectAddr.trim(),
       });
-      if (res.connect_endpoint) {
-        setWifiEndpoint(res.connect_endpoint);
-        setTransport("wifi");
-        setStep(5);
-      } else {
-        setNeedConnect(true);
-        toast.success("Paired. Enter the connect address shown on the Wireless debugging screen.");
-      }
+      if (res.connect_endpoint) await finishWireless(res.connect_endpoint);
+      else setPairError("Paired, but adb could not connect to that Connect IP:Port.");
     } catch (e) {
       setPairError(errText(e));
     } finally {
@@ -273,15 +294,26 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);
     return () => ro.disconnect();
-  }, [step, manualOpen, measureScroll]);
+  }, [step, wirelessOpen, tab, measureScroll]);
 
   const pairingActive = pairEvent?.kind === "pairing";
 
-  /* Next is always shown; each step enables it once its own condition holds. */
-  const nextEnabled =
-    step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : step === 4 ? wifiEndpoint !== null : false;
+  /* Next is always shown on USB steps; each step enables it once its own condition holds. */
+  const nextEnabled = step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : false;
   const goNext = () => {
-    if (step === 1 || step === 2 || step === 3 || step === 4) setStep((step + 1) as Step);
+    if (step === 1 || step === 2 || step === 3) setStep((step + 1) as Step);
+  };
+  const startUsb = () => {
+    setVia("usb");
+    setWirelessOpen(false);
+    setStep(1);
+  };
+  const goBack = () => {
+    if (step === 4 && via === "wireless") {
+      setWifiEndpoint(null);
+      setDevice(null);
+      setStep(0);
+    } else setStep((s) => (s - 1) as Step);
   };
 
   return (
@@ -295,6 +327,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
             <DialogTitle className="text-xl font-medium leading-8 text-foreground">Add device</DialogTitle>
           </header>
 
+          {step > 0 && via === "usb" && (
           <ol className="flex gap-2 px-6 pb-4 pt-2">
             {STEPS.map((label, i) => {
               const n = i + 1;
@@ -313,9 +346,176 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
               );
             })}
           </ol>
+          )}
 
           <div className="relative flex min-h-[260px] flex-1 flex-col overflow-hidden">
           <div ref={scrollerRef} onScroll={measureScroll} className="flex flex-1 flex-col overflow-y-auto px-6 py-4"><div className="my-auto space-y-4">
+            {step === 0 && (
+              <>
+                <button
+                  type="button"
+                  onClick={startUsb}
+                  className="flex w-full items-start gap-4 rounded-xl bg-primary px-5 py-5 text-left text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                >
+                  <Usb className="mt-0.5 size-6 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="block text-base font-medium">Setup via USB (Recommended)</span>
+                    <span className="mt-1 block text-xs leading-relaxed opacity-90">
+                      Plug in your device. We will automatically install the app and configure wireless mode.
+                    </span>
+                  </span>
+                </button>
+
+                <div>
+                  <button
+                    type="button"
+                    aria-expanded={wirelessOpen}
+                    aria-controls="wizard-wireless"
+                    onClick={() => setWirelessOpen((v) => !v)}
+                    className="flex items-center gap-1.5 rounded-sm text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <ChevronDown className={cn("size-3.5 transition-transform", wirelessOpen && "rotate-180")} />
+                    Don&rsquo;t have a USB cable? Set up wirelessly.
+                  </button>
+
+                  {wirelessOpen && (
+                    <div id="wizard-wireless" className="mt-3 space-y-3">
+                      <Note>
+                        You must download and install the UScreen APK manually on your device first. Once installed,
+                        use one of the methods below.
+                      </Note>
+
+                      <div role="tablist" aria-label="Wireless pairing method" className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
+                        {(
+                          [
+                            { id: "qr", title: "QR Code", icon: QrCode },
+                            { id: "manual", title: "Manual Pairing", icon: KeyRound },
+                          ] as const
+                        ).map(({ id, title, icon: Icon }) => (
+                          <button
+                            key={id}
+                            type="button"
+                            role="tab"
+                            aria-selected={tab === id}
+                            onClick={() => setTab(id)}
+                            className={cn(
+                              "flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                              tab === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                            )}
+                          >
+                            <Icon className="size-3.5" />
+                            {title}
+                          </button>
+                        ))}
+                      </div>
+
+                      {mdnsWarning && (
+                        <Note tone="warning">
+                          <span className="flex items-start gap-2">
+                            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+                            <span>{mdnsWarning}</span>
+                          </span>
+                        </Note>
+                      )}
+
+                      {tab === "qr" && (
+                        <div className="space-y-3">
+                          <Instructions
+                            items={[
+                              <>Connect the device to the <b>same Wi-Fi network</b> as this computer.</>,
+                              <>Open <b>Developer options, Wireless debugging</b> and switch it on.</>,
+                              <>Tap <b>Pair device with QR code</b> and scan the code below.</>,
+                            ]}
+                          />
+                          <div className="flex gap-4 rounded-lg border border-border bg-background p-3">
+                            <div className="flex size-[164px] shrink-0 items-center justify-center rounded-lg bg-white p-2">
+                              {qr ? (
+                                <QRCodeSVG value={qr.qr_payload} size={148} level="M" fgColor="#111318" bgColor="#ffffff" />
+                              ) : (
+                                <LoaderCircle className="size-5 animate-spin text-background" />
+                              )}
+                            </div>
+                            <div className="flex min-w-0 flex-1 flex-col justify-between">
+                              <div className="space-y-2">
+                                <div>
+                                  <div className="text-[11px] text-muted-foreground">Pairing code</div>
+                                  <div className="font-mono text-lg tracking-widest text-foreground">{qr?.pairing_code ?? "------"}</div>
+                                </div>
+                                <div>
+                                  <div className="text-[11px] text-muted-foreground">Service</div>
+                                  <div className="truncate font-mono text-[11px] text-muted-foreground">{qr?.service_name ?? "-"}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                {pairingActive || pairEvent?.kind === "searching" ? (
+                                  <LoaderCircle className="size-3 animate-spin text-primary" />
+                                ) : null}
+                                <span className={cn(pairEvent?.kind === "error" && "text-destructive")}>
+                                  {pairEvent?.message ?? "Starting"}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <Button size="sm" variant="ghost" onClick={openWirelessSettings}><ExternalLink />
+                              Open Developer options on device
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setQrNonce((n) => n + 1)}>
+                              Retry QR
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {tab === "manual" && (
+                        <div className="space-y-2 rounded-lg border border-border bg-background p-3">
+                          <p className="text-[11px] leading-relaxed text-muted-foreground">
+                            On the device choose <b>Wireless debugging, Pair device with pairing code</b> and enter the
+                            address and code it shows. The <b>Connect IP:Port</b> is different: find it on the main
+                            Wireless Debugging screen of the tablet, under &lsquo;IP address &amp; Port&rsquo;.
+                          </p>
+                          <div className="grid grid-cols-[1fr_120px] gap-2">
+                            <TextInput
+                              aria-label="Pairing IP:Port"
+                              className="w-full font-mono"
+                              placeholder="Pairing IP:Port"
+                              value={pairAddr}
+                              onChange={(v) => setPairAddr(v)}
+                            />
+                            <TextInput
+                              aria-label="6-digit pairing code"
+                              className="w-full font-mono"
+                              placeholder="6-digit code"
+                              inputMode="numeric"
+                              maxLength={6}
+                              value={pairCode}
+                              onChange={(v) => setPairCode(v.replace(/\D/g, ""))}
+                            />
+                          </div>
+                          <TextInput
+                            aria-label="Connect IP:Port (required)"
+                            className="w-full font-mono"
+                            placeholder="Connect IP:Port (required)"
+                            value={connectAddr}
+                            onChange={(v) => setConnectAddr(v)}
+                          />
+                          <Button
+                            size="sm"
+                            onClick={manualPair}
+                            disabled={pairBusy || !pairAddr.trim() || pairCode.length !== 6 || !connectAddr.trim()}
+                          >
+                            {pairBusy ? <LoaderCircle className="animate-spin" /> : <Wifi />}
+                            Pair and connect
+                          </Button>
+                        </div>
+                      )}
+                      {pairError && <Note tone="error">{pairError}</Note>}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
             {step === 1 && <DebugTimeline />}
 
             {step === 2 && (
@@ -384,110 +584,13 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
             {step === 4 && (
               <>
-                <Instructions
-                  items={[
-                    <>Connect the device to the <b>same Wi-Fi network</b> as this computer.</>,
-                    <>Open <b>Developer options, Wireless debugging</b> and switch it on.</>,
-                    <>Tap <b>Pair device with QR code</b> and scan the code below.</>,
-                  ]}
-                />
-                <div className="flex gap-4 rounded-lg border border-border bg-background p-3">
-                  <div className="flex size-[164px] shrink-0 items-center justify-center rounded-lg bg-white p-2">
-                    {qr ? (
-                      <QRCodeSVG value={qr.qr_payload} size={148} level="M" fgColor="#111318" bgColor="#ffffff" />
-                    ) : (
-                      <LoaderCircle className="size-5 animate-spin text-background" />
-                    )}
-                  </div>
-                  <div className="flex min-w-0 flex-1 flex-col justify-between">
-                    <div className="space-y-2">
-                      <div>
-                        <div className="text-[11px] text-muted-foreground">Pairing code</div>
-                        <div className="font-mono text-lg tracking-widest text-foreground">{qr?.pairing_code ?? "------"}</div>
-                      </div>
-                      <div>
-                        <div className="text-[11px] text-muted-foreground">Service</div>
-                        <div className="truncate font-mono text-[11px] text-muted-foreground">{qr?.service_name ?? "-"}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                      {pairingActive || pairEvent?.kind === "searching" ? (
-                        <LoaderCircle className="size-3 animate-spin text-primary" />
-                      ) : null}
-                      <span className={cn(pairEvent?.kind === "error" && "text-destructive", pairEvent?.kind === "timeout" && "text-warning")}>
-                        {pairEvent?.message ?? "Starting"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <Button size="sm" variant="ghost" onClick={openWirelessSettings}><ExternalLink />
-                    Open Developer options on device
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setManualOpen((v) => !v)}>
-                    {manualOpen ? "Hide manual pairing" : "Pair with a code instead"}
-                  </Button>
-                </div>
-
-                {manualOpen && (
-                  <div className="space-y-2 rounded-lg border border-border bg-background p-3">
-                    <p className="text-[11px] text-muted-foreground">
-                      On the device choose <b>Pair device with pairing code</b>, then enter the address and code it
-                      shows. The connect address is the IP and port on the main Wireless debugging screen; leave it
-                      empty to look it up automatically.
-                    </p>
-                    <div className="grid grid-cols-[1fr_120px] gap-2">
-                      <TextInput
-                        aria-label="Pairing address"
-                        className="w-full font-mono"
-                        placeholder="Pairing IP:port"
-                        value={pairAddr}
-                        disabled={needConnect}
-                        onChange={(v) => setPairAddr(v)}
-                      />
-                      <TextInput
-                        aria-label="Pairing code"
-                        className="w-full font-mono"
-                        placeholder="6-digit code"
-                        maxLength={6}
-                        value={pairCode}
-                        disabled={needConnect}
-                        onChange={(v) => setPairCode(v.replace(/\D/g, ""))}
-                      />
-                    </div>
-                    <TextInput
-                      aria-label="Connect address"
-                      className={cn("w-full font-mono", needConnect && "border-primary")}
-                      placeholder={needConnect ? "Connect IP:port (required)" : "Connect IP:port (optional)"}
-                      value={connectAddr}
-                      onChange={(v) => setConnectAddr(v)}
-                    />
-                    <div className="flex items-center gap-3">
-                      <Button size="sm"
-                        onClick={manualPair}
-                        disabled={
-                          pairBusy ||
-                          (needConnect ? !connectAddr.trim() : !pairAddr.trim() || pairCode.length !== 6)
-                        }><Wifi />
-                        {needConnect ? "Connect" : "Pair"}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {pairError && <Note tone="error">{pairError}</Note>}
-              </>
-            )}
-
-            {step === 5 && (
-              <>
                 <Note tone="success">
                   {wifiEndpoint ? (
                     <>
                       Paired and connected over Wi-Fi at <span className="font-mono">{wifiEndpoint}</span>.
                     </>
                   ) : (
-                    <>Set up over USB. Wireless pairing was skipped.</>
+                    <>Set up over USB. The host enables wireless mode on its own while the cable is plugged in.</>
                   )}
                 </Note>
 
@@ -522,7 +625,7 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                             {title}
                           </div>
                           <div className="mt-1 text-[11px] opacity-80">
-                            {disabled ? "Pair over Wi-Fi first" : desc}
+                            {disabled ? "Not set up yet" : desc}
                           </div>
                         </button>
                       );
@@ -557,14 +660,11 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
           />
           </div>
 
+          {step > 0 && (
           <footer className="flex items-center justify-between px-6 pb-6 pt-2">
-            {step > 1 ? (
-              <Button size="sm" variant="ghost" onClick={() => setStep((s) => (s - 1) as Step)}><ChevronLeft />
-                Back
-              </Button>
-            ) : (
-              <span />
-            )}
+            <Button size="sm" variant="ghost" onClick={goBack}><ChevronLeft />
+              Back
+            </Button>
 
             <div className="flex items-center gap-2">
               {step === 3 && install.state !== "ok" && (
@@ -572,13 +672,8 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                   Skip install
                 </Button>
               )}
-              {step === 4 && (
-                <Button size="sm" variant="ghost" onClick={() => setStep(5)}>
-                  Skip, use USB only
-                </Button>
-              )}
-              {step < 5 ? (
-                /* Visible from the first screen, disabled until this step has what it needs. */
+              {step < 4 ? (
+                /* Disabled until this step has what it needs. */
                 <Button size="sm" onClick={goNext} disabled={!nextEnabled}>
                   Next
                 </Button>
@@ -589,6 +684,8 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
               )}
             </div>
           </footer>
+          )}
+          {step === 0 && <div className="h-4" />}
       </DialogContent>
     </Dialog>
   );
