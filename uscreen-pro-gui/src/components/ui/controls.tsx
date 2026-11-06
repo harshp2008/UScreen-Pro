@@ -50,7 +50,6 @@ export function Select({
   return (
     <M3Select
       aria-label={label}
-      label={label}
       dense
       variant="outlined"
       value={value}
@@ -73,6 +72,7 @@ export function Slider({
   step = 1,
   onValueChange,
   label,
+  ticks = false,
 }: {
   value: number;
   min: number;
@@ -80,6 +80,8 @@ export function Slider({
   step?: number;
   onValueChange: (v: number) => void;
   label: string;
+  /** Dots on the track, one per step. */
+  ticks?: boolean;
 }) {
   return (
     <M3Slider
@@ -90,6 +92,8 @@ export function Slider({
       min={min}
       max={max}
       step={step}
+      showTicks={ticks}
+      showValueIndicator={false}
       onValueChange={onValueChange}
       className="m3-round-thumb w-full"
     />
@@ -168,7 +172,6 @@ export function TextInput({
       type={type}
       noSpinner
       aria-label={ariaLabel ?? placeholder ?? "Value"}
-      label={ariaLabel}
       placeholder={placeholder}
       disabled={disabled}
       value={String(value)}

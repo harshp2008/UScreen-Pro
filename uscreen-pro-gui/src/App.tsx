@@ -8,6 +8,7 @@ import { TitleBar } from "./components/TitleBar";
 import { TooltipProvider } from "./components/ui/layout";
 import type { AppConfig, DaemonStatus, TabletProfile, View } from "./lib/types";
 import { DeviceSettings } from "./views/DeviceSettings";
+import { Advanced } from "./views/Advanced";
 import { GlobalSettings } from "./views/GlobalSettings";
 import { Health } from "./views/Health";
 import "./styles.css";
@@ -71,6 +72,7 @@ export default function App() {
       if (!(e.ctrlKey || e.altKey)) return;
       if (e.key === "n") setWizardOpen(true);
       else if (e.key === "1") setView("settings");
+      else if (e.key === "2") setView("advanced");
       else if (e.key === "3") setView("health");
     };
     window.addEventListener("keydown", onKey);
@@ -180,7 +182,8 @@ export default function App() {
   return (
     <TooltipProvider>
       <div className="flex h-full w-full flex-col overflow-hidden bg-surface text-on-surface">
-        <Toaster theme={dark ? "dark" : "light"} position="bottom-right" />
+        {/* Sits above the 52px status bar so a toast never covers the version. */}
+        <Toaster theme={dark ? "dark" : "light"} position="bottom-right" offset={{ right: 16, bottom: 64 }} mobileOffset={{ right: 16, bottom: 64 }} />
         <AddDeviceWizard
           open={wizardOpen}
           onOpenChange={setWizardOpen}
@@ -218,6 +221,9 @@ export default function App() {
                     onSave={saveConfig}
                     onAutostart={toggleAutostart}
                   />
+                )}
+                {view === "advanced" && config && (
+                  <Advanced config={config} dirty={dirty} onChange={patchConfig} onSave={saveConfig} />
                 )}
                 {view === "health" && status && <Health status={status} onRestartAdb={restartAdb} />}
                 {serial && profile && config && (

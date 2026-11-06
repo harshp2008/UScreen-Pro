@@ -75,7 +75,7 @@ export interface AppConfig {
   tablets: Record<string, TabletProfile>;
 }
 
-export type View = "settings" | "health" | { device: string };
+export type View = "settings" | "advanced" | "health" | { device: string };
 
 export interface PairingEvent {
   kind: "searching" | "stalled" | "pairing" | "success" | "error" | "timeout";

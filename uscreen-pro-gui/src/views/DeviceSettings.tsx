@@ -1,7 +1,8 @@
 import { AlertTriangle, Check, Download, Pause, Play, Trash2 } from "lucide-react";
+import { AppLockList } from "../components/ui/AppLockList";
 import { Button, Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow, type Override } from "../components/ui/layout";
-import { ENCODERS, FPS, POSITIONS, QUALITY_STOPS, STREAM_DETAIL, TRANSPORTS, labelOf, nearestQualityIndex } from "../lib/options";
+import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL, TRANSPORTS, labelOf, qualityLabel } from "../lib/options";
 import type { AppConfig, ConnectedDevice, TabletProfile } from "../lib/types";
 
 interface Props {
@@ -16,12 +17,6 @@ interface Props {
   onTogglePause: () => void;
   onInstallApk: () => void;
 }
-
-const splitList = (s: string) =>
-  s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
 
 export function DeviceSettings({
   serial,
@@ -132,7 +127,7 @@ export function DeviceSettings({
         <QualityRow
           quality={p.quality ?? g.quality}
           onChange={(quality) => onChange({ quality })}
-          override={ov("quality", g.quality, QUALITY_STOPS[nearestQualityIndex(g.quality)].label)}
+          override={ov("quality", g.quality, `${g.quality} · ${qualityLabel(g.quality)}`)}
         />
         <SliderRow
           label="Bitrate ceiling"
@@ -141,6 +136,7 @@ export function DeviceSettings({
           min={5000}
           max={60000}
           step={1000}
+          ticks
           onChange={(bitrate) => onChange({ bitrate })}
           override={ov("bitrate", g.bitrate, `${Math.round(g.bitrate / 1000)} Mbps`)}
         />
@@ -180,16 +176,15 @@ export function DeviceSettings({
         />
         <SettingRow
           label="App locking"
-          tip="Comma-separated application IDs pinned to this tablet."
+          tip="Application IDs pinned to this device, instead of the global list in Advanced."
           override={ov("locked_apps", g.locked_apps, g.locked_apps.join(", ") || "none")}
         >
-          <TextInput
-            aria-label="App locking"
-            className="w-64 font-mono"
-            placeholder="org.gnome.Nautilus, gimp"
-            value={(p.locked_apps ?? g.locked_apps).join(", ")}
-            onChange={(v) => onChange({ locked_apps: splitList(v) })}
-          />
+          <div className="w-80">
+            <AppLockList
+              apps={p.locked_apps ?? g.locked_apps}
+              onChange={(locked_apps) => onChange({ locked_apps })}
+            />
+          </div>
         </SettingRow>
         <SettingRow label="Resolution" tip="Leave at 0 x 0 to use the panel's own resolution.">
           <div className="flex items-center gap-2">

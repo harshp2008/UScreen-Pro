@@ -34,15 +34,15 @@
   --md-sys-color-on-secondary-fixed: #0b2a1d;
   --md-sys-color-on-secondary-fixed-variant: #33493e;
 
-  --md-sys-color-tertiary: #2f6b73;
+  --md-sys-color-tertiary: #2c6b62;
   --md-sys-color-on-tertiary: #ffffff;
-  --md-sys-color-tertiary-container: #c3e9ee;
-  --md-sys-color-on-tertiary-container: #04292e;
-  --md-sys-color-tertiary-dim: #265a61;
-  --md-sys-color-tertiary-fixed: #c3e9ee;
-  --md-sys-color-tertiary-fixed-dim: #a6ccd2;
-  --md-sys-color-on-tertiary-fixed: #04292e;
-  --md-sys-color-on-tertiary-fixed-variant: #1f4d53;
+  --md-sys-color-tertiary-container: #bfece3;
+  --md-sys-color-on-tertiary-container: #00201c;
+  --md-sys-color-tertiary-dim: #235a52;
+  --md-sys-color-tertiary-fixed: #bfece3;
+  --md-sys-color-tertiary-fixed-dim: #a2cfc6;
+  --md-sys-color-on-tertiary-fixed: #00201c;
+  --md-sys-color-on-tertiary-fixed-variant: #1d4f48;
 
   --md-sys-color-error: #ba1a1a;
   --md-sys-color-on-error: #ffffff;
@@ -91,15 +91,15 @@
   --md-sys-color-on-secondary-fixed: #0b2a1d;
   --md-sys-color-on-secondary-fixed-variant: #33493e;
 
-  --md-sys-color-tertiary: #86d2da;
-  --md-sys-color-on-tertiary: #00363b;
-  --md-sys-color-tertiary-container: #1f4d53;
-  --md-sys-color-on-tertiary-container: #a2eef6;
-  --md-sys-color-tertiary-dim: #6bb7bf;
-  --md-sys-color-tertiary-fixed: #c3e9ee;
-  --md-sys-color-tertiary-fixed-dim: #a6ccd2;
-  --md-sys-color-on-tertiary-fixed: #04292e;
-  --md-sys-color-on-tertiary-fixed-variant: #1f4d53;
+  --md-sys-color-tertiary: #84d5c8;
+  --md-sys-color-on-tertiary: #00372f;
+  --md-sys-color-tertiary-container: #1d4f48;
+  --md-sys-color-on-tertiary-container: #a0f0e3;
+  --md-sys-color-tertiary-dim: #6bb8aa;
+  --md-sys-color-tertiary-fixed: #bfece3;
+  --md-sys-color-tertiary-fixed-dim: #a2cfc6;
+  --md-sys-color-on-tertiary-fixed: #00201c;
+  --md-sys-color-on-tertiary-fixed-variant: #1d4f48;
 
   --md-sys-color-error: #ffb4ab;
   --md-sys-color-on-error: #690005;

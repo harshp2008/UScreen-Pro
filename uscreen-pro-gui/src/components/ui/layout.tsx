@@ -2,7 +2,7 @@ import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import { PlainTooltip } from "@bug-on/m3-expressive/feedback";
 import { Info } from "lucide-react";
 import type { ReactNode } from "react";
-import { QUALITY_STOPS, nearestQualityIndex } from "../../lib/options";
+import { QUALITY_MAX, QUALITY_MIN, qualityLabel } from "../../lib/options";
 import { Slider, Switch, cx } from "./controls";
 
 export const TooltipProvider = TooltipPrimitive.Provider;
@@ -100,7 +100,7 @@ export function SettingRow({
   );
 }
 
-/** Label on the left, value on the right, full-width track underneath. */
+/** Label, tip and the live value in one line; full-width track (optionally dotted) underneath. */
 export function SliderRow({
   label,
   tip,
@@ -109,6 +109,7 @@ export function SliderRow({
   min,
   max,
   step,
+  ticks,
   onChange,
   override,
   ends,
@@ -121,6 +122,7 @@ export function SliderRow({
   min: number;
   max: number;
   step?: number;
+  ticks?: boolean;
   onChange: (v: number) => void;
   override?: Override;
 }) {
@@ -128,19 +130,19 @@ export function SliderRow({
   return (
     <div className="px-3 py-2">
       <div className="flex min-h-6 items-center justify-between gap-4">
-        <Label label={label} tip={tip} />
-        <div className="flex shrink-0 items-center gap-3">
-          <span className={cx("font-mono text-[11px]", active ? "text-on-surface" : "text-on-surface-variant")}>
+        <div className="flex min-w-0 items-center gap-3">
+          <Label label={label} tip={tip} />
+          <span className={cx("truncate font-medium", active ? "text-primary" : "text-on-surface-variant")}>
             {active ? valueText : override.inherited}
           </span>
-          {override && <OverrideToggle override={override} label={label} />}
         </div>
+        {override && <OverrideToggle override={override} label={label} />}
       </div>
       {active && (
         <>
-          <Slider label={label} value={value} min={min} max={max} step={step} onValueChange={onChange} />
+          <Slider label={label} value={value} min={min} max={max} step={step} ticks={ticks} onValueChange={onChange} />
           {ends && (
-            <div className="flex justify-between text-[10px] text-on-surface-variant">
+            <div className="flex justify-between text-[11px] text-on-surface-variant">
               <span>{ends[0]}</span>
               <span>{ends[1]}</span>
             </div>
@@ -183,7 +185,7 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   );
 }
 
-/** Qualitative quality control: five stops mapped to the encoder CRF/QP values the backend expects. */
+/** CRF slider in steps of 1; the band name ("Balanced", ...) updates as the handle moves. */
 export function QualityRow({
   quality,
   onChange,
@@ -193,17 +195,19 @@ export function QualityRow({
   onChange: (crf: number) => void;
   override?: Override;
 }) {
-  const index = nearestQualityIndex(quality);
+  const crf = Math.min(QUALITY_MAX, Math.max(QUALITY_MIN, Math.round(quality)));
   return (
     <SliderRow
       label="Quality"
-      tip="Trades text sharpness against bandwidth and encoder load. Balanced (CRF 18) is the default."
-      valueText={QUALITY_STOPS[index].label}
-      value={index}
-      min={0}
-      max={QUALITY_STOPS.length - 1}
+      tip="Encoder CRF: lower is sharper and heavier. 12-15 maximum sharpness, 16-20 balanced (default 18), 21-25 efficient, 26+ low bandwidth."
+      valueText={`${crf} · ${qualityLabel(crf)}`}
+      value={crf}
+      min={QUALITY_MIN}
+      max={QUALITY_MAX}
+      step={1}
+      ticks
       ends={["Sharper", "Smaller"]}
-      onChange={(i) => onChange(Number(QUALITY_STOPS[i].value))}
+      onChange={onChange}
       override={override}
     />
   );

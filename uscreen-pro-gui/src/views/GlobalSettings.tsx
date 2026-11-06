@@ -1,5 +1,4 @@
 import { Check } from "lucide-react";
-import { useRef, useState } from "react";
 import { Button, Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow } from "../components/ui/layout";
 import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL } from "../lib/options";
@@ -14,26 +13,7 @@ interface Props {
   onAutostart: (enabled: boolean) => void;
 }
 
-const splitList = (s: string) =>
-  s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
-
 export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, onAutostart }: Props) {
-  // The list itself is the stored state; the switch only reveals the field. Turning it off
-  // stashes the list so switching back on restores it.
-  const [appLock, setAppLock] = useState(c.locked_apps.length > 0);
-  const stash = useRef<string[]>(c.locked_apps);
-  function toggleAppLock(on: boolean) {
-    setAppLock(on);
-    if (on) onChange({ locked_apps: stash.current });
-    else {
-      stash.current = c.locked_apps;
-      onChange({ locked_apps: [] });
-    }
-  }
-
   return (
     <div className="w-full space-y-2">
       <PageHeader title="Settings">
@@ -64,6 +44,8 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           min={5000}
           max={60000}
           step={1000}
+          ticks
+          ends={["5 Mbps", "60 Mbps"]}
           onChange={(bitrate) => onChange({ bitrate })}
         />
         <SettingRow label="Stream detail" tip="Full sends every pixel; Half renders at half resolution for the lowest latency.">
@@ -157,23 +139,6 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           checked={c.max_performance_mode}
           onChange={(max_performance_mode) => onChange({ max_performance_mode })}
         />
-        <SwitchRow
-          label="Enable app locking (Mutter)"
-          tip="Keep chosen applications on the virtual display; other windows are moved off it. Off by default."
-          checked={appLock}
-          onChange={toggleAppLock}
-        />
-        {appLock && (
-          <SettingRow label="Locked applications" tip="Comma-separated application IDs, e.g. org.gnome.Nautilus.">
-            <TextInput
-              aria-label="Locked applications"
-              className="w-64 font-mono"
-              placeholder="org.gnome.Nautilus, gimp"
-              value={c.locked_apps.join(", ")}
-              onChange={(v) => onChange({ locked_apps: splitList(v) })}
-            />
-          </SettingRow>
-        )}
       </Section>
 
       <Section title="Connection and security">

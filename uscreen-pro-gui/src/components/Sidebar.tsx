@@ -1,4 +1,4 @@
-import { Activity, Plus, Play, Sliders, Square, Tablet, WifiOff } from "lucide-react";
+import { Activity, FlaskConical, Plus, Play, Sliders, Square, Tablet, WifiOff } from "lucide-react";
 import {
   NavigationDrawer,
   NavigationDrawerContent,
@@ -37,8 +37,8 @@ export function Sidebar({
   /* Status row + button share the sidebar's single content column, so every button in the
      sidebar spans the same left and right edges. */
   const daemonBlock = (
-    <div className="space-y-2 pb-2">
-      <div className="flex items-center gap-2 px-1">
+    <div className="mb-2 space-y-3 rounded-2xl border border-outline-variant bg-card p-3">
+      <div className="flex items-center gap-2">
         <span
           className={cx("size-2.5 shrink-0 rounded-full", daemonRunning ? "bg-success" : "bg-error")}
           aria-hidden
@@ -70,6 +70,7 @@ export function Sidebar({
       width={240}
       aria-label="UScreen navigation"
       footer={
+        <div className="w-full px-3">
         <Button
           variant="tonal"
           fullWidth
@@ -78,6 +79,7 @@ export function Sidebar({
         >
           Add device
         </Button>
+        </div>
       }
       className="!h-auto min-h-0 shrink-0 gap-2 border-r border-outline-variant !bg-transparent !rounded-none px-4 pb-4 pt-2"
     >
@@ -90,6 +92,13 @@ export function Sidebar({
           icon={<Sliders className="size-5" />}
           label="Settings"
           onClick={() => onSelect("settings")}
+        />
+        <NavigationDrawerItem
+          className="!h-9"
+          selected={view === "advanced"}
+          icon={<FlaskConical className="size-5" />}
+          label="Advanced"
+          onClick={() => onSelect("advanced")}
         />
         <NavigationDrawerItem
           className="!h-9"

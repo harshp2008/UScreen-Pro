@@ -40,22 +40,15 @@ export function labelOf(options: Option[], value: string | number | undefined): 
   return options.find((o) => o.value === String(value))?.label ?? String(value ?? "");
 }
 
-/** Encoder CRF/QP values behind the qualitative quality slider. 18 is the host default. */
-export const QUALITY_STOPS: Option[] = [
-  { value: "14", label: "Maximum sharpness" },
-  { value: "18", label: "Balanced" },
-  { value: "22", label: "Efficient" },
-  { value: "26", label: "Low bandwidth" },
-  { value: "30", label: "High compression" },
-];
-
+/** Encoder CRF/QP scale of the quality slider: lower is sharper. 18 is the host default. */
+export const QUALITY_MIN = 12;
+export const QUALITY_MAX = 32;
 export const DEFAULT_QUALITY = 18;
 
-/** Index of the stop closest to a stored CRF value (older configs may hold e.g. 17 or 12). */
-export function nearestQualityIndex(quality: number): number {
-  let best = 0;
-  QUALITY_STOPS.forEach((s, i) => {
-    if (Math.abs(Number(s.value) - quality) < Math.abs(Number(QUALITY_STOPS[best].value) - quality)) best = i;
-  });
-  return best;
+/** Named band for a CRF value, shown next to the number while the slider moves. */
+export function qualityLabel(crf: number): string {
+  if (crf <= 15) return "Maximum sharpness";
+  if (crf <= 20) return "Balanced";
+  if (crf <= 25) return "Efficient";
+  return "Low bandwidth";
 }
