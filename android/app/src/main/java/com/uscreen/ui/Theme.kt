@@ -5,58 +5,94 @@ import androidx.compose.material3.MaterialExpressiveTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
-// MD3 baseline dark scheme (seed #6750A4), identical to the desktop app: one accent, tonal surfaces,
-// no gradients, glows or elevation shadows anywhere in the UI.
-val Accent = Color(0xFF4F378B)        // primary container: filled buttons, selected chips
-val AccentSoft = Color(0xFFD0BCFF)    // primary: highlights, links, switches, sliders
-val Ok = Color(0xFF8FD6A3)
-val Warn = Color(0xFFF2C46D)
-val ErrorTone = Color(0xFFF2B8B5)
+// MD3 Expressive emerald dark scheme, token for token the `.dark` block of uscreen-pro-gui/src/index.css
+// (oklch converted to sRGB): same primary, same tonal surfaces, no gradients, glows or elevation shadows.
+val Accent = Color(0xFF183F2C)        // desktop --accent / primary container
+val AccentSoft = Color(0xFF34D399)    // desktop --primary: filled buttons, links, switches, sliders
+val Ok = Color(0xFF8FD6A3)            // --success
+val Warn = Color(0xFFF2C46D)          // --warning
+val ErrorTone = Color(0xFFFFB4AB)     // --destructive
 
-val Surface0 = Color(0xFF141218)      // screen background
-val SurfaceLow = Color(0xFF1D1B20)    // sheets, cards
-val SurfaceMid = Color(0xFF211F26)    // inputs
-val SurfaceHigh = Color(0xFF2B2930)   // buttons, chips
-val OnSurface = Color(0xFFE6E1E5)     // primary text
-val Muted = Color(0xFFCAC4D0)         // on-surface-variant: secondary text
-val Subtle = Color(0xFF938F99)        // outline
+val Surface0 = Color(0xFF0C1513)      // --background: screen
+val SurfaceLow = Color(0xFF141D1B)    // --card / --popover: sheets, cards
+val SurfaceMid = Color(0xFF18211F)    // --sidebar-background: inputs
+val SurfaceHigh = Color(0xFF232E2B)   // card to muted midpoint: buttons, chips
+val OnSurface = Color(0xFFDBE5E0)     // --foreground: primary text
+val Muted = Color(0xFFB8CBC4)         // --muted-foreground: secondary text
+val Subtle = Color(0xFF85968F)        // muted-foreground, dimmed: outline, disabled
 
 private val UScreenColors = darkColorScheme(
     primary = AccentSoft,
-    onPrimary = Color(0xFF381E72),
+    onPrimary = Color(0xFF00382A),            // --primary-foreground
     primaryContainer = Accent,
-    onPrimaryContainer = Color(0xFFEADDFF),
-    secondary = Color(0xFFCCC2DC),
-    onSecondary = Color(0xFF332D41),
-    secondaryContainer = Color(0xFF4A4458),
-    onSecondaryContainer = Color(0xFFE8DEF8),
+    onPrimaryContainer = Color(0xFFCFE9DB),   // --accent-foreground
+    secondary = Color(0xFFCFE9DB),
+    onSecondary = Color(0xFF0B2A1D),
+    secondaryContainer = Color(0xFF2F4A3C),   // --secondary
+    onSecondaryContainer = Color(0xFFCFE9DB), // --secondary-foreground
+    tertiary = Ok,
+    onTertiary = Color(0xFF0B2A1D),           // --success-foreground
     background = Surface0,
     onBackground = OnSurface,
     surface = Surface0,
     onSurface = OnSurface,
-    surfaceVariant = Color(0xFF49454F),
+    surfaceVariant = Color(0xFF3A4A45),       // --muted
     onSurfaceVariant = Muted,
-    surfaceContainerLowest = Color(0xFF0F0D13),
+    surfaceContainerLowest = Color(0xFF0C1513),
     surfaceContainerLow = SurfaceLow,
     surfaceContainer = SurfaceMid,
     surfaceContainerHigh = SurfaceHigh,
-    surfaceContainerHighest = Color(0xFF36343B),
+    surfaceContainerHighest = Color(0xFF3A4A45),
     outline = Subtle,
-    outlineVariant = Color(0xFF49454F),
+    outlineVariant = Color(0xFF3A4A45),       // --border
     error = ErrorTone,
+    onError = Color(0xFF690005),              // --destructive-foreground
 )
 
-// Restrained utility shapes: 8dp cards, 4dp fields. Buttons use their own morphing pill shape.
+// Desktop radius scale: --radius 0.5rem; sm = 4, md = 6, lg = 8 (dialogs and the wizard card use 12).
 private val UScreenShapes = Shapes(
-    extraSmall = androidx.compose.foundation.shape.RoundedCornerShape(4.dp),
-    small = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
-    medium = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(6.dp),
+    medium = RoundedCornerShape(8.dp),
+    large = RoundedCornerShape(12.dp),
+    extraLarge = RoundedCornerShape(12.dp),
 )
+
+// Desktop type: Roboto-class sans (Roboto Flex on the desktop, Roboto on Android), 12 px base text,
+// 11 px captions, 20 px medium titles.
+private val UScreenFont = FontFamily.SansSerif
+private val UScreenTypography = Typography().let { t ->
+    fun TextStyle.sans(size: Int, weight: FontWeight, line: Int) =
+        copy(fontFamily = UScreenFont, fontSize = size.sp, fontWeight = weight, lineHeight = line.sp)
+    t.copy(
+        displayLarge = t.displayLarge.copy(fontFamily = UScreenFont),
+        displayMedium = t.displayMedium.copy(fontFamily = UScreenFont),
+        displaySmall = t.displaySmall.copy(fontFamily = UScreenFont),
+        headlineLarge = t.headlineLarge.copy(fontFamily = UScreenFont),
+        headlineMedium = t.headlineMedium.copy(fontFamily = UScreenFont),
+        headlineSmall = t.headlineSmall.copy(fontFamily = UScreenFont),
+        titleLarge = t.titleLarge.sans(20, FontWeight.Medium, 28),
+        titleMedium = t.titleMedium.sans(14, FontWeight.Medium, 20),
+        titleSmall = t.titleSmall.sans(12, FontWeight.Medium, 16),
+        bodyLarge = t.bodyLarge.sans(14, FontWeight.Normal, 20),
+        bodyMedium = t.bodyMedium.sans(12, FontWeight.Normal, 16),
+        bodySmall = t.bodySmall.sans(11, FontWeight.Normal, 16),
+        labelLarge = t.labelLarge.sans(12, FontWeight.Medium, 16),
+        labelMedium = t.labelMedium.sans(11, FontWeight.Medium, 16),
+        labelSmall = t.labelSmall.sans(10, FontWeight.Medium, 14),
+    )
+}
 
 /**
  * App theme. The expressive motion scheme (bouncy spatial springs) drives the onboarding wizard
@@ -69,6 +105,7 @@ fun UScreenTheme(content: @Composable () -> Unit) {
         colorScheme = UScreenColors,
         motionScheme = MotionScheme.expressive(),
         shapes = UScreenShapes,
+        typography = UScreenTypography,
         content = content,
     )
 }

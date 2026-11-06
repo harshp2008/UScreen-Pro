@@ -247,9 +247,9 @@ fun StepIndicator(currentStep: Int, totalSteps: Int = 4) {
                     .clip(RoundedCornerShape(4.dp))
                     .background(
                         when {
-                            isActive -> Accent
+                            isActive -> AccentSoft
                             isDone -> Ok
-                            else -> Color(0xFF33334D)
+                            else -> SurfaceHigh
                         }
                     )
             )
@@ -298,7 +298,7 @@ private fun StatusItemCardContent(
             ) {
                 Surface(
                     shape = RoundedCornerShape(4.dp),
-                    color = if (isPassed) Ok else Color(0xFF55556A),
+                    color = if (isPassed) Ok else Subtle,
                     modifier = Modifier.size(28.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
@@ -321,7 +321,7 @@ private fun StatusItemCardContent(
                     Text(
                         text = description,
                         fontSize = 12.sp,
-                        color = if (isPassed) Color(0xFFD1FAE5) else Muted
+                        color = if (isPassed) Color(0xFFCFE9DB) else Muted
                     )
                 }
             }
@@ -490,7 +490,7 @@ fun OnboardingScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Monitor,
                                                 contentDescription = null,
-                                                tint = Color(0xFF818CF8),
+                                                tint = AccentSoft,
                                                 modifier = Modifier.size(36.dp)
                                             )
                                         }
@@ -720,7 +720,7 @@ fun OnboardingScreen(
                                                 "UScreen Pro on your Linux workstation to begin streaming.",
                                         fontSize = 14.sp,
                                         lineHeight = 22.sp,
-                                        color = Color(0xFFD1D1E0),
+                                        color = Muted,
                                         textAlign = TextAlign.Center,
                                         modifier = Modifier.padding(horizontal = 16.dp)
                                     )

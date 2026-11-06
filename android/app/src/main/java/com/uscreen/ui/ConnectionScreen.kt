@@ -420,7 +420,7 @@ fun UScreenMain(
                     .size(36.dp)
                     .alpha(if (penOnly && blankInPenMode) 0.18f else if (isConnected) 0.35f else 0.9f)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xAA20202C))
+                    .background(Color(0xAA141D1B))
                     .clickable { showSettings = true },
                 contentAlignment = Alignment.Center
             ) {
@@ -439,7 +439,7 @@ fun UScreenMain(
                     .align(Alignment.BottomCenter)
                     .padding(24.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xE620202C))
+                    .background(Color(0xE6141D1B))
                     .padding(16.dp)
             ) {
                 Column {
@@ -453,7 +453,7 @@ fun UScreenMain(
                         Text(
                             "Open GitHub",
                             fontSize = 13.sp,
-                            color = Accent,
+                            color = AccentSoft,
                             modifier = Modifier
                                 .clickable {
                                     context.startActivity(
