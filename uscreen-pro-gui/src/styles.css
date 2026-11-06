@@ -1,0 +1,157 @@
+@import "tailwindcss";
+@import "../node_modules/sonner/dist/styles.css";
+
+/*
+ * Material Design 3 (Expressive) dark scheme, tuned for a dense desktop utility:
+ * flat tonal surfaces only, no gradients, no glows, no elevation shadows.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Material 3 Expressive tokens, indigo primary with a teal secondary.
+ * Light values live on :root, dark values on .dark. Utilities (bg-surface, text-primary, ...)
+ * read the --color-* variables, so switching the class re-themes everything.
+ * Surfaces step through tonal containers for depth; there are no gradients, glows or shadows.
+ */
+@theme {
+  --font-sans: "Roboto Flex", "Roboto", "Inter", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Roboto Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --color-surface: #faf8ff;
+  --color-surface-low: #f4f3fa;
+  --color-surface-container: #eeedf4;
+  --color-surface-high: #e8e7ef;
+  --color-surface-highest: #e3e1e9;
+
+  --color-on-surface: #1a1b21;
+  --color-on-surface-variant: #45464f;
+  --color-outline: #767680;
+  --color-outline-variant: #c6c5d0;
+
+  --color-primary: #4355b9;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #dde1ff;
+  --color-on-primary-container: #00105c;
+
+  --color-secondary: #006a60;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #a0f2e4;
+  --color-on-secondary-container: #00201c;
+
+  --color-success: #1b6b3a;
+  --color-success-container: #a7f5b8;
+  --color-warning: #7a5900;
+  --color-warning-container: #ffdf9f;
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+}
+
+.dark {
+  --color-surface: #121318;
+  --color-surface-low: #1a1b21;
+  --color-surface-container: #1e1f25;
+  --color-surface-high: #292a2f;
+  --color-surface-highest: #34343a;
+
+  --color-on-surface: #e3e1e9;
+  --color-on-surface-variant: #c6c5d0;
+  --color-outline: #90909a;
+  --color-outline-variant: #46464f;
+
+  --color-primary: #b8c3ff;
+  --color-on-primary: #0a1b85;
+  --color-primary-container: #2d3ea1;
+  --color-on-primary-container: #dde1ff;
+
+  --color-secondary: #53dbc9;
+  --color-on-secondary: #003731;
+  --color-secondary-container: #005047;
+  --color-on-secondary-container: #a0f2e4;
+
+  --color-success: #8fd6a3;
+  --color-success-container: #1a3a27;
+  --color-warning: #f2c46d;
+  --color-warning-container: #3e2f0c;
+  --color-error: #ffb4ab;
+  --color-error-container: #5c1a14;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  .dark {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--color-surface);
+    color: var(--color-on-surface);
+    font-family: var(--font-sans);
+    font-size: 12px;
+    line-height: 1.4;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  input[type="text"],
+  input[type="number"] {
+    user-select: text;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 1px;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline);
+}
+
+/* sonner: flat tonal toasts that match the scheme */
+[data-sonner-toast] {
+  background: var(--color-surface-high) !important;
+  color: var(--color-on-surface) !important;
+  border: 1px solid var(--color-outline-variant) !important;
+  border-radius: var(--radius-card) !important;
+  box-shadow: none !important;
+  font-size: 12px !important;
+}
+[data-sonner-toast][data-type="error"] {
+  background: var(--color-error-container) !important;
+  color: var(--color-error) !important;
+  border-color: transparent !important;
+}
+[data-sonner-toast][data-type="success"] {
+  background: var(--color-success-container) !important;
+  color: var(--color-success) !important;
+  border-color: transparent !important;
+}

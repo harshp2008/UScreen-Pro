@@ -1,0 +1,235 @@
+//! Android 11+ wireless-debugging pairing: QR flow (mDNS) and manual `IP:port + code` fallback.
+//!
+//! QR flow: the phone scans `WIFI:T:ADB;S:<name>;P:<code>;;` and starts advertising
+//! `_adb-tls-pairing._tcp` under instance name `<name>`. We watch `adb mdns services` for that
+//! exact instance, run `adb pair <addr> <code>`, then look up the *separate* connect port
+//! (`_adb-tls-connect._tcp`, same IP) and `adb connect` to it.
+
+use crate::adb::{self, combined_of, stdout_of};
+use rand::Rng;
+use serde::Serialize;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
+use tauri::{AppHandle, Emitter, State};
+
+const PAIRING_TYPE: &str = "_adb-tls-pairing._tcp";
+const CONNECT_TYPE: &str = "_adb-tls-connect._tcp";
+const QR_TIMEOUT: Duration = Duration::from_secs(180);
+const STALL_HINT_AFTER: Duration = Duration::from_secs(20);
+
+#[derive(Serialize, Clone, Debug)]
+pub struct QrPairingSession {
+    pub service_name: String,
+    pub pairing_code: String,
+    pub qr_payload: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct PairingEvent {
+    /// "searching" | "stalled" | "pairing" | "success" | "error" | "timeout"
+    pub kind: &'static str,
+    pub message: String,
+    /// Set on "success" when `adb connect` succeeded.
+    pub connect_endpoint: Option<String>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+pub struct ManualPairResult {
+    pub message: String,
+    /// None when the connect port could not be discovered via mDNS; the UI then asks for it.
+    pub connect_endpoint: Option<String>,
+}
+
+/// Generation counter: starting or cancelling a session bumps it, which stops older poll loops.
+#[derive(Default)]
+pub struct PairingState(pub Arc<AtomicU64>);
+
+struct MdnsService {
+    name: String,
+    kind: String,
+    addr: String,
+}
+
+impl MdnsService {
+    fn ip(&self) -> &str {
+        self.addr.rsplit_once(':').map_or(&self.addr, |(ip, _)| ip)
+    }
+}
+
+async fn mdns_services() -> Vec<MdnsService> {
+    let Ok(out) = adb::run(None, &["mdns", "services"], Duration::from_secs(5)).await else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| {
+            // <instance>\t<type>.\t<ip:port>
+            let mut parts = line.split_whitespace();
+            let (name, kind, addr) = (parts.next()?, parts.next()?, parts.next()?);
+            addr.contains(':').then(|| MdnsService {
+                name: name.to_string(),
+                kind: kind.trim_end_matches('.').to_string(),
+                addr: addr.to_string(),
+            })
+        })
+        .collect()
+}
+
+async fn discover_connect_endpoint(ip: &str, wait: Duration) -> Option<String> {
+    let start = Instant::now();
+    loop {
+        let found = mdns_services()
+            .await
+            .into_iter()
+            .find(|s| s.kind == CONNECT_TYPE && s.ip() == ip);
+        if let Some(s) = found {
+            return Some(s.addr);
+        }
+        if start.elapsed() >= wait {
+            return None;
+        }
+        tokio::time::sleep(Duration::from_millis(700)).await;
+    }
+}
+
+async fn adb_pair(endpoint: &str, code: &str) -> Result<String, String> {
+    let out = adb::run(None, &["pair", endpoint, code], Duration::from_secs(20)).await?;
+    // `adb pair` exits 0 even on "Failed: Wrong password", so the output is the only signal.
+    let text = combined_of(&out);
+    if text.contains("Successfully paired") {
+        Ok(stdout_of(&out))
+    } else {
+        Err(if text.is_empty() { "adb pair returned no output".into() } else { text })
+    }
+}
+
+async fn adb_connect(endpoint: &str) -> Result<String, String> {
+    let out = adb::run(None, &["connect", endpoint], Duration::from_secs(15)).await?;
+    let text = combined_of(&out);
+    if text.contains("connected to") || text.contains("already connected") {
+        Ok(endpoint.to_string())
+    } else {
+        Err(if text.is_empty() { format!("Could not connect to {endpoint}") } else { text })
+    }
+}
+
+fn emit(app: &AppHandle, kind: &'static str, message: impl Into<String>, connect: Option<String>) {
+    let _ = app.emit(
+        "pairing_event",
+        PairingEvent { kind, message: message.into(), connect_endpoint: connect },
+    );
+}
+
+#[tauri::command]
+pub async fn initiate_qr_pairing(
+    app: AppHandle,
+    state: State<'_, PairingState>,
+) -> Result<QrPairingSession, String> {
+    let (service_name, pairing_code) = {
+        let mut rng = rand::thread_rng();
+        (
+            format!("UScreen-{:04X}", rng.gen_range(0x1000u32..=0xFFFF)),
+            rng.gen_range(100_000u32..1_000_000).to_string(),
+        )
+    };
+    let qr_payload = format!("WIFI:T:ADB;S:{service_name};P:{pairing_code};;");
+
+    let generation = state.0.fetch_add(1, Ordering::SeqCst) + 1;
+    let counter = state.0.clone();
+    let (name, code) = (service_name.clone(), pairing_code.clone());
+
+    tokio::spawn(async move {
+        let alive = || counter.load(Ordering::SeqCst) == generation;
+        let start = Instant::now();
+        let mut stall_sent = false;
+        let mut last_attempt: Option<String> = None;
+
+        emit(&app, "searching", "Waiting for the tablet to scan the QR code", None);
+        while alive() && start.elapsed() < QR_TIMEOUT {
+            let hit = mdns_services()
+                .await
+                .into_iter()
+                .find(|s| s.kind == PAIRING_TYPE && s.name == name);
+
+            if let Some(svc) = hit
+                && last_attempt.as_deref() != Some(svc.addr.as_str())
+            {
+                last_attempt = Some(svc.addr.clone());
+                emit(&app, "pairing", format!("Tablet found at {}, pairing", svc.addr), None);
+                match adb_pair(&svc.addr, &code).await {
+                    Ok(_) => {
+                        let connect = match discover_connect_endpoint(svc.ip(), Duration::from_secs(10)).await {
+                            Some(ep) => adb_connect(&ep).await.ok(),
+                            None => None,
+                        };
+                        if alive() {
+                            emit(&app, "success", format!("Paired with {}", svc.addr), connect);
+                        }
+                        counter.fetch_add(1, Ordering::SeqCst);
+                        return;
+                    }
+                    Err(e) => emit(&app, "error", e, None),
+                }
+            }
+
+            if !stall_sent && last_attempt.is_none() && start.elapsed() > STALL_HINT_AFTER {
+                stall_sent = true;
+                emit(
+                    &app,
+                    "stalled",
+                    "No pairing service seen yet. If the tablet shows a pairing code, use manual pairing; \
+                     some routers block mDNS multicast.",
+                    None,
+                );
+            }
+            tokio::time::sleep(Duration::from_millis(800)).await;
+        }
+        if alive() {
+            emit(
+                &app,
+                "timeout",
+                "Timed out waiting for the tablet. Your network may block mDNS; use manual pairing.",
+                None,
+            );
+        }
+    });
+
+    Ok(QrPairingSession { service_name, pairing_code, qr_payload })
+}
+
+#[tauri::command]
+pub fn cancel_qr_pairing(state: State<'_, PairingState>) {
+    state.0.fetch_add(1, Ordering::SeqCst);
+}
+
+/// Manual fallback: `pair_endpoint` and `code` come from the tablet's "Pair with pairing code"
+/// dialog; `connect_endpoint` is the IP:port on the main Wireless debugging screen (optional,
+/// discovered via mDNS when omitted).
+#[tauri::command]
+pub async fn manual_adb_pair(
+    pair_endpoint: String,
+    code: String,
+    connect_endpoint: Option<String>,
+) -> Result<ManualPairResult, String> {
+    let pair_endpoint = pair_endpoint.trim().to_string();
+    let message = adb_pair(&pair_endpoint, code.trim()).await?;
+
+    let target = match connect_endpoint.map(|c| c.trim().to_string()).filter(|c| !c.is_empty()) {
+        Some(ep) => Some(ep),
+        None => {
+            let ip = pair_endpoint.rsplit_once(':').map_or(pair_endpoint.as_str(), |(ip, _)| ip);
+            discover_connect_endpoint(ip, Duration::from_secs(6)).await
+        }
+    };
+    let connect_endpoint = match target {
+        Some(ep) => Some(adb_connect(&ep).await?),
+        None => None,
+    };
+    Ok(ManualPairResult { message, connect_endpoint })
+}
+
+#[tauri::command]
+pub async fn manual_adb_connect(endpoint: String) -> Result<String, String> {
+    adb_connect(endpoint.trim()).await
+}
