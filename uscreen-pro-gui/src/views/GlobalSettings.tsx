@@ -40,7 +40,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
         <SliderRow
           label="Bitrate ceiling"
           tip="Upper bound on stream bandwidth. Lower it on congested Wi-Fi."
-          valueText={`${Math.round(c.bitrate / 1000)} Mbps`}
+          formatValue={(v) => `${Math.round(v / 1000)} Mbps`}
           value={c.bitrate}
           min={5000}
           max={60000}

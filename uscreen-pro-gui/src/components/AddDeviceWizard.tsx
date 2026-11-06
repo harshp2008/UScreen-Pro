@@ -76,35 +76,23 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
 
   const poll = useCallback(async () => {
     try {
-      setEntries(await invoke<AdbEntry[]>("list_adb_devices"));
+      const next = (await invoke<AdbEntry[] | null>("list_adb_devices")) ?? [];
+      // Keep the old array when nothing changed so the 1.5 s poll does not re-render the dialog.
+      setEntries((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
     } catch (e) {
       console.error("list_adb_devices failed:", e);
     }
   }, []);
 
-  /* Reset and start polling whenever the dialog opens. */
+  /*
+   * The wizard is mounted only while open (see App), so every field starts from its initial value
+   * on the first render. Resetting in an effect instead would paint the previous run's step first.
+   */
   useEffect(() => {
-    if (!open) return;
-    setStep(1);
-    setEntries([]);
-    setDevice(null);
-    setInstall({ state: "idle", message: "" });
-    installStarted.current = false;
-    setQr(null);
-    setPairEvent(null);
-    setManualOpen(false);
-    setPairAddr("");
-    setPairCode("");
-    setConnectAddr("");
-    setNeedConnect(false);
-    setPairError(null);
-    setWifiEndpoint(null);
-    setTransport("usb");
-    setNickname("");
     void poll();
     const timer = setInterval(poll, 1500);
     return () => clearInterval(timer);
-  }, [open, poll]);
+  }, [poll]);
 
   useEffect(() => {
     if (usb) setDevice(usb);

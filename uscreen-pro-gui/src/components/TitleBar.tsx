@@ -61,7 +61,7 @@ export function TitleBar({ dark, onToggleTheme }: { dark: boolean; onToggleTheme
     >
       <div className="pointer-events-none flex items-center gap-2">
         <img src={appIcon} alt="" className="size-5" draggable={false} />
-        <span className="text-xs font-semibold text-on-surface">UScreen Pro</span>
+        <span className="text-xs font-semibold text-foreground">UScreen Pro</span>
       </div>
       <div className="flex items-center gap-1">
         <WindowButton label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme}>

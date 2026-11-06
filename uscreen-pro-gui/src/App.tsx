@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { AddDeviceWizard } from "./components/AddDeviceWizard";
 import { Sidebar } from "./components/Sidebar";
@@ -14,13 +14,34 @@ import { GlobalSettings } from "./views/GlobalSettings";
 import { Health } from "./views/Health";
 import "./index.css";
 
+const SCROLL_PREFIX = "uscreen-scroll:";
+
+function readScroll(key: string): number {
+  try {
+    return Number(sessionStorage.getItem(SCROLL_PREFIX + key)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeScroll(key: string, top: number) {
+  try {
+    sessionStorage.setItem(SCROLL_PREFIX + key, String(Math.round(top)));
+  } catch {
+    /* storage unavailable: scroll just won't be remembered */
+  }
+}
+
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Fingerprint of the global settings only; per-device edits have their own Save button. */
 const globalsKey = (c: AppConfig) => JSON.stringify({ ...c, tablets: {} });
 
 export default function App() {
-  const [view, setView] = useState<View>("settings");
+  const [view, setViewState] = useState<View>("settings");
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const viewKey = typeof view === "object" ? `device:${view.device}` : view;
+  const viewKeyRef = useRef(viewKey);
   const [status, setStatus] = useState<DaemonStatus | null>(null);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [savedConfig, setSavedConfig] = useState("");
@@ -30,6 +51,12 @@ export default function App() {
   const [daemonBusy, setDaemonBusy] = useState<"starting" | "stopping" | null>(null);
   // The library's baseline scheme is keyed on the `.dark` class (see index.css); index.html sets it pre-paint.
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+
+  /** Every tab change goes through here so the outgoing tab's scroll offset is saved first. */
+  const setView = useCallback((next: View) => {
+    if (scrollRef.current) writeScroll(viewKeyRef.current, scrollRef.current.scrollTop);
+    setViewState(next);
+  }, []);
 
   const toggleTheme = () => {
     const next = !dark;
@@ -79,6 +106,16 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  /*
+   * Restore the incoming tab's offset once its content is in the DOM. The config/status flags are
+   * dependencies because the first render of a tab can happen before the data it shows has loaded.
+   */
+  const contentReady = config !== null && status !== null;
+  useLayoutEffect(() => {
+    viewKeyRef.current = viewKey;
+    if (scrollRef.current) scrollRef.current.scrollTop = readScroll(viewKey);
+  }, [viewKey, contentReady]);
 
   const dirty = useMemo(() => config !== null && globalsKey(config) !== savedConfig, [config, savedConfig]);
 
@@ -184,15 +221,17 @@ export default function App() {
     <TooltipProvider>
       <div className="flex h-full w-full flex-col overflow-hidden bg-background text-foreground">
         <Notifications dark={dark} />
-        <AddDeviceWizard
-          open={wizardOpen}
-          onOpenChange={setWizardOpen}
-          hostVersion={status?.host_version}
-          onDeviceAdded={async (added) => {
-            await Promise.all([fetchStatus(), fetchConfig()]);
-            setView({ device: added });
-          }}
-        />
+        {wizardOpen && (
+          <AddDeviceWizard
+            open={wizardOpen}
+            onOpenChange={setWizardOpen}
+            hostVersion={status?.host_version}
+            onDeviceAdded={async (added) => {
+              await Promise.all([fetchStatus(), fetchConfig()]);
+              setView({ device: added });
+            }}
+          />
+        )}
 
         <TitleBar dark={dark} onToggleTheme={toggleTheme} />
 
@@ -210,7 +249,7 @@ export default function App() {
           />
 
           <main className="flex min-w-0 flex-1 flex-col bg-background">
-            <div className="flex-1 overflow-y-auto p-4">
+            <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
               <div className="mx-auto w-full max-w-5xl">
                 {view === "settings" && config && (
                   <GlobalSettings

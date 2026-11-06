@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { QUALITY_MAX, QUALITY_MIN, qualityLabel } from "@/lib/options";
-import { cn } from "@/lib/utils";
 import { Slider } from "./controls";
 
 export const TooltipProvider = UiTooltipProvider;
@@ -33,9 +32,9 @@ export function Section({ title, hint, children }: { title: string; hint?: strin
     <section className="space-y-2">
       <div className="flex items-baseline justify-between px-1 pt-2">
         <h3 className="text-xs font-semibold tracking-wide text-primary">{title}</h3>
-        {hint && <span className="text-[11px] text-on-surface-variant">{hint}</span>}
+        {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
       </div>
-      <div className="divide-y divide-outline-variant/60 rounded-lg border border-outline-variant bg-card">
+      <div className="divide-y divide-border rounded-lg border border-border bg-card">
         {children}
       </div>
     </section>
@@ -60,7 +59,7 @@ function OverrideToggle({ override, label }: { override: Override; label: string
 function Label({ label, tip }: { label: string; tip?: string }) {
   return (
     <div className="flex min-w-0 items-center gap-1">
-      <span className="truncate text-on-surface">{label}</span>
+      <span className="truncate text-foreground">{label}</span>
       {tip && <InfoTip text={tip} />}
     </div>
   );
@@ -86,7 +85,7 @@ export function SettingRow({
         {showControl ? (
           children
         ) : (
-          <span className="text-[11px] text-on-surface-variant">{override.inherited}</span>
+          <span className="text-[11px] text-muted-foreground">{override.inherited}</span>
         )}
         {override && <OverrideToggle override={override} label={label} />}
       </div>
@@ -98,7 +97,7 @@ export function SettingRow({
 export function SliderRow({
   label,
   tip,
-  valueText,
+  formatValue,
   value,
   min,
   max,
@@ -108,7 +107,7 @@ export function SliderRow({
 }: {
   label: string;
   tip?: string;
-  valueText: string;
+  formatValue: (v: number) => string;
   value: number;
   min: number;
   max: number;
@@ -119,17 +118,14 @@ export function SliderRow({
   const active = !override || override.enabled;
   return (
     <div className="flex min-h-10 items-center justify-between gap-4 px-3">
-      <div className="flex min-w-0 flex-col">
-        <Label label={label} tip={tip} />
-        <span className={cn("truncate text-xs font-medium", active ? "text-primary" : "text-on-surface-variant")}>
-          {active ? valueText : override.inherited}
-        </span>
-      </div>
+      <Label label={label} tip={tip} />
       <div className="flex shrink-0 items-center gap-3">
-        {active && (
+        {active ? (
           <div className="w-72">
-            <Slider label={label} value={value} min={min} max={max} step={step} onValueChange={onChange} />
+            <Slider label={label} value={value} min={min} max={max} step={step} formatValue={formatValue} onValueChange={onChange} />
           </div>
+        ) : (
+          <span className="text-[11px] text-muted-foreground">{override?.inherited}</span>
         )}
         {override && <OverrideToggle override={override} label={label} />}
       </div>
@@ -161,8 +157,8 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
   return (
     <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">
       <div className="flex min-w-0 items-baseline gap-2">
-        <h2 className="truncate text-xl font-medium leading-8 text-on-surface">{title}</h2>
-        {subtitle && <span className="truncate font-mono text-[11px] text-on-surface-variant">{subtitle}</span>}
+        <h2 className="truncate text-xl font-medium leading-8 text-foreground">{title}</h2>
+        {subtitle && <span className="truncate font-mono text-[11px] text-muted-foreground">{subtitle}</span>}
       </div>
       <div className="flex items-center gap-2">{children}</div>
     </div>
@@ -184,7 +180,7 @@ export function QualityRow({
     <SliderRow
       label="Quality"
       tip="Encoder CRF: lower is sharper and heavier. 12-15 maximum sharpness, 16-20 balanced (default 18), 21-25 efficient, 26+ low bandwidth."
-      valueText={`${crf} · ${qualityLabel(crf)}`}
+      formatValue={(v) => `${v} · ${qualityLabel(v)}`}
       value={crf}
       min={QUALITY_MIN}
       max={QUALITY_MAX}
