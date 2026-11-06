@@ -330,13 +330,14 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
                     <div className="font-medium">
                       {usb?.state === "device" ? "Device authorized" : "Waiting for authorization..."}
                     </div>
-                    {usb?.state !== "device" && (
-                      <div className="text-[11px] text-muted-foreground">
-                        {usb ? <>Tap <b>Allow</b> on the &ldquo;Allow USB debugging?&rdquo; prompt.</> : "Plug in the cable and unlock the device."}
-                      </div>
-                    )}
                   </div>
                 </div>
+                <ul className="list-inside list-disc space-y-1 rounded-lg bg-muted/50 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+                  <li>Use a USB cable that supports data transfer (not a charge-only cable).</li>
+                  <li>Unlock your device screen.</li>
+                  <li>Tap &lsquo;Allow&rsquo; on the &lsquo;Allow USB debugging?&rsquo; prompt on your device.</li>
+                  <li>Not seeing the prompt? You may not have USB debugging enabled. Go back to Step 1 to check.</li>
+                </ul>
               </>
             )}
 
@@ -530,16 +531,15 @@ export function AddDeviceWizard({ open, onOpenChange, hostVersion, onDeviceAdded
           </div>
 
           <footer className="flex items-center justify-between px-6 pb-6 pt-2">
-            <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
+            {step > 1 ? (
+              <Button size="sm" variant="ghost" onClick={() => setStep((s) => (s - 1) as Step)}><ChevronLeft />
+                Back
+              </Button>
+            ) : (
+              <span />
+            )}
 
             <div className="flex items-center gap-2">
-              {step > 1 && step < 5 && (
-                <Button size="sm" variant="ghost" onClick={() => setStep((s) => (s - 1) as Step)}><ChevronLeft />
-                  Back
-                </Button>
-              )}
               {step === 3 && install.state !== "ok" && (
                 <Button size="sm" variant="ghost" onClick={() => setStep(4)}>
                   Skip install
