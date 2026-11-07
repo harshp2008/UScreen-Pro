@@ -1068,14 +1068,16 @@ mod tests {
 /// tablet screen (`encode_to_display`, which includes the wire and the tablet's
 /// decode) and capture-ready -> screen (`true_e2e`). The desktop mouse itself
 /// never reaches the daemon, so it has no timestamp of its own to log.
-pub async fn run_latency(secs: u64) -> anyhow::Result<()> {
+pub async fn run_latency(secs: u64, sparse: bool) -> anyhow::Result<()> {
     let secs = secs.clamp(3, 60);
     let cfg = FileConfig::load();
     println!(
-        "Latency test: {} s of mouse motion across both screens; configured {}x{}@{} {}, stream scale {}",
-        secs, cfg.width, cfg.height, cfg.fps, cfg.encoder, cfg.stream_scale
+        "Latency test: {} s of {} mouse motion across both screens; configured {}x{}@{} {}, stream scale {}",
+        secs,
+        if sparse { "sparse (one step per 100 ms)" } else { "continuous" },
+        cfg.width, cfg.height, cfg.fps, cfg.encoder, cfg.stream_scale
     );
-    let sweeper = tokio::task::spawn_blocking(move || sweep_mouse(secs));
+    let sweeper = tokio::task::spawn_blocking(move || sweep_mouse(secs, sparse));
     let sock = crate::runtime::runtime_dir().join("control.sock");
     // Give the sweep a moment to start, then read the window that covers it.
     tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
@@ -1122,7 +1124,7 @@ pub async fn run_latency(secs: u64) -> anyhow::Result<()> {
 
 /// A relative uinput mouse that sweeps left-right over more than the whole
 /// desktop (the pointer clamps at the edges) at ~125 Hz.
-fn sweep_mouse(secs: u64) -> anyhow::Result<()> {
+fn sweep_mouse(secs: u64, sparse: bool) -> anyhow::Result<()> {
     use std::io::Write;
     use std::os::unix::io::AsRawFd;
     const UI_SET_EVBIT: libc::c_ulong = 0x4004_5564;
@@ -1167,10 +1169,10 @@ fn sweep_mouse(secs: u64) -> anyhow::Result<()> {
         ev(&mut f, 2, 1, if n % 2 == 0 { 3 } else { -3 })?;
         ev(&mut f, 0, 0, 0)?;
         n += 1;
-        if n % 220 == 0 {
+        if n % if sparse { 22 } else { 220 } == 0 {
             dir = -dir;
         }
-        std::thread::sleep(std::time::Duration::from_millis(8));
+        std::thread::sleep(std::time::Duration::from_millis(if sparse { 100 } else { 8 }));
     }
     unsafe {
         libc::ioctl(fd, UI_DEV_DESTROY);

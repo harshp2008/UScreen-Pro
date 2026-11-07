@@ -183,6 +183,18 @@ Reading: the USB link plus tablet decode is a steady ~22–26 ms. Everything var
 
 `-fps_mode passthrough` and `-flush_packets 1` do not remove the hold; a duplicate frame does. This explains the real-daemon `encode` stage of ~75–115 ms at 2560x1600 (the helper only re-emits an unchanged frame every `IDLE_KEEPALIVE_MS` = 33 ms, or 16 ms in Max Performance Mode) and why the cursor feels laggy when updates are sparse but fine when moving fast.
 
-**Not implemented — candidate fix:** in `evdi_helper.c`'s writer thread, after a *fresh* frame write one duplicate of it a few ms later if no newer frame has arrived (cost: one extra near-zero-bit P frame and one more FIFO copy per damage burst). Risk to check first: re-emitting a stale frame is exactly the ghost-cursor mechanism of experiment 05 (`g_last_exit_time_us` suppression), so it must respect the boundary-exit suppression window. Expected gain from the probe: ~120 → ~30 ms for sparse updates, ~50 → ~27 ms at idle keepalive cadence.
+**Implemented: flush duplicate (`evdi_helper.c`, writer thread).** After a fresh frame that follows a quiet period (previous fresh frame >= 25 ms earlier) the helper writes one duplicate of it ~2 ms later by pulling the next writer tick forward. It does nothing during bursts (so continuous motion does not double the encoder load), while throttled, in Max Performance Mode (a frame is sent every 16 ms anyway), and it respects the boundary-exit ghost guard (a flush is skipped, not sent, during the 100 ms window after the pointer leaves the tablet; 0 were blocked in the tests). `USCREEN_FLUSH_DUP=0` disables it; the helper's 5 s stats line now also reports `writes: fresh / flush armed / sent / blocked-by-ghost-guard`.
+
+Real-daemon A/B (`uscreen doctor --latency [--sparse]`, standard pacing i.e. `max_performance_mode` temporarily off, two rounds each, p50 ms):
+
+| | flush OFF | flush ON |
+|---|---|---|
+| sparse updates (one step / 100 ms): host stages | 114.4, 113.5 | **89.7, 88.3** |
+| sparse: capture-ready → screen | 127.2, 126.0 | **102.1, 101.3** |
+| continuous motion: host stages | 52.8, 50.3 | 48.4, 49.5 (unchanged, as designed) |
+| continuous: capture-ready → screen | 66.9, 63.2 | 61.7, 62.1 |
+| flush writes (sparse run) | 0 | ~125-134 sent of ~139-141 armed |
+
+So about **-25 ms (-22%) for isolated updates**, nothing lost elsewhere. This is less than the probe's -90 ms because the duplicate is a whole 6 MB frame that itself takes ~9 ms to write through the FIFO and the real encoder shares the GPU with the compositor. In Max Performance Mode (power profile `performance`) the flush is off by design and sparse host stages measured ~84 ms (p95 ~89) with a 16 ms frame cadence — i.e. the frame cadence alone does not explain the whole host stage; the remaining ~80 ms for a 4 Mpx frame is encode + queueing and is only reduced by a smaller stream (stream detail "Half": ~45 ms).
 
 What users can expect today: ~24 ms link + ~20 ms encode + up to one frame interval of hold (≈ 11 ms while moving, 33 ms at the idle keepalive, up to ~100 ms for isolated updates) at 2560x1600; stream detail "Half" halves the encode share; HEVC and 60 Hz are not latency wins on this hardware.

@@ -147,6 +147,10 @@ enum Commands {
         /// Length of the --latency run in seconds
         #[arg(long, default_value_t = 10)]
         secs: u64,
+        /// With --latency: one small mouse step every 100 ms (isolated screen
+        /// updates) instead of continuous motion
+        #[arg(long)]
+        sparse: bool,
     },
     /// Clear the compositor-safety record so the virtual display may be created
     /// again after a safe-mode start (restart the daemon afterwards)
@@ -205,7 +209,9 @@ async fn main() -> Result<()> {
         }
         Some(Commands::ListDisplays) => list_displays().await?,
         Some(Commands::Wifi { off }) => adb::setup_wifi(*off).await?,
-        Some(Commands::Doctor { latency: true, secs }) => doctor::run_latency(*secs).await?,
+        Some(Commands::Doctor { latency: true, secs, sparse }) => {
+            doctor::run_latency(*secs, *sparse).await?
+        }
         Some(Commands::Doctor { .. }) => doctor::run().await?,
         Some(Commands::ResetGuard) => match guard::reset() {
             Ok(true) => println!("Safety record cleared. Restart the daemon to re-enable the virtual display."),

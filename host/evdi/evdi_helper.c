@@ -102,6 +102,21 @@ static volatile int g_buffers_ready = 0;
    In Max Performance Mode, this is lowered to 16ms (approx 60 FPS). */
 #define DEFAULT_IDLE_KEEPALIVE_MS 33
 static int g_idle_keepalive_ms = DEFAULT_IDLE_KEEPALIVE_MS;
+
+/* Flush duplicate (RCA 56 s10). ffmpeg + VAAPI hold every frame until the NEXT
+   one is written to the FIFO, so an isolated update only reaches the tablet
+   when the next frame (the idle keepalive, 33 ms later, or the next damage)
+   pushes it out: measured p50 119 ms for updates 100 ms apart, 31 ms when the
+   same frame is simply written a second time 2 ms later. After a fresh frame
+   that follows a quiet period, write one duplicate shortly after. During a
+   burst (frames closer than FLUSH_SPARSE_US) nothing changes, so continuous
+   motion does not double the encoder load. USCREEN_FLUSH_DUP=0 turns it off. */
+#define FLUSH_SPARSE_US 25000LL
+#define FLUSH_DELAY_NS 2000000L
+static int g_flush_enabled = 1;
+static int g_flush_pending = 0;
+static long long g_last_fresh_write_us = 0;
+static volatile long long g_flush_armed_n = 0, g_flush_sent_n = 0, g_fresh_sent_n = 0, g_flush_blocked_n = 0;
 static long long g_last_write_ms = 0;
 
 static long long now_us(void);
@@ -1335,7 +1350,9 @@ static void *writer_thread(void *arg) {
        standard mode, motionless screens are kept alive every
        g_idle_keepalive_ms (33ms). */
     long long now_ms_write = now_ms();
-    if (!fresh && (now_ms_write - g_last_write_ms) < g_idle_keepalive_ms) {
+    int flush_due = !fresh && g_flush_pending && g_flush_enabled;
+    if (!fresh && !flush_due &&
+        (now_ms_write - g_last_write_ms) < g_idle_keepalive_ms) {
       g_writer_busy = 0;
       continue;
     }
@@ -1346,11 +1363,19 @@ static void *writer_thread(void *arg) {
     if (!fresh && g_last_exit_time_us > 0) {
       long long since_exit_ms = (now_us() - g_last_exit_time_us) / 1000;
       if (since_exit_ms < 100) {
+        if (flush_due)
+          g_flush_blocked_n++;
         g_writer_busy = 0;
         continue;
       }
     }
     g_last_write_ms = now_ms_write;
+    if (flush_due) {
+      g_flush_pending = 0;
+      g_flush_sent_n++;
+    }
+    if (fresh)
+      g_fresh_sent_n++;
 
     /* Bounded write: if the encoder stops reading for >250ms per chunk
        it is stalled or dead — close the FIFO and resync on reopen. */
@@ -1397,6 +1422,27 @@ static void *writer_thread(void *arg) {
       g_timing_shm->records[idx].t_conv_done_us = (uint64_t)g_write_conv_us;
       g_timing_shm->records[idx].t_fifo_write_us = (uint64_t)t_fifo_done;
       __sync_synchronize();
+    }
+
+    /* Arm the flush duplicate for an isolated fresh frame (see the comment at
+       g_flush_enabled), and pull the next writer tick forward so it goes out
+       ~2 ms later instead of a whole frame period later. */
+    if (fresh && remaining == 0) {
+      long long tf = now_us();
+      int sparse = g_last_fresh_write_us == 0 ||
+                   (tf - g_last_fresh_write_us) >= FLUSH_SPARSE_US;
+      g_last_fresh_write_us = tf;
+      g_flush_pending =
+          (sparse && g_flush_enabled && !g_throttled &&
+           g_idle_keepalive_ms > 16);
+      if (g_flush_pending) {
+        g_flush_armed_n++;
+        struct timespec soon;
+        clock_gettime(CLOCK_MONOTONIC, &soon);
+        timespec_add_ns(&soon, FLUSH_DELAY_NS);
+        if (timespec_diff_ns(&soon, &next_frame_time) < 0)
+          next_frame_time = soon;
+      }
     }
 
     /* Only freshly grabbed frames say anything about capture latency */
@@ -1507,6 +1553,9 @@ static void run_event_loop(evdi_handle handle) {
               "pending:%d\n",
               elapsed > 0 ? grabs / elapsed : 0, g_grab_count, g_have_mode,
               g_dpms_on, g_update_pending);
+      fprintf(stderr,
+              "[evdi-helper] writes: fresh %lld, flush armed %lld sent %lld blocked-by-ghost-guard %lld\n",
+              g_fresh_sent_n, g_flush_armed_n, g_flush_sent_n, g_flush_blocked_n);
       fprintf(stderr,
               "[evdi-helper] stages: req→ready avg %.1fms (%d waited, %d imm), "
               "grab avg %.1fms, conv avg %.1fms, write avg %.1fms\n",
@@ -1734,6 +1783,13 @@ int main(int argc, char *argv[]) {
             cursor_events ? "on: cursor left out of the stream"
                           : "off: cursor composited into the stream",
             ce ? "USCREEN_CURSOR_EVENTS" : "default");
+  }
+
+  {
+    const char *fd_env = getenv("USCREEN_FLUSH_DUP");
+    g_flush_enabled = !(fd_env && fd_env[0] == '0');
+    fprintf(stderr, "[evdi-helper] flush duplicate %s\n",
+            g_flush_enabled ? "on" : "off (USCREEN_FLUSH_DUP=0)");
   }
 
   FILE *f = fopen(edid_path, "rb");
