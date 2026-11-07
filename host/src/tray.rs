@@ -146,14 +146,14 @@ impl Tray for UScreenTray {
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Settings…".into(),
+                label: "Show Window".into(),
                 icon_name: "configure".into(),
                 activate: Box::new(|_: &mut Self| open_settings()),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Quit".into(),
+                label: "Stop Daemon (Quit)".into(),
                 icon_name: "application-exit".into(),
                 activate: Box::new(|t: &mut Self| {
                     info!("Quit requested from the tray");
@@ -217,23 +217,38 @@ pub async fn run(
     mut update_rx: watch::Receiver<crate::update::Available>,
 ) {
     let mut mode_rx = mode_tx.subscribe();
+    let mut shutdown_rx = shutdown_tx.subscribe();
 
-    let tray = UScreenTray {
-        pen_only: *mode_rx.borrow_and_update(),
-        tablet_present: *tablet_rx.borrow_and_update(),
-        update: update_rx.borrow_and_update().clone(),
-        mode_tx,
-        shutdown_tx,
-    };
-
-    let handle: Handle<UScreenTray> = match tray.spawn().await {
-        Ok(h) => {
-            info!("Tray icon registered");
-            h
-        }
-        Err(e) => {
-            warn!("No tray icon: {}. The daemon runs the same without one.", e);
-            return;
+    // The daemon starts with the session, usually before gnome-shell's
+    // StatusNotifierWatcher (the AppIndicator extension) is on the bus. Giving
+    // up on the first ServiceUnknown left the tray empty for the whole session,
+    // so keep trying until a watcher answers.
+    let mut delay = std::time::Duration::from_millis(500);
+    let mut warned = false;
+    let handle: Handle<UScreenTray> = loop {
+        let tray = UScreenTray {
+            pen_only: *mode_rx.borrow_and_update(),
+            tablet_present: *tablet_rx.borrow_and_update(),
+            update: update_rx.borrow_and_update().clone(),
+            mode_tx: mode_tx.clone(),
+            shutdown_tx: shutdown_tx.clone(),
+        };
+        match tray.spawn().await {
+            Ok(h) => {
+                info!("Tray icon registered");
+                break h;
+            }
+            Err(e) => {
+                if !warned {
+                    warned = true;
+                    info!("No StatusNotifierWatcher yet ({}); retrying until one appears", e);
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep(delay) => {}
+                    _ = shutdown_rx.changed() => return,
+                }
+                delay = (delay * 2).min(std::time::Duration::from_secs(5));
+            }
         }
     };
 

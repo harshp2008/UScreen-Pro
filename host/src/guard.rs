@@ -33,12 +33,8 @@ use tracing::{info, warn};
 /// A probe slower than this counts as "not idle" for the readiness gate.
 const READY_PROBE_MAX: Duration = Duration::from_millis(500);
 /// Consecutive fast probes the gate wants before declaring the shell idle.
-const READY_PROBES_NEEDED: u32 = 4;
-const READY_PROBE_GAP: Duration = Duration::from_millis(500);
-/// The shell process must be at least this old. Both observed freezes had a
-/// topology change inside the first ~35 s of the session; the healthy runs saw
-/// theirs hours in (RCA 56, E7/E8).
-const SHELL_MIN_UPTIME: Duration = Duration::from_secs(60);
+const READY_PROBES_NEEDED: u32 = 2;
+const READY_PROBE_GAP: Duration = Duration::from_millis(250);
 /// Never proceed on a sluggish-but-answering shell before this long.
 const READY_SLOW_FALLBACK: Duration = Duration::from_secs(180);
 
@@ -317,9 +313,6 @@ pub async fn wait_compositor_ready(shutdown: &mut watch::Receiver<bool>) -> bool
                 None => Err("no session bus yet".into()),
                 Some(c) => match shell_uptime(c).await {
                     None => Err("gnome-shell is not on the bus yet".into()),
-                    Some(up) if up < SHELL_MIN_UPTIME => {
-                        Err(format!("gnome-shell is only {}s old", up.as_secs()))
-                    }
                     Some(_) => match session_running(c).await {
                         Some(false) => Err("gnome-session is still starting".into()),
                         _ => match probe_main_loop(c).await {
