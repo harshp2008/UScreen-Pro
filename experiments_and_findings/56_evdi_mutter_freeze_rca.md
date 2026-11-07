@@ -149,3 +149,40 @@ So the cursor regression was the boundary-sync geometry defect of §8.2, not an 
 * **Stability (the freeze):** the fix is the guard (readiness gate with 60 s shell settle, hotplug limiter, stall watchdog, boot-loop safe mode) plus the unit hardening (`After=gnome-session-initialized.target`, `Nice=5`, `CPUWeight=50`, `OOMScoreAdjust=300`, start limit). Two live guarded runs on real EVDI: no stall (worst probe 450 ms, then 334 ms). Login-time behaviour is verified only by the first real login with the service enabled (§7 step 5); root cause remains evidence-supported, not proven (§3).
 * **Status:** cursor confirmed (§8.3); six guarded runs on real EVDI across the session, none stalled (worst probe 450 ms). **Still open:** the first real *login* with the service enabled — the failing scenario of both freezes — has not happened yet; §3 stands (root cause evidence-supported, not proven). The safeguards (settle gate, watchdog, safe mode) are what protect that first login.
 * **Cursor:** the project's own design is kept and repaired rather than replaced: software cursors (`/etc/environment`), composited cursor (new default), boundary-sync nudge with live geometry (§8.2). Trade-off: stability is independent of the cursor mode (four guarded runs, none stalled); the tablet cursor is smooth with the corrected boundary sync (§8.3, confirmed live by the user). Hardware cursors + default mode (A) are rejected: invisible cursor.
+
+## 10. Latency baselines (2560x1600 @ 90, Intel iGPU, VAAPI, USB) and what drives them
+
+Measured with `uscreen doctor --latency` (real daemon, tablet attached, synthetic mouse sweep) and `scripts/enc_latency_probe.py` (the daemon's exact ffmpeg arguments fed through a FIFO; latency = frame written → its slice NAL out; synthetic runs include the FIFO write and run beside the idle daemon encoder, so compare rows with each other, not with the real-daemon rows).
+
+**Real daemon, `doctor --latency` (p50 / p95, ms)**
+
+| Run | encoder → tablet screen | capture-ready → screen | host stages |
+|---|---|---|---|
+| 2560x1600 stream, session 1 | 24–26 / 34 | 120 / 132 | 99 / 108 |
+| `stream_scale=2` (1280x800 stream) | 22 / 29 | 64 / 84 | 45 / 67 |
+| user's later run, 2560x1600 | 24.0 | 70.4 | 50.0 |
+
+Reading: the USB link plus tablet decode is a steady ~22–26 ms. Everything variable is host-side, and it varies with how densely frames arrive (below), which is why two runs on the same setup gave 120 ms and 70 ms.
+
+**Synthetic encoder probe, 2560x1600 (p50 ms)**
+
+| Question | Result |
+|---|---|
+| `hevc_vaapi` vs `h264_vaapi` | **HEVC is slower here**: 90 Hz continuous feed, interleaved x3: h264 33–45 vs hevc 54–58; with the frame hold removed (below): h264 29–31 vs hevc 44–76. No upside to HEVC at this bitrate on this GPU unless the link is the limit (it is not: USB takes ~24 ms). |
+| Extra CPU colour conversion (swscale) in ffmpeg? | **None.** The filter graph is `rawvideo → format=nv12,hwupload → h264_vaapi`; debug log has 0 `auto_scale`/`sws` lines (libswscale is linked but unused). The only CPU conversion is in `evdi_helper` (BGRA→NV12, 4 threads): 0.7 ms p50 / 1.0 ms p95. Moving it to the GPU (feed BGRA 4 B/px, `hwupload,scale_vaapi=format=nv12`) is **slower**: 33–34 vs 28–29 ms p50 and a worse p95, because the FIFO carries 2.7x the bytes. Keep the CPU conversion. |
+| 2560x1600 @ 60 vs 90 | **No real difference** once the hold is removed: 29.4–30.5 vs 29.6–29.9. Per-frame encode cost does not depend on the frame rate; lowering to 60 Hz does not help latency (it only changes the frame interval, below). |
+| Resolution | The one thing that costs real encode time: 1920x1080 and 1280x800 ≈ 22 ms vs ≈ 33–60 ms at 2560x1600. |
+| VAAPI knobs | `-low_power 1` unsupported on this GPU; `-compression_level 7`, `-quality 7`, `-fps_mode passthrough`, `-flush_packets 1` change nothing material. |
+
+**The dominant effect: ffmpeg + VAAPI hold each frame until the next one arrives.** Latency of a frame ≈ a fixed ~20 ms + roughly its distance to the *next* frame written to the FIFO:
+
+| Feed interval | 11 ms (active motion) | 33 ms (helper idle keepalive) | 100 ms (sparse damage) |
+|---|---|---|---|
+| p50 latency | 24 ms | 51–52 ms | 119 ms |
+| same, with a duplicate of each frame written 2 ms later | – | 27.5 ms | **31 ms** (h264), 46 ms (hevc) |
+
+`-fps_mode passthrough` and `-flush_packets 1` do not remove the hold; a duplicate frame does. This explains the real-daemon `encode` stage of ~75–115 ms at 2560x1600 (the helper only re-emits an unchanged frame every `IDLE_KEEPALIVE_MS` = 33 ms, or 16 ms in Max Performance Mode) and why the cursor feels laggy when updates are sparse but fine when moving fast.
+
+**Not implemented — candidate fix:** in `evdi_helper.c`'s writer thread, after a *fresh* frame write one duplicate of it a few ms later if no newer frame has arrived (cost: one extra near-zero-bit P frame and one more FIFO copy per damage burst). Risk to check first: re-emitting a stale frame is exactly the ghost-cursor mechanism of experiment 05 (`g_last_exit_time_us` suppression), so it must respect the boundary-exit suppression window. Expected gain from the probe: ~120 → ~30 ms for sparse updates, ~50 → ~27 ms at idle keepalive cadence.
+
+What users can expect today: ~24 ms link + ~20 ms encode + up to one frame interval of hold (≈ 11 ms while moving, 33 ms at the idle keepalive, up to ~100 ms for isolated updates) at 2560x1600; stream detail "Half" halves the encode share; HEVC and 60 Hz are not latency wins on this hardware.
