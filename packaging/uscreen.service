@@ -1,12 +1,20 @@
 [Unit]
 Description=UScreen — Android tablet as a second display
-After=graphical-session.target
+After=graphical-session.target gnome-session-initialized.target
+StartLimitIntervalSec=120
+StartLimitBurst=4
 PartOf=graphical-session.target
 
 [Service]
 Type=simple
 ExecStart=/usr/bin/uscreen start
 ExecStop=/usr/bin/uscreen stop
+# Compositor safety (experiments_and_findings/56_evdi_mutter_freeze_rca.md):
+# the daemon creates a monitor on the desktop, so it must never compete with the
+# compositor for the CPU, and must be the first thing the OOM killer takes.
+Nice=5
+CPUWeight=50
+OOMScoreAdjust=300
 Restart=on-failure
 RestartSec=3
 

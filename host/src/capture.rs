@@ -1118,7 +1118,22 @@ impl CaptureManager {
         let mut is_throttled = false;
         let mut applied_nonce = settings_rx.borrow().restart_nonce;
 
+        // Compositor safety (see guard.rs and experiments_and_findings/56_*):
+        // the virtual monitor is only created once the compositor is up and idle,
+        // hotplugs are spaced out, and a stall watchdog removes the monitor again
+        // if the compositor stops answering while it exists.
+        let mut gate = crate::guard::Guard::new();
+        let (active_tx, active_rx) = watch::channel(false);
+        let (mut trip_rx, mut ok_rx) = crate::guard::spawn_watchdog(active_rx);
+        // keep_alive only means "keep the monitor after the tablet leaves". It
+        // must never create one at login with nobody attached (issue #12): that
+        // consumer-less monitor is what the desktop then has to lay windows,
+        // docks and the pointer out on while it is still starting up.
+        let mut tablet_seen = false;
+        let mut refusal_logged = false;
+
         loop {
+            tablet_seen |= *display_rx.borrow();
             // Apply the latest runtime settings before (re)starting anything
             {
                 let s = settings_rx.borrow_and_update().clone();
@@ -1159,8 +1174,11 @@ impl CaptureManager {
                     }
                     if let Some(mut h) = self.helper_child.take() {
                         Self::terminate(&mut h, "evdi_helper").await;
+                        gate.display_down();
+                        let _ = active_tx.send(false);
                     }
-                    // Give the compositor a moment to process the unplug
+                    // Give the compositor a moment to process the unplug. The
+                    // guard enforces the real minimum gap before the reconnect.
                     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
                 }
                 self.config.encoder = s.encoder;
@@ -1186,19 +1204,22 @@ impl CaptureManager {
             // while a tablet is attached makes the virtual monitor appear and
             // disappear exactly like a cable being plugged in and out.
             // If keep_alive is set, the helper and display are preserved.
-            if !*display_rx.borrow() && !self.config.keep_alive {
+            if !*display_rx.borrow() && !(self.config.keep_alive && tablet_seen) {
                 info!("No tablet is a screen — disconnecting the virtual display");
                 if let Some(mut e) = self.encoder_child.take() {
                     Self::terminate(&mut e, "ffmpeg").await;
                 }
                 if let Some(mut h) = self.helper_child.take() {
                     Self::terminate(&mut h, "evdi_helper").await;
+                    gate.display_down();
+                    let _ = active_tx.send(false);
                 }
                 encoder_mode = None;
                 tokio::select! {
                     _ = display_rx.changed() => {}
                     _ = settings_rx.changed() => {}
                     _ = shutdown_rx.changed() => {
+                        gate.display_down();
                         self.shutdown().await;
                         return Ok(());
                     }
@@ -1236,6 +1257,30 @@ impl CaptureManager {
 
             // Start evdi-helper if not running
             if self.helper_child.is_none() {
+                // Creating the helper creates a monitor on the desktop. Ask the
+                // guard first: it waits for the compositor instead of racing it.
+                match gate.admit(&mut shutdown_rx).await {
+                    crate::guard::Admission::Go => refusal_logged = false,
+                    crate::guard::Admission::Shutdown => {
+                        gate.display_down();
+                        self.shutdown().await;
+                        return Ok(());
+                    }
+                    crate::guard::Admission::Refused => {
+                        if !refusal_logged {
+                            refusal_logged = true;
+                            warn!("guard: virtual display not created (safe mode / breaker latched); the tablet's pen and touch do not need it");
+                        }
+                        tokio::select! {
+                            _ = shutdown_rx.changed() => {
+                                self.shutdown().await;
+                                return Ok(());
+                            }
+                            _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => {}
+                        }
+                        continue;
+                    }
+                }
                 if let Err(e) = self.start_helper().await {
                     error!(
                         "Failed to start helper: {}. Retrying in {}ms...",
@@ -1257,6 +1302,8 @@ impl CaptureManager {
                 }
                 explained_evdi = false;
                 pipeline_started_at = Instant::now();
+                gate.display_up();
+                let _ = active_tx.send(true);
             }
 
             // Enable the display via kscreen-doctor so KWin actively renders
@@ -1305,6 +1352,8 @@ impl CaptureManager {
                     }
                     if let Some(mut h) = self.helper_child.take() {
                         Self::terminate(&mut h, "evdi_helper").await;
+                        gate.display_down();
+                        let _ = active_tx.send(false);
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
                     backoff_ms = (backoff_ms * 2).min(30_000);
@@ -1395,6 +1444,8 @@ impl CaptureManager {
             // The tablet stopped being a screen: a clean stop, not a crash,
             // so no backoff and no wait before the outer loop parks itself.
             let mut display_dropped = false;
+            // The stall watchdog fired: take the virtual monitor away again.
+            let mut guard_tripped = false;
             let card = self.helper_card;
 
             // Events that need no restart at all send us back here without
@@ -1426,6 +1477,14 @@ impl CaptureManager {
                     _ = settings_rx.changed() => {
                         info!("Settings changed — restarting encoder");
                         settings_changed = true;
+                    }
+                    _ = trip_rx.changed() => {
+                        warn!("guard: removing the virtual display - the compositor stopped answering");
+                        guard_tripped = true;
+                    }
+                    _ = ok_rx.changed() => {
+                        gate.healthy();
+                        resume_same_encoder = true;
                     }
                     _ = stream_rx.changed() => {
                         let now = self.active_mode();
@@ -1501,6 +1560,7 @@ impl CaptureManager {
                         stop_encode.store(true, std::sync::atomic::Ordering::Relaxed);
                         encode_task.abort();
                         Self::disable_evdi_display(card).await;
+                        gate.display_down();
                         self.shutdown().await;
                         return Ok(());
                     }
@@ -1562,14 +1622,24 @@ impl CaptureManager {
             if !settings_changed && !mode_changed {
                 if let Some(mut h) = self.helper_child.take() {
                     Self::terminate(&mut h, "evdi_helper").await;
+                    if guard_tripped {
+                        gate.tripped();
+                    } else {
+                        gate.display_down();
+                    }
+                    let _ = active_tx.send(false);
                 }
+            }
+            // A helper that died on its own is gone too: stop probing for it.
+            if self.helper_child.is_none() {
+                let _ = active_tx.send(false);
             }
             encoder_mode = None;
             // Reset codec config so it gets re-extracted on restart
             if let Ok(mut config) = self.codec_config.lock() {
                 *config = None;
             }
-            if !settings_changed && !mode_changed && !display_dropped {
+            if !settings_changed && !mode_changed && !display_dropped && !guard_tripped {
                 tokio::time::sleep(std::time::Duration::from_millis(backoff_ms)).await;
             }
         }

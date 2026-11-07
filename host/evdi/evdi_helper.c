@@ -252,10 +252,20 @@ static pthread_t g_boundary_thread = 0;
 static volatile int g_boundary_running = 0;
 static Display *g_x11_dpy = NULL;
 static Window g_nudge_win = 0;
-static int g_tablet_x = 1920;
-static int g_tablet_y = 165;
-static int g_tablet_w = 1464;
-static int g_tablet_h = 915;
+/* Where this helper's output sits on the desktop, in the X root's (logical)
+   coordinates. Unknown (w == 0) until the compositor has created the monitor:
+   the helper connects BEFORE mutter lists the new output, so reading XRandR
+   once at start-up found nothing and the thread ran forever on a hard-coded
+   rectangle from an old layout (y off by 165 px), which made it nudge at the
+   wrong moments and the ghost cursor survive (RCA 56 s8.2). It is therefore
+   re-read while the helper runs. */
+static int g_tablet_x = 0;
+static int g_tablet_y = 0;
+static int g_tablet_w = 0;
+static int g_tablet_h = 0;
+static int g_tablet_known = 0;
+static int g_nudge_mapped = 0;
+static char g_my_connector[32] = "";
 static volatile int g_pointer_in_tablet = 0;
 static volatile long long g_last_exit_time_us = 0;
 
@@ -273,6 +283,86 @@ static inline long long timespec_diff_ns(const struct timespec *a,
          (a->tv_nsec - b->tv_nsec);
 }
 
+/* The connector this helper's EVDI card drives ("DVI-I-2" for card2), from
+   /sys/class/drm/card<N>-<connector>. With two tablets each helper must watch
+   its OWN output; matching any "DVI-" output made both use the same one. */
+static void find_my_connector(void) {
+  if (g_device_index < 0)
+    return;
+  char prefix[32];
+  snprintf(prefix, sizeof(prefix), "card%d-", g_device_index);
+  size_t plen = strlen(prefix);
+  DIR *d = opendir("/sys/class/drm");
+  if (!d)
+    return;
+  struct dirent *de;
+  while ((de = readdir(d)) != NULL) {
+    if (strncmp(de->d_name, prefix, plen) == 0 && de->d_name[plen]) {
+      snprintf(g_my_connector, sizeof(g_my_connector), "%s", de->d_name + plen);
+      break;
+    }
+  }
+  closedir(d);
+}
+
+/* Re-read this output's geometry from XRandR; keeps the nudge window on it. */
+static void refresh_tablet_geometry(void) {
+  Window root = DefaultRootWindow(g_x11_dpy);
+  XRRScreenResources *res = XRRGetScreenResourcesCurrent(g_x11_dpy, root);
+  int found = 0, x = 0, y = 0, w = 0, h = 0;
+  if (res) {
+    for (int i = 0; i < res->noutput && !found; i++) {
+      XRROutputInfo *info = XRRGetOutputInfo(g_x11_dpy, res, res->outputs[i]);
+      if (info && info->connection == RR_Connected && info->crtc) {
+        int mine = g_my_connector[0]
+                       ? strcmp(info->name, g_my_connector) == 0
+                       : (strstr(info->name, "DVI-") || strstr(info->name, "UScreen") ||
+                          strstr(info->name, "evdi"));
+        if (mine) {
+          XRRCrtcInfo *crtc = XRRGetCrtcInfo(g_x11_dpy, res, info->crtc);
+          if (crtc) {
+            x = crtc->x;
+            y = crtc->y;
+            w = (int)crtc->width;
+            h = (int)crtc->height;
+            found = (w > 0 && h > 0);
+            XRRFreeCrtcInfo(crtc);
+          }
+        }
+      }
+      if (info)
+        XRRFreeOutputInfo(info);
+    }
+    XRRFreeScreenResources(res);
+  }
+  if (!found) {
+    if (g_tablet_known)
+      fprintf(stderr, "[evdi-helper] Boundary sync: output %s went away\n",
+              g_my_connector);
+    g_tablet_known = 0;
+    return;
+  }
+  if (!g_tablet_known || x != g_tablet_x || y != g_tablet_y || w != g_tablet_w ||
+      h != g_tablet_h) {
+    g_tablet_x = x;
+    g_tablet_y = y;
+    g_tablet_w = w;
+    g_tablet_h = h;
+    fprintf(stderr,
+            "[evdi-helper] Boundary sync: output %s at (%d,%d) %dx%d\n",
+            g_my_connector[0] ? g_my_connector : "?", x, y, w, h);
+    if (g_nudge_win) {
+      XMoveWindow(g_x11_dpy, g_nudge_win, x + 1, y + 1);
+      if (!g_nudge_mapped) {
+        XMapWindow(g_x11_dpy, g_nudge_win);
+        g_nudge_mapped = 1;
+      }
+      XFlush(g_x11_dpy);
+    }
+  }
+  g_tablet_known = 1;
+}
+
 static void *boundary_sync_thread(void *arg) {
   (void)arg;
   struct timespec ts = {
@@ -281,10 +371,23 @@ static void *boundary_sync_thread(void *arg) {
   int toggle = 1;
   long long last_prewarm = 0;
 
+  long long last_geo_us = 0;
   while (g_running && g_boundary_running) {
     nanosleep(&ts, NULL);
     if (!g_x11_dpy || !g_nudge_win)
       continue;
+
+    /* Poll fast until the output exists, then slowly to follow layout /
+       scale changes. */
+    long long t_us = now_us();
+    if (t_us - last_geo_us > (g_tablet_known ? 1000000 : 250000)) {
+      last_geo_us = t_us;
+      refresh_tablet_geometry();
+    }
+    if (!g_tablet_known) {
+      g_pointer_in_tablet = 0;
+      continue;
+    }
 
     Window root_ret, child_ret;
     int rx = 0, ry = 0, wx = 0, wy = 0;
@@ -342,44 +445,24 @@ static void init_boundary_sync(void) {
   }
 
   Window root = DefaultRootWindow(g_x11_dpy);
-  XRRScreenResources *res = XRRGetScreenResourcesCurrent(g_x11_dpy, root);
-  if (res) {
-    for (int i = 0; i < res->noutput; i++) {
-      XRROutputInfo *info = XRRGetOutputInfo(g_x11_dpy, res, res->outputs[i]);
-      if (info && info->connection == RR_Connected && info->crtc) {
-        if (strstr(info->name, "DVI-") || strstr(info->name, "UScreen") ||
-            strstr(info->name, "evdi")) {
-          XRRCrtcInfo *crtc = XRRGetCrtcInfo(g_x11_dpy, res, info->crtc);
-          if (crtc) {
-            g_tablet_x = crtc->x;
-            g_tablet_y = crtc->y;
-            g_tablet_w = crtc->width;
-            g_tablet_h = crtc->height;
-            XRRFreeCrtcInfo(crtc);
-          }
-        }
-      }
-      if (info)
-        XRRFreeOutputInfo(info);
-    }
-    XRRFreeScreenResources(res);
-  }
-
+  find_my_connector();
   fprintf(stderr,
-          "[evdi-helper] Boundary sync initialized: tablet output at (%d,%d) "
-          "%dx%d\n",
-          g_tablet_x, g_tablet_y, g_tablet_w, g_tablet_h);
+          "[evdi-helper] Boundary sync initialized for output %s (geometry is "
+          "tracked live; unknown until the compositor creates the monitor)\n",
+          g_my_connector[0] ? g_my_connector : "?");
 
   XSetWindowAttributes attr;
   memset(&attr, 0, sizeof(attr));
   attr.override_redirect = True;
   attr.background_pixel = 0;
+  /* Created unmapped; refresh_tablet_geometry() moves it onto the output and
+     maps it as soon as the output is known. */
   g_nudge_win = XCreateWindow(
-      g_x11_dpy, root, g_tablet_x + 1, g_tablet_y + 1, 1, 1, 0, CopyFromParent,
-      InputOutput, CopyFromParent, CWOverrideRedirect | CWBackPixel, &attr);
+      g_x11_dpy, root, 0, 0, 1, 1, 0, CopyFromParent, InputOutput,
+      CopyFromParent, CWOverrideRedirect | CWBackPixel, &attr);
   XSelectInput(g_x11_dpy, g_nudge_win, ExposureMask);
-  XMapWindow(g_x11_dpy, g_nudge_win);
   XFlush(g_x11_dpy);
+  refresh_tablet_geometry();
 
   g_boundary_running = 1;
   if (pthread_create(&g_boundary_thread, NULL, boundary_sync_thread, NULL) !=
@@ -1636,7 +1719,22 @@ int main(int argc, char *argv[]) {
      compositor stops repainting an idle output). Measured on the tablet in
      experiments_and_findings/46: false => ~11 grabs/s and a cursor sprite in
      the stream while the pointer moves; true => 0 grabs and a clean stream. */
-  evdi_enable_cursor_events(handle, true);
+  {
+    /* Default: libevdi composites the cursor into the grabbed frames (cursor
+       events OFF). Under hardware cursors EVDI never receives the cursor
+       plane and, with events ON, nothing in the stream draws one, so the
+       tablet shows NO cursor; under mutter's forced software cursors the
+       composited cursor is visible and the boundary-sync engine above keeps
+       it from ghosting. USCREEN_CURSOR_EVENTS=1 selects the experiment-46
+       mode (cursor left out of the stream). Measured: RCA 56 s8. */
+    const char *ce = getenv("USCREEN_CURSOR_EVENTS");
+    int cursor_events = (ce && ce[0] == '1');
+    evdi_enable_cursor_events(handle, cursor_events);
+    fprintf(stderr, "[evdi-helper] cursor events %s (%s)\n",
+            cursor_events ? "on: cursor left out of the stream"
+                          : "off: cursor composited into the stream",
+            ce ? "USCREEN_CURSOR_EVENTS" : "default");
+  }
 
   FILE *f = fopen(edid_path, "rb");
   if (!f) {

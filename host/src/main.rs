@@ -15,6 +15,7 @@ mod edid;
 mod encoder;
 mod encoders;
 mod gnome;
+mod guard;
 mod hyprland;
 mod input;
 mod installer;
@@ -139,6 +140,9 @@ enum Commands {
     ResumeDevice { serial: String },
     /// Diagnose the whole setup and report what is wrong
     Doctor,
+    /// Clear the compositor-safety record so the virtual display may be created
+    /// again after a safe-mode start (restart the daemon afterwards)
+    ResetGuard,
 }
 
 #[tokio::main]
@@ -194,6 +198,11 @@ async fn main() -> Result<()> {
         Some(Commands::ListDisplays) => list_displays().await?,
         Some(Commands::Wifi { off }) => adb::setup_wifi(*off).await?,
         Some(Commands::Doctor) => doctor::run().await?,
+        Some(Commands::ResetGuard) => match guard::reset() {
+            Ok(true) => println!("Safety record cleared. Restart the daemon to re-enable the virtual display."),
+            Ok(false) => println!("Nothing to clear: no safety record exists."),
+            Err(e) => anyhow::bail!("could not clear {:?}: {}", guard::state_path(), e),
+        },
     }
 
     Ok(())
