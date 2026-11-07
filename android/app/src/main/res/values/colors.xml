@@ -2,4 +2,6 @@
 <resources>
     <!-- Emerald tile of the desktop icon. -->
     <color name="ic_launcher_background">#059669</color>
+    <!-- Window behind the first frame; the video area itself is always black. -->
+    <color name="window_background">#F5FBF7</color>
 </resources>

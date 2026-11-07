@@ -239,6 +239,24 @@ fun UScreenMain(
     var keepDisplayAliveWhenLocked by remember { mutableStateOf(prefs?.keepDisplayAliveWhenLocked ?: true) }
     var preferredTransport by remember { mutableStateOf(prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO) }
     var forceReviewMode by remember { mutableStateOf(false) }
+    var themeMode by remember { mutableStateOf(prefs?.themeMode ?: Prefs.THEME_SYSTEM) }
+
+    /*
+     * A live stream means setup is done: never show onboarding over it, and remember that so the wizard
+     * does not come back on a later dropout (the connection monitor still does). The grace period keeps a
+     * quick (re)connect, such as resuming the app, from flashing the screen. The wizard stays reachable on
+     * demand through Settings > Review Setup Guide (forceReviewMode).
+     */
+    var onboardingGraceOver by remember { mutableStateOf(false) }
+    LaunchedEffect(isConnected) {
+        if (isConnected) {
+            onboardingGraceOver = false
+            prefs?.hasCompletedOnboarding = true
+        } else {
+            delay(1500)
+            onboardingGraceOver = true
+        }
+    }
 
     val context = LocalContext.current
     val activity = context as? MainActivity
@@ -310,7 +328,7 @@ fun UScreenMain(
         }
 
         AnimatedVisibility(
-            visible = (!isConnected && !penOnly) || forceReviewMode,
+            visible = (!isConnected && !penOnly && onboardingGraceOver) || forceReviewMode,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier
@@ -538,6 +556,12 @@ fun UScreenMain(
                         else -> "auto"
                     }
                     touchCapture?.sendPreferredTransport(transStr)
+                },
+                themeMode = themeMode,
+                onThemeModeChange = {
+                    themeMode = it
+                    prefs?.themeMode = it
+                    activity?.applyThemeMode(it)
                 },
                 onReviewSetupGuide = {
                     forceReviewMode = true

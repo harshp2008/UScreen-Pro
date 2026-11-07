@@ -14,13 +14,9 @@ use ksni::{Handle, Status, ToolTip, Tray, TrayMethods};
 use tokio::sync::watch;
 use tracing::{info, warn};
 
-/// The project's own icons, installed into the hicolor theme by the packages
-/// and the installer. The pen variant carries the mode at a glance without a
-/// tooltip. The same pictures are also embedded as pixmaps below, so a tray
-/// that cannot find the theme icon (a build run from the source tree, a
-/// desktop with an odd icon path) still shows something recognisable.
-const ICON_SCREEN: &str = "uscreen";
-const ICON_TABLET: &str = "uscreen-pen";
+/// The emerald UScreen Pro icons, embedded as pixmaps. The tray deliberately names no theme icon:
+/// an old `uscreen` icon left in the hicolor theme by a previous install would otherwise win over the
+/// pixmap and show the retired logo. The pen variant carries the mode at a glance without a tooltip.
 const PIXMAP_SCREEN: &[u8] = include_bytes!("../../packaging/icons/uscreen-64.rgba");
 const PIXMAP_TABLET: &[u8] = include_bytes!("../../packaging/icons/uscreen-pen-64.rgba");
 const PIXMAP_SIDE: i32 = 64;
@@ -39,6 +35,9 @@ fn pixmap(rgba: &[u8]) -> ksni::Icon {
     }
 }
 
+/// The Tauri settings app. The retired `uscreen-gui` must never be launched from here.
+const GUI_BIN: &str = "uscreen-pro-gui";
+
 struct UScreenTray {
     pen_only: bool,
     tablet_present: bool,
@@ -49,6 +48,10 @@ struct UScreenTray {
 }
 
 impl UScreenTray {
+    fn current_pixmap(&self) -> ksni::Icon {
+        pixmap(if self.pen_only { PIXMAP_TABLET } else { PIXMAP_SCREEN })
+    }
+
     fn state_line(&self) -> String {
         if !self.tablet_present {
             "No tablet connected".to_string()
@@ -62,27 +65,20 @@ impl UScreenTray {
 
 impl Tray for UScreenTray {
     fn id(&self) -> String {
-        "uscreen".into()
+        "uscreen-pro".into()
     }
 
     fn title(&self) -> String {
-        "UScreen".into()
+        "UScreen Pro".into()
     }
 
+    /// Empty on purpose, so the desktop uses [`Self::icon_pixmap`] (see the pixmap constants).
     fn icon_name(&self) -> String {
-        if self.pen_only {
-            ICON_TABLET.into()
-        } else {
-            ICON_SCREEN.into()
-        }
+        String::new()
     }
 
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        vec![pixmap(if self.pen_only {
-            PIXMAP_TABLET
-        } else {
-            PIXMAP_SCREEN
-        })]
+        vec![self.current_pixmap()]
     }
 
     /// Always visible. Passive lets the desktop hide the icon, and an icon you
@@ -97,10 +93,10 @@ impl Tray for UScreenTray {
             description.push_str(&format!("\nUpdate available: {}", v));
         }
         ToolTip {
-            icon_name: self.icon_name(),
-            title: "UScreen".into(),
+            icon_name: String::new(),
+            icon_pixmap: vec![self.current_pixmap()],
+            title: "UScreen Pro".into(),
             description,
-            ..Default::default()
         }
     }
 
@@ -184,17 +180,29 @@ fn open_release_page() {
 /// Best effort: a missing GUI binary is worth a log line, not a crash in the
 /// middle of a menu callback.
 fn open_settings() {
+    // A second window of the same app is never what a click on the tray means.
+    let running = std::process::Command::new("pgrep")
+        .args(["-x", GUI_BIN])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if running {
+        // Ask the window manager to raise the existing window; harmless if wmctrl is absent.
+        let _ = std::process::Command::new("wmctrl").args(["-x", "-a", GUI_BIN]).status();
+        info!("{} is already running; raised its window", GUI_BIN);
+        return;
+    }
     // Next to this binary first. Under systemd --user the PATH usually lacks
-    // ~/.local/bin, where install.sh puts both binaries, so a bare name would
+    // ~/.local/bin, where the installer puts both binaries, so a bare name would
     // fail for exactly the installs that start the daemon at login.
     let sibling = std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(|d| d.join("uscreen-gui")))
+        .and_then(|p| p.parent().map(|d| d.join(GUI_BIN)))
         .filter(|p| p.exists());
-    let program = sibling.unwrap_or_else(|| std::path::PathBuf::from("uscreen-gui"));
+    let program = sibling.unwrap_or_else(|| std::path::PathBuf::from(GUI_BIN));
     match std::process::Command::new(&program).spawn() {
         Ok(_) => info!("Opened settings from the tray"),
-        Err(e) => warn!("Could not launch uscreen-gui: {}", e),
+        Err(e) => warn!("Could not launch {}: {}", GUI_BIN, e),
     }
 }
 

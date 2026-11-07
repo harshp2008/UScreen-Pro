@@ -943,7 +943,7 @@ fn check_config(r: &mut Report, cfg: &FileConfig) {
                 cfg.bitrate / 1000
             ),
         );
-        r.hint("rewrite it via uscreen-gui (or the tablet settings) to make the file agree");
+        r.hint("rewrite it via UScreen Pro (or the tablet settings) to make the file agree");
     } else {
         r.line(
             Level::Ok,

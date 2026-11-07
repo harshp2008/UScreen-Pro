@@ -99,6 +99,8 @@ export function installDevMock() {
           running = false;
           return "Daemon stopped";
         case "list_adb_devices":
+          /* `window.__unplugged = true` simulates pulling the USB cable (the wizard's disconnect banner). */
+          if ((window as unknown as { __unplugged?: boolean }).__unplugged) return [];
           return status().devices.map((d) => ({ serial: d.serial, state: d.state, model: d.model, is_wifi: false }));
         case "install_apk_on_device": {
           const serial = (args as { serial: string }).serial;

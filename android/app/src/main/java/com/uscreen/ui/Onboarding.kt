@@ -321,7 +321,7 @@ private fun StatusItemCardContent(
                     Text(
                         text = description,
                         fontSize = 12.sp,
-                        color = if (isPassed) Color(0xFFCFE9DB) else Muted
+                        color = if (isPassed) OnSurface else Muted
                     )
                 }
             }
@@ -516,7 +516,7 @@ fun OnboardingScreen(
                                     Spacer(Modifier.height(20.dp))
 
                                     Card(
-                                        colors = CardDefaults.cardColors(containerColor = Color(0x8C1A1A2A)),
+                                        colors = CardDefaults.cardColors(containerColor = SurfaceMid),
                                         shape = RoundedCornerShape(8.dp),
                                         modifier = Modifier.fillMaxWidth(0.9f)
                                     ) {
@@ -729,7 +729,7 @@ fun OnboardingScreen(
                                     // Quick checklist summary
                                     Card(
                                         shape = RoundedCornerShape(8.dp),
-                                        colors = CardDefaults.cardColors(containerColor = Color(0x8C1A1A2A)),
+                                        colors = CardDefaults.cardColors(containerColor = SurfaceMid),
                                         modifier = Modifier.fillMaxWidth(0.9f)
                                     ) {
                                         Column(modifier = Modifier.padding(16.dp)) {

@@ -12,7 +12,8 @@ import android.util.Log
 import android.view.View
 import android.view.WindowInsetsController
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,7 +48,7 @@ fun getLocalWifiIp(@Suppress("UNUSED_PARAMETER") context: Context? = null): Stri
  * Primary Android Activity managing lifecycle, hardware video rendering, low-latency touch/stylus
  * hover dispatch, screen refresh rate negotiation, and system immersive UI flags.
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     /// Mirrors the host's mode so the UI can say what is going on.
     private var penOnlyMode by mutableStateOf(false)
     private var hostVersion by mutableStateOf<String?>(null)
@@ -142,7 +143,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Light / Dark / System choice. Read by the Compose theme, so a change repaints without a restart. */
+    private var themeMode by mutableStateOf(Prefs.THEME_SYSTEM)
+
+    /**
+     * Apply the saved Light / Dark / System choice. AppCompatDelegate carries it to everything that is not
+     * Compose (resources, dialogs, the window); Compose reads [themeMode] directly because the activity
+     * handles uiMode itself and so never gets a recreate to pick the new configuration up.
+     */
+    fun applyThemeMode(mode: Int = prefs.themeMode) {
+        themeMode = mode
+        AppCompatDelegate.setDefaultNightMode(
+            when (mode) {
+                Prefs.THEME_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                Prefs.THEME_DARK -> AppCompatDelegate.MODE_NIGHT_YES
+                else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+        )
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Before super.onCreate, so the first frame is already in the chosen scheme.
+        prefs = Prefs(this)
+        applyThemeMode()
         super.onCreate(savedInstanceState)
 
         // Keep screen on while streaming
@@ -150,7 +173,6 @@ class MainActivity : ComponentActivity() {
 
         requestHighestRefreshRate()
 
-        prefs = Prefs(this)
         applyOrientation()
         applyLockScreenFlags()
         registerLockReceiver()
@@ -255,7 +277,7 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            UScreenTheme {
+            UScreenTheme(themeMode = themeMode) {
                 UScreenMain(
                     penOnly = penOnlyMode,
                     showThanks = showThanks,

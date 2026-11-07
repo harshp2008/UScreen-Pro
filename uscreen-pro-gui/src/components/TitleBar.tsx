@@ -1,7 +1,15 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/ui/button";
-import { Minus, Moon, Square, Sun, X, Copy } from "lucide-react";
+import { Copy, Minus, Monitor, Moon, Square, Sun, X, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { ThemePref } from "@/lib/theme";
 import appIcon from "../assets/uscreen-pro.svg";
 import { cn } from "@/lib/utils";
 
@@ -34,7 +42,15 @@ function WindowButton({
  * Custom frameless title bar. `data-tauri-drag-region` only fires on the element it is set on,
  * so the label is pointer-events-none and drags fall through to the bar itself.
  */
-export function TitleBar({ dark, onToggleTheme }: { dark: boolean; onToggleTheme: () => void }) {
+const THEMES: { id: ThemePref; label: string; icon: LucideIcon }[] = [
+  { id: "light", label: "Light", icon: Sun },
+  { id: "dark", label: "Dark", icon: Moon },
+  { id: "system", label: "System (Auto)", icon: Monitor },
+];
+
+export function TitleBar({ theme, onThemeChange }: { theme: ThemePref; onThemeChange: (t: ThemePref) => void }) {
+  const current = THEMES.find((t) => t.id === theme) ?? THEMES[2];
+  const CurrentIcon = current.icon;
   const win = useMemo(() => {
     try {
       return getCurrentWindow();
@@ -64,9 +80,29 @@ export function TitleBar({ dark, onToggleTheme }: { dark: boolean; onToggleTheme
         <span className="text-xs font-semibold text-foreground">UScreen Pro</span>
       </div>
       <div className="flex items-center gap-1">
-        <WindowButton label={dark ? "Switch to light mode" : "Switch to dark mode"} onClick={onToggleTheme}>
-          {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-        </WindowButton>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={`Theme: ${current.label}`}
+              title={`Theme: ${current.label}`}
+              className="size-7 text-muted-foreground"
+            >
+              <CurrentIcon className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuRadioGroup value={theme} onValueChange={(v) => onThemeChange(v as ThemePref)}>
+              {THEMES.map(({ id, label, icon: Icon }) => (
+                <DropdownMenuRadioItem key={id} value={id}>
+                  <Icon className="mr-2 size-4" />
+                  {label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <WindowButton label="Minimize" onClick={() => void win?.minimize()}>
           <Minus className="size-4" />
         </WindowButton>

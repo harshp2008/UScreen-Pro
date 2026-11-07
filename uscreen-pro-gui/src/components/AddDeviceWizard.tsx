@@ -194,6 +194,13 @@ export function AddDeviceWizard({
     ? (usbEntries.find((e) => e.serial === lockedSerial) ?? null)
     : (candidates[0] ?? null);
   const installStarted = useRef(false);
+  /* Bumped when the cable drops so a result that arrives from an interrupted run is ignored. */
+  const installRun = useRef(0);
+  const wirelessRun = useRef(0);
+  /* USB: has an authorized device been seen on step 2+ (so its absence now means "unplugged"), and has it stayed gone. */
+  const [usbSeen, setUsbSeen] = useState(false);
+  const [usbGone, setUsbGone] = useState(false);
+  const [retryingConn, setRetryingConn] = useState(false);
   /* A successful USB bootstrap makes the mDNS check pointless, so a late timeout event is ignored. */
   const usbBootstrapped = useRef(false);
   const stepRef = useRef<Step>(0);
@@ -226,22 +233,25 @@ export function AddDeviceWizard({
   }, [usb, via]);
 
   const runInstall = useCallback(async (serial: string) => {
+    const run = ++installRun.current;
     setInstallLog([]);
     setInstall({ state: "running", message: "Installing over USB" });
     try {
       await invoke("install_apk_on_device", { serial });
-      setInstall({ state: "ok", message: "App installed" });
+      if (run === installRun.current) setInstall({ state: "ok", message: "App installed" });
     } catch (e) {
-      setInstall({ state: "failed", message: errText(e) });
+      if (run === installRun.current) setInstall({ state: "failed", message: errText(e) });
     }
   }, []);
 
   /* Once installed, switch the device to wireless mode over the same cable. */
   const runBootstrap = useCallback(async (serial: string) => {
+    const run = ++wirelessRun.current;
     setPairLog([]);
     setWireless({ state: "running", message: "Configuring wireless mode over USB..." });
     try {
       const endpoint = await invoke<string>("bootstrap_wireless_over_usb", { serial });
+      if (run !== wirelessRun.current) return;
       usbBootstrapped.current = true;
       void invoke("cancel_qr_pairing");
       setWifiEndpoint(endpoint);
@@ -262,15 +272,63 @@ export function AddDeviceWizard({
           setSaving(false);
         }
       } else {
-        // Brief pause so the green tick is seen, unless the user already moved on.
-        setTimeout(() => {
-          if (stepRef.current === WIRELESS_STEP) setStep(FINISH_STEP);
-        }, 700);
+        /* No auto-advance: the green "Wireless mode ready" tick stays until the user presses Next. */
       }
     } catch (e) {
-      setWireless({ state: "failed", message: errText(e) });
+      if (run === wirelessRun.current) setWireless({ state: "failed", message: errText(e) });
     }
   }, [reconfigure, onDeviceAdded, onOpenChange]);
+
+  /*
+   * Unplug detection. Once an authorized device has been seen on Connect USB / Install / Wireless, its
+   * absence halts the wizard. The delay rides out the brief adb reconnect after `adb tcpip` restarts adbd.
+   */
+  const usbOnline = usb?.state === "device";
+  useEffect(() => {
+    if (step < 2) setUsbSeen(false);
+    else if (usbOnline && via === "usb") setUsbSeen(true);
+  }, [step, usbOnline, via]);
+
+  useEffect(() => {
+    if (usbOnline || !usbSeen) {
+      setUsbGone(false);
+      return;
+    }
+    const t = setTimeout(() => setUsbGone(true), wireless.state === "running" ? 8000 : 2500);
+    return () => clearTimeout(t);
+  }, [usbOnline, usbSeen, wireless.state]);
+
+  /* Once wireless mode is ready the cable is no longer needed, so unplugging is fine from then on. */
+  const disconnected =
+    usbGone && via === "usb" && step >= 2 && step <= WIRELESS_STEP && !(step === WIRELESS_STEP && wireless.state === "ok");
+
+  /* An interrupted install or pairing becomes a clear failure with a restart button instead of hanging. */
+  useEffect(() => {
+    if (!disconnected) return;
+    installRun.current++;
+    wirelessRun.current++;
+    setInstall((s) =>
+      s.state === "running"
+        ? { state: "failed", message: "Device disconnected during installation. Plug the cable back in and restart the installation." }
+        : s,
+    );
+    setWireless((s) =>
+      s.state === "running"
+        ? { state: "failed", message: "Device disconnected during wireless setup. Plug the cable back in and restart the setup." }
+        : s,
+    );
+  }, [disconnected]);
+
+  async function retryConnection() {
+    setRetryingConn(true);
+    try {
+      await invoke("restart_adb_server");
+    } catch (e) {
+      console.error("restart_adb_server failed:", e);
+    }
+    await poll();
+    setRetryingConn(false);
+  }
 
   /* Step 3 installs as soon as the device is authorized, then moves on. */
   useEffect(() => {
@@ -406,7 +464,7 @@ export function AddDeviceWizard({
 
   /* Next is always shown on USB steps; each step enables it once its own condition holds. */
   const nextEnabled =
-    step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : step === 4 ? wireless.state === "ok" : false;
+    disconnected ? false : step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : step === 4 ? wireless.state === "ok" : false;
   const goNext = () => {
     if (step === 2 && usb) setChosenSerial(usb.serial);
     if (step >= 1 && step <= 4) setStep((step + 1) as Step);
@@ -639,7 +697,19 @@ export function AddDeviceWizard({
 
             {step === 1 && <DebugTimeline />}
 
-            {step === 2 && (
+            {disconnected && (
+              <div role="alert" className="space-y-3 rounded-lg border border-destructive bg-destructive/15 px-4 py-4 text-destructive" data-testid="disconnect-banner">
+                <div className="text-sm font-semibold leading-snug">
+                  ⚠️ Device disconnected. Please plug the USB cable back in to continue.
+                </div>
+                <Button size="sm" variant="secondary" onClick={retryConnection} disabled={retryingConn}>
+                  {retryingConn ? <LoaderCircle className="animate-spin" /> : <Usb />}
+                  Retry Connection
+                </Button>
+              </div>
+            )}
+
+            {step === 2 && !disconnected && (
               <>
                 <p className="text-muted-foreground">Plug your device into this computer with a USB data cable.</p>
                 {/* One box for the whole sequence: no device, device seen but unauthorized, authorized. */}
@@ -702,7 +772,7 @@ export function AddDeviceWizard({
               </>
             )}
 
-            {step === 3 && (
+            {step === 3 && !disconnected && (
               <>
                 <p className="text-muted-foreground">
                   Installing the UScreen app over USB{hostVersion ? ` (build ${hostVersion})` : ""}
@@ -738,13 +808,13 @@ export function AddDeviceWizard({
                 {install.state === "failed" && (
                   <Button size="sm" onClick={() => usb && runInstall(usb.serial)}
                     disabled={!usb || usb.state !== "device"}>
-                    Retry install
+                    Restart installation
                   </Button>
                 )}
               </>
             )}
 
-            {step === WIRELESS_STEP && (
+            {step === WIRELESS_STEP && !disconnected && (
               <>
                 <p className="text-muted-foreground">
                   Wireless setup is optional. It switches {usb ? usb.model : "the device"} to Wi-Fi debugging over the
@@ -785,7 +855,7 @@ export function AddDeviceWizard({
                       disabled={!usb || usb.state !== "device" || wireless.state === "running" || saving}
                     >
                       <Wifi />
-                      {wireless.state === "failed" ? "Retry wireless setup" : "Set up wireless"}
+                      {wireless.state === "failed" ? "Restart wireless setup" : "Set up wireless"}
                     </Button>
                   )}
                   {!reconfigure && (
@@ -891,7 +961,7 @@ export function AddDeviceWizard({
             )}
 
             <div className="flex items-center gap-2">
-              {step === 3 && install.state !== "ok" && (
+              {step === 3 && install.state !== "ok" && !disconnected && (
                 <Button size="sm" variant="ghost" onClick={() => setStep(WIRELESS_STEP)}>
                   Skip install
                 </Button>

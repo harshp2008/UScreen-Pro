@@ -6,7 +6,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Typography
+import androidx.compose.foundation.isSystemInDarkTheme
+import com.uscreen.Prefs
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.Composable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
@@ -16,49 +23,116 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 
-// MD3 Expressive emerald dark scheme, token for token the `.dark` block of uscreen-pro-gui/src/index.css
-// (oklch converted to sRGB): same primary, same tonal surfaces, no gradients, glows or elevation shadows.
-val Accent = Color(0xFF183F2C)        // desktop --accent / primary container
-val AccentSoft = Color(0xFF34D399)    // desktop --primary: filled buttons, links, switches, sliders
-val Ok = Color(0xFF8FD6A3)            // --success
-val Warn = Color(0xFFF2C46D)          // --warning
-val ErrorTone = Color(0xFFFFB4AB)     // --destructive
-
-val Surface0 = Color(0xFF0C1513)      // --background: screen
-val SurfaceLow = Color(0xFF141D1B)    // --card / --popover: sheets, cards
-val SurfaceMid = Color(0xFF18211F)    // --sidebar-background: inputs
-val SurfaceHigh = Color(0xFF232E2B)   // card to muted midpoint: buttons, chips
-val OnSurface = Color(0xFFDBE5E0)     // --foreground: primary text
-val Muted = Color(0xFFB8CBC4)         // --muted-foreground: secondary text
-val Subtle = Color(0xFF85968F)        // muted-foreground, dimmed: outline, disabled
-
-private val UScreenColors = darkColorScheme(
-    primary = AccentSoft,
-    onPrimary = Color(0xFF00382A),            // --primary-foreground
-    primaryContainer = Accent,
-    onPrimaryContainer = Color(0xFFCFE9DB),   // --accent-foreground
-    secondary = Color(0xFFCFE9DB),
-    onSecondary = Color(0xFF0B2A1D),
-    secondaryContainer = Color(0xFF2F4A3C),   // --secondary
-    onSecondaryContainer = Color(0xFFCFE9DB), // --secondary-foreground
-    tertiary = Ok,
-    onTertiary = Color(0xFF0B2A1D),           // --success-foreground
-    background = Surface0,
-    onBackground = OnSurface,
-    surface = Surface0,
-    onSurface = OnSurface,
-    surfaceVariant = Color(0xFF3A4A45),       // --muted
-    onSurfaceVariant = Muted,
-    surfaceContainerLowest = Color(0xFF0C1513),
-    surfaceContainerLow = SurfaceLow,
-    surfaceContainer = SurfaceMid,
-    surfaceContainerHigh = SurfaceHigh,
-    surfaceContainerHighest = Color(0xFF3A4A45),
-    outline = Subtle,
-    outlineVariant = Color(0xFF3A4A45),       // --border
-    error = ErrorTone,
-    onError = Color(0xFF690005),              // --destructive-foreground
+/**
+ * The app's colors, for both schemes. Dark is token for token the `.dark` block of
+ * uscreen-pro-gui/src/index.css (oklch converted to sRGB); light is the `:root` block. Same primary,
+ * same tonal surfaces, no gradients, glows or elevation shadows.
+ */
+@Immutable
+class UScreenPalette(
+    val dark: Boolean,
+    val accent: Color,       // --accent / primary container
+    val accentSoft: Color,   // --primary: filled buttons, links, switches, sliders
+    val ok: Color,           // --success
+    val warn: Color,         // --warning
+    val errorTone: Color,    // --destructive
+    val surface0: Color,     // --background: screen
+    val surfaceLow: Color,   // --card / --popover: sheets, cards
+    val surfaceMid: Color,   // --sidebar-background: inputs
+    val surfaceHigh: Color,  // card to muted midpoint: buttons, chips
+    val onSurface: Color,    // --foreground: primary text
+    val muted: Color,        // --muted-foreground: secondary text
+    val subtle: Color,       // muted-foreground, dimmed: outline, disabled
 )
+
+val DarkPalette = UScreenPalette(
+    dark = true,
+    accent = Color(0xFF183F2C), accentSoft = Color(0xFF34D399),
+    ok = Color(0xFF8FD6A3), warn = Color(0xFFF2C46D), errorTone = Color(0xFFFFB4AB),
+    surface0 = Color(0xFF0C1513), surfaceLow = Color(0xFF141D1B), surfaceMid = Color(0xFF18211F),
+    surfaceHigh = Color(0xFF232E2B), onSurface = Color(0xFFDBE5E0), muted = Color(0xFFB8CBC4),
+    subtle = Color(0xFF85968F),
+)
+
+val LightPalette = UScreenPalette(
+    dark = false,
+    accent = Color(0xFFDCEDE3), accentSoft = Color(0xFF047857),
+    ok = Color(0xFF1B6B3A), warn = Color(0xFF7A5900), errorTone = Color(0xFFBA1A1A),
+    surface0 = Color(0xFFF5FBF7), surfaceLow = Color(0xFFECF6F1), surfaceMid = Color(0xFFE6F0EC),
+    surfaceHigh = Color(0xFFDDEBE5), onSurface = Color(0xFF141D1B), muted = Color(0xFF3A4A45),
+    subtle = Color(0xFF6B7C75),
+)
+
+val LocalPalette = staticCompositionLocalOf { DarkPalette }
+
+// Call-site names are unchanged; they now resolve against the active scheme.
+val Accent: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.accent
+val AccentSoft: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.accentSoft
+val Ok: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.ok
+val Warn: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.warn
+val ErrorTone: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.errorTone
+val Surface0: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.surface0
+val SurfaceLow: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.surfaceLow
+val SurfaceMid: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.surfaceMid
+val SurfaceHigh: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.surfaceHigh
+val OnSurface: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.onSurface
+val Muted: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.muted
+val Subtle: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.subtle
+
+private fun colorScheme(p: UScreenPalette) =
+    if (p.dark) darkColorScheme(
+        primary = p.accentSoft,
+        onPrimary = Color(0xFF00382A),            // --primary-foreground
+        primaryContainer = p.accent,
+        onPrimaryContainer = Color(0xFFCFE9DB),   // --accent-foreground
+        secondary = Color(0xFFCFE9DB),
+        onSecondary = Color(0xFF0B2A1D),
+        secondaryContainer = Color(0xFF2F4A3C),   // --secondary
+        onSecondaryContainer = Color(0xFFCFE9DB), // --secondary-foreground
+        tertiary = p.ok,
+        onTertiary = Color(0xFF0B2A1D),           // --success-foreground
+        background = p.surface0,
+        onBackground = p.onSurface,
+        surface = p.surface0,
+        onSurface = p.onSurface,
+        surfaceVariant = Color(0xFF3A4A45),       // --muted
+        onSurfaceVariant = p.muted,
+        surfaceContainerLowest = Color(0xFF0C1513),
+        surfaceContainerLow = p.surfaceLow,
+        surfaceContainer = p.surfaceMid,
+        surfaceContainerHigh = p.surfaceHigh,
+        surfaceContainerHighest = Color(0xFF3A4A45),
+        outline = p.subtle,
+        outlineVariant = Color(0xFF3A4A45),       // --border
+        error = p.errorTone,
+        onError = Color(0xFF690005),              // --destructive-foreground
+    ) else lightColorScheme(
+        primary = p.accentSoft,
+        onPrimary = Color(0xFFFFFFFF),
+        primaryContainer = p.accent,
+        onPrimaryContainer = Color(0xFF0B2A1D),
+        secondary = Color(0xFF0B2A1D),
+        onSecondary = Color(0xFFFFFFFF),
+        secondaryContainer = Color(0xFFC9EBD9),   // --secondary
+        onSecondaryContainer = Color(0xFF0B2A1D),
+        tertiary = p.ok,
+        onTertiary = Color(0xFFFFFFFF),
+        background = p.surface0,
+        onBackground = p.onSurface,
+        surface = p.surface0,
+        onSurface = p.onSurface,
+        surfaceVariant = Color(0xFFD4E7E0),       // --muted
+        onSurfaceVariant = p.muted,
+        surfaceContainerLowest = Color(0xFFFFFFFF),
+        surfaceContainerLow = p.surfaceLow,
+        surfaceContainer = p.surfaceMid,
+        surfaceContainerHigh = p.surfaceHigh,
+        surfaceContainerHighest = Color(0xFFD4E7E0),
+        outline = p.subtle,
+        outlineVariant = Color(0xFFB8CBC4),       // --border
+        error = p.errorTone,
+        onError = Color(0xFFFFFFFF),
+    )
 
 // Desktop radius scale: --radius 0.5rem; sm = 4, md = 6, lg = 8 (dialogs and the wizard card use 12).
 private val UScreenShapes = Shapes(
@@ -100,14 +174,23 @@ private val UScreenTypography = Typography().let { t ->
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun UScreenTheme(content: @Composable () -> Unit) {
-    MaterialExpressiveTheme(
-        colorScheme = UScreenColors,
-        motionScheme = MotionScheme.expressive(),
-        shapes = UScreenShapes,
-        typography = UScreenTypography,
-        content = content,
-    )
+fun UScreenTheme(themeMode: Int = Prefs.THEME_SYSTEM, content: @Composable () -> Unit) {
+    // System follows the OS (also kept in step by AppCompatDelegate, see MainActivity.applyThemeMode).
+    val dark = when (themeMode) {
+        Prefs.THEME_LIGHT -> false
+        Prefs.THEME_DARK -> true
+        else -> isSystemInDarkTheme()
+    }
+    val palette = if (dark) DarkPalette else LightPalette
+    CompositionLocalProvider(LocalPalette provides palette) {
+        MaterialExpressiveTheme(
+            colorScheme = colorScheme(palette),
+            motionScheme = MotionScheme.expressive(),
+            shapes = UScreenShapes,
+            typography = UScreenTypography,
+            content = content,
+        )
+    }
 }
 
 /**

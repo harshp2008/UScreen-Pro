@@ -1,3 +1,4 @@
+import { useTheme } from "./lib/theme";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { RefreshCw } from "lucide-react";
@@ -64,25 +65,13 @@ export default function App() {
   const [daemonBusy, setDaemonBusy] = useState<"starting" | "stopping" | null>(null);
   /** Devices whose ffmpeg/evdi_helper are being respawned; "*" means all of them. */
   const [restarting, setRestarting] = useState<ReadonlySet<string>>(new Set());
-  // The library's baseline scheme is keyed on the `.dark` class (see index.css); index.html sets it pre-paint.
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  const { pref: themePref, dark, setPref: setThemePref } = useTheme();
 
   /** Every tab change goes through here so the outgoing tab's scroll offset is saved first. */
   const setView = useCallback((next: View) => {
     if (scrollRef.current) writeScroll(viewKeyRef.current, scrollRef.current.scrollTop);
     setViewState(next);
   }, []);
-
-  const toggleTheme = () => {
-    const next = !dark;
-    setDark(next);
-    document.documentElement.classList.toggle("dark", next);
-    try {
-      localStorage.setItem("uscreen-theme", next ? "dark" : "light");
-    } catch {
-      /* storage unavailable: the choice just won't persist */
-    }
-  };
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -317,7 +306,7 @@ export default function App() {
           />
         )}
 
-        <TitleBar dark={dark} onToggleTheme={toggleTheme} />
+        <TitleBar theme={themePref} onThemeChange={setThemePref} />
 
         <div className="flex min-h-0 flex-1">
           <Sidebar

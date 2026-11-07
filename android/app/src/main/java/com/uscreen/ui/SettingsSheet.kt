@@ -99,6 +99,8 @@ fun SettingsSheet(
     onKeepDisplayAliveWhenLockedChange: (Boolean) -> Unit = {},
     preferredTransport: Int = Prefs.TRANSPORT_AUTO,
     onPreferredTransportChange: (Int) -> Unit = {},
+    themeMode: Int = Prefs.THEME_SYSTEM,
+    onThemeModeChange: (Int) -> Unit = {},
     onReviewSetupGuide: () -> Unit = {},
     onExitApp: () -> Unit = {},
     onDismiss: () -> Unit,
@@ -196,6 +198,25 @@ fun SettingsSheet(
                     fontSize = 11.sp,
                     color = Muted
                 )
+            }
+            Spacer(Modifier.height(20.dp))
+
+            // Theme: Light, Dark or System default (AppCompatDelegate.setDefaultNightMode)
+            Text("Theme", fontSize = 14.sp, color = Muted)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    Prefs.THEME_LIGHT to "Light",
+                    Prefs.THEME_DARK to "Dark",
+                    Prefs.THEME_SYSTEM to "System (Auto)",
+                ).forEach { (value, label) ->
+                    FilterChip(
+                        selected = themeMode == value,
+                        onClick = { onThemeModeChange(value) },
+                        label = { Text(label) },
+                        colors = FilterChipDefaults.filterChipColors()
+                    )
+                }
             }
             Spacer(Modifier.height(20.dp))
 

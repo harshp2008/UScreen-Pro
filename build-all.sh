@@ -110,6 +110,26 @@ for pair in "uscreen-pro-gui:$BIN_DIR/uscreen-pro-gui" "uscreen:$BIN_DIR/uscreen
     fi
 done
 
+# 5b. Retire leftovers of the old UI so nothing can launch it again: the legacy GUI binary, its
+#     "UScreen" menu entry and its old-logo theme icons. (Single named files only, nothing recursive.)
+echo ""
+echo "==> Removing retired legacy GUI artifacts..."
+for stale in \
+    "$BIN_DIR/uscreen-gui" \
+    "$HOME/.local/share/applications/uscreen.desktop" \
+    "$HOME/.local/share/icons/hicolor/scalable/apps/uscreen.svg" \
+    "$HOME/.local/share/icons/hicolor/scalable/apps/uscreen-pen.svg"; do
+    if [ -e "$stale" ]; then rm -f -- "$stale" && echo "  ✓ removed $stale"; fi
+done
+
+# 5c. A daemon that is still running keeps the old binary (and its old tray icon) in memory, so
+#     restart it when it runs under the user service; the new binary takes over.
+if systemctl --user is-active --quiet uscreen.service 2>/dev/null; then
+    echo ""
+    echo "==> Restarting uscreen.service so the new daemon (and tray) replaces the old one..."
+    systemctl --user restart uscreen.service && echo "  ✓ uscreen.service restarted"
+fi
+
 # 6. Desktop integration: launcher icon (hicolor theme) and .desktop entry, so the dock and the
 #    app grid show the UScreen Pro icon instead of a generic one.
 echo ""

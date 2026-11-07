@@ -28,6 +28,11 @@ class Prefs(context: Context) {
         const val ORIENTATION_CAMERA_UP = 1
         const val ORIENTATION_CAMERA_DOWN = 2
 
+        /** Values of [themeMode]; the numbers are AppCompatDelegate's own MODE_NIGHT_* constants' order, not their values. */
+        const val THEME_SYSTEM = 0
+        const val THEME_LIGHT = 1
+        const val THEME_DARK = 2
+
         /** Values of [preferredTransport]. */
         const val TRANSPORT_AUTO = 0
         const val TRANSPORT_USB = 1
@@ -38,6 +43,11 @@ class Prefs(context: Context) {
     var unpairedByHost: Boolean
         get() = sp.getBoolean("unpaired_by_host", false)
         set(v) = sp.edit().putBoolean("unpaired_by_host", v).apply()
+
+    /** Light, Dark or System default ([THEME_SYSTEM], the default). */
+    var themeMode: Int
+        get() = sp.getInt("theme_mode", THEME_SYSTEM)
+        set(v) = sp.edit().putInt("theme_mode", v).apply()
 
     var preferredTransport: Int
         get() = sp.getInt("preferred_transport", TRANSPORT_AUTO)

@@ -9,7 +9,7 @@
       // Apply the saved (or system) theme before first paint to avoid a flash.
       try {
         var saved = localStorage.getItem("uscreen-theme");
-        var dark = saved ? saved === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+        var dark = saved === "dark" || (saved !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
         document.documentElement.classList.toggle("dark", dark);
       } catch (e) {}
     </script>
