@@ -5,11 +5,15 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, watch};
 use tracing::{error, info, warn};
 
 const PACKET_TYPE_CONFIG: u8 = 0;
 const PACKET_TYPE_FRAME: u8 = 1;
+/// Sent once to every attached client as the daemon exits cleanly, so the app can say
+/// "Host Offline" at once instead of guessing from a dropped socket.
+const PACKET_TYPE_HOST_SHUTDOWN: u8 = 2;
+const HOST_SHUTDOWN_JSON: &[u8] = br#"{"type":"host_shutdown"}"#;
 
 /// If more than this many frames are queued for a client, skip ahead to the
 /// most recent IDR instead of letting latency accumulate.
@@ -46,6 +50,8 @@ pub struct StreamServer {
     /// keyframe. Without it a client joining an idle screen waits for the
     /// scheduled one, which on a mostly-static desktop can be seconds of black.
     idr_wanted: Arc<AtomicBool>,
+    /// Flips to true when the daemon is stopping (Ctrl+C, SIGTERM, tray or UI Stop).
+    shutdown: Option<watch::Receiver<bool>>,
 }
 
 impl StreamServer {
@@ -59,7 +65,13 @@ impl StreamServer {
             running: Arc::new(AtomicBool::new(false)),
             codec_config,
             idr_wanted,
+            shutdown: None,
         }
+    }
+
+    pub fn with_shutdown(mut self, rx: watch::Receiver<bool>) -> Self {
+        self.shutdown = Some(rx);
+        self
     }
 
     pub async fn run(&self, video_rx: broadcast::Receiver<VideoPacket>) -> Result<()> {
@@ -101,8 +113,9 @@ impl StreamServer {
             let rx = video_rx.resubscribe();
             let cc = self.codec_config.clone();
             let token = self.config.token.clone();
+            let sd = self.shutdown.clone();
             tokio::spawn(async move {
-                if let Err(e) = Self::handle_client(socket, rx, cc, token).await {
+                if let Err(e) = Self::handle_client(socket, rx, cc, token, sd).await {
                     warn!("Client {} disconnected: {}", peer, e);
                 }
                 info!("Client {} session ended", peer);
@@ -117,6 +130,7 @@ impl StreamServer {
         mut rx: broadcast::Receiver<VideoPacket>,
         codec_config: Arc<Mutex<Option<Bytes>>>,
         token: Option<String>,
+        mut shutdown: Option<watch::Receiver<bool>>,
     ) -> Result<()> {
         // Disable Nagle's algorithm for lower latency
         socket.set_nodelay(true)?;
@@ -177,14 +191,22 @@ impl StreamServer {
         let mut dropped: u64 = 0;
 
         loop {
-            let first = match rx.recv().await {
-                Ok(d) => d,
-                Err(broadcast::error::RecvError::Lagged(n)) => {
-                    warn!("Client lagged {} frames, resuming at next IDR", n);
-                    wait_for_idr = true;
-                    continue;
+            let first = match Self::recv_or_shutdown(&mut rx, shutdown.as_mut()).await {
+                Some(r) => match r {
+                    Ok(d) => d,
+                    Err(broadcast::error::RecvError::Lagged(n)) => {
+                        warn!("Client lagged {} frames, resuming at next IDR", n);
+                        wait_for_idr = true;
+                        continue;
+                    }
+                    Err(broadcast::error::RecvError::Closed) => break,
+                },
+                None => {
+                    // Daemon is stopping: tell the app, then let the socket close.
+                    let _ = Self::write_packet(&mut socket, PACKET_TYPE_HOST_SHUTDOWN, HOST_SHUTDOWN_JSON).await;
+                    let _ = socket.flush().await;
+                    break;
                 }
-                Err(broadcast::error::RecvError::Closed) => break,
             };
 
             // Drain whatever else is already queued so we can see how far
@@ -244,6 +266,25 @@ impl StreamServer {
         }
 
         Ok(())
+    }
+
+    /// Next video packet, or `None` once the daemon has been told to stop.
+    async fn recv_or_shutdown(
+        rx: &mut broadcast::Receiver<VideoPacket>,
+        shutdown: Option<&mut watch::Receiver<bool>>,
+    ) -> Option<Result<VideoPacket, broadcast::error::RecvError>> {
+        match shutdown {
+            None => Some(rx.recv().await),
+            Some(sd) => {
+                if *sd.borrow() {
+                    return None;
+                }
+                tokio::select! {
+                    r = rx.recv() => Some(r),
+                    _ = async { while sd.changed().await.is_ok() && !*sd.borrow() {} } => None,
+                }
+            }
+        }
     }
 
     /// Best-effort: a kernel that refuses the hint is not a reason to fail the

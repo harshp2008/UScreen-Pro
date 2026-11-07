@@ -123,7 +123,18 @@ export function installDevMock() {
           await wait(700);
           await emit("pair_progress", { serial, message: "Connecting..." });
           await wait(700);
+          /* `?bootstrap=blocked` reproduces a router that drops device-to-device traffic. */
+          if (new URLSearchParams(location.search).get("bootstrap") === "blocked")
+            throw "ROUTER_BLOCKED|192.168.1.50|This computer can see the device over USB but can't reach it at 192.168.1.50 over Wi-Fi.";
           return "192.168.1.50:5555";
+        }
+        case "detect_tailscale_ip":
+          return "100.101.102.103";
+        case "pair_via_tailscale": {
+          await wait(700);
+          const { targetIp } = args as { targetIp: string };
+          if (targetIp.endsWith(".1")) throw "Could not connect via Tailscale. Please ensure: 1. Tailscale is running on both devices.\n\nDetails: failed to connect to " + targetIp + ":5555";
+          return `${targetIp}:5555`;
         }
         case "save_device_profile": {
           const { serial, profile } = args as { serial: string; profile: AppConfig["tablets"][string] };

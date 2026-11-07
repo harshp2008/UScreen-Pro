@@ -208,6 +208,10 @@ class TouchCapture {
         } catch (_: Exception) {}
 
         sv.setOnTouchListener { view, event ->
+            if (inputBlocked) {
+                liftTouches()
+                return@setOnTouchListener true
+            }
             handleMotionEvent(event, view.width, view.height)
             true
         }
@@ -216,7 +220,7 @@ class TouchCapture {
         // Without this, the first touch always snaps the cursor to the pen
         // position and fires a click simultaneously (jarring).
         sv.setOnHoverListener { view, event ->
-            if (!isConnected) return@setOnHoverListener false
+            if (!isConnected || inputBlocked) return@setOnHoverListener false
             val vw = view.width.coerceAtLeast(1).toFloat()
             val vh = view.height.coerceAtLeast(1).toFloat()
             when (event.actionMasked) {
@@ -754,6 +758,18 @@ class TouchCapture {
             for (slot in downSlots.toList()) sendTouch(0f, 0f, 0.0, 1, slot)
             downSlots.clear()
         }
+    }
+
+    /**
+     * True while the locked-device overlay is up and the user has not allowed touch on the lock screen:
+     * nothing (finger or pen) is forwarded, and whatever was pressed is lifted so it cannot stay stuck.
+     */
+    @Volatile var inputBlocked = false
+        private set
+
+    fun setInputBlocked(blocked: Boolean) {
+        inputBlocked = blocked
+        if (blocked) liftTouches()
     }
 
     /**

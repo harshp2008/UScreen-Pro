@@ -246,7 +246,8 @@ pub fn spawn_extra_session(
         },
         codec_config,
         cap.idr_request_flag(),
-    );
+    )
+    .with_shutdown(t.shutdown_rx.clone());
     let input_srv = InputServer::new(
         InputConfig {
             port: input_port,

@@ -17,6 +17,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Android 13+: the desktop's Identify button posts a heads-up notification from this app. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Lets the "Uninstall App" button after an unpair hand com.uscreen to the system uninstaller (ACTION_DELETE). -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- For the Wi-Fi lock that keeps the radio out of power save while
@@ -47,6 +49,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Exported for `adb shell am broadcast`, but only senders holding DUMP (the shell, the system) may call it. -->
+        <receiver
+            android:name=".IdentifyReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
 
         <service
             android:name=".StreamingService"

@@ -6,6 +6,7 @@
 //! (`_adb-tls-connect._tcp`, same IP) and `adb connect` to it.
 
 use crate::adb::{self, combined_of, stdout_of};
+use crate::config;
 use rand::Rng;
 use serde::Serialize;
 use std::sync::Arc;
@@ -253,6 +254,115 @@ async fn device_wlan_ip(serial: &str) -> Option<String> {
     })
 }
 
+/// Wireless setup runs one device at a time. Two concurrent runs would both restart adbd / poke the
+/// shared adb server's mDNS and connect state, and the second one fails intermittently.
+static WIRELESS_SETUP: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Android API level of the device (`ro.build.version.sdk`), read over its own USB shell.
+async fn device_sdk(serial: &str) -> Option<u32> {
+    let out = adb::run(Some(serial), &["shell", "getprop", "ro.build.version.sdk"], Duration::from_secs(5))
+        .await
+        .ok()?;
+    stdout_of(&out).trim().parse().ok()
+}
+
+/// Can this computer reach `ip` over IP at all? A closed port answers with a reset (reachable);
+/// only a silent timeout means the router/AP is dropping the traffic (client isolation, guest
+/// network, MAC filtering) and no amount of adb retrying will help.
+async fn host_reachable(ip: &str) -> bool {
+    use tokio::net::TcpStream;
+    for port in [5555u16, 5037, 80] {
+        match tokio::time::timeout(Duration::from_millis(1500), TcpStream::connect((ip, port))).await {
+            Ok(Ok(_)) => return true, // connected
+            // A reset means the host itself answered. Any other error (EHOSTUNREACH after a failed
+            // ARP, ENETUNREACH) or a timeout means it did not.
+            Ok(Err(e)) if e.kind() == std::io::ErrorKind::ConnectionRefused => return true,
+            Ok(Err(_)) | Err(_) => continue,
+        }
+    }
+    false
+}
+
+/// Error prefix of a failed reachability check, parsed by the wizard's router-block banner.
+pub const ROUTER_BLOCKED_PREFIX: &str = "ROUTER_BLOCKED|";
+/// adb's classic TCP port. Tailscale has no mDNS, so the Tailscale path always uses it.
+const TAILSCALE_ADB_PORT: u16 = 5555;
+
+fn parse_ipv4(label: &str, value: &str) -> Result<std::net::Ipv4Addr, String> {
+    value
+        .trim()
+        .parse()
+        .map_err(|_| format!("{label} \"{}\" is not a valid IPv4 address (Tailscale addresses look like 100.x.y.z).", value.trim()))
+}
+
+/// IPv4 address Tailscale assigned to this computer (`tailscale ip -4`), for auto-filling the wizard.
+#[tauri::command]
+pub async fn detect_tailscale_ip() -> Result<String, String> {
+    let out = tokio::time::timeout(
+        Duration::from_secs(4),
+        tokio::process::Command::new("tailscale").args(["ip", "-4"]).kill_on_drop(true).output(),
+    )
+    .await
+    .map_err(|_| "tailscale ip -4 timed out".to_string())?
+    .map_err(|e| format!("Tailscale is not installed or not on PATH: {e}"))?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.lines()
+        .map(str::trim)
+        .find(|l| l.parse::<std::net::Ipv4Addr>().is_ok())
+        .map(str::to_string)
+        .ok_or_else(|| "Tailscale is installed but has no IPv4 address. Is it logged in and running?".to_string())
+}
+
+/// Tailscale path: connect to `target_ip:5555` through the tunnel and remember both addresses.
+///
+/// There is no mDNS across a tailnet, so this uses classic adb-over-TCP on 5555. When `serial` is given
+/// (the device is on the USB cable right now) adbd is first switched to TCP mode with `adb tcpip 5555`,
+/// which is what makes that port exist on the device. On success the `ip:port` is returned and both
+/// addresses are saved to config.toml as `tailscale_host_ip` / `tailscale_target_ip`.
+#[tauri::command]
+pub async fn pair_via_tailscale(host_ip: String, target_ip: String, serial: Option<String>) -> Result<String, String> {
+    let host = parse_ipv4("The Tailscale IP of this PC", &host_ip)?;
+    let target = parse_ipv4("The Tailscale IP of the target device", &target_ip)?;
+    let _one_at_a_time = WIRELESS_SETUP.lock().await;
+
+    let _ = adb::run(None, &["start-server"], Duration::from_secs(10)).await;
+    if let Some(serial) = serial.as_deref().filter(|s| !s.is_empty()) {
+        adb::require_serial(serial)?;
+        // Best effort: the user may also have enabled TCP mode some other way.
+        let _ = adb::run(Some(serial), &["tcpip", &TAILSCALE_ADB_PORT.to_string()], Duration::from_secs(10)).await;
+        tokio::time::sleep(Duration::from_millis(1200)).await;
+    }
+
+    let endpoint = format!("{target}:{TAILSCALE_ADB_PORT}");
+    let mut last = String::new();
+    let mut connected = false;
+    for attempt in 0..3 {
+        if attempt > 0 {
+            tokio::time::sleep(Duration::from_millis(900)).await;
+        }
+        match adb_connect(&endpoint).await {
+            Ok(_) => {
+                connected = true;
+                break;
+            }
+            Err(e) => last = e,
+        }
+    }
+    if !connected {
+        return Err(format!(
+            "Could not connect via Tailscale. Please ensure: 1. Tailscale is running on both devices. \
+             2. Both devices are logged into the same account (Tailnet). 3. The IP addresses entered are correct.\n\n\
+             Details: {last}"
+        ));
+    }
+
+    let mut cfg = config::load().await;
+    cfg.extra.insert("tailscale_host_ip".into(), toml::Value::String(host.to_string()));
+    cfg.extra.insert("tailscale_target_ip".into(), toml::Value::String(target.to_string()));
+    config::store(&cfg).await?;
+    Ok(endpoint)
+}
+
 /// "Setup via USB": switch the plugged-in device to wireless debugging without any pairing
 /// code. Over USB the host already has an authorized adb shell, so it can enable Wireless
 /// debugging itself (`settings put global adb_wifi_enabled 1`), read the Wi-Fi IP, and connect
@@ -261,6 +371,7 @@ async fn device_wlan_ip(serial: &str) -> Option<String> {
 #[tauri::command]
 pub async fn bootstrap_wireless_over_usb(app: AppHandle, serial: String) -> Result<String, String> {
     adb::require_serial(&serial)?;
+    let _one_at_a_time = WIRELESS_SETUP.lock().await;
     let app = Some(&app);
     adb::progress(app, PAIR_PROGRESS, Some(&serial), "Starting ADB server");
     let _ = adb::run(None, &["start-server"], Duration::from_secs(10)).await;
@@ -269,12 +380,27 @@ pub async fn bootstrap_wireless_over_usb(app: AppHandle, serial: String) -> Resu
         .await
         .ok_or("The device has no Wi-Fi address. Connect it to the same Wi-Fi network as this computer.")?;
 
-    // Preferred: Android 11+ Wireless debugging (TLS), port found through mDNS.
-    let _ = adb::run(Some(&serial), &["shell", "settings", "put", "global", "adb_wifi_enabled", "1"], Duration::from_secs(5)).await;
-    if let Some(endpoint) = discover_connect_endpoint(&ip, Duration::from_secs(8)).await {
-        adb::progress(app, PAIR_PROGRESS, Some(&serial), "Connecting...");
-        if let Ok(ep) = adb_connect(&endpoint).await {
-            return Ok(ep);
+    // Fail fast, and say why, when the network path is dead: otherwise this spins for ~90 s and ends
+    // in a vague "adb connect timed out".
+    if !host_reachable(&ip).await {
+        // The `ROUTER_BLOCKED|<ip>|` prefix lets the wizard show its dedicated "Connection Blocked by
+        // Router" banner; the rest is a readable message for any other caller.
+        return Err(format!(
+            "{ROUTER_BLOCKED_PREFIX}{ip}|This computer can see the device over USB but can't reach it at {ip} over Wi-Fi. \
+             The router is dropping traffic between them (MAC randomization, AP/client isolation or a guest network)."
+        ));
+    }
+
+    // Preferred: Android 11+ Wireless debugging (TLS), port found through mDNS. Older devices have no
+    // such feature, so they go straight to `adb tcpip`.
+    let sdk = device_sdk(&serial).await;
+    if sdk.is_none_or(|v| v >= 30) {
+        let _ = adb::run(Some(&serial), &["shell", "settings", "put", "global", "adb_wifi_enabled", "1"], Duration::from_secs(5)).await;
+        if let Some(endpoint) = discover_connect_endpoint(&ip, Duration::from_secs(8)).await {
+            adb::progress(app, PAIR_PROGRESS, Some(&serial), "Connecting...");
+            if let Ok(ep) = adb_connect(&endpoint).await {
+                return Ok(ep);
+            }
         }
     }
 
@@ -295,4 +421,20 @@ pub async fn bootstrap_wireless_over_usb(app: AppHandle, serial: String) -> Resu
         }
     }
     Err(format!("Could not connect to {endpoint}: {last}"))
+}
+
+#[cfg(test)]
+mod reachability_tests {
+    use super::host_reachable;
+
+    #[tokio::test]
+    async fn refused_port_on_a_live_host_counts_as_reachable() {
+        assert!(host_reachable("127.0.0.1").await);
+    }
+
+    #[tokio::test]
+    async fn blackholed_address_is_unreachable() {
+        // TEST-NET-1 (RFC 5737) is never routed: a timeout or "unreachable" error, never a reset.
+        assert!(!host_reachable("192.0.2.1").await);
+    }
 }

@@ -31,9 +31,9 @@ export const STREAM_DETAIL: Option[] = [
 ];
 
 export const TRANSPORTS: Option[] = [
+  { value: "usb", label: "USB cable" },
   { value: "auto", label: "Auto (USB first, Wi-Fi fallback)" },
-  { value: "usb", label: "USB only" },
-  { value: "wifi", label: "Wi-Fi only" },
+  { value: "wifi", label: "Wi-Fi" },
 ];
 
 export function labelOf(options: Option[], value: string | number | undefined): string {

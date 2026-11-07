@@ -118,7 +118,7 @@ pub(crate) fn norm_label(m: &str) -> String {
 }
 
 pub(crate) async fn ro_serial(serial: &str) -> Option<String> {
-    let out = run(Some(serial), &["shell", "getprop", "ro.serialno"], Duration::from_millis(800))
+    let out = run(Some(serial), &["shell", "getprop", "ro.serialno"], Duration::from_millis(3000))
         .await
         .ok()?;
     let s = stdout_of(&out);
@@ -130,7 +130,7 @@ async fn installed_app_version(serials: &[String]) -> Option<String> {
         let Ok(out) = run(
             Some(s),
             &["shell", "dumpsys", "package", "com.uscreen"],
-            Duration::from_millis(800),
+            Duration::from_millis(3000),
         )
         .await
         else {
@@ -352,9 +352,33 @@ pub async fn install_apk(app: Option<&AppHandle>, serial: &str, replace_existing
     let text = combined_of(&out);
     if text.contains("Success") {
         progress(app, ev, Some(serial), "APK installed");
+        // Open the app right away so the device sits on "waiting for host" without a tap. Best effort:
+        // a locked screen or a launcher that blocks background starts must not fail a good install.
+        progress(app, ev, Some(serial), "Launching the app");
+        if let Err(e) = launch_app(serial).await {
+            progress(app, ev, Some(serial), &format!("App installed but could not be opened automatically ({e})"));
+        }
         Ok("APK installed".into())
     } else {
         Err(format!("Install failed: {text}"))
+    }
+}
+
+/// Start the UScreen activity on exactly `serial`: `am start -n com.uscreen/.MainActivity`.
+/// `am start` exits 0 even when the activity is missing, so its output is checked too.
+pub async fn launch_app(serial: &str) -> Result<(), String> {
+    require_serial(serial)?;
+    let out = run(
+        Some(serial),
+        &["shell", "am", "start", "-n", "com.uscreen/.MainActivity"],
+        Duration::from_secs(8),
+    )
+    .await?;
+    let text = combined_of(&out);
+    if !out.status.success() || text.contains("Error") || text.contains("Exception") {
+        Err(text)
+    } else {
+        Ok(())
     }
 }
 
@@ -400,23 +424,87 @@ pub async fn open_wireless_debugging_settings(serial: String) -> Result<String, 
         .map(|_| "Opened Developer Options; choose Wireless debugging".to_string())
 }
 
+/// Quote one argument for the device's shell. `adb shell a b c` joins its arguments with spaces and
+/// the device shell splits them again, so anything with a space (a title, a nickname) needs quotes.
+fn sh_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
+/// Title shown on the identify notification: `UScreen: <device name>`.
+fn identify_title(name: &str) -> String {
+    format!("UScreen: {name}")
+}
+
 /// Make one specific device announce itself so the user can tell which one the wizard is about to
-/// set up: a notification plus a short buzz, both pinned to `serial` with `-s`. The notification is
-/// what proves it worked; the vibration is best effort (tablets without a motor, older Android).
+/// set up: a heads-up notification titled with the device name plus a short buzz, all pinned to
+/// `serial` with `-s`.
+///
+/// `cmd notification post` has no priority flag (`-p` does not exist; its notifications land in a
+/// low-importance shell channel and never pop up), so the heads-up comes from the UScreen app itself:
+/// its `IdentifyReceiver` posts on an IMPORTANCE_HIGH channel. If the app is not installed yet (the
+/// wizard identifies before it installs), the shell notification with the same title is the fallback.
+/// `name` is the device nickname or model; without one the device's own `ro.product.model` is used.
 #[tauri::command]
-pub async fn identify_device(serial: String) -> Result<String, String> {
+pub async fn identify_device(serial: String, name: Option<String>) -> Result<String, String> {
     require_serial(&serial)?;
-    let out = run(
+    let mut name: String = name
+        .unwrap_or_default()
+        .chars()
+        .filter(|c| !c.is_control())
+        .collect::<String>()
+        .trim()
+        .to_string();
+    if name.is_empty() {
+        name = run(Some(&serial), &["shell", "getprop", "ro.product.model"], Duration::from_secs(4))
+            .await
+            .map(|o| stdout_of(&o))
+            .unwrap_or_default();
+    }
+    if name.is_empty() {
+        name = serial.clone();
+    }
+    let title = identify_title(&name);
+
+    // 1. High-importance heads-up from the app (needs POST_NOTIFICATIONS on Android 13+, which the
+    //    shell may grant).
+    let _ = run(
+        Some(&serial),
+        &["shell", "pm", "grant", "com.uscreen", "android.permission.POST_NOTIFICATIONS"],
+        Duration::from_secs(5),
+    )
+    .await;
+    let mut notified = false;
+    let mut text = String::new();
+    if let Ok(out) = run(
         Some(&serial),
         &[
-            "shell", "cmd", "notification", "post", "-S", "bigtext", "-t", "UScreen Pro",
-            "uscreen-identify", "This is your target device!",
+            "shell", "am", "broadcast", "-n", "com.uscreen/.IdentifyReceiver",
+            "--es", "name", &sh_quote(&name),
         ],
         Duration::from_secs(8),
     )
-    .await?;
-    let text = combined_of(&out);
-    let notified = out.status.success() && !text.to_lowercase().contains("error") && !text.contains("Unknown command");
+    .await
+    {
+        text = combined_of(&out);
+        notified = text.contains("data=\"posted\"");
+    }
+
+    // 2. Fallback: plain shell notification (title still carries the name), no heads-up.
+    if !notified {
+        let out = run(
+            Some(&serial),
+            &[
+                "shell", "cmd", "notification", "post", "-S", "bigtext", "-t", &sh_quote(&title),
+                "uscreen-identify", &sh_quote("This is your target device!"),
+            ],
+            Duration::from_secs(8),
+        )
+        .await?;
+        let t = combined_of(&out);
+        notified = out.status.success() && !t.to_lowercase().contains("error") && !t.contains("Unknown command");
+        text = t;
+    }
+
     let buzzed = run(
         Some(&serial),
         &["shell", "cmd", "vibrator_manager", "synced", "-f", "oneshot", "500", "255"],
@@ -426,8 +514,8 @@ pub async fn identify_device(serial: String) -> Result<String, String> {
     .map(|o| o.status.success() && combined_of(&o).is_empty())
     .unwrap_or(false);
     match (notified, buzzed) {
-        (true, true) => Ok("Notification sent and the device vibrated".into()),
-        (true, false) => Ok("Notification sent to the device".into()),
+        (true, true) => Ok(format!("\"{title}\" notification sent and the device vibrated")),
+        (true, false) => Ok(format!("\"{title}\" notification sent to the device")),
         (false, true) => Ok("The device vibrated".into()),
         (false, false) => Err(format!("The device did not react: {text}")),
     }
@@ -469,9 +557,15 @@ mod serial_tests {
         assert!(require_serial("PHONE_SERIAL").is_ok());
     }
 
+    #[test]
+    fn identify_title_and_quoting() {
+        assert_eq!(identify_title("Tab S9"), "UScreen: Tab S9");
+        assert_eq!(sh_quote("Dipal's tab"), "'Dipal'\\''s tab'");
+    }
+
     #[tokio::test]
     async fn serial_commands_refuse_to_run_without_a_target() {
-        assert!(identify_device(String::new()).await.is_err());
+        assert!(identify_device(String::new(), None).await.is_err());
         assert!(open_developer_options(String::new()).await.is_err());
         assert!(open_wireless_debugging_settings("  ".into()).await.is_err());
     }

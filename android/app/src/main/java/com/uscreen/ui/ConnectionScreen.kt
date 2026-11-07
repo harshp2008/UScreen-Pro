@@ -16,6 +16,9 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -60,6 +63,7 @@ import com.uscreen.BuildConfig
 import com.uscreen.HostNotice
 import com.uscreen.MainActivity
 import com.uscreen.Prefs
+import com.uscreen.lockScreenTouchSupported
 import com.uscreen.TouchCapture
 import com.uscreen.VideoReceiver
 import kotlinx.coroutines.delay
@@ -268,22 +272,23 @@ fun UScreenMain(
     var orientationChoice by remember { mutableStateOf(prefs?.orientation ?: Prefs.ORIENTATION_AUTO) }
     var immersiveOn by remember { mutableStateOf(prefs?.immersiveModeEnabled ?: false) }
     var keepConnectedInBackground by remember { mutableStateOf(prefs?.keepConnectedInBackground ?: false) }
+    var touchOnLockScreen by remember { mutableStateOf(prefs?.touchOnLockScreen ?: false) }
+    val lockTouchSupported = remember { lockScreenTouchSupported() }
+    /* Locked, and the user has not allowed touch there: cover the picture and send no input at all. */
+    val lockBlocked = isDeviceLocked && !(touchOnLockScreen && lockTouchSupported)
+    LaunchedEffect(lockBlocked, touchCapture) { touchCapture?.setInputBlocked(lockBlocked) }
     var keepDisplayAliveWhenLocked by remember { mutableStateOf(prefs?.keepDisplayAliveWhenLocked ?: true) }
     var preferredTransport by remember { mutableStateOf(prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO) }
-    var forceReviewMode by remember { mutableStateOf(false) }
     var themeMode by remember { mutableStateOf(prefs?.themeMode ?: Prefs.THEME_SYSTEM) }
 
     /*
-     * A live stream means setup is done: never show onboarding over it, and remember that so the wizard
-     * does not come back on a later dropout (the connection monitor still does). The grace period keeps a
-     * quick (re)connect, such as resuming the app, from flashing the screen. The wizard stays reachable on
-     * demand through Settings > Review Setup Guide (forceReviewMode).
+     * The "waiting for host" screen shows whenever no stream is live. The grace period keeps a quick
+     * (re)connect, such as resuming the app, from flashing it.
      */
     var onboardingGraceOver by remember { mutableStateOf(false) }
     LaunchedEffect(isConnected) {
         if (isConnected) {
             onboardingGraceOver = false
-            prefs?.hasCompletedOnboarding = true
         } else {
             delay(1500)
             onboardingGraceOver = true
@@ -360,20 +365,17 @@ fun UScreenMain(
         }
 
         AnimatedVisibility(
-            visible = (!isConnected && !penOnly && onboardingGraceOver) || forceReviewMode,
+            visible = !isConnected && !penOnly && onboardingGraceOver,
             enter = fadeIn(),
             exit = fadeOut(),
-            modifier = Modifier
-                .fillMaxSize()
-                .zIndex(if (forceReviewMode) 100f else 0f)
+            modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
         ) {
-            OnboardingScreen(
+            WaitingScreen(
                 videoReceiver = videoReceiver,
                 touchCapture = touchCapture,
                 prefs = prefs,
                 isConnected = isConnected,
-                forceReviewMode = forceReviewMode,
-                onDismissReviewMode = { forceReviewMode = false }
+                onOpenSettings = { showSettings = true },
             )
         }
 
@@ -383,6 +385,7 @@ fun UScreenMain(
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
                     .align(Alignment.TopStart)
+                    .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(12.dp)
             ) {
                 Text(
@@ -401,6 +404,7 @@ fun UScreenMain(
             exit = fadeOut() + shrinkVertically(),
             modifier = Modifier
                 .align(Alignment.TopCenter)
+                .windowInsetsPadding(WindowInsets.safeDrawing)
                 .zIndex(50f)
         ) {
             Surface(
@@ -428,7 +432,18 @@ fun UScreenMain(
             }
         }
 
-        if (isDeviceLocked) {
+        if (lockBlocked) {
+            // Swallows every touch on the picture; the settings handle is drawn after this, so it still works.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0x66000000))
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) awaitPointerEvent().changes.forEach { it.consume() }
+                        }
+                    }
+            )
             Surface(
                 color = Color(0xD9B71C1C),
                 shape = RoundedCornerShape(8.dp),
@@ -572,6 +587,12 @@ fun UScreenMain(
                     keepConnectedInBackground = it
                     prefs?.keepConnectedInBackground = it
                 },
+                touchOnLockScreen = touchOnLockScreen,
+                touchOnLockScreenSupported = lockTouchSupported,
+                onTouchOnLockScreenChange = {
+                    touchOnLockScreen = it
+                    prefs?.touchOnLockScreen = it
+                },
                 keepDisplayAliveWhenLocked = keepDisplayAliveWhenLocked,
                 onKeepDisplayAliveWhenLockedChange = {
                     keepDisplayAliveWhenLocked = it
@@ -594,9 +615,6 @@ fun UScreenMain(
                     themeMode = it
                     prefs?.themeMode = it
                     activity?.applyThemeMode(it)
-                },
-                onReviewSetupGuide = {
-                    forceReviewMode = true
                 },
                 onExitApp = {
                     activity?.finish()

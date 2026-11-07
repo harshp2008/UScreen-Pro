@@ -445,6 +445,7 @@ async fn run_daemon(cli: Cli) -> Result<()> {
         }
     });
 
+    let stream_srv = stream_srv.with_shutdown(shutdown_tx.subscribe());
     let video_rx = video_tx.subscribe();
     let stream_handle = tokio::spawn(async move {
         if let Err(e) = stream_srv.run(video_rx).await {
@@ -679,6 +680,8 @@ async fn run_daemon(cli: Cli) -> Result<()> {
     info!("Shutting down...");
 
     let _ = shutdown_tx.send(true);
+    // Give attached clients a moment to receive the host_shutdown packet.
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
     if tokio::time::timeout(std::time::Duration::from_secs(5), cap_handle)
         .await
         .is_err()

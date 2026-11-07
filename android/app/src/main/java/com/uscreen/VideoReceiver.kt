@@ -25,6 +25,8 @@ class VideoReceiver {
         const val MAX_FRAME_SIZE = 8 * 1024 * 1024
         const val PACKET_TYPE_CONFIG = 0
         const val PACKET_TYPE_FRAME = 1
+        /** Sent by the daemon as it exits cleanly: payload is {"type":"host_shutdown"}. */
+        const val PACKET_TYPE_HOST_SHUTDOWN = 2
 
         /** type byte + 4-byte big-endian sequence number */
         const val FRAME_HEADER_SIZE = 5
@@ -59,6 +61,17 @@ class VideoReceiver {
     var onConnected: (() -> Unit)? = null
     var onDisconnected: (() -> Unit)? = null
     var onDiagnosticUpdate: ((String) -> Unit)? = null
+
+    /** True once the daemon announced it is stopping; the reconnect loop idles until [retryConnection]. */
+    @Volatile var hostShutdown = false
+        private set
+    var onHostShutdown: (() -> Unit)? = null
+
+    /** User-requested retry from the Host Offline screen: forget the shutdown and reconnect now. */
+    fun retryConnection() {
+        hostShutdown = false
+        try { socket?.close() } catch (_: Exception) {}
+    }
 
     fun restartSocket() {
         synchronized(this) {
@@ -480,6 +493,12 @@ class VideoReceiver {
                 }
                 if (!isRunning) return
 
+                // The daemon said it is gone: stop hammering the port until the user retries.
+                if (hostShutdown) {
+                    delay(250)
+                    continue
+                }
+
                 // Ensure codec is set up
                 val codecReady = synchronized(this@VideoReceiver) {
                     if (mediaCodec == null) {
@@ -575,6 +594,13 @@ class VideoReceiver {
                                 ptsFor(seq)
                             )
                         }
+                        PACKET_TYPE_HOST_SHUTDOWN -> {
+                            Log.i(TAG, "Host announced shutdown")
+                            hostShutdown = true
+                            onDisconnected?.invoke()
+                            onHostShutdown?.invoke()
+                            break@receiveLoop
+                        }
                         else -> {
                             Log.w(TAG, "Unknown packet type: $packetType, reconnecting")
                             break@receiveLoop
@@ -582,7 +608,7 @@ class VideoReceiver {
                     }
                 }
             } catch (e: java.io.EOFException) {
-                if (isRunning) {
+                if (isRunning && !hostShutdown) {
                     Log.i(TAG, "Stream ended (server closed)")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke("Stream closed by host daemon.")

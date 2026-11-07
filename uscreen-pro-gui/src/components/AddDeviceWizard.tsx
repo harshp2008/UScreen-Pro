@@ -4,6 +4,10 @@ import {
   AlertTriangle,
   Check,
   ChevronDown,
+  Download,
+  Network,
+  RotateCcw,
+  ScanSearch,
   ChevronLeft,
   ExternalLink,
   BadgeCheck,
@@ -22,6 +26,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { toast } from "../lib/toast";
 import type {
   AdbEntry,
@@ -46,6 +51,10 @@ type Step = 0 | 1 | 2 | 3 | 4 | 5;
 type Via = "usb" | "wireless";
 type InstallState = "idle" | "running" | "ok" | "failed";
 type Transport = "auto" | "usb" | "wifi";
+type WirelessTab = "auto" | "tailscale";
+/* Backend error prefix of a failed router reachability check (see pairing.rs). */
+const ROUTER_BLOCKED_PREFIX = "ROUTER_BLOCKED|";
+const TAILSCALE_DOWNLOAD_URL = "https://tailscale.com/download";
 
 interface Props {
   open: boolean;
@@ -168,6 +177,13 @@ export function AddDeviceWizard({
   const [qr, setQr] = useState<QrPairingSession | null>(null);
   const [pairEvent, setPairEvent] = useState<PairingEvent | null>(null);
   const [wirelessOpen, setWirelessOpen] = useState(false);
+  /* Step 4 has two paths. Both keep their own state, so switching tabs never loses a result or typed address. */
+  const [wirelessTab, setWirelessTab] = useState<WirelessTab>("auto");
+  const [macOpen, setMacOpen] = useState(false);
+  const [tsHostIp, setTsHostIp] = useState("");
+  const [tsTargetIp, setTsTargetIp] = useState("");
+  const [ts, setTs] = useState<{ state: InstallState; message: string; detail?: string }>({ state: "idle", message: "" });
+  const tsDetectTried = useRef(false);
   const [manualOpen, setManualOpen] = useState(false);
   /* The device the user explicitly chose on Connect USB ("Setup this device"); never guessed. */
   const [pickedSerial, setPickedSerial] = useState<string | null>(null);
@@ -257,6 +273,29 @@ export function AddDeviceWizard({
     }
   }, []);
 
+  /* Reconfigure mode saves straight into the existing profile and closes; returns an error text on failure. */
+  const persistReconfigure = useCallback(
+    async (serial: string, endpoint: string): Promise<string | null> => {
+      if (!reconfigure) return null;
+      setSaving(true);
+      try {
+        await invoke("save_device_profile", {
+          serial,
+          profile: { ...reconfigure.profile, wifi_address: endpoint, wireless_configured: true },
+        });
+        toast.success("Wireless mode configured");
+        await onDeviceAdded(serial);
+        onOpenChange(false);
+        return null;
+      } catch (e) {
+        return errText(e);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [reconfigure, onDeviceAdded, onOpenChange],
+  );
+
   /* Once installed, switch the device to wireless mode over the same cable. */
   const runBootstrap = useCallback(async (serial: string) => {
     const run = ++wirelessRun.current;
@@ -269,28 +308,54 @@ export function AddDeviceWizard({
       void invoke("cancel_qr_pairing");
       setWifiEndpoint(endpoint);
       setWireless({ state: "ok", message: `Wireless mode ready at ${endpoint}` });
-      if (reconfigure) {
-        setSaving(true);
-        try {
-          await invoke("save_device_profile", {
-            serial,
-            profile: { ...reconfigure.profile, wifi_address: endpoint, wireless_configured: true },
-          });
-          toast.success("Wireless mode configured");
-          await onDeviceAdded(serial);
-          onOpenChange(false);
-        } catch (e) {
-          setWireless({ state: "failed", message: `Wireless is on, but saving failed: ${errText(e)}` });
-        } finally {
-          setSaving(false);
-        }
-      } else {
-        /* No auto-advance: the green "Wireless mode ready" tick stays until the user presses Next. */
-      }
+      /* Outside reconfigure there is no auto-advance: the green tick stays until the user presses Next. */
+      const failure = await persistReconfigure(serial, endpoint);
+      if (failure) setWireless({ state: "failed", message: `Wireless is on, but saving failed: ${failure}` });
     } catch (e) {
       if (run === wirelessRun.current) setWireless({ state: "failed", message: errText(e) });
     }
-  }, [reconfigure, onDeviceAdded, onOpenChange]);
+  }, [persistReconfigure]);
+
+  /* Tailscale path: adb over the tunnel on port 5555; the backend remembers both addresses. */
+  async function runTailscale() {
+    setTs({ state: "running", message: "Connecting through Tailscale..." });
+    try {
+      const endpoint = await invoke<string>("pair_via_tailscale", {
+        hostIp: tsHostIp.trim(),
+        targetIp: tsTargetIp.trim(),
+        serial: usb?.state === "device" ? usb.serial : null,
+      });
+      usbBootstrapped.current = true;
+      void invoke("cancel_qr_pairing");
+      setWifiEndpoint(endpoint);
+      setTs({ state: "ok", message: endpoint });
+      const failure = await persistReconfigure(reconfigure?.serial ?? "", endpoint);
+      if (failure) setTs({ state: "failed", message: `Connected, but saving failed: ${failure}` });
+    } catch (e) {
+      const text = errText(e);
+      const at = text.indexOf("\n\nDetails:");
+      setTs(
+        text.startsWith("Could not connect via Tailscale")
+          ? { state: "failed", message: "tailscale", detail: at >= 0 ? text.slice(at + 10).trim() : undefined }
+          : { state: "failed", message: text },
+      );
+    }
+  }
+
+  async function detectTailscaleIp(quiet: boolean) {
+    try {
+      setTsHostIp(await invoke<string>("detect_tailscale_ip"));
+    } catch (e) {
+      if (!quiet) toast.error(errText(e));
+    }
+  }
+
+  /* Fill "this PC" the first time the Tailscale tab is shown. */
+  useEffect(() => {
+    if (step !== WIRELESS_STEP || wirelessTab !== "tailscale" || tsDetectTried.current) return;
+    tsDetectTried.current = true;
+    void detectTailscaleIp(true);
+  }, [step, wirelessTab]);
 
   /*
    * Unplug detection. Once an authorized device has been seen on Connect USB / Install / Wireless, its
@@ -313,7 +378,7 @@ export function AddDeviceWizard({
 
   /* Once wireless mode is ready the cable is no longer needed, so unplugging is fine from then on. */
   const disconnected =
-    usbGone && via === "usb" && step >= 2 && step <= WIRELESS_STEP && !(step === WIRELESS_STEP && wireless.state === "ok");
+    usbGone && via === "usb" && step >= 2 && step <= WIRELESS_STEP && !(step === WIRELESS_STEP && (wireless.state === "ok" || ts.state === "ok"));
 
   /* An interrupted install or pairing becomes a clear failure with a restart button instead of hanging. */
   useEffect(() => {
@@ -419,7 +484,7 @@ export function AddDeviceWizard({
   async function identify(e: AdbEntry) {
     setIdentifying(e.serial);
     try {
-      toast.success(`${e.model}: ${await invoke<string>("identify_device", { serial: e.serial })}`);
+      toast.success(`${e.model}: ${await invoke<string>("identify_device", { serial: e.serial, name: e.model })}`);
     } catch (err) {
       toast.error(`Could not identify ${e.model}: ${errText(err)}`);
     } finally {
@@ -467,13 +532,18 @@ export function AddDeviceWizard({
     return () => ro.disconnect();
   }, [step, wirelessOpen, mdnsBlocked, manualOpen, measureScroll]);
 
+  /* The device IP the router refused to route to, when the last Automatic setup failed that way. */
+  const routerBlock =
+    wireless.state === "failed" && wireless.message.startsWith(ROUTER_BLOCKED_PREFIX)
+      ? wireless.message.slice(ROUTER_BLOCKED_PREFIX.length).split("|")[0]
+      : null;
   const pairingActive = pairEvent?.kind === "pairing";
   const alreadyPaired = contextSerial !== null && wirelessSerials.includes(contextSerial);
   const usbPresent = usbEntries.length > 0;
 
   /* Next is always shown on USB steps; each step enables it once its own condition holds. */
   const nextEnabled =
-    disconnected ? false : step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : step === 4 ? wireless.state === "ok" : false;
+    disconnected ? false : step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : step === 4 ? wireless.state === "ok" || ts.state === "ok" : false;
   const goNext = () => {
     if (step === 2 && usb) setChosenSerial(usb.serial);
     if (step >= 1 && step <= 4) setStep((step + 1) as Step);
@@ -837,53 +907,237 @@ export function AddDeviceWizard({
             {step === WIRELESS_STEP && !disconnected && (
               <>
                 <p className="text-muted-foreground">
-                  Wireless setup is optional. It switches {usb ? usb.model : "the device"} to Wi-Fi debugging over the
-                  cable so you can stream without it later. Both the device and this computer must be on the same
-                  Wi-Fi network.
+                  Wireless setup is optional. It lets {usb ? usb.model : "your device"} stream without the cable later.
+                  Pick the route that suits your network; you can switch between them at any time.
                 </p>
-                {reconfigure && !usb && (
-                  <Note tone="warning">Plug the device in over USB to configure wireless mode.</Note>
-                )}
-                {wireless.state !== "idle" && (
-                  <div role="status" aria-live="polite" className="space-y-2 rounded-lg border border-border bg-background px-3 py-3">
-                    <StepLog lines={pairLog} running={wireless.state === "running"} />
-                    {wireless.state === "running" && pairLog.length === 0 && (
-                      <div className="flex items-center gap-2 text-foreground">
-                        <LoaderCircle className="size-3.5 animate-spin text-primary" />
-                        Starting ADB server
+
+                <div role="tablist" aria-label="Wireless setup method" className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+                  {(
+                    [
+                      { id: "auto", title: "Automatic Setup", sub: "Recommended", icon: Usb, ok: wireless.state === "ok" },
+                      { id: "tailscale", title: "Tailscale", sub: "Advanced", icon: Network, ok: ts.state === "ok" },
+                    ] as const
+                  ).map(({ id, title, sub, icon: Icon, ok }) => {
+                    const on = wirelessTab === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        id={`wireless-tab-${id}`}
+                        aria-selected={on}
+                        aria-controls={`wireless-panel-${id}`}
+                        onClick={() => setWirelessTab(id)}
+                        className={cn(
+                          "flex flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                          on ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        <span className="flex w-full items-center gap-2 text-sm font-medium">
+                          <Icon className="size-4 shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">{title}</span>
+                          {ok && <Check className="size-4 shrink-0 text-success" />}
+                        </span>
+                        <span className="text-[11px] opacity-80">Option {id === "auto" ? "A" : "B"} &middot; {sub}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {wirelessTab === "auto" && (
+                  <div role="tabpanel" id="wireless-panel-auto" aria-labelledby="wireless-tab-auto" className="space-y-3">
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Uses the USB cable to switch Wi-Fi debugging on for you. Both the device and this computer must be
+                      on the same Wi-Fi network.
+                    </p>
+                    {reconfigure && !usb && (
+                      <Note tone="warning">Plug the device in over USB to configure wireless mode.</Note>
+                    )}
+
+                    {wireless.state !== "idle" && !routerBlock && (
+                      <div role="status" aria-live="polite" className="space-y-2 rounded-lg border border-border bg-background px-3 py-3">
+                        <StepLog lines={pairLog} running={wireless.state === "running"} />
+                        {wireless.state === "running" && pairLog.length === 0 && (
+                          <div className="flex items-center gap-2 text-foreground">
+                            <LoaderCircle className="size-3.5 animate-spin text-primary" />
+                            Starting ADB server
+                          </div>
+                        )}
+                        {wireless.state === "ok" && (
+                          <div className="flex items-center gap-2 text-success" data-testid="wireless-ok">
+                            <Check className="size-4 shrink-0" />
+                            <span>
+                              Wireless mode ready at <span className="font-mono">{wifiEndpoint ?? ""}</span>
+                            </span>
+                          </div>
+                        )}
+                        {wireless.state === "failed" && (
+                          <div className="flex items-start gap-2 text-warning">
+                            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                            <span className="min-w-0 break-words">{wireless.message}</span>
+                          </div>
+                        )}
                       </div>
                     )}
-                    {wireless.state === "ok" && (
-                      <div className="flex items-center gap-2 text-success">
-                        <Check className="size-4" />
-                        {wireless.message}
+
+                    {/* The router is the problem, not the user: say so, name the usual causes, offer the fix. */}
+                    {routerBlock && (
+                      <div
+                        role="alert"
+                        data-testid="router-blocked"
+                        className="space-y-3 rounded-lg border border-warning/60 bg-warning/15 px-4 py-3 text-foreground"
+                      >
+                        <div className="flex items-center gap-2 text-sm font-semibold">
+                          <AlertTriangle className="size-4 shrink-0 text-warning" />
+                          Connection Blocked by Router
+                        </div>
+                        <p className="text-xs leading-relaxed">
+                          Your computer can see the device via USB, but the Wi-Fi router is preventing them from talking to
+                          each other. This is not your fault&mdash;many modern routers block device-to-device traffic for
+                          security. It is usually caused by:
+                        </p>
+                        <ul className="list-inside list-disc space-y-1 text-xs leading-relaxed">
+                          <li>
+                            <b>MAC Randomization:</b> Your device is using a fake MAC address.
+                          </li>
+                          <li>
+                            <b>AP Isolation:</b> Your router&rsquo;s guest network is blocking local traffic.
+                          </li>
+                        </ul>
+                        <p className="text-[11px] text-muted-foreground">
+                          Device address tried: <span className="font-mono">{routerBlock}</span>. Still stuck? The Tailscale tab
+                          bypasses the router entirely.
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          <Button size="sm" variant="secondary" onClick={() => setMacOpen(true)}>
+                            <ScanSearch />
+                            How to fix MAC Randomization
+                          </Button>
+                          <Button
+                            size="sm"
+                            onClick={() => usb && runBootstrap(usb.serial)}
+                            disabled={!usb || usb.state !== "device" || saving}
+                          >
+                            <RotateCcw />
+                            Retry Setup
+                          </Button>
+                        </div>
                       </div>
                     )}
-                    {wireless.state === "failed" && (
-                      <div className="flex items-start gap-2 text-warning">
-                        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                        <span className="min-w-0 break-words">{wireless.message}</span>
-                      </div>
+
+                    {wireless.state !== "ok" && !routerBlock && (
+                      <Button
+                        size="sm"
+                        onClick={() => usb && runBootstrap(usb.serial)}
+                        disabled={!usb || usb.state !== "device" || wireless.state === "running" || saving}
+                      >
+                        {wireless.state === "failed" ? <RotateCcw /> : <Wifi />}
+                        {wireless.state === "failed" ? "Retry Setup" : "Configure Wireless over USB"}
+                      </Button>
                     )}
                   </div>
                 )}
-                <div className="flex flex-wrap items-center gap-2">
-                  {wireless.state !== "ok" && (
+
+                {wirelessTab === "tailscale" && (
+                  <div role="tabpanel" id="wireless-panel-tailscale" aria-labelledby="wireless-tab-tailscale" className="space-y-3">
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      If your router blocks local traffic, use Tailscale to create a secure, direct tunnel. Requires a free
+                      Tailscale account.
+                    </p>
+                    <Button size="sm" variant="secondary" onClick={() => void openUrl(TAILSCALE_DOWNLOAD_URL)}>
+                      <Download />
+                      Download Tailscale
+                    </Button>
+
+                    <div className="space-y-1">
+                      <label htmlFor="ts-host-ip" className="text-xs text-muted-foreground">
+                        Tailscale IP of this PC
+                      </label>
+                      <div className="flex gap-2">
+                        <TextInput
+                          id="ts-host-ip"
+                          className="w-full flex-1 font-mono"
+                          placeholder="100.x.y.z"
+                          value={tsHostIp}
+                          onChange={(v) => setTsHostIp(v)}
+                        />
+                        <Button size="sm" variant="ghost" onClick={() => void detectTailscaleIp(false)} title="Run tailscale ip -4">
+                          <ScanSearch />
+                          Detect
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label htmlFor="ts-target-ip" className="text-xs text-muted-foreground">
+                        Tailscale IP of the target device
+                      </label>
+                      <TextInput
+                        id="ts-target-ip"
+                        className="w-full font-mono"
+                        placeholder="100.x.y.z"
+                        value={tsTargetIp}
+                        onChange={(v) => setTsTargetIp(v)}
+                      />
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        Look it up in your Tailscale admin console (login.tailscale.com/admin/machines) or in the Tailscale app on
+                        the device.{usb?.state === "device" ? " The cable stays plugged in so the app can open adb port 5555 for you." : ""}
+                      </p>
+                    </div>
+
+                    {ts.state === "ok" && (
+                      <Note tone="success">
+                        <span className="flex items-center gap-2" data-testid="tailscale-ok">
+                          <Check className="size-4 shrink-0 text-success" />
+                          <span>
+                            Connected through Tailscale at <span className="font-mono">{ts.message}</span>
+                          </span>
+                        </span>
+                      </Note>
+                    )}
+                    {ts.state === "failed" && (
+                      <div role="alert" data-testid="tailscale-failed" className="space-y-2 rounded-lg border border-warning/60 bg-warning/15 px-4 py-3 text-xs leading-relaxed text-foreground">
+                        {ts.message === "tailscale" ? (
+                          <>
+                            <div className="flex items-center gap-2 text-sm font-semibold">
+                              <AlertTriangle className="size-4 shrink-0 text-warning" />
+                              Could not connect via Tailscale
+                            </div>
+                            <p>Please ensure:</p>
+                            <ol className="list-inside list-decimal space-y-1">
+                              <li>Tailscale is running on both devices.</li>
+                              <li>Both devices are logged into the same account (Tailnet).</li>
+                              <li>The IP addresses entered are correct.</li>
+                            </ol>
+                            {ts.detail && <p className="break-words font-mono text-[11px] text-muted-foreground">{ts.detail}</p>}
+                          </>
+                        ) : (
+                          <span className="break-words">{ts.message}</span>
+                        )}
+                      </div>
+                    )}
                     <Button
                       size="sm"
-                      onClick={() => usb && runBootstrap(usb.serial)}
-                      disabled={!usb || usb.state !== "device" || wireless.state === "running" || saving}
+                      onClick={() => void runTailscale()}
+                      disabled={!tsHostIp.trim() || !tsTargetIp.trim() || ts.state === "running" || saving}
                     >
-                      <Wifi />
-                      {wireless.state === "failed" ? "Restart wireless setup" : "Set up wireless"}
+                      {ts.state === "running" ? <LoaderCircle className="animate-spin" /> : <Network />}
+                      {ts.state === "failed" ? "Retry via Tailscale" : "Connect via Tailscale"}
                     </Button>
-                  )}
-                  {!reconfigure && (
-                    <Button size="sm" variant="secondary" onClick={skipWireless} disabled={wireless.state === "running"}>
+                  </div>
+                )}
+
+                {!reconfigure && (
+                  <div className="border-t border-border pt-3">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={skipWireless}
+                      disabled={wireless.state === "running" || ts.state === "running"}
+                    >
                       Skip for now (USB Only)
                     </Button>
-                  )}
-                </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -907,8 +1161,8 @@ export function AddDeviceWizard({
                   <div role="radiogroup" aria-label="Preferred connection" className="grid grid-cols-3 gap-2">
                     {(
                       [
-                        { id: "auto", title: "Auto", desc: "USB first, Wi-Fi fallback", icon: Zap },
                         { id: "usb", title: "USB cable", desc: "Lowest latency, charges the device", icon: Usb },
+                        { id: "auto", title: "Auto", desc: "USB first, Wi-Fi fallback", icon: Zap },
                         { id: "wifi", title: "Wi-Fi", desc: "No cable needed", icon: Wifi },
                       ] as const
                     ).map(({ id, title, desc, icon: Icon }) => {
@@ -982,11 +1236,6 @@ export function AddDeviceWizard({
             )}
 
             <div className="flex items-center gap-2">
-              {step === 3 && install.state !== "ok" && !disconnected && (
-                <Button size="sm" variant="ghost" onClick={() => setStep(WIRELESS_STEP)}>
-                  Skip install
-                </Button>
-              )}
               {reconfigure ? null : step < FINISH_STEP ? (
                 /* Disabled until this step has what it needs. */
                 <Button size="sm" onClick={goNext} disabled={!nextEnabled}>
@@ -1002,6 +1251,44 @@ export function AddDeviceWizard({
           )}
           {step === 0 && <div className="h-4" />}
       </DialogContent>
+      {macOpen && (
+        <Dialog open onOpenChange={setMacOpen}>
+          <DialogContent className="w-[440px] max-w-[96vw] gap-4 text-sm" onOpenAutoFocus={(e) => e.preventDefault()}>
+            <DialogTitle className="flex items-center gap-2 text-lg font-medium text-foreground">
+              <Wifi className="size-5 text-primary" />
+              How to fix MAC Randomization
+            </DialogTitle>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Android hides your real hardware address from each Wi-Fi network, and some routers then refuse to pass traffic to
+              that &ldquo;fake&rdquo; device. Switching it off for this one network fixes that.
+            </p>
+            <Instructions
+              items={[
+                <>Open <b className="text-foreground">Settings</b> on your device.</>,
+                <>Go to <b className="text-foreground">Wi-Fi</b> &rarr; tap your network.</>,
+                <>Change <b className="text-foreground">Privacy</b> from &ldquo;Randomized MAC&rdquo; to &ldquo;Device MAC&rdquo;.</>,
+                <>Reconnect and click <b className="text-foreground">Retry</b>.</>,
+              ]}
+            />
+            <div className="flex justify-end gap-2">
+              <Button size="sm" variant="ghost" onClick={() => setMacOpen(false)}>
+                Close
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  setMacOpen(false);
+                  if (usb) void runBootstrap(usb.serial);
+                }}
+                disabled={!usb || usb.state !== "device"}
+              >
+                <RotateCcw />
+                Retry Setup
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
       {manualOpen && (
         <ManualPairDialog
           onClose={() => setManualOpen(false)}

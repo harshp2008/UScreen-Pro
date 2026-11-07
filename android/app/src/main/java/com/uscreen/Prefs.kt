@@ -49,6 +49,14 @@ class Prefs(context: Context) {
         get() = sp.getInt("theme_mode", THEME_SYSTEM)
         set(v) = sp.edit().putInt("theme_mode", v).apply()
 
+    /**
+     * Forward touches while the device is locked. Off by default: a locked screen swallows taps meant for
+     * the lock screen, so the app covers the picture and sends nothing until it is unlocked.
+     */
+    var touchOnLockScreen: Boolean
+        get() = sp.getBoolean("touch_on_lock_screen", false)
+        set(v) = sp.edit().putBoolean("touch_on_lock_screen", v).apply()
+
     var preferredTransport: Int
         get() = sp.getInt("preferred_transport", TRANSPORT_AUTO)
         set(v) = sp.edit().putInt("preferred_transport", v).apply()
@@ -136,10 +144,4 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("keep_display_alive_when_locked", true)
         set(v) = sp.edit().putBoolean("keep_display_alive_when_locked", v).apply()
 
-    /**
-     * Whether the user has completed the 4-step onboarding wizard.
-     */
-    var hasCompletedOnboarding: Boolean
-        get() = sp.getBoolean("has_completed_onboarding", false)
-        set(v) = sp.edit().putBoolean("has_completed_onboarding", v).apply()
 }

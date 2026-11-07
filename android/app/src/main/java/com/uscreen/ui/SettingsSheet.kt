@@ -42,8 +42,19 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -71,7 +82,29 @@ import com.uscreen.getLocalWifiIp
 import kotlin.math.roundToInt
 
 /**
- * Settings configuration modal bottom sheet.
+ * Full-screen settings page in a dialog window. It replaces the modal bottom sheet, whose drag-to-dismiss
+ * gesture competed with scrolling the list; a dialog has no draggable surface, so a drag always scrolls.
+ * Back and the close button dismiss it.
+ */
+@Composable
+private fun SettingsContainer(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(modifier = Modifier.fillMaxSize(), color = SurfaceLow) {
+            Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                content()
+                IconButton(onClick = onDismiss, modifier = Modifier.align(Alignment.TopEnd)) {
+                    Icon(Icons.Default.Close, contentDescription = "Close settings", tint = OnSurface)
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Settings configuration page.
  *
  * Exposes live-tunable streaming parameters (video bitrate, target FPS), device mode toggling
  * (Display vs Graphics Tablet), display orientation locking, touch input filters, power management
@@ -98,11 +131,13 @@ fun SettingsSheet(
     onKeepConnectedInBackgroundChange: (Boolean) -> Unit = {},
     keepDisplayAliveWhenLocked: Boolean = true,
     onKeepDisplayAliveWhenLockedChange: (Boolean) -> Unit = {},
+    touchOnLockScreen: Boolean = false,
+    touchOnLockScreenSupported: Boolean = true,
+    onTouchOnLockScreenChange: (Boolean) -> Unit = {},
     preferredTransport: Int = Prefs.TRANSPORT_AUTO,
     onPreferredTransportChange: (Int) -> Unit = {},
     themeMode: Int = Prefs.THEME_SYSTEM,
     onThemeModeChange: (Int) -> Unit = {},
-    onReviewSetupGuide: () -> Unit = {},
     onExitApp: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
@@ -112,23 +147,15 @@ fun SettingsSheet(
     var fpsChoice by remember { mutableStateOf(prefs?.fps ?: Prefs.DEFAULT_FPS) }
     val context = LocalContext.current
 
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        // Fully expanded from the start: a half-open sheet turns the first drag into "expand the sheet"
-        // instead of "scroll the list", which is why dragging on blank space seemed to do nothing.
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-        containerColor = SurfaceLow
-    ) {
+    SettingsContainer(onDismiss = onDismiss) {
       // Dense utility rows: calm (standard) motion and 40dp minimum touch targets, matching the desktop app.
       CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
       CalmMotion {
-        // The scroll container is the whole sheet body (full width, full available height), not just the
-        // content's own bounds, so a drag that starts on blank background scrolls too. The padding sits
-        // inside the scrolling area for the same reason.
+        // The scroll container is the whole page (full width, full height), so a drag that starts on blank
+        // background scrolls too. The padding sits inside the scrolling area for the same reason.
         Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f, fill = false)
+                .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 8.dp)
         ) {
@@ -234,8 +261,8 @@ fun SettingsSheet(
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
-                    Prefs.TRANSPORT_AUTO to "Auto",
                     Prefs.TRANSPORT_USB to "USB",
+                    Prefs.TRANSPORT_AUTO to "Auto",
                     Prefs.TRANSPORT_WIFI to "Wi-Fi",
                 ).forEach { (value, label) ->
                     FilterChip(
@@ -382,25 +409,6 @@ fun SettingsSheet(
                                 }
                             }
 
-                            Spacer(Modifier.height(8.dp))
-                            MorphButton(
-                                onClick = {
-                                    onReviewSetupGuide()
-                                    onDismiss()
-                                },
-                                colors = ButtonDefaults.buttonColors(),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(
-                                        imageVector = Icons.Default.MenuBook,
-                                        contentDescription = null,
-                                        tint = OnSurface,
-                                        modifier = Modifier.padding(end = 4.dp)
-                                    )
-                                    Text("Review Setup Guide (4-Step Wizard)", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                                }
-                            }
                         }
                     }
                 }
@@ -556,7 +564,7 @@ fun SettingsSheet(
                 Column(modifier = Modifier.weight(1f)) {
                     Text("Keep display alive when locked", fontSize = 14.sp, color = Muted)
                     Text(
-                        "Hold system WakeLock while locked. Note: secure keyguard disables touch input until unlocked.",
+                        "Hold system WakeLock and keep this screen showing while the device is locked.",
                         fontSize = 11.sp,
                         color = Muted
                     )
@@ -567,6 +575,44 @@ fun SettingsSheet(
                     onCheckedChange = onKeepDisplayAliveWhenLockedChange,
                     colors = SwitchDefaults.colors()
                 )
+            }
+            Spacer(Modifier.height(20.dp))
+
+            // Touch while locked. Greyed out (with the reason as a long-press tooltip and as visible text)
+            // when the device cannot deliver touches to the app over the lock screen.
+            val lockHint = "Your device does not support touch injection on the lock screen."
+            TooltipBox(
+                positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                tooltip = { if (!touchOnLockScreenSupported) PlainTooltip { Text(lockHint) } },
+                state = rememberTooltipState(),
+                enableUserInput = !touchOnLockScreenSupported
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Touch on Lock Screen",
+                            fontSize = 14.sp,
+                            color = if (touchOnLockScreenSupported) Muted else Subtle
+                        )
+                        Text(
+                            if (touchOnLockScreenSupported)
+                                "Off: a locked device shows a cover and sends no touch. On: touch keeps working while locked."
+                            else lockHint,
+                            fontSize = 11.sp,
+                            color = if (touchOnLockScreenSupported) Muted else Subtle
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Switch(
+                        checked = touchOnLockScreen && touchOnLockScreenSupported,
+                        onCheckedChange = onTouchOnLockScreenChange,
+                        enabled = touchOnLockScreenSupported,
+                        colors = SwitchDefaults.colors()
+                    )
+                }
             }
             Spacer(Modifier.height(24.dp))
 

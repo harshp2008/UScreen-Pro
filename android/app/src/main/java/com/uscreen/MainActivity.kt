@@ -45,6 +45,13 @@ fun getLocalWifiIp(@Suppress("UNUSED_PARAMETER") context: Context? = null): Stri
 }
 
 /**
+ * Whether touches can reach the app while the keyguard is up. The activity can only be drawn over the
+ * lock screen through `setShowWhenLocked`, which arrived in API 27; below that the window is never
+ * shown while locked, so there is nothing to touch.
+ */
+fun lockScreenTouchSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
+
+/**
  * Primary Android Activity managing lifecycle, hardware video rendering, low-latency touch/stylus
  * hover dispatch, screen refresh rate negotiation, and system immersive UI flags.
  */
@@ -413,6 +420,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        checkKeyguardState()
         applyImmersiveMode()
         touchCapture?.sendPing()
     }
