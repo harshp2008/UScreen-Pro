@@ -28,6 +28,7 @@ pub fn run() {
             adb::install_apk_on_device,
             adb::open_developer_options,
             adb::open_wireless_debugging_settings,
+            adb::identify_device,
             adb::restart_adb_server,
             pairing::initiate_qr_pairing,
             pairing::cancel_qr_pairing,

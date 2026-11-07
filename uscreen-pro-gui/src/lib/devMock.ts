@@ -42,7 +42,7 @@ const config: AppConfig = {
 
 /*
  * `?scenario=` picks the device set: `two` (default: a paired tablet and an unpaired phone, both on USB),
- * `empty` (only the unpaired phone, no paired devices) and `skipped` (a paired tablet whose wireless
+ * `multi` (a phone and a tablet, neither paired: the wizard must make the user pick), `empty` (only the unpaired phone, no paired devices) `wifi` (a single tablet that already has a Wi-Fi address) and `skipped` (a paired tablet whose wireless
  * setup was skipped). Every IPC call is recorded on `window.__ipcLog` so a test can assert which serial
  * each command was given.
  */
@@ -50,10 +50,11 @@ const scenario = new URLSearchParams(location.search).get("scenario") ?? "two";
 const TABLET = { serial: "TABLET_SERIAL", model: "SM-X616B" };
 const PHONE = { serial: "PHONE_SERIAL", model: "SM-A556E" };
 
-if (scenario !== "empty") {
+if (scenario !== "empty" && scenario !== "multi") {
   config.tablets[TABLET.serial] = {
     label: TABLET.model,
     ...(scenario === "skipped" ? { wireless_configured: false } : {}),
+    ...(scenario === "wifi" ? { wifi_address: "192.168.1.50:5555", wireless_configured: true } : {}),
   };
 }
 
@@ -74,7 +75,7 @@ const status = (): DaemonStatus => ({
   host_version: "dev-mock",
   is_dirty: false,
   control_socket: "/run/user/1000/uscreen.sock",
-  devices: scenario === "empty" ? [dev(PHONE, false)] : [dev(TABLET, true), ...(scenario === "two" ? [dev(PHONE, false)] : [])],
+  devices: scenario === "multi" ? [dev(PHONE, false), dev(TABLET, false)] : scenario === "empty" ? [dev(PHONE, false)] : [dev(TABLET, true), ...(scenario === "two" ? [dev(PHONE, false)] : [])],
 });
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -102,6 +103,8 @@ export function installDevMock() {
           /* `window.__unplugged = true` simulates pulling the USB cable (the wizard's disconnect banner). */
           if ((window as unknown as { __unplugged?: boolean }).__unplugged) return [];
           return status().devices.map((d) => ({ serial: d.serial, state: d.state, model: d.model, is_wifi: false }));
+        case "identify_device":
+          return "Notification sent and the device vibrated";
         case "install_apk_on_device": {
           const serial = (args as { serial: string }).serial;
           await emit("install_progress", { serial, message: "Found old APK" });

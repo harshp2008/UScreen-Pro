@@ -43,6 +43,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -113,13 +114,21 @@ fun SettingsSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        // Fully expanded from the start: a half-open sheet turns the first drag into "expand the sheet"
+        // instead of "scroll the list", which is why dragging on blank space seemed to do nothing.
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         containerColor = SurfaceLow
     ) {
       // Dense utility rows: calm (standard) motion and 40dp minimum touch targets, matching the desktop app.
       CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 40.dp) {
       CalmMotion {
+        // The scroll container is the whole sheet body (full width, full available height), not just the
+        // content's own bounds, so a drag that starts on blank background scrolls too. The padding sits
+        // inside the scrolling area for the same reason.
         Column(
             modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f, fill = false)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 8.dp)
         ) {

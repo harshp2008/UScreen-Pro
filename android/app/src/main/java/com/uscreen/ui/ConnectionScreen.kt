@@ -6,6 +6,8 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -22,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
@@ -31,6 +34,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -122,6 +126,15 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
 @Composable
 fun UnpairedBanner() {
     val context = LocalContext.current
+    /*
+     * The system uninstall dialog can take a second to appear. From the tap until the dialog is answered
+     * (uninstalled, or cancelled) the button shows a spinner and ignores further taps, so it never looks
+     * dead and cannot launch the dialog twice.
+     */
+    var uninstalling by remember { mutableStateOf(false) }
+    val uninstall = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        uninstalling = false
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -135,17 +148,36 @@ fun UnpairedBanner() {
                 text = "Unpaired by Host. This device is no longer connected.",
                 fontSize = 22.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = OnSurface,
+                color = Color.White,
                 textAlign = TextAlign.Center
             )
             Spacer(Modifier.height(20.dp))
-            Button(onClick = {
-                context.startActivity(
-                    Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}"))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-            }) {
-                Text("Uninstall App")
+            Button(
+                enabled = !uninstalling,
+                onClick = {
+                    uninstalling = true
+                    try {
+                        uninstall.launch(
+                            Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:${context.packageName}"))
+                                .putExtra(Intent.EXTRA_RETURN_RESULT, true)
+                        )
+                    } catch (_: Exception) {
+                        // No uninstaller to handle it: nothing will ever answer, so release the button now.
+                        uninstalling = false
+                    }
+                }
+            ) {
+                if (uninstalling) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = LocalContentColor.current
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Uninstalling…")
+                } else {
+                    Text("Uninstall App")
+                }
             }
         }
     }

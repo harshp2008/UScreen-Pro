@@ -6,17 +6,18 @@ import {
   ChevronDown,
   ChevronLeft,
   ExternalLink,
-  KeyRound,
+  BadgeCheck,
   Info,
+  Siren,
   LoaderCircle,
   MousePointerClick,
-  QrCode,
   Settings,
   Smartphone,
   ToggleRight,
   Usb,
   Wifi,
   X,
+  Zap,
   type LucideIcon,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
@@ -24,27 +25,27 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from "react"
 import { toast } from "../lib/toast";
 import type {
   AdbEntry,
-  ManualPairResult,
   PairingEvent,
   ProgressEvent,
   QrPairingSession,
   TabletProfile,
   WirelessDeviceInfo,
 } from "../lib/types";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { TextInput } from "./ui/controls";
+import { ManualPairDialog } from "./ManualPairDialog";
 
 /* Step 0 is the landing screen; steps 1-5 are the USB flow (the no-cable wireless path jumps to Finish). */
 const STEPS = ["Prepare Device", "Connect USB", "Install", "Wireless", "Finish"] as const;
 const WIRELESS_STEP = 4;
 const FINISH_STEP = 5;
 type Step = 0 | 1 | 2 | 3 | 4 | 5;
-type WirelessTab = "qr" | "manual";
 type Via = "usb" | "wireless";
 type InstallState = "idle" | "running" | "ok" | "failed";
-type Transport = "usb" | "wifi";
+type Transport = "auto" | "usb" | "wifi";
 
 interface Props {
   open: boolean;
@@ -54,6 +55,8 @@ interface Props {
   targetSerial?: string;
   /** Serials that already have a profile; they are never offered as a new device. */
   pairedSerials?: string[];
+  /** Serials whose saved profile already has a Wi-Fi address (wireless is set up for them). */
+  wirelessSerials?: string[];
   /** Re-run only the Wireless step for an already paired device. */
   reconfigure?: { serial: string; profile: TabletProfile };
   onDeviceAdded: (serial: string) => void | Promise<void>;
@@ -86,9 +89,9 @@ function StepLog({ lines, running }: { lines: string[]; running: boolean }) {
 function Note({ tone = "neutral", children }: { tone?: "neutral" | "warning" | "error" | "success"; children: ReactNode }) {
   const tones = {
     neutral: "bg-muted text-foreground",
-    warning: "bg-warning/15 text-warning",
-    error: "bg-destructive/15 text-destructive",
-    success: "bg-success/15 text-success",
+    warning: "border border-warning/50 bg-warning/15 text-foreground",
+    error: "border border-destructive/50 bg-destructive/15 text-foreground",
+    success: "border border-success/50 bg-success/15 text-foreground",
   };
   return <div className={cn("rounded-lg px-3 py-2 text-xs leading-relaxed", tones[tone])}>{children}</div>;
 }
@@ -143,6 +146,7 @@ export function AddDeviceWizard({
   hostVersion,
   targetSerial,
   pairedSerials = [],
+  wirelessSerials = [],
   reconfigure,
   onDeviceAdded,
 }: Props) {
@@ -164,18 +168,17 @@ export function AddDeviceWizard({
   const [qr, setQr] = useState<QrPairingSession | null>(null);
   const [pairEvent, setPairEvent] = useState<PairingEvent | null>(null);
   const [wirelessOpen, setWirelessOpen] = useState(false);
-  const [tab, setTab] = useState<WirelessTab>("qr");
+  const [manualOpen, setManualOpen] = useState(false);
+  /* The device the user explicitly chose on Connect USB ("Setup this device"); never guessed. */
+  const [pickedSerial, setPickedSerial] = useState<string | null>(null);
+  const [identifying, setIdentifying] = useState<string | null>(null);
   const [qrNonce, setQrNonce] = useState(0);
   /* True once discovery found nothing for 30 s: the router drops multicast, so QR pairing cannot work. */
   const [mdnsBlocked, setMdnsBlocked] = useState(false);
-  const [pairAddr, setPairAddr] = useState("");
-  const [pairCode, setPairCode] = useState("");
-  const [connectAddr, setConnectAddr] = useState("");
-  const [pairBusy, setPairBusy] = useState(false);
   const [pairError, setPairError] = useState<string | null>(null);
 
   const [wifiEndpoint, setWifiEndpoint] = useState<string | null>(null);
-  const [transport, setTransport] = useState<Transport>("usb");
+  const [transport, setTransport] = useState<Transport>("auto");
   const [nickname, setNickname] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -189,10 +192,20 @@ export function AddDeviceWizard({
   const candidates = pinned
     ? usbEntries.filter((e) => e.serial === pinned)
     : usbEntries.filter((e) => !pairedSerials.includes(e.serial));
-  const lockedSerial = pinned ?? chosenSerial;
+  /*
+   * With more than one USB device attached nothing is chosen for the user: `usb` stays null until they
+   * press "Setup this device" on one (or the wizard was pinned to a device). That click is the only way a
+   * serial gets into `pickedSerial`, and every later adb call is pinned to it.
+   */
+  const needsPick = !pinned && usbEntries.length > 1;
+  const lockedSerial = pinned ?? pickedSerial ?? chosenSerial;
   const usb = lockedSerial
     ? (usbEntries.find((e) => e.serial === lockedSerial) ?? null)
-    : (candidates[0] ?? null);
+    : needsPick
+      ? null
+      : (candidates[0] ?? null);
+  /* The device the landing screen's guide is about: pinned, picked, or the only one plugged in. */
+  const contextSerial = pinned ?? pickedSerial ?? (usbEntries.length === 1 ? usbEntries[0].serial : null);
   const installStarted = useRef(false);
   /* Bumped when the cable drops so a result that arrives from an interrupted run is ignored. */
   const installRun = useRef(0);
@@ -337,9 +350,9 @@ export function AddDeviceWizard({
     void runInstall(usb.serial);
   }, [step, usb, runInstall]);
 
-  /* A QR session lives only while the QR tab is on screen. */
+  /* A QR session lives only while the guide is open and the manual dialog is not. */
   useEffect(() => {
-    if (!open || step !== 0 || !wirelessOpen || tab !== "qr" || mdnsBlocked || usbBootstrapped.current) return;
+    if (!open || step !== 0 || !wirelessOpen || manualOpen || mdnsBlocked || usbBootstrapped.current) return;
     let cancelled = false;
     invoke<QrPairingSession>("initiate_qr_pairing")
       .then((s) => !cancelled && setQr(s))
@@ -350,12 +363,12 @@ export function AddDeviceWizard({
       setPairEvent(null);
       void invoke("cancel_qr_pairing");
     };
-  }, [open, step, wirelessOpen, tab, qrNonce, mdnsBlocked]);
+  }, [open, step, wirelessOpen, manualOpen, qrNonce, mdnsBlocked]);
 
   /* Wireless pairing succeeded: identify the device and go straight to Finish. */
   const finishWireless = useCallback(async (endpoint: string) => {
     setWifiEndpoint(endpoint);
-    setTransport("wifi");
+    setTransport("auto");
     setVia("wireless");
     try {
       const info = await invoke<WirelessDeviceInfo>("wireless_device_info", { endpoint });
@@ -377,16 +390,15 @@ export function AddDeviceWizard({
         if (payload.kind === "success") {
           if (payload.connect_endpoint) void finishWireless(payload.connect_endpoint);
           else {
-            setPairError("Paired, but the connect address could not be found. Enter it under Manual Pairing.");
-            setTab("manual");
+            setPairError("Paired, but the connect address could not be found. Use Manual setup to enter it.");
+            setManualOpen(true);
           }
         }
       }),
-      /* Backend saw no mDNS answer for 30 s: lock the QR tab and move the user to Manual Pairing. */
+      /* Backend saw no mDNS answer for 30 s: QR pairing cannot work, so offer the manual route instead. */
       listen<string>("mdns_timeout", () => {
         if (usbBootstrapped.current || stepRef.current !== 0) return;
         setMdnsBlocked(true);
-        setTab("manual");
       }),
     ];
     return () => {
@@ -395,28 +407,23 @@ export function AddDeviceWizard({
   }, [open, finishWireless]);
 
   async function openWirelessSettings() {
+    if (!contextSerial) return;
     try {
-      toast.info(await invoke<string>("open_wireless_debugging_settings", { serial: device?.serial ?? null }));
+      toast.info(await invoke<string>("open_wireless_debugging_settings", { serial: contextSerial }));
     } catch (e) {
       toast.error(errText(e));
     }
   }
 
-  async function manualPair() {
-    setPairError(null);
-    setPairBusy(true);
+  /* Ask exactly this device to announce itself (notification + buzz) so the user knows it is the right one. */
+  async function identify(e: AdbEntry) {
+    setIdentifying(e.serial);
     try {
-      const res = await invoke<ManualPairResult>("manual_adb_pair", {
-        pairEndpoint: pairAddr,
-        code: pairCode,
-        connectEndpoint: connectAddr.trim(),
-      });
-      if (res.connect_endpoint) await finishWireless(res.connect_endpoint);
-      else setPairError("Paired, but adb could not connect to that Connect IP:Port.");
-    } catch (e) {
-      setPairError(errText(e));
+      toast.success(`${e.model}: ${await invoke<string>("identify_device", { serial: e.serial })}`);
+    } catch (err) {
+      toast.error(`Could not identify ${e.model}: ${errText(err)}`);
     } finally {
-      setPairBusy(false);
+      setIdentifying(null);
     }
   }
 
@@ -458,9 +465,11 @@ export function AddDeviceWizard({
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);
     return () => ro.disconnect();
-  }, [step, wirelessOpen, tab, measureScroll]);
+  }, [step, wirelessOpen, mdnsBlocked, manualOpen, measureScroll]);
 
   const pairingActive = pairEvent?.kind === "pairing";
+  const alreadyPaired = contextSerial !== null && wirelessSerials.includes(contextSerial);
+  const usbPresent = usbEntries.length > 0;
 
   /* Next is always shown on USB steps; each step enables it once its own condition holds. */
   const nextEnabled =
@@ -472,10 +481,13 @@ export function AddDeviceWizard({
   const skipWireless = () => {
     setWirelessSkipped(true);
     setWifiEndpoint(null);
-    setTransport("usb");
+    setTransport("auto");
     setStep(FINISH_STEP);
   };
   const startUsb = () => {
+    /* A new run starts with no device chosen; the picker (or the pinned serial) decides. */
+    setPickedSerial(null);
+    setChosenSerial(null);
     setVia("usb");
     setWirelessOpen(false);
     setStep(1);
@@ -553,57 +565,27 @@ export function AddDeviceWizard({
                   </button>
 
                   {wirelessOpen && (
-                    <div id="wizard-wireless" className="mt-3 space-y-3">
+                    <div id="wizard-wireless" className="mt-3 space-y-3 text-foreground">
                       <Note>
                         You must download and install the UScreen APK manually on your device first. Once installed,
-                        use one of the methods below.
+                        pair it below.
                       </Note>
 
-                      <div role="tablist" aria-label="Wireless pairing method" className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1">
-                        {(
-                          [
-                            { id: "qr", title: "QR Code", icon: QrCode },
-                            { id: "manual", title: "Manual Pairing", icon: KeyRound },
-                          ] as const
-                        ).map(({ id, title, icon: Icon }) => (
-                          <button
-                            key={id}
-                            type="button"
-                            role="tab"
-                            aria-selected={tab === id}
-                            aria-disabled={id === "qr" && mdnsBlocked}
-                            disabled={id === "qr" && mdnsBlocked}
-                            title={id === "qr" && mdnsBlocked ? "Disabled: your router blocks mDNS discovery" : undefined}
-                            onClick={() => setTab(id)}
-                            className={cn(
-                              "flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
-                              tab === id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-                              id === "qr" && mdnsBlocked && "cursor-not-allowed opacity-40 hover:text-muted-foreground",
-                            )}
-                          >
-                            <Icon className="size-3.5" />
-                            {title}
-                          </button>
-                        ))}
-                      </div>
-
-                      {mdnsBlocked && (
+                      {mdnsBlocked ? (
                         <div
                           role="alert"
-                          className="rounded-lg border border-warning bg-warning/20 px-3 py-2.5 text-sm font-semibold leading-snug text-warning"
+                          className="rounded-lg border border-warning bg-warning/20 px-3 py-2.5 text-sm font-medium leading-snug text-foreground"
                         >
-                          ⚠️ Your router is blocking mDNS discovery. QR code pairing is disabled. Please use the Manual
-                          Pairing text code below.
+                          ⚠️ Your router is blocking mDNS discovery, so QR pairing is unavailable. Use the pairing code
+                          instead.
                         </div>
-                      )}
-
-                      {tab === "qr" && (
+                      ) : (
                         <div className="space-y-3">
                           <Instructions
                             items={[
-                              <>Connect the device to the <b>same Wi-Fi network</b> as this computer.</>,
-                              <>Open <b>Developer options, Wireless debugging</b> and switch it on.</>,
-                              <>Tap <b>Pair device with QR code</b> and scan the code below.</>,
+                              <>Connect the device to the <b className="text-foreground">same Wi-Fi network</b> as this computer.</>,
+                              <>Open <b className="text-foreground">Developer options, Wireless debugging</b> and switch it on.</>,
+                              <>Tap <b className="text-foreground">Pair device with QR code</b> and scan the code below.</>,
                             ]}
                           />
                           <div className="flex gap-4 rounded-lg border border-border bg-background p-3">
@@ -611,7 +593,7 @@ export function AddDeviceWizard({
                               {qr ? (
                                 <QRCodeSVG value={qr.qr_payload} size={148} level="M" fgColor="#111318" bgColor="#ffffff" />
                               ) : (
-                                <LoaderCircle className="size-5 animate-spin text-background" />
+                                <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
                               )}
                             </div>
                             <div className="flex min-w-0 flex-1 flex-col justify-between">
@@ -629,66 +611,54 @@ export function AddDeviceWizard({
                                 {pairingActive || pairEvent?.kind === "searching" ? (
                                   <LoaderCircle className="size-3 animate-spin text-primary" />
                                 ) : null}
-                                <span className={cn(pairEvent?.kind === "error" && "text-destructive")}>
+                                <span className={cn(pairEvent?.kind === "error" && "font-medium text-destructive")}>
                                   {pairEvent?.message ?? "Starting"}
                                 </span>
                               </div>
                             </div>
                           </div>
                           <div className="flex items-center justify-between">
-                            <Button size="sm" variant="ghost" onClick={openWirelessSettings}><ExternalLink />
-                              Open Developer options on device
-                            </Button>
+                            {contextSerial ? (
+                              <Button size="sm" variant="ghost" onClick={openWirelessSettings}><ExternalLink />
+                                Open Developer options on device
+                              </Button>
+                            ) : (
+                              <span />
+                            )}
                             <Button size="sm" variant="ghost" onClick={() => setQrNonce((n) => n + 1)}>
                               Retry QR
                             </Button>
                           </div>
                         </div>
                       )}
-
-                      {tab === "manual" && (
-                        <div className="space-y-2 rounded-lg border border-border bg-background p-3">
-                          <p className="text-[11px] leading-relaxed text-muted-foreground">
-                            On the device choose <b>Wireless debugging, Pair device with pairing code</b> and enter the
-                            address and code it shows. The <b>Connect IP:Port</b> is different: find it on the main
-                            Wireless Debugging screen of the tablet, under &lsquo;IP address &amp; Port&rsquo;.
-                          </p>
-                          <div className="grid grid-cols-[1fr_120px] gap-2">
-                            <TextInput
-                              aria-label="Pairing IP:Port"
-                              className="w-full font-mono"
-                              placeholder="Pairing IP:Port"
-                              value={pairAddr}
-                              onChange={(v) => setPairAddr(v)}
-                            />
-                            <TextInput
-                              aria-label="6-digit pairing code"
-                              className="w-full font-mono"
-                              placeholder="6-digit code"
-                              inputMode="numeric"
-                              maxLength={6}
-                              value={pairCode}
-                              onChange={(v) => setPairCode(v.replace(/\D/g, ""))}
-                            />
-                          </div>
-                          <TextInput
-                            aria-label="Connect IP:Port (required)"
-                            className="w-full font-mono"
-                            placeholder="Connect IP:Port (required)"
-                            value={connectAddr}
-                            onChange={(v) => setConnectAddr(v)}
-                          />
-                          <Button
-                            size="sm"
-                            onClick={manualPair}
-                            disabled={pairBusy || !pairAddr.trim() || pairCode.length !== 6 || !connectAddr.trim()}
-                          >
-                            {pairBusy ? <LoaderCircle className="animate-spin" /> : <Wifi />}
-                            Pair and connect
-                          </Button>
-                        </div>
-                      )}
                       {pairError && <Note tone="error">{pairError}</Note>}
+
+                      {/* One action that follows the device: already paired, plugged in, or not. */}
+                      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-2.5">
+                        <div className="min-w-0 text-xs text-muted-foreground">
+                          {alreadyPaired
+                            ? "Wireless is already set up for this device."
+                            : usbPresent
+                              ? "A USB device is plugged in; no code needed."
+                              : "No USB device detected."}
+                        </div>
+                        {alreadyPaired ? (
+                          <Badge variant="outline" className="shrink-0 gap-1 border-success bg-success/15 text-success">
+                            <BadgeCheck className="size-3.5" />
+                            Paired
+                          </Badge>
+                        ) : usbPresent ? (
+                          <Button size="sm" className="shrink-0" onClick={startUsb}>
+                            <Usb />
+                            Pair Automatically (via USB)
+                          </Button>
+                        ) : (
+                          <Button size="sm" className="shrink-0" onClick={() => setManualOpen(true)}>
+                            <Wifi />
+                            Pair Manually (via Code)
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -712,62 +682,112 @@ export function AddDeviceWizard({
             {step === 2 && !disconnected && (
               <>
                 <p className="text-muted-foreground">Plug your device into this computer with a USB data cable.</p>
-                {/* One box for the whole sequence: no device, device seen but unauthorized, authorized. */}
-                <div
-                  role="status"
-                  aria-live="polite"
-                  className={cn(
-                    "flex min-h-14 items-center justify-between gap-3 rounded-lg px-3 py-2.5",
-                    usb?.state === "device" ? "bg-success/15 text-success" : "bg-muted text-foreground",
-                  )}
-                >
-                  <div className="min-w-0">
-                    <div className="font-medium">
-                      {!usb
-                        ? "Waiting for USB device..."
-                        : usb.state === "device"
-                          ? "Device authorized."
-                          : "Waiting for authorization on device..."}
+
+                {/* More than one device on the bus: the user picks, nothing is guessed. */}
+                {needsPick && !pickedSerial && (
+                  <div role="group" aria-label="Choose the device to set up" className="space-y-2" data-testid="device-picker">
+                    <div className="text-foreground">
+                      {usbEntries.length} devices are plugged in. Which one do you want to set up?
                     </div>
-                    {usb && (
-                      <div className="truncate font-mono text-[11px] text-muted-foreground">
-                        {usb.model} · {usb.serial}
-                      </div>
+                    <ul className="space-y-2">
+                      {usbEntries.map((e) => {
+                        const added = pairedSerials.includes(e.serial);
+                        return (
+                          <li key={e.serial} className="flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2">
+                            <Smartphone className="size-4 shrink-0 text-muted-foreground" />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate font-medium text-foreground">{e.model}</div>
+                              <div className="truncate font-mono text-[11px] text-muted-foreground">
+                                {e.serial}
+                                {e.state !== "device" ? ` · ${e.state === "unauthorized" ? "waiting for authorization" : e.state}` : ""}
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => identify(e)}
+                              disabled={e.state !== "device" || identifying === e.serial}
+                              title="Make this device show a notification and vibrate"
+                            >
+                              {identifying === e.serial ? <LoaderCircle className="animate-spin" /> : <Siren />}
+                              Identify
+                            </Button>
+                            {added ? (
+                              <Badge variant="outline" className="shrink-0 border-success bg-success/15 text-success">
+                                Already added
+                              </Badge>
+                            ) : (
+                              <Button size="sm" onClick={() => setPickedSerial(e.serial)}>
+                                Setup this device
+                              </Button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
+
+                {/* One box for the whole sequence: no device, device seen but unauthorized, authorized. */}
+                {!(needsPick && !pickedSerial) && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    className={cn(
+                      "flex min-h-14 items-center justify-between gap-3 rounded-lg px-3 py-2.5",
+                      usb?.state === "device" ? "bg-success/15 text-foreground" : "bg-muted text-foreground",
                     )}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium">
+                        {!usb
+                          ? "Waiting for USB device..."
+                          : usb.state === "device"
+                            ? "Device authorized."
+                            : "Waiting for authorization on device..."}
+                      </div>
+                      {usb && (
+                        <div className="truncate font-mono text-[11px] text-muted-foreground">
+                          {usb.model} · {usb.serial}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1">
+                      {usb && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => identify(usb)}
+                          disabled={usb.state !== "device" || identifying === usb.serial}
+                          title="Make this device show a notification and vibrate"
+                        >
+                          {identifying === usb.serial ? <LoaderCircle className="animate-spin" /> : <Siren />}
+                          Identify
+                        </Button>
+                      )}
+                      {usb?.state === "device" ? (
+                        <Check className="size-5 text-success" />
+                      ) : (
+                        <LoaderCircle className="size-5 animate-spin text-primary" />
+                      )}
+                    </div>
                   </div>
-                  {usb?.state === "device" ? (
-                    <Check className="size-5 shrink-0" />
-                  ) : (
-                    <LoaderCircle className="size-5 shrink-0 animate-spin text-primary" />
-                  )}
-                </div>
-                {!pinned && candidates.length > 1 && (
-                  <div role="radiogroup" aria-label="Device to set up" className="space-y-1">
-                    <div className="text-xs text-muted-foreground">Several new devices are plugged in. Which one?</div>
-                    {candidates.map((c) => (
-                      <button
-                        key={c.serial}
-                        type="button"
-                        role="radio"
-                        aria-checked={usb?.serial === c.serial}
-                        onClick={() => setChosenSerial(c.serial)}
-                        className={cn(
-                          "flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left",
-                          usb?.serial === c.serial ? "border-primary bg-secondary" : "border-border hover:bg-muted",
-                        )}
-                      >
-                        <span>{c.model}</span>
-                        <span className="font-mono text-[11px] text-muted-foreground">{c.serial}</span>
-                      </button>
-                    ))}
-                  </div>
+                )}
+                {needsPick && pickedSerial && (
+                  <button
+                    type="button"
+                    onClick={() => setPickedSerial(null)}
+                    className="rounded-sm text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    Choose a different device
+                  </button>
                 )}
                 <ul className="list-inside list-disc space-y-1 rounded-lg bg-muted/50 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
                   <li>Use a USB cable that supports data transfer (not a charge-only cable).</li>
                   <li>Unlock your device screen.</li>
                   <li>Tap &lsquo;Allow&rsquo; on the &lsquo;Allow USB debugging?&rsquo; prompt on your device.</li>
                   <li>Not seeing the prompt? You may not have USB debugging enabled. Go back to Step 1 to check.</li>
-                  {!pinned && pairedSerials.length > 0 && <li>Devices that are already paired are not listed here.</li>}
+                  {!pinned && pairedSerials.length > 0 && <li>Devices that are already paired cannot be set up again here.</li>}
                 </ul>
               </>
             )}
@@ -884,9 +904,10 @@ export function AddDeviceWizard({
 
                 <div className="space-y-2">
                   <div className="text-foreground">How do you usually connect this device?</div>
-                  <div role="radiogroup" aria-label="Preferred connection" className="grid grid-cols-2 gap-2">
+                  <div role="radiogroup" aria-label="Preferred connection" className="grid grid-cols-3 gap-2">
                     {(
                       [
+                        { id: "auto", title: "Auto", desc: "USB first, Wi-Fi fallback", icon: Zap },
                         { id: "usb", title: "USB cable", desc: "Lowest latency, charges the device", icon: Usb },
                         { id: "wifi", title: "Wi-Fi", desc: "No cable needed", icon: Wifi },
                       ] as const
@@ -981,6 +1002,15 @@ export function AddDeviceWizard({
           )}
           {step === 0 && <div className="h-4" />}
       </DialogContent>
+      {manualOpen && (
+        <ManualPairDialog
+          onClose={() => setManualOpen(false)}
+          onPaired={async (endpoint) => {
+            setManualOpen(false);
+            await finishWireless(endpoint);
+          }}
+        />
+      )}
     </Dialog>
   );
 }

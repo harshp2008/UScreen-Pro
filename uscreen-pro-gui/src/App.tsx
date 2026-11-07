@@ -294,6 +294,7 @@ export default function App() {
             hostVersion={status?.host_version}
             targetSerial={wizard.serial}
             pairedSerials={Object.keys(config?.tablets ?? {})}
+            wirelessSerials={Object.entries(config?.tablets ?? {}).filter(([, t]) => t.wifi_address).map(([k]) => k)}
             reconfigure={
               wizard.reconfigure && wizard.serial && config?.tablets[wizard.serial]
                 ? { serial: wizard.serial, profile: config.tablets[wizard.serial] }

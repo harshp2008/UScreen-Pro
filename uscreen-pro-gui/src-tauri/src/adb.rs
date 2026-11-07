@@ -380,24 +380,57 @@ async fn start_intent(serial: Option<&str>, action: &str) -> Result<(), String> 
 }
 
 #[tauri::command]
-pub async fn open_developer_options(serial: Option<String>) -> Result<String, String> {
-    let serial = serial.as_deref();
-    start_intent(serial, "android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
+pub async fn open_developer_options(serial: String) -> Result<String, String> {
+    require_serial(&serial)?;
+    start_intent(Some(&serial), "android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
         .await
         .map(|_| "Opened Developer Options on the device".to_string())
 }
 
 #[tauri::command]
-pub async fn open_wireless_debugging_settings(serial: Option<String>) -> Result<String, String> {
-    let serial = serial.as_deref();
+pub async fn open_wireless_debugging_settings(serial: String) -> Result<String, String> {
+    require_serial(&serial)?;
     // The Wireless Debugging page has no public action on stock Android, so some builds reject
     // this intent; Developer Options is the fallback.
-    if start_intent(serial, "android.settings.WIRELESS_DEBUGGING_SETTINGS").await.is_ok() {
+    if start_intent(Some(&serial), "android.settings.WIRELESS_DEBUGGING_SETTINGS").await.is_ok() {
         return Ok("Opened Wireless Debugging".into());
     }
-    start_intent(serial, "android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
+    start_intent(Some(&serial), "android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
         .await
         .map(|_| "Opened Developer Options; choose Wireless debugging".to_string())
+}
+
+/// Make one specific device announce itself so the user can tell which one the wizard is about to
+/// set up: a notification plus a short buzz, both pinned to `serial` with `-s`. The notification is
+/// what proves it worked; the vibration is best effort (tablets without a motor, older Android).
+#[tauri::command]
+pub async fn identify_device(serial: String) -> Result<String, String> {
+    require_serial(&serial)?;
+    let out = run(
+        Some(&serial),
+        &[
+            "shell", "cmd", "notification", "post", "-S", "bigtext", "-t", "UScreen Pro",
+            "uscreen-identify", "This is your target device!",
+        ],
+        Duration::from_secs(8),
+    )
+    .await?;
+    let text = combined_of(&out);
+    let notified = out.status.success() && !text.to_lowercase().contains("error") && !text.contains("Unknown command");
+    let buzzed = run(
+        Some(&serial),
+        &["shell", "cmd", "vibrator_manager", "synced", "-f", "oneshot", "500", "255"],
+        Duration::from_secs(5),
+    )
+    .await
+    .map(|o| o.status.success() && combined_of(&o).is_empty())
+    .unwrap_or(false);
+    match (notified, buzzed) {
+        (true, true) => Ok("Notification sent and the device vibrated".into()),
+        (true, false) => Ok("Notification sent to the device".into()),
+        (false, true) => Ok("The device vibrated".into()),
+        (false, false) => Err(format!("The device did not react: {text}")),
+    }
 }
 
 #[tauri::command]
@@ -423,4 +456,23 @@ pub async fn wireless_device_info(endpoint: String) -> Result<WirelessDeviceInfo
         .map(|o| stdout_of(&o))
         .unwrap_or_default();
     Ok(WirelessDeviceInfo { serial, model: if model.is_empty() { endpoint } else { model } })
+}
+
+#[cfg(test)]
+mod serial_tests {
+    use super::*;
+
+    #[test]
+    fn empty_serial_is_refused() {
+        assert!(require_serial("").is_err());
+        assert!(require_serial("   ").is_err());
+        assert!(require_serial("PHONE_SERIAL").is_ok());
+    }
+
+    #[tokio::test]
+    async fn serial_commands_refuse_to_run_without_a_target() {
+        assert!(identify_device(String::new()).await.is_err());
+        assert!(open_developer_options(String::new()).await.is_err());
+        assert!(open_wireless_debugging_settings("  ".into()).await.is_err());
+    }
 }
