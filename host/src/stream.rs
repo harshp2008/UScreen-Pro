@@ -140,6 +140,12 @@ impl StreamServer {
         // hex; anything else, or silence, and the connection is dropped.
         if let Some(expected) = token.as_deref() {
             use tokio::io::AsyncReadExt;
+            // The tablet's reachability probe connects, sends nothing and hangs up.
+            // That is not a failed login: stay quiet about it.
+            let mut one = [0u8; 1];
+            if let Ok(Ok(0)) = tokio::time::timeout(AUTH_TIMEOUT, socket.peek(&mut one)).await {
+                return Ok(());
+            }
             let mut buf = [0u8; 64];
             let read = tokio::time::timeout(AUTH_TIMEOUT, socket.read_exact(&mut buf)).await;
             let ok = matches!(read, Ok(Ok(_)))

@@ -11,7 +11,10 @@ import android.os.Build
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import android.provider.Settings
 import androidx.activity.ComponentActivity
@@ -339,6 +342,9 @@ fun WaitingScreen(
     var dynamicDiagnostic by remember { mutableStateOf<String?>(null) }
     var secondsWaiting by remember { mutableIntStateOf(0) }
     var hostShutdown by remember { mutableStateOf(videoReceiver?.hostShutdown == true) }
+    // Result of the 1 Hz host probe below. Three failures in a row mean "Host Offline"; one success
+    // means the host is up and we are only waiting for it to start the stream.
+    var probeFailures by remember { mutableIntStateOf(0) }
     val preferredTransport = prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO
 
     LaunchedEffect(videoReceiver) {
@@ -352,6 +358,34 @@ fun WaitingScreen(
     LaunchedEffect(videoReceiver) {
         videoReceiver?.onHostShutdown = {
             (context as? ComponentActivity)?.runOnUiThread { hostShutdown = true }
+        }
+    }
+
+    /*
+     * Host reachability, at most once a second and only while the activity is STARTED (the loop is
+     * cancelled on onStop and restarted on onStart, so a backgrounded app never polls). This is what
+     * tells "Host Offline" (nobody answers) from "waiting for the host" (a listener answers, the
+     * stream just has not started), and it brings the app back by itself when the daemon returns.
+     */
+    LaunchedEffect(videoReceiver) {
+        val receiver = videoReceiver ?: return@LaunchedEffect
+        val lifecycle = (context as? ComponentActivity)?.lifecycle ?: return@LaunchedEffect
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) {
+                val up = probeHostSocket(receiver.host, receiver.port)
+                if (up) {
+                    if (probeFailures >= 3 || hostShutdown) {
+                        // The host came back: leave Host Offline and restart the video socket.
+                        hostShutdown = false
+                        secondsWaiting = 0
+                        receiver.retryConnection()
+                    }
+                    probeFailures = 0
+                } else {
+                    probeFailures += 1
+                }
+                delay(1000)
+            }
         }
     }
 
@@ -375,8 +409,8 @@ fun WaitingScreen(
     val transportPresent = usbPlugged || wifiConnected
     val noStreamState = when {
         hostShutdown -> NoStream.HOST_OFFLINE
+        probeFailures >= 3 && transportPresent -> NoStream.HOST_OFFLINE
         secondsWaiting > 5 && !usbAdbOn -> NoStream.DEBUGGING_DISABLED
-        secondsWaiting >= 10 && transportPresent -> NoStream.HOST_OFFLINE
         else -> NoStream.WAITING
     }
 
@@ -423,6 +457,7 @@ fun WaitingScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(onClick = {
                     secondsWaiting = 0
+                    probeFailures = 0
                     hostShutdown = false
                     videoReceiver?.retryConnection()
                 }) { Text("Retry Connection") }

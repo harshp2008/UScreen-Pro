@@ -97,6 +97,7 @@ export interface AppConfig {
   auto_launch_app: boolean;
   max_performance_mode: boolean;
   hevc_low_latency_tuning: boolean;
+  software_cursor: boolean;
   keep_alive: boolean;
   locked_apps: string[];
   allow_legacy_fallback: boolean;

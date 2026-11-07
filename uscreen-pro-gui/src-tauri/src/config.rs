@@ -74,6 +74,8 @@ pub struct AppConfig {
     pub auto_launch_app: bool,
     pub max_performance_mode: bool,
     pub hevc_low_latency_tuning: bool,
+    #[serde(default)]
+    pub software_cursor: bool,
     pub keep_alive: bool,
     #[serde(default)]
     pub locked_apps: Vec<String>,
@@ -111,6 +113,7 @@ impl Default for AppConfig {
             auto_launch_app: true,
             max_performance_mode: false,
             hevc_low_latency_tuning: true,
+            software_cursor: false,
             keep_alive: false,
             locked_apps: Vec::new(),
             allow_legacy_fallback: false,
@@ -158,8 +161,8 @@ pub async fn get_config() -> Result<AppConfig, String> {
 
 /// Settings that change the arguments of ffmpeg or evdi_helper.
 fn stream_args_differ(a: &AppConfig, b: &AppConfig) -> bool {
-    (&a.encoder, a.fps, a.bitrate, a.quality, a.stream_scale, a.ten_bit, a.width, a.height)
-        != (&b.encoder, b.fps, b.bitrate, b.quality, b.stream_scale, b.ten_bit, b.width, b.height)
+    (&a.encoder, a.fps, a.bitrate, a.quality, a.stream_scale, a.ten_bit, a.width, a.height, a.hevc_low_latency_tuning, a.software_cursor)
+        != (&b.encoder, b.fps, b.bitrate, b.quality, b.stream_scale, b.ten_bit, b.width, b.height, b.hevc_low_latency_tuning, b.software_cursor)
 }
 
 fn profile_args_differ(a: Option<&TabletProfile>, b: &TabletProfile) -> bool {

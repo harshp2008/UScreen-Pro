@@ -200,6 +200,32 @@ fn open_settings() {
         .and_then(|p| p.parent().map(|d| d.join(GUI_BIN)))
         .filter(|p| p.exists());
     let program = sibling.unwrap_or_else(|| std::path::PathBuf::from(GUI_BIN));
+    // The window must outlive "Stop Daemon". A plain child of this process sits
+    // in uscreen.service's cgroup, and `systemctl stop` (KillMode=control-group)
+    // kills it along with the daemon, so stopping the daemon from inside the GUI
+    // closed the GUI (RCA 58). Start it as its own transient unit instead.
+    let unit = format!(
+        "uscreen-pro-gui-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
+    );
+    let mut sr = std::process::Command::new("systemd-run");
+    sr.args(["--user", "--collect", "--quiet", "--unit", &unit]);
+    for var in ["DISPLAY", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "DBUS_SESSION_BUS_ADDRESS"] {
+        if std::env::var_os(var).is_some() {
+            sr.arg(format!("--setenv={var}"));
+        }
+    }
+    sr.arg(&program);
+    match sr.status() {
+        Ok(s) if s.success() => {
+            info!("Opened settings from the tray (detached unit {})", unit);
+            return;
+        }
+        other => warn!("systemd-run could not detach {} ({:?}); starting it directly", GUI_BIN, other),
+    }
     match std::process::Command::new(&program).spawn() {
         Ok(_) => info!("Opened settings from the tray"),
         Err(e) => warn!("Could not launch {}: {}", GUI_BIN, e),

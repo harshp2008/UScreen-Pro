@@ -199,6 +199,11 @@ pub struct FileConfig {
     pub hevc_low_latency_tuning: bool,
     /// Keep virtual display active when tablet disconnects (throttled to 1 FPS).
     pub keep_alive: bool,
+    /// Compatibility mode for the mouse cursor on the virtual screen: plain
+    /// libevdi compositing without the X11 boundary-nudge helper (slower, but it
+    /// depends on nothing compositor-specific). Off = the fast path.
+    #[serde(default)]
+    pub software_cursor: bool,
     /// Application window locking: allowed apps on the virtual monitor.
     #[serde(default)]
     pub locked_apps: Vec<String>,
@@ -255,6 +260,7 @@ impl Default for FileConfig {
             max_performance_mode: false,
             hevc_low_latency_tuning: true,
             keep_alive: false,
+            software_cursor: false,
             locked_apps: Vec::new(),
             allow_legacy_fallback: false,
             auto_enable_wifi_adb: true,

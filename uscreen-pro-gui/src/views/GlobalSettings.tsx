@@ -61,15 +61,24 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           checked={c.ten_bit}
           onChange={(ten_bit) => onChange({ ten_bit })}
         />
-        <SwitchRow
-          label="Zero-latency HEVC tuning"
-          tip="Disables B-frames and lookahead so frames leave the encoder immediately."
-          checked={c.hevc_low_latency_tuning}
-          onChange={(hevc_low_latency_tuning) => onChange({ hevc_low_latency_tuning })}
-        />
+        {/* Only hevc_vaapi has these tuning flags (NVENC always runs zero-latency, H.264 has none). */}
+        {c.encoder === "hevc_vaapi" && (
+          <SwitchRow
+            label="Zero-latency HEVC tuning"
+            tip="Disables B-frames and lookahead so frames leave the encoder immediately."
+            checked={c.hevc_low_latency_tuning}
+            onChange={(hevc_low_latency_tuning) => onChange({ hevc_low_latency_tuning })}
+          />
+        )}
       </Section>
 
       <Section title="Display and layout">
+        <SwitchRow
+          label="Use Software Mouse Cursor (Slower, more compatible)"
+          tip="Off (default): the fast path, with the 1x1 boundary window that clears the ghost cursor on GNOME/Xwayland. On: plain composited cursor with no compositor-specific helper; use it on KDE, Sway or anything where the cursor misbehaves."
+          checked={c.software_cursor}
+          onChange={(software_cursor) => onChange({ software_cursor })}
+        />
         <SettingRow label="Position" tip="Where the virtual display sits relative to your primary monitor.">
           <Segmented
             label="Position"

@@ -205,6 +205,7 @@ pub struct CaptureConfig {
     /// When true and power profile is "performance", forces 60 FPS keepalive stream.
     pub max_performance_mode: bool,
     /// When true, enables advanced low-latency parameters on HEVC VAAPI encoder.
+    #[allow(dead_code)] // read fresh from the config at each ffmpeg spawn
     pub hevc_low_latency_tuning: bool,
     /// Keep virtual display active when tablet disconnects, throttled to 1 FPS.
     pub keep_alive: bool,
@@ -718,6 +719,15 @@ impl CaptureManager {
             }
         }
 
+        // Mouse cursor mode, read fresh so a GUI change applies at the next respawn.
+        // Default: composited cursor + the boundary-nudge window. Compatibility
+        // mode: composited cursor only (USCREEN_CURSOR_EVENTS=0, no nudge).
+        if crate::config::FileConfig::load().software_cursor {
+            cmd.env("USCREEN_CURSOR_EVENTS", "0")
+                .env("USCREEN_BOUNDARY_NUDGE", "0");
+            info!("Software mouse cursor (compatibility) mode: boundary nudge disabled");
+        }
+
         cmd.stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .stdin(Stdio::null())
@@ -990,7 +1000,9 @@ impl CaptureManager {
             if encoder == "hevc_vaapi" {
                 // Main profile uses direct 8-bit NV12 hardware encoding on Intel Arc
                 encoder_args.extend_from_slice(&["-profile:v".into(), "main".into()]);
-                if self.config.hevc_low_latency_tuning {
+                // Only hevc_vaapi has these knobs (hevc_nvenc is always run
+                // zero-latency above). Read fresh: a GUI toggle respawns ffmpeg.
+                if crate::config::FileConfig::load().hevc_low_latency_tuning {
                     encoder_args.extend_from_slice(&[
                         "-b_depth".into(),
                         "1".into(),

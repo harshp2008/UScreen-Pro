@@ -241,6 +241,12 @@ pub async fn run_control_server(
                         Err(_) => "ERR channel closed\n".to_string(),
                     };
                     let _ = writer.write_all(reply.as_bytes()).await;
+                } else if let Some(arg) = cmd.strip_prefix("LATENCY") {
+                    // Percentiles over the last N seconds (default 10), one JSON line.
+                    let secs = arg.trim().parse::<u64>().unwrap_or(10).clamp(1, 60);
+                    let _ = writer
+                        .write_all(format!("{}\n", crate::latency::recent_json(secs)).as_bytes())
+                        .await;
                 } else if cmd == "PING" {
                     let _ = writer.write_all(b"PONG\n").await;
                 } else {

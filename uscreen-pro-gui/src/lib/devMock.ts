@@ -32,6 +32,7 @@ const config: AppConfig = {
   auto_launch_app: true,
   max_performance_mode: false,
   hevc_low_latency_tuning: true,
+  software_cursor: false,
   keep_alive: false,
   locked_apps: ["com.android.chrome"],
   allow_legacy_fallback: false,

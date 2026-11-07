@@ -139,7 +139,15 @@ enum Commands {
     /// Resume a device's display and capture session after surgical update
     ResumeDevice { serial: String },
     /// Diagnose the whole setup and report what is wrong
-    Doctor,
+    Doctor {
+        /// Instead: sweep a synthetic mouse across both screens for a few
+        /// seconds and report the frame-path latency percentiles
+        #[arg(long)]
+        latency: bool,
+        /// Length of the --latency run in seconds
+        #[arg(long, default_value_t = 10)]
+        secs: u64,
+    },
     /// Clear the compositor-safety record so the virtual display may be created
     /// again after a safe-mode start (restart the daemon afterwards)
     ResetGuard,
@@ -197,7 +205,8 @@ async fn main() -> Result<()> {
         }
         Some(Commands::ListDisplays) => list_displays().await?,
         Some(Commands::Wifi { off }) => adb::setup_wifi(*off).await?,
-        Some(Commands::Doctor) => doctor::run().await?,
+        Some(Commands::Doctor { latency: true, secs }) => doctor::run_latency(*secs).await?,
+        Some(Commands::Doctor { .. }) => doctor::run().await?,
         Some(Commands::ResetGuard) => match guard::reset() {
             Ok(true) => println!("Safety record cleared. Restart the daemon to re-enable the virtual display."),
             Ok(false) => println!("Nothing to clear: no safety record exists."),

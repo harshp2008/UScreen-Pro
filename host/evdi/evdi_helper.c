@@ -1794,7 +1794,13 @@ int main(int argc, char *argv[]) {
   fprintf(stderr,
           "[evdi-helper] Connected. Capture at %d fps. Entering event loop.\n",
           g_fps);
-  init_boundary_sync();
+  {
+    const char *nudge = getenv("USCREEN_BOUNDARY_NUDGE");
+    if (nudge && nudge[0] == '0')
+      fprintf(stderr, "[evdi-helper] Boundary nudge disabled (software cursor mode)\n");
+    else
+      init_boundary_sync();
+  }
   run_event_loop(handle);
   cleanup_boundary_sync();
 
