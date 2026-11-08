@@ -22,7 +22,6 @@ import java.util.concurrent.TimeUnit
 class TouchCapture {
     companion object {
         const val TAG = "UScreenTouch"
-        const val WS_URL = "ws://127.0.0.1:8891"
         const val DEFAULT_PORT = 8891
         // MotionEvent.TOOL_TYPE_PALM is @hide, so it has to be spelled out;
         // it is 5 in AOSP (0 unknown, 1 finger, 2 stylus, 3 mouse, 4 eraser,
@@ -101,14 +100,6 @@ class TouchCapture {
         nativeHeightMm = heightMm
         if (virtualWidth == 0) virtualWidth = width
         if (virtualHeight == 0) virtualHeight = height
-    }
-
-    /**
-     * Size of the host-side virtual display, used to map touch coordinates onto it.
-     */
-    fun setVirtualResolution(width: Int, height: Int) {
-        virtualWidth = width
-        virtualHeight = height
     }
 
     private val client = OkHttpClient.Builder()
@@ -352,19 +343,6 @@ class TouchCapture {
         val nx = ((rawX - quad.ox) / quad.w).coerceIn(0f, 1f)
         val ny = ((rawY - quad.oy) / quad.h).coerceIn(0f, 1f)
         return nx to ny
-    }
-
-    /**
-     * Constructs a MotionEvent targeted at a specific virtual display ID.
-     * Implements display targeting corresponding to scrcpy PR #5614.
-     */
-    fun obtainMotionEventWithDisplay(event: MotionEvent, displayId: Int): MotionEvent {
-        val copy = MotionEvent.obtain(event)
-        try {
-            val method = MotionEvent::class.java.getMethod("setDisplayId", Int::class.javaPrimitiveType)
-            method.invoke(copy, displayId)
-        } catch (_: Exception) {}
-        return copy
     }
 
     /**

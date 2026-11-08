@@ -189,7 +189,7 @@ pub fn host_version() -> &'static str {
     env!("GIT_VERSION_STRING")
 }
 
-async fn adb_install(serial: &str, apk: &PathBuf) -> Result<(), String> {
+async fn adb_install(serial: &str, apk: &std::path::Path) -> Result<(), String> {
     for downgrade in [false, true] {
         let mut args = vec!["-s", serial, "install", "-r"];
         if downgrade {

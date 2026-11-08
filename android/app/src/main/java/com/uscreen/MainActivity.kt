@@ -15,15 +15,15 @@ import android.view.WindowManager
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import com.uscreen.ui.UScreenMain
 import com.uscreen.ui.UScreenTheme
 import java.net.Inet4Address
 import java.net.NetworkInterface
 import java.util.Collections
 import kotlin.math.roundToInt
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 
 /**
  * Retrieve the active IPv4 address assigned to the device's wireless (`wlan`) interface.

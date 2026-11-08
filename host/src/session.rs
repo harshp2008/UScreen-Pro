@@ -105,7 +105,6 @@ pub struct ExtraSession {
     /// Zero-based slot index (slot 1, slot 2, etc.).
     pub instance: u32,
     /// Persistent hardware identifier of the attached device.
-    #[allow(dead_code)]
     pub hw_id: String,
     /// Currently active ADB endpoint serial (USB ID or IP:port).
     pub active_serial: String,

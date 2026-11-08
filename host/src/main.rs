@@ -343,7 +343,6 @@ async fn run_daemon(cli: Cli) -> Result<()> {
         instance: 0,
         card: vdisplay::evdi_cards().first().copied(),
         max_performance_mode,
-        hevc_low_latency_tuning: file_cfg.hevc_low_latency_tuning,
         keep_alive: file_cfg.keep_alive,
     };
 
@@ -626,8 +625,7 @@ async fn run_daemon(cli: Cli) -> Result<()> {
             instance: 0,
             card: None,
             max_performance_mode,
-            hevc_low_latency_tuning: file_cfg.hevc_low_latency_tuning,
-            keep_alive: file_cfg.keep_alive,
+                keep_alive: file_cfg.keep_alive,
         },
         video_port,
         input_port,

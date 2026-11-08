@@ -50,12 +50,6 @@ pub fn fifo_path_for(instance: u32) -> PathBuf {
     }
 }
 
-/// Timing-ring path of the first display.
-#[allow(dead_code)]
-pub fn timing_path() -> PathBuf {
-    timing_path_for(0)
-}
-
 /// Shared memory file for high-resolution stage timing tracking between evdi_helper and host.
 pub fn timing_path_for(instance: u32) -> PathBuf {
     PathBuf::from(format!("/dev/shm/uscreen_timing_{}", instance))

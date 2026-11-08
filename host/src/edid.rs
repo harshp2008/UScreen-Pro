@@ -194,19 +194,6 @@ pub fn ensure_edid_sized(
     Ok(path)
 }
 
-/// Write (or reuse) a generated EDID at the default physical size.
-#[allow(dead_code)]
-pub fn ensure_edid(width: u32, height: u32, refresh: u32) -> Result<PathBuf> {
-    ensure_edid_sized(
-        width,
-        height,
-        refresh,
-        DEFAULT_WIDTH_MM,
-        DEFAULT_HEIGHT_MM,
-        1,
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

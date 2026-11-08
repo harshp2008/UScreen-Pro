@@ -86,21 +86,6 @@ class VideoReceiver {
     }
 
     /**
-     * Drop the current connection so the receive loop reconnects.
-     */
-    fun restartSocket() {
-        synchronized(this) {
-            try {
-                socket?.close()
-            } catch (_: Exception) {}
-            socket = null
-            inputStream = null
-            onDisconnected?.invoke()
-            onDiagnosticUpdate?.invoke("Restarting connection...")
-        }
-    }
-
-    /**
      * Invoked with the host's frame sequence number once that frame is
      * actually on screen. The host times the round trip on its own clock, so
      * no clock synchronisation between the two devices is needed.

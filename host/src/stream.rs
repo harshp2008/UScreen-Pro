@@ -347,11 +347,4 @@ impl StreamServer {
         socket.write_all(payload).await?;
         Ok(())
     }
-
-    /// Counterpart to `run`; shutdown currently goes through task
-    /// cancellation instead, but leaving this makes the lifecycle explicit.
-    #[allow(dead_code)]
-    pub fn stop(&self) {
-        self.running.store(false, Ordering::SeqCst);
-    }
 }

@@ -95,10 +95,6 @@ pub struct TabletProfile {
     pub api_level: Option<u32>,
 }
 
-/// Alias kept for call sites that predate the rename to `TabletProfile`.
-#[allow(dead_code)]
-pub type DeviceProfile = TabletProfile;
-
 impl TabletProfile {
     /// Friendly display name: nickname if provided, else model label, else fallback.
     pub fn display_name<'a>(&'a self, fallback: &'a str) -> &'a str {

@@ -1,4 +1,4 @@
-//! Host-side pairing and wireless-transport helpers built on adb: `adb pair` with a code, mDNS
+//! Host-side pairing and wireless-transport helpers built on adb: mDNS
 //! discovery of the TLS connect endpoint, the legacy `adb tcpip` fallback for pre-Android-11
 //! devices (with unique per-device ports), and Wi-Fi provisioning over an existing USB link.
 //! The device's Android API level (see [`query_device_api_level`]) decides which path is used.
@@ -18,28 +18,6 @@ pub async fn query_device_api_level(serial: &str) -> Option<u32> {
     }
     let s = String::from_utf8_lossy(&out.stdout);
     s.trim().parse::<u32>().ok()
-}
-
-/// Executes `adb pair <pairing_endpoint> <code>` for secure Android 11+ pairing.
-#[allow(dead_code)]
-pub async fn perform_secure_pair(pairing_endpoint: &str, code: &str) -> Result<String> {
-    info!("Initiating secure TLS pairing with {}...", pairing_endpoint);
-    let out = tokio::process::Command::new("adb")
-        .args(["pair", pairing_endpoint, code])
-        .output()
-        .await
-        .context("Failed to execute `adb pair`")?;
-
-    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
-
-    if out.status.success() || stdout.contains("Successfully paired") {
-        info!("Successfully paired to {}: {}", pairing_endpoint, stdout);
-        Ok(stdout)
-    } else {
-        let err_msg = if !stderr.is_empty() { stderr } else { stdout };
-        anyhow::bail!("Pairing failed: {}", err_msg);
-    }
 }
 
 /// Discovers the dynamic TLS connect endpoint (_adb-tls-connect._tcp) for a given IP

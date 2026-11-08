@@ -7,7 +7,6 @@ import android.hardware.usb.UsbManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.BatteryManager
-import android.os.Build
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.net.SocketTimeoutException
@@ -18,76 +17,42 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import android.provider.Settings
 import androidx.activity.ComponentActivity
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Monitor
-import androidx.compose.material.icons.filled.PriorityHigh
-import androidx.compose.material.icons.filled.Usb
-import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uscreen.Prefs
 import com.uscreen.TouchCapture
 import com.uscreen.VideoReceiver
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 
 /**
  * Evaluates whether Developer Options are unlocked system-wide.
@@ -229,91 +194,6 @@ fun evaluateDiagnostic(
         DiagnosticState.CONNECTING -> "Waiting for UScreen desktop..."
     }
     return Pair(state, message)
-}
-
-/**
- * Status checklist row used in the troubleshooter.
- */
-@Composable
-fun StatusItemCard(
-    title: String,
-    description: String,
-    isPassed: Boolean,
-    actionButtonText: String? = null,
-    onActionClick: (() -> Unit)? = null
-) {
-    // Status rows are a dense list: standard (calm) motion, not the wizard's expressive springs.
-    CalmMotion {
-        StatusItemCardContent(title, description, isPassed, actionButtonText, onActionClick)
-    }
-}
-
-@Composable
-private fun StatusItemCardContent(
-    title: String,
-    description: String,
-    isPassed: Boolean,
-    actionButtonText: String? = null,
-    onActionClick: (() -> Unit)? = null
-) {
-    Card(
-        shape = RoundedCornerShape(8.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isPassed) Color(0x3310B981) else MaterialTheme.colorScheme.surfaceContainer
-        ),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = if (isPassed) Ok else Subtle,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = if (isPassed) Icons.Default.Check else Icons.Default.PriorityHigh,
-                            contentDescription = null,
-                            tint = OnSurface,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = OnSurface
-                    )
-                    Text(
-                        text = description,
-                        fontSize = 12.sp,
-                        color = if (isPassed) OnSurface else Muted
-                    )
-                }
-            }
-
-            if (!isPassed && actionButtonText != null && onActionClick != null) {
-                Spacer(Modifier.height(8.dp))
-                MorphButton(
-                    onClick = onActionClick,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 40.dp)
-                ) {
-                    Text(actionButtonText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
-        }
-    }
 }
 
 private enum class NoStream { WAITING, HOST_OFFLINE, DEBUGGING_DISABLED }

@@ -222,9 +222,6 @@ pub struct CaptureConfig {
     pub card: Option<u32>,
     /// When true and power profile is "performance", forces 60 FPS keepalive stream.
     pub max_performance_mode: bool,
-    /// When true, enables advanced low-latency parameters on HEVC VAAPI encoder.
-    #[allow(dead_code)] // read fresh from the config at each ffmpeg spawn
-    pub hevc_low_latency_tuning: bool,
     /// Keep virtual display active when tablet disconnects, throttled to 1 FPS.
     pub keep_alive: bool,
 }
@@ -248,7 +245,6 @@ impl Default for CaptureConfig {
             instance: 0,
             card: None,
             max_performance_mode: false,
-            hevc_low_latency_tuning: true,
             keep_alive: false,
         }
     }

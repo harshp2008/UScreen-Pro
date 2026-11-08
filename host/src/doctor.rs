@@ -1047,20 +1047,6 @@ fn report_transport(r: &mut Report, serial: &str) {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reads_the_kwin_version_from_its_banner() {
-        assert_eq!(kwin_version("kwin 6.8.2\n"), Some((6, 8, 2)));
-        assert_eq!(kwin_version("kwin 6.7.5"), Some((6, 7, 5)));
-        assert_eq!(kwin_version("kwin 6.8"), Some((6, 8, 0)));
-        assert_eq!(kwin_version(""), None);
-        assert_eq!(kwin_version("kwin"), None);
-    }
-}
-
 /// `uscreen doctor --latency`: move a synthetic mouse across the whole desktop
 /// for `secs` seconds (so the virtual screen keeps producing frames) and ask the
 /// running daemon for the percentiles of what the tablet acknowledged meanwhile.
@@ -1179,4 +1165,18 @@ fn sweep_mouse(secs: u64, sparse: bool) -> anyhow::Result<()> {
         libc::ioctl(fd, UI_DEV_DESTROY);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_the_kwin_version_from_its_banner() {
+        assert_eq!(kwin_version("kwin 6.8.2\n"), Some((6, 8, 2)));
+        assert_eq!(kwin_version("kwin 6.7.5"), Some((6, 7, 5)));
+        assert_eq!(kwin_version("kwin 6.8"), Some((6, 8, 0)));
+        assert_eq!(kwin_version(""), None);
+        assert_eq!(kwin_version("kwin"), None);
+    }
 }

@@ -243,53 +243,6 @@ pub async fn adb_devices() -> Vec<String> {
     ready
 }
 
-/// Return the serial of the primary attached device, preferring physical USB over Wi-Fi.
-#[allow(dead_code)]
-pub async fn adb_device_serial() -> Option<String> {
-    let out = Command::new("adb").arg("devices").output().await.ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    let ready: Vec<&str> = text
-        .lines()
-        .skip(1)
-        .filter_map(|line| {
-            let mut parts = line.split_whitespace();
-            let serial = parts.next()?;
-            let state = parts.next()?;
-            (state == "device").then_some(serial)
-        })
-        .collect();
-
-    ready
-        .iter()
-        .find(|s| transport_of(s) == Transport::Usb)
-        .or_else(|| ready.first())
-        .map(|s| s.to_string())
-}
-
-/// Select which attached device to drive, retaining any currently active device if still valid.
-#[allow(dead_code)]
-pub async fn pick_device(devices: &[String], current: Option<&str>) -> Option<String> {
-    if let Some(cur) = current {
-        if devices.iter().any(|d| d == cur) {
-            return Some(cur.to_string());
-        }
-    }
-    let usb: Vec<&String> = devices
-        .iter()
-        .filter(|s| transport_of(s) == Transport::Usb)
-        .collect();
-
-    for d in &usb {
-        if let Some(true) = app_running(d).await {
-            return Some((*d).clone());
-        }
-    }
-    if let Some(first_usb) = usb.first() {
-        return Some((*first_usb).clone());
-    }
-    devices.first().cloned()
-}
-
 /// Establish reverse port forwarding tunnels via ADB to route client TCP connections back to host ports.
 ///
 /// Retries up to 3 times with exponential backoff to handle transient ADB daemon restarts.

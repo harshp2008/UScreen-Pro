@@ -77,7 +77,6 @@ pub fn recent_json(secs: u64) -> String {
 /// Per-stage host timings of one frame, in microseconds, as recorded by the helper's shared timing ring.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DetailedTiming {
-    #[allow(dead_code)]
     pub is_fresh: bool,
     pub req_to_ready_us: u32,
     pub grab_us: u32,
@@ -124,7 +123,7 @@ impl LatencyTracker {
     }
 
     /// An access unit just left the encoder without detailed timing.
-    #[allow(dead_code)]
+    #[cfg(feature = "inproc-encoder")]
     pub fn on_encoded(&self, seq: u32) {
         self.on_encoded_with_timing(seq, None);
     }
