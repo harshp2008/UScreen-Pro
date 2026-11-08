@@ -109,6 +109,9 @@ export interface TabletProfile {
   touchpad_haptics?: boolean;
   right_click_method?: string;
   touchpad_shape?: string;
+  stylus_style?: string;
+  stylus_button_primary?: string;
+  stylus_button_secondary?: string;
   app_version?: string;
   preferred_transport?: string;
   /** false when the user skipped wireless setup in the wizard; absent on older profiles means configured. */
@@ -170,6 +173,11 @@ export interface AppConfig {
   right_click_method: string;
   /** `full_screen`, `standard_rectangle` or `wide_rectangle`. */
   touchpad_shape: string;
+  /** `mouse` or `tablet`. */
+  stylus_style: string;
+  /** `right`, `middle` or `none`. */
+  stylus_button_primary: string;
+  stylus_button_secondary: string;
   /** Fade curves saved in the curve editor; referenced as `preset:<name>`. */
   curve_presets: CurvePreset[];
   version: string;

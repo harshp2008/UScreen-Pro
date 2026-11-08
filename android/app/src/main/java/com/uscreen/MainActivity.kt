@@ -385,6 +385,9 @@ class MainActivity : AppCompatActivity() {
         prefs.touchpadHaptics = cfg.touchpadHaptics
         prefs.rightClickMethod = cfg.rightClickMethod
         prefs.touchpadShape = cfg.touchpadShape
+        prefs.stylusStyle = cfg.stylusStyle
+        prefs.stylusButtonPrimary = cfg.stylusButtonPrimary
+        prefs.stylusButtonSecondary = cfg.stylusButtonSecondary
         // Touchpad mode is made of finger input, so it overrides the "Touch input" switch.
         touchCapture?.setTouchEnabled(cfg.touchInput || cfg.inputMode == HostConfig.MODE_TOUCHPAD)
         touchCapture?.setTouchpadMode(cfg.inputMode == HostConfig.MODE_TOUCHPAD)

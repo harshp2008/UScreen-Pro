@@ -243,6 +243,15 @@ pub struct TabletProfile {
     /// Which part of the tablet acts as the touchpad: `full_screen`, `standard_rectangle` or `wide_rectangle`. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_shape: Option<String>,
+    /// What the pen does in Stylus mode: `mouse` (a pointer that clicks and drag-selects) or `tablet` (a pressure and tilt pen). Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_style: Option<String>,
+    /// What the pen's first side button does in `mouse` style: `right`, `middle` or `none`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_button_primary: Option<String>,
+    /// What the pen's second side button does in `mouse` style: `right`, `middle` or `none`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_button_secondary: Option<String>,
     /// Firmware/APK version reported by the connected Android client.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,
@@ -438,6 +447,12 @@ pub struct FileConfig {
     pub right_click_method: String,
     /// Which part of the tablet acts as the touchpad: `full_screen`, `standard_rectangle` or `wide_rectangle`.
     pub touchpad_shape: String,
+    /// What the pen does in Stylus mode: `mouse` or `tablet`.
+    pub stylus_style: String,
+    /// First pen side button in `mouse` style: `right`, `middle` or `none`.
+    pub stylus_button_primary: String,
+    /// Second pen side button in `mouse` style: `right`, `middle` or `none`.
+    pub stylus_button_secondary: String,
     /// Fade curves saved by the user in the GUI's curve editor, usable as `preset:<name>`.
     pub curve_presets: Vec<CurvePreset>,
     /// Protocol/daemon version.
@@ -450,6 +465,22 @@ pub fn clean_shape(v: &str) -> String {
     match v.trim().to_ascii_lowercase().as_str() {
         s @ ("standard_rectangle" | "wide_rectangle") => s.to_string(),
         _ => "full_screen".into(),
+    }
+}
+
+/// `mouse` (default) or `tablet`.
+pub fn clean_stylus_style(v: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        "tablet" => "tablet".into(),
+        _ => "mouse".into(),
+    }
+}
+
+/// `right`, `middle` or `none`; anything else falls back to [default].
+pub fn clean_pen_button(v: &str, default: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        b @ ("right" | "middle" | "none") => b.to_string(),
+        _ => default.to_string(),
     }
 }
 
@@ -524,6 +555,9 @@ impl Default for FileConfig {
             touchpad_haptics: true,
             right_click_method: "bottom_right_zone".into(),
             touchpad_shape: "full_screen".into(),
+            stylus_style: "mouse".into(),
+            stylus_button_primary: "right".into(),
+            stylus_button_secondary: "middle".into(),
             curve_presets: Vec::new(),
         }
     }
@@ -641,7 +675,19 @@ impl FileConfig {
         };
         self.right_click_method = clean_right_click(&self.right_click_method);
         self.touchpad_shape = clean_shape(&self.touchpad_shape);
+        self.stylus_style = clean_stylus_style(&self.stylus_style);
+        self.stylus_button_primary = clean_pen_button(&self.stylus_button_primary, "right");
+        self.stylus_button_secondary = clean_pen_button(&self.stylus_button_secondary, "middle");
         for p in self.tablets.values_mut() {
+            if let Some(m) = p.stylus_style.take() {
+                p.stylus_style = Some(clean_stylus_style(&m));
+            }
+            if let Some(m) = p.stylus_button_primary.take() {
+                p.stylus_button_primary = Some(clean_pen_button(&m, "right"));
+            }
+            if let Some(m) = p.stylus_button_secondary.take() {
+                p.stylus_button_secondary = Some(clean_pen_button(&m, "middle"));
+            }
             if let Some(m) = p.right_click_method.take() {
                 p.right_click_method = Some(clean_right_click(&m));
             }
@@ -675,6 +721,21 @@ impl FileConfig {
             );
             self.position = "right".into();
         }
+    }
+
+    /// Make Stylus (`true`) or Display (`false`) the global default input mode. Returns whether that
+    /// changed anything. A global Touchpad default is left alone when the request is for Display:
+    /// the tray's switch is a Stylus toggle, it must not undo a Touchpad default chosen separately.
+    pub fn set_global_stylus(&mut self, on: bool) -> bool {
+        let current = self.input_mode.unwrap_or_default();
+        let next = match (on, current) {
+            (true, InputMode::Stylus) => return false,
+            (true, _) => InputMode::Stylus,
+            (false, InputMode::Stylus) => InputMode::Display,
+            (false, _) => return false,
+        };
+        self.input_mode = Some(next);
+        true
     }
 
     /// Whether a device has a saved profile, under its hardware serial or the adb serial it is
@@ -724,6 +785,34 @@ impl FileConfig {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_tray_toggle_changes_only_the_stylus_default() {
+        let mut c = FileConfig::default();
+        assert!(c.set_global_stylus(true));
+        assert_eq!(c.input_mode, Some(InputMode::Stylus));
+        assert!(!c.set_global_stylus(true), "already Stylus: nothing to write");
+        assert!(c.set_global_stylus(false));
+        assert_eq!(c.input_mode, Some(InputMode::Display));
+        // A Touchpad default chosen separately survives the switch being turned off.
+        c.input_mode = Some(InputMode::Touchpad);
+        assert!(!c.set_global_stylus(false));
+        assert_eq!(c.input_mode, Some(InputMode::Touchpad));
+    }
+
+    #[test]
+    fn stylus_settings_are_validated() {
+        assert_eq!(clean_pen_button(" Right ", "middle"), "right");
+        assert_eq!(clean_pen_button("bogus", "middle"), "middle");
+        assert_eq!(clean_stylus_style("TABLET"), "tablet");
+        assert_eq!(clean_stylus_style("x"), "mouse");
+        let mut c = FileConfig {
+            stylus_button_primary: "nonsense".into(),
+            ..FileConfig::default()
+        };
+        c.sanitize();
+        assert_eq!(c.stylus_button_primary, "right");
+    }
+
     use super::*;
 
     #[test]

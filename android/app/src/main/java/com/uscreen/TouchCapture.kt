@@ -1,11 +1,15 @@
 package com.uscreen
 
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceView
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
+import kotlin.math.max
 import kotlin.math.sin
 import kotlinx.coroutines.*
 import okhttp3.*
@@ -28,6 +32,18 @@ class TouchCapture {
         // it is 5 in AOSP (0 unknown, 1 finger, 2 stylus, 3 mouse, 4 eraser,
         // 5 palm). It was 6 here until 1.2.5, so no palm was ever filtered.
         private const val TOOL_TYPE_PALM = 5
+
+        /** Pointer speed: pixels sent to the computer per pixel of finger travel. */
+        private const val PAD_GAIN = 1.6f
+
+        /** How long the pen may be out of range before a held side button is let go. */
+        private const val PEN_BUTTON_GRACE_MS = 250L
+
+        /** A typical 11 inch tablet, used until the host tells us the real panel size. */
+        private const val DEFAULT_MM_PER_PX = 0.0927f
+
+        /** `adb logcat -s UScreenInput` shows every palm, tap and gesture decision. */
+        private const val DEBUG_INPUT = true
     }
 
     /** WebSocket port on 127.0.0.1. Defaults to 8891. */
@@ -336,6 +352,7 @@ class TouchCapture {
             MotionEvent.ACTION_HOVER_ENTER,
             MotionEvent.ACTION_HOVER_MOVE -> {
                 if (!isPenLike(event, 0)) return false
+                mainHandler.removeCallbacks(releasePenButtons)
                 sendPenEvent(event, 0, 3, vw, vh)
                 true
             }
@@ -427,7 +444,7 @@ class TouchCapture {
                         }
                         outsideIds.remove(id)
                         if (maskedAction == MotionEvent.ACTION_DOWN) sendWake(force = false)
-                        pad.down(id, x, y, event.eventTime)
+                        feedPad(event, padBounds, -1)
                         return true
                     }
                     val slot = slotOf(event, actionIndex)
@@ -438,6 +455,7 @@ class TouchCapture {
             }
 
             MotionEvent.ACTION_MOVE -> {
+                var sawPadFinger = false
                 for (i in 0 until pointerCount) {
                     if (isPalm(event, i)) {
                         // A finger that Android reclassifies as a palm mid-
@@ -469,16 +487,15 @@ class TouchCapture {
                     } else {
                         if (stylusMode || penIsActive() || !touchEnabled) continue
                         if (touchpadMode) {
-                            val id = event.getPointerId(i)
-                            if (id in outsideIds) continue
-                            // A finger that slides out stops at the edge, like on a real pad.
-                            pad.move(id, padBounds.clampX(event.getX(i)), padBounds.clampY(event.getY(i)))
+                            sawPadFinger = true
                             continue
                         }
                         val (nx, ny) = mapCoordinates(event.getX(i), event.getY(i), vw, vh)
                         sendTouch(nx, ny, event.getPressure(i).toDouble(), 2, slotOf(event, i))
                     }
                 }
+                // One frame per sample Android batched, so the engine sees the same stream a pad would.
+                if (sawPadFinger) feedPad(event, padBounds, -1)
             }
 
             // S-Pen side button. Fired as a discrete event while hovering or
@@ -500,7 +517,7 @@ class TouchCapture {
                     if (touchpadMode) {
                         val id = event.getPointerId(actionIndex)
                         if (outsideIds.remove(id)) return true
-                        pad.up(id, event.eventTime)
+                        feedPad(event, padBounds, actionIndex)
                         return true
                     }
                     // Not filtered on palm: whatever the contact is called
@@ -629,26 +646,29 @@ class TouchCapture {
         syncPenButton(event)
     }
 
-    /** The S Pen side button as the host last heard it. */
+    /** The pen's side buttons as the host last heard them. */
     private var penButtonDown = false
+    private var penSecondaryDown = false
 
     /**
-     * Send the side button whenever its state differs from what the host
-     * knows, read from the event's own button state. Android reports a press
-     * as a separate ACTION_BUTTON_PRESS only some of the time, and never
-     * through the touch listener while the pen hovers — which is when the
-     * button is used to pan or right-click — so waiting for that action left
-     * the button dead for anyone who presses it before touching down
-     * (#23, #25).
+     * Send the side buttons whenever their state differs from what the host knows, read from the
+     * event's own button state: the level, not the press event (S-Pen-Mouse does the same).
+     * Android reports a press as a separate ACTION_BUTTON_PRESS only some of the time, and never
+     * through the touch listener while the pen hovers, which is when the button is used to pan or
+     * right-click (#23, #25). BUTTON_STYLUS_PRIMARY is the S Pen's one button; some Samsung builds
+     * report it as BUTTON_SECONDARY instead, which counts as the same button.
      */
     private fun syncPenButton(event: MotionEvent) {
-        // Some Samsung builds report the S Pen button as a secondary mouse
-        // button instead of the stylus one.
-        val down = (event.buttonState and
-            (MotionEvent.BUTTON_STYLUS_PRIMARY or MotionEvent.BUTTON_SECONDARY)) != 0
-        if (down != penButtonDown) {
-            penButtonDown = down
-            sendPenButton(down)
+        val state = event.buttonState
+        val primary = (state and (MotionEvent.BUTTON_STYLUS_PRIMARY or MotionEvent.BUTTON_SECONDARY)) != 0
+        val secondary = (state and MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
+        if (primary != penButtonDown) {
+            penButtonDown = primary
+            sendPenButton(if (primary) 5 else 6)
+        }
+        if (secondary != penSecondaryDown) {
+            penSecondaryDown = secondary
+            sendPenButton(if (secondary) 7 else 8)
         }
     }
 
@@ -668,7 +688,8 @@ class TouchCapture {
         webSocket?.send(msg.toString())
     }
 
-    private fun sendPenButton(down: Boolean) {
+    /** [action]: 5 / 6 first button down / up, 7 / 8 second button down / up. */
+    private fun sendPenButton(action: Int) {
         val msg = JSONObject().apply {
             put("type", "pen")
             put("x", 0.0)
@@ -677,19 +698,18 @@ class TouchCapture {
             put("tilt_x", 0.0)
             put("tilt_y", 0.0)
             put("eraser", false)
-            // 5 = stylus button down, 6 = stylus button up
-            put("action", if (down) 5 else 6)
+            put("action", action)
         }
         webSocket?.send(msg.toString())
     }
 
     private fun sendPenProximityExit() {
-        // A button still held when the pen leaves would stay pressed on the
-        // host until the next press.
-        if (penButtonDown) {
-            penButtonDown = false
-            sendPenButton(false)
-        }
+        // Android sends a hover exit just before the tip touches down, and the side button can be
+        // held through it. Letting go of the button at once would send a release and a new press
+        // around every touch-down (a spurious right-button release, which opens a context menu).
+        // So the buttons are only released if the pen really stays away for a moment.
+        mainHandler.removeCallbacks(releasePenButtons)
+        mainHandler.postDelayed(releasePenButtons, PEN_BUTTON_GRACE_MS)
         val msg = JSONObject().apply {
             put("type", "pen")
             put("x", 0.0)
@@ -701,6 +721,17 @@ class TouchCapture {
             put("action", 4) // HOVER_EXIT / pen left proximity
         }
         webSocket?.send(msg.toString())
+    }
+
+    private val releasePenButtons: Runnable = Runnable {
+        if (penButtonDown) {
+            penButtonDown = false
+            sendPenButton(6)
+        }
+        if (penSecondaryDown) {
+            penSecondaryDown = false
+            sendPenButton(8)
+        }
     }
 
     private fun sendTouch(x: Float, y: Float, pressure: Double,
@@ -874,6 +905,7 @@ and consults it when choosing between the device's adb entries.
 
     /** The pen took over: anything a finger left pressed has to be lifted. */
     private fun notePenActivity() {
+        mainHandler.removeCallbacks(releasePenButtons)
         lastPenNanos = System.nanoTime()
         liftTouches()
     }
@@ -886,9 +918,38 @@ and consults it when choosing between the device's adb entries.
     @Volatile var touchpadMode = false
         private set
 
-    private val pad = TouchpadGestures(object : TouchpadGestures.Output {
-        override fun move(dx: Float, dy: Float) = sendRel("rel", dx, dy)
-        override fun scroll(dx: Float, dy: Float) = sendRel("scroll", dx, dy)
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val padTimer: Runnable = Runnable { pad.onTimer(SystemClock.uptimeMillis() / 1000.0) }
+
+    /** Millimetres per tablet pixel, from the panel's real size when the host told us, else a typical tablet. */
+    private fun mmPerPx(): Float {
+        val longPx = max(nativeWidth, nativeHeight)
+        val longMm = max(nativeWidthMm, nativeHeightMm)
+        return if (longPx > 0 && longMm > 0) longMm.toFloat() / longPx else DEFAULT_MM_PER_PX
+    }
+
+    private val pad: TouchpadEngine = TouchpadEngine(object : TouchpadEngine.Output {
+        // The engine speaks millimetres; the host wants tablet pixels, as it always has.
+        override fun move(dxMm: Float, dyMm: Float) {
+            val k = PAD_GAIN / mmPerPx()
+            sendRel("rel", dxMm * k, dyMm * k)
+        }
+        override fun scroll(dxMm: Float, dyMm: Float) {
+            val k = 1f / mmPerPx()
+            sendRel("scroll", dxMm * k, dyMm * k)
+        }
+        override fun pinch(deltaMm: Float) = sendGesture("pinch", (deltaMm / mmPerPx()).toDouble())
+        override fun pinchEnd() = sendGesture("pinch_end", 0.0)
+        override fun swipe(fingers: Int, direction: TouchpadEngine.Swipe) {
+            sendGesture(
+                when (direction) {
+                    TouchpadEngine.Swipe.LEFT -> "workspace_next"
+                    TouchpadEngine.Swipe.RIGHT -> "workspace_prev"
+                    TouchpadEngine.Swipe.UP, TouchpadEngine.Swipe.DOWN -> "overview"
+                },
+                0.0,
+            )
+        }
         override fun button(button: Int, down: Boolean) {
             webSocket?.send(JSONObject().apply {
                 put("type", "button")
@@ -897,7 +958,58 @@ and consults it when choosing between the device's adb entries.
             }.toString())
             if (down) onHaptic?.invoke()
         }
-    })
+    }, schedule = { delayMs ->
+        mainHandler.removeCallbacks(padTimer)
+        mainHandler.postDelayed(padTimer, delayMs)
+    }).also { it.log = { line -> if (DEBUG_INPUT) Log.d("UScreenInput", line) } }
+
+    private fun sendGesture(kind: String, amount: Double) {
+        webSocket?.send(JSONObject().apply {
+            put("type", "gesture")
+            put("kind", kind)
+            put("amount", amount)
+        }.toString())
+    }
+
+    /**
+     * Turn the fingers of [event] into engine frames: one for each sample Android batched into a
+     * move, one for anything else. [excludeIndex] is a pointer that has just lifted. Contacts outside
+     * the touch area are ignored; one that slides out stops at the edge, like on a real pad.
+     */
+    private fun feedPad(event: MotionEvent, bounds: TouchpadShape.Bounds, excludeIndex: Int) {
+        val k = mmPerPx()
+        pad.padWidthMm = bounds.width * k
+        pad.padHeightMm = bounds.height * k
+        pad.rightClickZone = hostConfig.rightClickMethod != HostConfig.RIGHT_CLICK_TWO_FINGER
+        val history = if (event.actionMasked == MotionEvent.ACTION_MOVE) event.historySize else 0
+        for (h in 0..history) {
+            val sample = if (h < history) h else -1
+            val fingers = ArrayList<FingerState>(event.pointerCount)
+            for (i in 0 until event.pointerCount) {
+                if (i == excludeIndex || isPenLike(event, i)) continue
+                val id = event.getPointerId(i)
+                if (id in outsideIds) continue
+                val x = if (sample >= 0) event.getHistoricalX(i, sample) else event.getX(i)
+                val y = if (sample >= 0) event.getHistoricalY(i, sample) else event.getY(i)
+                val major = if (sample >= 0) event.getHistoricalTouchMajor(i, sample) else event.getTouchMajor(i)
+                val minor = if (sample >= 0) event.getHistoricalTouchMinor(i, sample) else event.getTouchMinor(i)
+                val pressure = if (sample >= 0) event.getHistoricalPressure(i, sample) else event.getPressure(i)
+                fingers.add(
+                    FingerState(
+                        id = id,
+                        x = (bounds.clampX(x) - bounds.left) * k,
+                        y = (bounds.clampY(y) - bounds.top) * k,
+                        touchMajor = major * k,
+                        touchMinor = minor * k,
+                        pressure = pressure,
+                        toolPalm = isPalm(event, i),
+                    ),
+                )
+            }
+            val t = if (sample >= 0) event.getHistoricalEventTime(sample) else event.eventTime
+            pad.onFrame(HardwareState(t / 1000.0, fingers))
+        }
+    }
 
     /** Pointer ids whose finger landed outside the touch area; they are ignored until they lift. */
     private val outsideIds = HashSet<Int>()

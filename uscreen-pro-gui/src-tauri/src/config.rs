@@ -91,6 +91,12 @@ pub struct TabletProfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_shape: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_style: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_button_primary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_button_secondary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub secure_port: Option<u16>,
@@ -165,6 +171,12 @@ pub struct AppConfig {
     pub right_click_method: String,
     /// `full_screen`, `standard_rectangle` or `wide_rectangle`.
     pub touchpad_shape: String,
+    /// What the pen does in Stylus mode: `mouse` or `tablet`.
+    pub stylus_style: String,
+    /// First pen side button in `mouse` style: `right`, `middle` or `none`.
+    pub stylus_button_primary: String,
+    /// Second pen side button in `mouse` style.
+    pub stylus_button_secondary: String,
     /// Fade curves saved in the curve editor (usable as `preset:<name>`).
     pub curve_presets: Vec<CurvePreset>,
     pub version: String,
@@ -225,6 +237,9 @@ impl Default for AppConfig {
             touchpad_haptics: true,
             right_click_method: "bottom_right_zone".into(),
             touchpad_shape: "full_screen".into(),
+            stylus_style: "mouse".into(),
+            stylus_button_primary: "right".into(),
+            stylus_button_secondary: "middle".into(),
             curve_presets: Vec::new(),
             version: env!("GIT_VERSION_STRING").to_string(),
             tablets: HashMap::new(),

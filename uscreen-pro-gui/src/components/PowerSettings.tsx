@@ -12,6 +12,8 @@ import {
   ORIENTATIONS,
   RIGHT_CLICK_METHODS,
   TOUCHPAD_SHAPES,
+  STYLUS_STYLES,
+  PEN_BUTTONS,
   THEME_MODES,
   labelOf,
 } from "../lib/options";
@@ -40,6 +42,9 @@ export interface PowerValues {
   touchpad_haptics: boolean;
   right_click_method: string;
   touchpad_shape: string;
+  stylus_style: string;
+  stylus_button_primary: string;
+  stylus_button_secondary: string;
 }
 
 /** Tooltip of the Input mode row of a device: where the power goes and what to do about it. */
@@ -97,6 +102,50 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
           onChange={(touch_input) => onChange({ touch_input })}
           override={ov("touch_input", onOff(v.touch_input))}
         />
+        {v.input_mode === "stylus" && (
+          <>
+            <SettingRow
+              label="Pen acts as"
+              tip="Mouse: the pen is a pointer. The tip is the left button and stays down while you drag, so you can select text and move windows; hovering moves a visible cursor. Graphics tablet: a pressure and tilt pen for drawing programs."
+              override={ov("stylus_style", labelOf(STYLUS_STYLES, v.stylus_style))}
+            >
+              <Segmented
+                label="Pen acts as"
+                value={v.stylus_style}
+                options={STYLUS_STYLES}
+                onValueChange={(stylus_style) => onChange({ stylus_style })}
+              />
+            </SettingRow>
+            {v.stylus_style === "mouse" && (
+              <>
+                <SettingRow
+                  label="Pen button"
+                  tip="What the pen's side button does while the pen acts as a mouse."
+                  override={ov("stylus_button_primary", labelOf(PEN_BUTTONS, v.stylus_button_primary))}
+                >
+                  <Segmented
+                    label="Pen button"
+                    value={v.stylus_button_primary}
+                    options={PEN_BUTTONS}
+                    onValueChange={(stylus_button_primary) => onChange({ stylus_button_primary })}
+                  />
+                </SettingRow>
+                <SettingRow
+                  label="Second pen button"
+                  tip="For pens with a second side button."
+                  override={ov("stylus_button_secondary", labelOf(PEN_BUTTONS, v.stylus_button_secondary))}
+                >
+                  <Segmented
+                    label="Second pen button"
+                    value={v.stylus_button_secondary}
+                    options={PEN_BUTTONS}
+                    onValueChange={(stylus_button_secondary) => onChange({ stylus_button_secondary })}
+                  />
+                </SettingRow>
+              </>
+            )}
+          </>
+        )}
         {v.input_mode === "stylus" && (
           <SwitchRow
             label="Black screen in stylus mode"
@@ -185,7 +234,7 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
           </SettingRow>
           <SettingRow
             label="Right Click Method"
-            tip="Bottom Right Zone: tap the right half of the strip along the bottom edge of the touch area (a faint line marks it). Two-Finger Tap: tap with two fingers. Three-finger tap is always a middle click; four fingers switch workspace; pinch and rotate are native touchpad gestures."
+            tip="Bottom Right Zone: tap the right half of the strip along the bottom edge of the touch area (a faint line marks it). Two-Finger Tap: tap with two fingers. Two-finger tap is also a right click and three-finger tap a middle click. Pinch zooms, and swiping three or four fingers sideways switches workspace (up or down: overview)."
             override={ov("right_click_method", labelOf(RIGHT_CLICK_METHODS, v.right_click_method))}
           >
             <Segmented

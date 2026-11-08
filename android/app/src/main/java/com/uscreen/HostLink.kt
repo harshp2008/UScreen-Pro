@@ -46,6 +46,9 @@ data class HostConfig(
     val touchpadHaptics: Boolean = true,
     val rightClickMethod: String = RIGHT_CLICK_ZONE,
     val touchpadShape: String = TouchpadShape.FULL,
+    val stylusStyle: String = STYLUS_MOUSE,
+    val stylusButtonPrimary: String = PEN_BUTTON_RIGHT,
+    val stylusButtonSecondary: String = PEN_BUTTON_MIDDLE,
 ) {
     /** True while the host streams video to this tablet (only Display mode does). */
     val streamsVideo: Boolean get() = inputMode == MODE_DISPLAY
@@ -69,6 +72,9 @@ data class HostConfig(
         "touchpad_shape" -> (value as? String)?.takeIf { it in TouchpadShape.SHAPES }?.let { copy(touchpadShape = it) }
         "touchpad_haptics" -> (value as? Boolean)?.let { copy(touchpadHaptics = it) }
         "right_click_method" -> (value as? String)?.takeIf { it in RIGHT_CLICK_METHODS }?.let { copy(rightClickMethod = it) }
+        "stylus_style" -> (value as? String)?.takeIf { it in STYLUS_STYLES }?.let { copy(stylusStyle = it) }
+        "stylus_button_primary" -> (value as? String)?.takeIf { it in PEN_BUTTONS }?.let { copy(stylusButtonPrimary = it) }
+        "stylus_button_secondary" -> (value as? String)?.takeIf { it in PEN_BUTTONS }?.let { copy(stylusButtonSecondary = it) }
         else -> null
     }
 
@@ -84,6 +90,17 @@ data class HostConfig(
         /** A two-finger tap right-clicks. */
         const val RIGHT_CLICK_TWO_FINGER = "two_finger_tap"
         val RIGHT_CLICK_METHODS = listOf(RIGHT_CLICK_ZONE, RIGHT_CLICK_TWO_FINGER)
+
+        /** Stylus mode: the pen is a mouse pointer (default), or a pressure and tilt graphics tablet. */
+        const val STYLUS_MOUSE = "mouse"
+        const val STYLUS_TABLET = "tablet"
+        val STYLUS_STYLES = listOf(STYLUS_MOUSE, STYLUS_TABLET)
+
+        /** What a pen side button does in mouse style. */
+        const val PEN_BUTTON_RIGHT = "right"
+        const val PEN_BUTTON_MIDDLE = "middle"
+        const val PEN_BUTTON_NONE = "none"
+        val PEN_BUTTONS = listOf(PEN_BUTTON_RIGHT, PEN_BUTTON_MIDDLE, PEN_BUTTON_NONE)
 
         /** Read a `config_update` message; fields it does not carry keep [base]'s value. */
         fun fromJson(o: JSONObject, base: HostConfig): HostConfig = HostConfig(
@@ -111,6 +128,12 @@ data class HostConfig(
                 .takeIf { it in RIGHT_CLICK_METHODS } ?: base.rightClickMethod,
             touchpadShape = o.optString("touchpad_shape", base.touchpadShape)
                 .takeIf { it in TouchpadShape.SHAPES } ?: base.touchpadShape,
+            stylusStyle = o.optString("stylus_style", base.stylusStyle)
+                .takeIf { it in STYLUS_STYLES } ?: base.stylusStyle,
+            stylusButtonPrimary = o.optString("stylus_button_primary", base.stylusButtonPrimary)
+                .takeIf { it in PEN_BUTTONS } ?: base.stylusButtonPrimary,
+            stylusButtonSecondary = o.optString("stylus_button_secondary", base.stylusButtonSecondary)
+                .takeIf { it in PEN_BUTTONS } ?: base.stylusButtonSecondary,
         )
 
         /** The saved copy of the synced settings, so a restart shows the last known values before the host answers. */
@@ -131,6 +154,9 @@ data class HostConfig(
             touchpadHaptics = prefs.touchpadHaptics,
             rightClickMethod = prefs.rightClickMethod,
             touchpadShape = prefs.touchpadShape,
+            stylusStyle = prefs.stylusStyle,
+            stylusButtonPrimary = prefs.stylusButtonPrimary,
+            stylusButtonSecondary = prefs.stylusButtonSecondary,
         )
     }
 }

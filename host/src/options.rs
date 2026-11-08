@@ -52,6 +52,11 @@ pub struct DeviceOptions {
     pub right_click_method: String,
     /// `full_screen`, `standard_rectangle` or `wide_rectangle`.
     pub touchpad_shape: String,
+    /// `mouse` or `tablet`.
+    pub stylus_style: String,
+    /// `right`, `middle` or `none`.
+    pub stylus_button_primary: String,
+    pub stylus_button_secondary: String,
     /// Informational: a Wi-Fi address is configured for this device, so the app hides its
     /// "Setup Wireless Pairing" button.
     pub wifi_configured: bool,
@@ -89,6 +94,9 @@ impl DeviceOptions {
         g.touchpad_haptics = pick!(touchpad_haptics);
         g.right_click_method = pick!(right_click_method);
         g.touchpad_shape = pick!(touchpad_shape);
+        g.stylus_style = pick!(stylus_style);
+        g.stylus_button_primary = pick!(stylus_button_primary);
+        g.stylus_button_secondary = pick!(stylus_button_secondary);
         g.sanitize();
         let global_mode = CLI_MODE
             .get()
@@ -118,6 +126,9 @@ impl DeviceOptions {
             touchpad_haptics: g.touchpad_haptics,
             right_click_method: g.right_click_method.clone(),
             touchpad_shape: g.touchpad_shape.clone(),
+            stylus_style: g.stylus_style.clone(),
+            stylus_button_primary: g.stylus_button_primary.clone(),
+            stylus_button_secondary: g.stylus_button_secondary.clone(),
             wifi_configured: wifi(&p.wifi_address) || !cfg.wifi_address.trim().is_empty(),
         }
     }
@@ -147,6 +158,9 @@ impl DeviceOptions {
             "touchpad_haptics": self.touchpad_haptics,
             "right_click_method": self.right_click_method,
             "touchpad_shape": self.touchpad_shape,
+            "stylus_style": self.stylus_style,
+            "stylus_button_primary": self.stylus_button_primary,
+            "stylus_button_secondary": self.stylus_button_secondary,
             "wifi_configured": self.wifi_configured,
         })
     }
@@ -203,6 +217,18 @@ fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Result<bool, ()>
             }
             _ => return Err(()),
         },
+        "stylus_style" => match s?.as_str() {
+            m @ ("mouse" | "tablet") => set(&mut p.stylus_style, m.to_string()),
+            _ => return Err(()),
+        },
+        "stylus_button_primary" => match s?.as_str() {
+            m @ ("right" | "middle" | "none") => set(&mut p.stylus_button_primary, m.to_string()),
+            _ => return Err(()),
+        },
+        "stylus_button_secondary" => match s?.as_str() {
+            m @ ("right" | "middle" | "none") => set(&mut p.stylus_button_secondary, m.to_string()),
+            _ => return Err(()),
+        },
         "right_click_method" => match s?.as_str() {
             m @ ("bottom_right_zone" | "two_finger_tap") => {
                 set(&mut p.right_click_method, m.to_string())
@@ -256,6 +282,11 @@ pub fn options_rx(instance: u32) -> watch::Receiver<DeviceOptions> {
 /// Whether the slot's device is in Stylus mode, live.
 pub fn pen_only_rx(instance: u32) -> watch::Receiver<bool> {
     with_slot(instance, |s| s.pen_only.subscribe())
+}
+
+/// The slot's current options.
+pub fn current_options(instance: u32) -> DeviceOptions {
+    with_slot(instance, |s| s.tx.borrow().clone())
 }
 
 /// The slot's current input mode.
@@ -593,6 +624,9 @@ mod tests {
             "touchpad_haptics",
             "right_click_method",
             "touchpad_shape",
+            "stylus_style",
+            "stylus_button_primary",
+            "stylus_button_secondary",
             "wifi_configured",
         ] {
             assert!(v.get(k).is_some(), "missing {k}");

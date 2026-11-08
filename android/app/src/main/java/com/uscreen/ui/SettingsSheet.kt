@@ -300,6 +300,33 @@ fun SettingsSheet(
                             enabled = mode != HostConfig.MODE_TOUCHPAD
                         )
                         if (mode == HostConfig.MODE_STYLUS) {
+                            ChipChoice(
+                                "Pen acts as",
+                                listOf(
+                                    HostConfig.STYLUS_MOUSE to "Mouse",
+                                    HostConfig.STYLUS_TABLET to "Graphics tablet",
+                                ),
+                                hostConfig.stylusStyle,
+                            ) { onSetting("stylus_style", it) }
+                            if (hostConfig.stylusStyle == HostConfig.STYLUS_MOUSE) {
+                                val penButtons = listOf(
+                                    HostConfig.PEN_BUTTON_RIGHT to "Right click",
+                                    HostConfig.PEN_BUTTON_MIDDLE to "Middle click",
+                                    HostConfig.PEN_BUTTON_NONE to "Nothing",
+                                )
+                                ChipChoice("Pen button", penButtons, hostConfig.stylusButtonPrimary) {
+                                    onSetting("stylus_button_primary", it)
+                                }
+                                ChipChoice("Second pen button", penButtons, hostConfig.stylusButtonSecondary) {
+                                    onSetting("stylus_button_secondary", it)
+                                }
+                                Text(
+                                    "The tip is the left button and stays down while you drag, so you can select text " +
+                                        "and move windows. Hovering moves the cursor.",
+                                    fontSize = 11.sp,
+                                    color = Muted
+                                )
+                            }
                             SwitchRow(
                                 "Black screen in stylus mode",
                                 "Nothing is streamed, so the screen goes black a few seconds after it starts.",
@@ -354,7 +381,8 @@ fun SettingsSheet(
                             )
                             Text(
                                 "Bottom Right Zone: tap the right half of the strip along the bottom edge of the touch area. " +
-                                    "Three-finger tap is middle click; four or five fingers switch workspace.",
+                                    "Two-finger tap is also a right click, three-finger tap is middle click, and swiping " +
+                                    "three or four fingers sideways switches workspace (up or down: overview).",
                                 fontSize = 11.sp,
                                 color = Muted
                             )

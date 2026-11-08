@@ -243,6 +243,8 @@ impl UInputDevice {
         let h = COORD_MAX + 1;
 
         unsafe {
+            // A pointing tablet, not a screen: INPUT_PROP_POINTER, never INPUT_PROP_DIRECT.
+            Self::ioctl_val(fd, UI_SET_PROPBIT, INPUT_PROP_POINTER)?;
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_SYN as i32)?;
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_KEY as i32)?;
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_ABS as i32)?;
@@ -286,6 +288,8 @@ impl UInputDevice {
         let w = COORD_MAX + 1;
 
         unsafe {
+            // An absolute mouse: INPUT_PROP_POINTER, never INPUT_PROP_DIRECT or a touch class.
+            Self::ioctl_val(fd, UI_SET_PROPBIT, INPUT_PROP_POINTER)?;
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_SYN as i32)?;
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_KEY as i32)?;
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_ABS as i32)?;
@@ -725,6 +729,11 @@ pub(super) struct InjectDevices {
     /// S Pen side button currently held (BTN_STYLUS). Tracked so a held
     /// button is released cleanly if the connection drops.
     pub(super) pen_button: bool,
+    /// Buttons the pen holds on the absolute pointer in `mouse` style (bit 0 left, 1 right,
+    /// 2 middle), so a dropped connection lets go of them.
+    pub(super) pen_mouse_buttons: u8,
+    /// Ctrl is held on the keyboard for a pinch in progress, and when the last pinch step came.
+    pub(super) pinch_since: Option<std::time::Instant>,
 }
 
 impl InjectDevices {
@@ -749,6 +758,8 @@ impl InjectDevices {
             active_slots: 0,
             pen_proximity: false,
             pen_button: false,
+            pen_mouse_buttons: 0,
+            pinch_since: None,
         }
     }
 
@@ -803,6 +814,8 @@ impl InjectDevices {
         self.mouse_buttons = 0;
         self.rel_rest = (0.0, 0.0);
         self.scroll_rest = (0, 0);
+        self.release_pen_mouse();
+        self.end_pinch();
     }
 
     /// The keyboard, created on first use. `None` when uinput is not available.
@@ -850,9 +863,9 @@ impl InjectDevices {
         }
     }
 
-    /// Put the absolute pointer where the pen last was, so it can click there.
-    pub(super) fn park_pointer(&mut self) {
-        let (px, py) = self.last_pen_pos;
+    /// Pen coordinates (0..=COORD_MAX over the pen's output) as pointer coordinates over the whole
+    /// desktop.
+    fn desktop_xy(&self, px: i32, py: i32) -> (i32, i32) {
         let (px, py) = match self.pointer_area {
             Some((ox, oy, ow, oh)) => {
                 let u = px as f64 / COORD_MAX as f64;
@@ -864,11 +877,100 @@ impl InjectDevices {
             }
             None => (px, py),
         };
+        (px.clamp(0, COORD_MAX), py.clamp(0, COORD_MAX))
+    }
+
+    /// Put the absolute pointer where the pen last was, so it can click there.
+    pub(super) fn park_pointer(&mut self) {
+        let (px, py) = self.desktop_xy(self.last_pen_pos.0, self.last_pen_pos.1);
         if let Some(ref mut dev) = self.pointer {
-            let _ = dev.emit(EV_ABS, ABS_X, px.clamp(0, COORD_MAX));
-            let _ = dev.emit(EV_ABS, ABS_Y, py.clamp(0, COORD_MAX));
+            let _ = dev.emit(EV_ABS, ABS_X, px);
+            let _ = dev.emit(EV_ABS, ABS_Y, py);
             let _ = dev.syn();
         }
+    }
+
+    /// Whether the pen can act as a mouse: needs the absolute pointer.
+    pub(super) fn has_pointer(&self) -> bool {
+        self.pointer.is_some()
+    }
+
+    /// The pen as a mouse (Stylus mode, `mouse` style). The tip is the left button: it goes down
+    /// the moment the pen touches and stays down for the whole stroke, so dragging selects text
+    /// and moves windows. Hovering moves the cursor. The pen's side buttons are the right and
+    /// middle buttons, or nothing, as configured. The pointer is an ordinary absolute mouse, so
+    /// the desktop draws its cursor.
+    ///
+    /// Actions are the pen protocol's: 0 down, 1 up, 2 move, 3 hover, 4 left the screen,
+    /// 5/6 first side button down/up, 7/8 second side button down/up.
+    pub(super) fn pen_as_mouse(
+        &mut self,
+        x: i32,
+        y: i32,
+        action: u8,
+        primary: &str,
+        secondary: &str,
+    ) {
+        let (px, py) = self.desktop_xy(x, y);
+        let side = |name: &str| match name {
+            "right" => Some((BTN_RIGHT, 2u8)),
+            "middle" => Some((BTN_MIDDLE, 4u8)),
+            _ => None,
+        };
+        let Some(dev) = self.pointer.as_mut() else {
+            return;
+        };
+        let mut held = self.pen_mouse_buttons;
+        let place = |dev: &mut UInputDevice| {
+            let _ = dev.emit(EV_ABS, ABS_X, px);
+            let _ = dev.emit(EV_ABS, ABS_Y, py);
+            let _ = dev.syn();
+        };
+        let mut press = |dev: &mut UInputDevice, code: u16, bit: u8, down: bool| {
+            let _ = dev.emit(EV_KEY, code, down as i32);
+            let _ = dev.syn();
+            if down {
+                held |= bit;
+            } else {
+                held &= !bit;
+            }
+        };
+        match action {
+            0 => {
+                place(dev);
+                press(dev, BTN_LEFT, 1, true);
+            }
+            1 => {
+                place(dev);
+                press(dev, BTN_LEFT, 1, false);
+            }
+            2 | 3 => place(dev),
+            5..=8 => {
+                let name = if action <= 6 { primary } else { secondary };
+                if let Some((code, bit)) = side(name) {
+                    press(dev, code, bit, action == 5 || action == 7);
+                }
+            }
+            _ => {}
+        }
+        self.pen_mouse_buttons = held;
+    }
+
+    /// Let go of every button the pen holds on the absolute pointer.
+    pub(super) fn release_pen_mouse(&mut self) {
+        if self.pen_mouse_buttons == 0 {
+            return;
+        }
+        let held = self.pen_mouse_buttons;
+        if let Some(ref mut dev) = self.pointer {
+            for (bit, code) in [(1u8, BTN_LEFT), (2, BTN_RIGHT), (4, BTN_MIDDLE)] {
+                if held & bit != 0 {
+                    let _ = dev.emit(EV_KEY, code, 0);
+                }
+            }
+            let _ = dev.syn();
+        }
+        self.pen_mouse_buttons = 0;
     }
 
     /// Tap a key combination on the virtual keyboard (modifiers first, released in reverse).
@@ -880,23 +982,42 @@ impl InjectDevices {
         }
     }
 
-    /// Scroll with a modifier held (Ctrl for zoom): the modifier goes down, the
-    /// wheel turns, the modifier comes up, so a lost connection can never leave it stuck.
-    pub(super) fn scroll_with_modifier(&mut self, modifier: u16, dy: i32) {
+    /// One step of a pinch: Ctrl is pressed with the first step and stays down until
+    /// [`Self::end_pinch`], and the wheel turns under it. Pressing and releasing Ctrl around every
+    /// step lost it to the order the compositor reads two devices in.
+    pub(super) fn pinch_step(&mut self, dy: i32) {
         if dy == 0 {
             return;
         }
-        let Some(kb) = self.keyboard() else { return };
-        let _ = kb.emit(EV_KEY, modifier, 1);
-        let _ = kb.syn();
+        if self.pinch_since.is_none() {
+            let Some(kb) = self.keyboard() else { return };
+            let _ = kb.emit(EV_KEY, KEY_LEFTCTRL, 1);
+            let _ = kb.syn();
+            // Let the compositor see Ctrl before the first notch.
+            std::thread::sleep(std::time::Duration::from_millis(15));
+        }
+        self.pinch_since = Some(std::time::Instant::now());
         let mut rest = self.scroll_rest;
         if let Some(dev) = self.mouse() {
             let _ = dev.scroll_by(0, dy, &mut rest);
         }
         self.scroll_rest = rest;
-        if let Some(kb) = self.keyboard.as_mut() {
-            let _ = kb.emit(EV_KEY, modifier, 0);
-            let _ = kb.syn();
+    }
+
+    /// The fingers came off: release Ctrl.
+    pub(super) fn end_pinch(&mut self) {
+        if self.pinch_since.take().is_some() {
+            if let Some(kb) = self.keyboard.as_mut() {
+                let _ = kb.emit(EV_KEY, KEY_LEFTCTRL, 0);
+                let _ = kb.syn();
+            }
+        }
+    }
+
+    /// Safety net: Ctrl held for a pinch whose end never arrived is let go after this long.
+    pub(super) fn expire_pinch(&mut self) {
+        if self.pinch_since.is_some_and(|t| t.elapsed() > std::time::Duration::from_millis(1500)) {
+            self.end_pinch();
         }
     }
 

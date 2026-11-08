@@ -103,6 +103,25 @@ class HostLinkTest {
     }
 
     @Test
+    fun stylusSettingsAreValidated() {
+        val base = HostConfig()
+        assertEquals(HostConfig.STYLUS_MOUSE, base.stylusStyle)
+        assertEquals(HostConfig.PEN_BUTTON_RIGHT, base.stylusButtonPrimary)
+        assertEquals(HostConfig.PEN_BUTTON_MIDDLE, base.stylusButtonSecondary)
+        assertEquals("tablet", base.withSetting("stylus_style", "tablet")?.stylusStyle)
+        assertEquals(null, base.withSetting("stylus_style", "wacom"))
+        assertEquals("none", base.withSetting("stylus_button_primary", "none")?.stylusButtonPrimary)
+        assertEquals(null, base.withSetting("stylus_button_secondary", "left"))
+        val c = HostConfig.fromJson(
+            org.json.JSONObject("""{"stylus_style":"tablet","stylus_button_primary":"middle","stylus_button_secondary":"bogus"}"""),
+            base,
+        )
+        assertEquals("tablet", c.stylusStyle)
+        assertEquals("middle", c.stylusButtonPrimary)
+        assertEquals(base.stylusButtonSecondary, c.stylusButtonSecondary)
+    }
+
+    @Test
     fun touchpadShapeIsASetting() {
         val base = HostConfig()
         assertEquals(TouchpadShape.FULL, base.touchpadShape)

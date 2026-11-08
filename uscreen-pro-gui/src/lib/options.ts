@@ -109,6 +109,19 @@ export const RIGHT_CLICK_METHODS: Option[] = [
   { value: "two_finger_tap", label: "Two-Finger Tap" },
 ];
 
+/** What the pen does in Stylus mode. */
+export const STYLUS_STYLES: Option[] = [
+  { value: "mouse", label: "Mouse" },
+  { value: "tablet", label: "Graphics tablet" },
+];
+
+/** What a pen side button does when the pen acts as a mouse. */
+export const PEN_BUTTONS: Option[] = [
+  { value: "right", label: "Right click" },
+  { value: "middle", label: "Middle click" },
+  { value: "none", label: "Nothing" },
+];
+
 /** Which part of the tablet acts as the touchpad; touches outside the shape are ignored. */
 export const TOUCHPAD_SHAPES: Option[] = [
   { value: "full_screen", label: "Full Screen" },

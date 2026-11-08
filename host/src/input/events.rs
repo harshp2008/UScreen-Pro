@@ -50,6 +50,12 @@ pub(super) fn handle_event(
     latency: &crate::latency::LatencyTracker,
     ping_notify: &Arc<tokio::sync::Notify>,
 ) {
+    // A pinch whose end never arrived must not leave Ctrl held.
+    if !matches!(event, InputEvent::Gesture { .. }) {
+        if let Ok(mut guard) = uinput.lock() {
+            guard.expire_pinch();
+        }
+    }
     // Any input from the tablet counts as use for the idle-dim timer.
     if matches!(
         event,
@@ -124,7 +130,27 @@ pub(super) fn handle_event(
             let tilt_x_deg = (tilt_x.round() as i32).clamp(-90, 90);
             let tilt_y_deg = (tilt_y.round() as i32).clamp(-90, 90);
 
+            let opts = crate::options::current_options(instance);
             if let Ok(mut guard) = uinput.lock() {
+                // Stylus mode as a mouse: the pen is the pointer, its tip the left button.
+                if opts.input_mode == crate::config::InputMode::Stylus
+                    && opts.stylus_style == "mouse"
+                    && guard.has_pointer()
+                {
+                    if !eraser || action >= 4 {
+                        guard.pen_as_mouse(
+                            abs_x,
+                            abs_y,
+                            action,
+                            &opts.stylus_button_primary,
+                            &opts.stylus_button_secondary,
+                        );
+                    }
+                    if matches!(action, 0..=3) {
+                        guard.last_pen_pos = (abs_x, abs_y);
+                    }
+                    return;
+                }
                 let ok = if let Some(ref mut dev) = guard.pen {
                     match dev.inject_pen(
                         abs_x,
@@ -338,8 +364,10 @@ pub(super) fn handle_event(
             if let Ok(mut guard) = uinput.lock() {
                 match kind.as_str() {
                     // Ctrl + wheel zooms in browsers and most viewers; fingers apart zoom in.
-                    "pinch" => guard
-                        .scroll_with_modifier(KEY_LEFTCTRL, (amount * PINCH_UNITS_PER_PX) as i32),
+                    "pinch" => guard.pinch_step((amount * PINCH_UNITS_PER_PX) as i32),
+                    "pinch_end" => guard.end_pinch(),
+                    // Super alone: the activities overview.
+                    "overview" => guard.tap_key_combo(&[KEY_LEFTMETA]),
                     "workspace_prev" => guard.tap_key_combo(&[KEY_LEFTMETA, KEY_PAGEUP]),
                     "workspace_next" => guard.tap_key_combo(&[KEY_LEFTMETA, KEY_PAGEDOWN]),
                     other => warn!("Unknown gesture {:?}", other),
@@ -499,6 +527,97 @@ mod tests {
         );
         assert_eq!(pressure(&f[4]), Some(0), "hover stays at zero");
         assert_eq!(pressure(&f[5]), Some(0), "the lift stays at zero");
+    }
+
+    #[test]
+    fn stylus_mouse_style_holds_left_from_pen_down_to_pen_up() {
+        let (dev, path) = device_over_file("penmouse");
+        let mut inj = InjectDevices::headless();
+        inj.pointer = Some(dev);
+        inj.pen_as_mouse(1000, 2000, 3, "right", "middle"); // hover
+        inj.pen_as_mouse(1000, 2000, 0, "right", "middle"); // tip down
+        for i in 1..=10 {
+            inj.pen_as_mouse(1000 + i * 40, 2000, 2, "right", "middle");
+        }
+        inj.pen_as_mouse(1400, 2000, 1, "right", "middle"); // tip up
+        let f = frames(&path);
+        let _ = std::fs::remove_file(&path);
+        let left: Vec<(usize, i32)> = f
+            .iter()
+            .enumerate()
+            .filter_map(|(i, fr)| {
+                fr.iter()
+                    .find(|e| e.0 == EV_KEY && e.1 == BTN_LEFT)
+                    .map(|e| (i, e.2))
+            })
+            .collect();
+        assert_eq!(left.len(), 2, "one press and one release, nothing in between: {left:?}");
+        assert_eq!(left[0].1, 1);
+        assert_eq!(left[1].1, 0);
+        let moves_while_held = f[left[0].0..left[1].0]
+            .iter()
+            .filter(|fr| fr.iter().any(|e| e.0 == EV_ABS && e.1 == ABS_X))
+            .count();
+        assert!(moves_while_held >= 10, "{moves_while_held} position frames while the button was held");
+        assert_eq!(inj.pen_mouse_buttons, 0);
+    }
+
+    #[test]
+    fn stylus_side_buttons_follow_the_configured_mapping() {
+        let (dev, path) = device_over_file("penbuttons");
+        let mut inj = InjectDevices::headless();
+        inj.pointer = Some(dev);
+        inj.pen_as_mouse(0, 0, 5, "right", "middle");
+        inj.pen_as_mouse(0, 0, 6, "right", "middle");
+        inj.pen_as_mouse(0, 0, 7, "right", "middle");
+        inj.pen_as_mouse(0, 0, 8, "right", "middle");
+        inj.pen_as_mouse(0, 0, 5, "none", "middle"); // disabled: nothing
+        inj.pen_as_mouse(0, 0, 7, "right", "right"); // swapped
+        let f = frames(&path);
+        let _ = std::fs::remove_file(&path);
+        let keys: Vec<(u16, i32)> = f
+            .iter()
+            .flat_map(|fr| fr.iter().filter(|e| e.0 == EV_KEY).map(|e| (e.1, e.2)))
+            .collect();
+        assert_eq!(
+            keys,
+            vec![
+                (BTN_RIGHT, 1),
+                (BTN_RIGHT, 0),
+                (BTN_MIDDLE, 1),
+                (BTN_MIDDLE, 0),
+                (BTN_RIGHT, 1)
+            ]
+        );
+        inj.release_pen_mouse();
+        assert_eq!(inj.pen_mouse_buttons, 0);
+    }
+
+    #[test]
+    fn pinch_holds_ctrl_for_every_step_and_lets_go_at_the_end() {
+        let (kb, kpath) = device_over_file("pinchkb");
+        let (mouse, mpath) = device_over_file("pinchmouse");
+        let mut inj = InjectDevices::headless();
+        inj.keyboard = Some(kb);
+        inj.mouse = Some(mouse);
+        inj.pinch_step(120);
+        inj.pinch_step(120);
+        inj.pinch_step(-120);
+        inj.end_pinch();
+        let k = frames(&kpath);
+        let m = frames(&mpath);
+        let _ = std::fs::remove_file(&kpath);
+        let _ = std::fs::remove_file(&mpath);
+        assert_eq!(
+            k,
+            vec![
+                vec![(EV_KEY, KEY_LEFTCTRL, 1)],
+                vec![(EV_KEY, KEY_LEFTCTRL, 0)]
+            ],
+            "Ctrl goes down once and comes up once"
+        );
+        assert_eq!(m.len(), 3, "three wheel steps");
+        assert!(inj.pinch_since.is_none());
     }
 
     #[test]

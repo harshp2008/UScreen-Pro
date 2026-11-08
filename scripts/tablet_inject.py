@@ -21,10 +21,17 @@ after each (so a shell script can drive it through a FIFO):
   drag X0 Y0 X1 Y1 STEPS [MS]     one finger travelling in equal steps
   scroll2 DY STEPS                two fingers moving together, DY pixels down
   tap-drag X Y DX                 tap, touch again at once, drag DX pixels
+  slowdrag X0 Y0 X1 Y1 SECONDS [JITTER_PX]
+                                  one finger crawling, with a real hand's tremor (about 80 Hz)
+  swipe N DX DY [MS]              N fingers land 15 ms apart, rest, travel together with jitter, lift
+  pen-drag X0 Y0 X1 Y1 STEPS [BARREL_MS]
+                                  pen hovers in, touches down, STEPS moves, lifts (optionally with
+                                  the barrel button held for BARREL_MS before touching down)
   sleep SECONDS
   quit
 """
 import math
+import random
 import shlex
 import struct
 import subprocess
@@ -33,6 +40,10 @@ import time
 
 UHID_DESTROY, UHID_CREATE2, UHID_INPUT2 = 1, 11, 12
 BUS_USB = 3
+
+# What a fingertip reports: contact width and height in raw units, and pressure. A real finger is
+# never a point; the palm filter and the tap logic look at these.
+CONTACT_W, CONTACT_H, CONTACT_P = 36, 30, 70
 
 RAW_W, RAW_H = 1600, 2560  # the panel's natural (portrait) size
 VIEW_W, VIEW_H = 2560, 1600  # what the app sees (display rotation 90)
@@ -52,7 +63,10 @@ def touch_descriptor(contacts=5):
             0x75, 0x10, 0x95, 0x01, 0x81, 0x02,  # X
             0x09, 0x31, 0x15, 0x00, 0x26, (RAW_H - 1) & 0xFF, (RAW_H - 1) >> 8,
             0x81, 0x02,  # Y
-            0x05, 0x0D, 0xC0,
+            0x05, 0x0D,
+            0x09, 0x48, 0x09, 0x49, 0x15, 0x00, 0x26, 0xFF, 0x00, 0x75, 0x08, 0x95, 0x02, 0x81, 0x02,  # width, height
+            0x09, 0x30, 0x95, 0x01, 0x81, 0x02,  # tip pressure
+            0xC0,
         ])
     d += bytes([0x05, 0x0D, 0x09, 0x54, 0x15, 0x00, 0x25, contacts, 0x75, 0x08, 0x95, 0x01, 0x81, 0x02, 0xC0])
     return bytes(d)
@@ -125,14 +139,15 @@ class Tablet:
         time.sleep(2.5)  # Android notices the new devices and maps them to the display
 
     # fingers: list of (id, rawx, rawy, tip)
-    def touch_frame(self, fingers):
+    def touch_frame(self, fingers, size=None):
+        w, h, p = size or (CONTACT_W, CONTACT_H, CONTACT_P)
         b = bytearray([1])
         for i in range(5):
             if i < len(fingers):
                 fid, x, y, tip = fingers[i]
-                b += bytes([tip & 1, fid]) + struct.pack("<HH", x, y)
+                b += bytes([tip & 1, fid]) + struct.pack("<HH", x, y) + bytes([w, h, p if tip else 0])
             else:
-                b += bytes([0, 0]) + struct.pack("<HH", 0, 0)
+                b += bytes([0, 0]) + struct.pack("<HH", 0, 0) + bytes([0, 0, 0])
         b.append(len(fingers))
         self.touch.report(bytes(b))
 
@@ -202,6 +217,68 @@ class Tablet:
         time.sleep(0.05)
         self.touch_frame([(0, *self.screen.raw(x1, y1), 0)])
         self.touch_frame([])
+        time.sleep(0.25)
+
+    def slow_drag(self, x0, y0, x1, y1, seconds, jitter=1.5):
+        """One finger crawling across the glass, with the tremor of a real hand."""
+        rnd = random.Random(11)
+        self.touch_frame(self.view_fingers([(x0, y0)]))
+        time.sleep(0.06)
+        n = max(int(seconds * 80), 1)
+        t0 = time.time()
+        for i in range(1, n + 1):
+            t = i / n
+            x = x0 + (x1 - x0) * t + rnd.uniform(-jitter, jitter)
+            y = y0 + (y1 - y0) * t + rnd.uniform(-jitter, jitter)
+            self.touch_frame(self.view_fingers([(x, y)]))
+            time.sleep(max(0.0, t0 + seconds * t - time.time()))
+        self.touch_frame([(0, *self.screen.raw(x1, y1), 0)])
+        self.touch_frame([])
+        time.sleep(0.25)
+
+    def swipe(self, n, dx, dy, ms=400):
+        """N fingers land one after another, rest a moment, travel together with jitter, lift."""
+        rnd = random.Random(5)
+        spacing, cx, cy = 150, VIEW_W / 2, VIEW_H / 2
+        base = [(cx + (i - (n - 1) / 2) * spacing, cy + rnd.uniform(-20, 20)) for i in range(n)]
+        for k in range(1, n + 1):
+            self.touch_frame(self.view_fingers(base[:k]))
+            time.sleep(0.015)
+        time.sleep(0.05)
+        steps = max(int(ms / 14), 1)
+        for i in range(1, steps + 1):
+            t = i / steps
+            pts = [(x + dx * t + rnd.uniform(-1.5, 1.5), y + dy * t + rnd.uniform(-1.5, 1.5)) for x, y in base]
+            self.touch_frame(self.view_fingers(pts))
+        end = [(x + dx, y + dy) for x, y in base]
+        for k in range(n, 0, -1):
+            fs = self.view_fingers(end[:k - 1]) + [(k - 1, *self.screen.raw(*end[k - 1]), 0)]
+            self.touch_frame(fs)
+        self.touch_frame([])
+        time.sleep(0.25)
+
+    def pen_drag(self, x0, y0, x1, y1, steps, barrel_ms=0):
+        """Pen hovers in, touches down, travels, lifts: a text selection."""
+        rx, ry = self.screen.raw(x0, y0)
+        for _ in range(3):
+            self.pen_frame(rx, ry)
+            time.sleep(0.02)
+        if barrel_ms:
+            t0 = time.time()
+            while (time.time() - t0) * 1000 < barrel_ms:
+                self.pen_frame(rx, ry, barrel=True)
+                time.sleep(0.02)
+        self.pen_frame(rx, ry, tip=True, pressure=900, barrel=bool(barrel_ms))
+        time.sleep(0.03)
+        for i in range(1, steps + 1):
+            t = i / steps
+            px, py = self.screen.raw(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)
+            self.pen_frame(px, py, tip=True, pressure=900 + (i % 5) * 20, barrel=bool(barrel_ms))
+            time.sleep(0.012)
+        ex, ey = self.screen.raw(x1, y1)
+        self.pen_frame(ex, ey, tip=False, barrel=bool(barrel_ms))
+        time.sleep(0.03)
+        self.pen_frame(ex, ey, in_range=False)
         time.sleep(0.25)
 
     def scroll2(self, dy, steps):
@@ -280,6 +357,12 @@ class Tablet:
             self.scroll2(f[0], int(f[1]))
         elif c == "tap-drag":
             self.tap_drag(f[0], f[1], f[2])
+        elif c == "slowdrag":
+            self.slow_drag(f[0], f[1], f[2], f[3], f[4], f[5] if len(f) > 5 else 1.5)
+        elif c == "swipe":
+            self.swipe(int(f[0]), f[1], f[2], int(f[3]) if len(f) > 3 else 400)
+        elif c == "pen-drag":
+            self.pen_drag(f[0], f[1], f[2], f[3], int(f[4]), int(f[5]) if len(f) > 5 else 0)
         elif c == "pen-button":
             self.pen_button(f[0], f[1], f[2])
         elif c == "pen-move":
