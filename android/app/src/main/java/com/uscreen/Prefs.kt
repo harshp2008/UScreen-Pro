@@ -93,6 +93,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("touch_enabled", true)
         set(v) = sp.edit().putBoolean("touch_enabled", v).apply()
 
+    /** Fingers act as a laptop touchpad for the computer's pointer instead of touching where they land. */
+    var touchpadMode: Boolean
+        get() = sp.getBoolean("touchpad_mode", false)
+        set(v) = sp.edit().putBoolean("touchpad_mode", v).apply()
+
     /**
      * Opt-in immersive mode: hides the settings handle, expands into cutout,
      * and maps the Android Back button to toggle the settings sheet.

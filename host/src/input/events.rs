@@ -34,6 +34,10 @@ pub(super) fn note_pen_action(action: u8) {
     }
 }
 
+/// High-resolution wheel units per tablet pixel of two-finger travel: one notch (120 units) per
+/// 40 px, about what a laptop touchpad feels like.
+const SCROLL_UNITS_PER_PX: f64 = 3.0;
+
 pub(super) fn handle_event(
     event: InputEvent,
     uinput: &Arc<std::sync::Mutex<InjectDevices>>,
@@ -271,6 +275,53 @@ pub(super) fn handle_event(
         // Already consumed by handle_connection; a second one is harmless.
         InputEvent::Auth { .. } => {}
 
+        InputEvent::Rel { dx, dy } => {
+            if let Ok(mut guard) = uinput.lock() {
+                // Keep the fraction: slow movements are often well under one pixel per sample
+                // and would otherwise never move at all.
+                let fx = guard.rel_rest.0 + dx;
+                let fy = guard.rel_rest.1 + dy;
+                let (ix, iy) = (fx.trunc(), fy.trunc());
+                guard.rel_rest = (fx - ix, fy - iy);
+                if let Some(dev) = guard.mouse() {
+                    if let Err(e) = dev.move_by(ix as i32, iy as i32) {
+                        warn!("Failed to move the touchpad pointer: {}", e);
+                    }
+                }
+            }
+        }
+        InputEvent::Button { button, down } => {
+            if let Ok(mut guard) = uinput.lock() {
+                let bit = match button {
+                    1 => 2u8,
+                    2 => 4,
+                    _ => 1,
+                };
+                if let Some(dev) = guard.mouse() {
+                    if dev.press(button, down).is_ok() {
+                        if down {
+                            guard.mouse_buttons |= bit
+                        } else {
+                            guard.mouse_buttons &= !bit
+                        }
+                    }
+                }
+            }
+        }
+        InputEvent::Scroll { dx, dy } => {
+            if let Ok(mut guard) = uinput.lock() {
+                let ux = (dx * SCROLL_UNITS_PER_PX) as i32;
+                let uy = (dy * SCROLL_UNITS_PER_PX) as i32;
+                let mut rest = guard.scroll_rest;
+                if let Some(dev) = guard.mouse() {
+                    if let Err(e) = dev.scroll_by(ux, uy, &mut rest) {
+                        warn!("Failed to scroll: {}", e);
+                    }
+                }
+                guard.scroll_rest = rest;
+            }
+        }
+
         InputEvent::Mode { pen_only } => {
             // Only publish a real change. A watch send always wakes every
             // follower, so re-sending the current mode would tear the virtual
@@ -422,6 +473,61 @@ mod tests {
         );
         assert_eq!(pressure(&f[4]), Some(0), "hover stays at zero");
         assert_eq!(pressure(&f[5]), Some(0), "the lift stays at zero");
+    }
+
+    #[test]
+    fn touchpad_motion_and_clicks_become_mouse_events() {
+        let (mut dev, path) = device_over_file("mouse");
+        dev.move_by(5, -3).unwrap();
+        dev.move_by(0, 0).unwrap(); // nothing to say, no frame
+        dev.press(0, true).unwrap();
+        dev.press(0, false).unwrap();
+        dev.press(1, true).unwrap();
+        let f = frames(&path);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(f.len(), 4);
+        assert_eq!(f[0], vec![(EV_REL, REL_X, 5), (EV_REL, REL_Y, -3)]);
+        assert_eq!(f[1], vec![(EV_KEY, BTN_LEFT, 1)]);
+        assert_eq!(f[2], vec![(EV_KEY, BTN_LEFT, 0)]);
+        assert_eq!(f[3], vec![(EV_KEY, BTN_RIGHT, 1)]);
+    }
+
+    #[test]
+    fn scroll_sends_hi_res_units_and_whole_notches_from_the_remainder() {
+        let (mut dev, path) = device_over_file("scroll");
+        let mut rest = (0, 0);
+        dev.scroll_by(0, 90, &mut rest).unwrap(); // not a notch yet
+        dev.scroll_by(0, 90, &mut rest).unwrap(); // 180 total: one notch, 60 left
+        dev.scroll_by(-240, 0, &mut rest).unwrap(); // two notches left
+        let f = frames(&path);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(f[0], vec![(EV_REL, REL_WHEEL_HI_RES, 90)]);
+        assert_eq!(
+            f[1],
+            vec![(EV_REL, REL_WHEEL_HI_RES, 90), (EV_REL, REL_WHEEL, 1)]
+        );
+        assert_eq!(
+            f[2],
+            vec![(EV_REL, REL_HWHEEL_HI_RES, -240), (EV_REL, REL_HWHEEL, -2)]
+        );
+        assert_eq!(rest, (0, 60));
+    }
+
+    #[test]
+    fn touchpad_messages_parse() {
+        let rel: InputEvent = serde_json::from_str(r#"{"type":"rel","dx":1.5,"dy":-2}"#).unwrap();
+        assert!(matches!(rel, InputEvent::Rel { dx, dy } if dx == 1.5 && dy == -2.0));
+        let b: InputEvent =
+            serde_json::from_str(r#"{"type":"button","button":1,"down":true}"#).unwrap();
+        assert!(matches!(
+            b,
+            InputEvent::Button {
+                button: 1,
+                down: true
+            }
+        ));
+        let sc: InputEvent = serde_json::from_str(r#"{"type":"scroll","dx":0,"dy":12}"#).unwrap();
+        assert!(matches!(sc, InputEvent::Scroll { dy, .. } if dy == 12.0));
     }
 
     #[test]

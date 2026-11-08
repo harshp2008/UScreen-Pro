@@ -268,6 +268,7 @@ fun UScreenMain(
     var showSettings by remember { mutableStateOf(false) }
     var showStats by remember { mutableStateOf(prefs?.showStats ?: false) }
     var touchOn by remember { mutableStateOf(prefs?.touchEnabled ?: true) }
+    var touchpadOn by remember { mutableStateOf(prefs?.touchpadMode ?: false) }
     var blankInPenMode by remember { mutableStateOf(prefs?.blankPenOnly ?: true) }
     var orientationChoice by remember { mutableStateOf(prefs?.orientation ?: Prefs.ORIENTATION_AUTO) }
     var immersiveOn by remember { mutableStateOf(prefs?.immersiveModeEnabled ?: false) }
@@ -565,6 +566,12 @@ fun UScreenMain(
                     touchOn = it
                     prefs?.touchEnabled = it
                     touchCapture?.setTouchEnabled(it)
+                },
+                touchpadMode = touchpadOn,
+                onTouchpadModeChange = {
+                    touchpadOn = it
+                    prefs?.touchpadMode = it
+                    touchCapture?.setTouchpadMode(it)
                 },
                 orientation = orientationChoice,
                 onOrientationChange = {

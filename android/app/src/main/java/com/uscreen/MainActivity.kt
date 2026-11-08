@@ -161,7 +161,10 @@ class MainActivity : AppCompatActivity() {
         checkKeyguardState()
 
         videoReceiver = VideoReceiver()
-        touchCapture = TouchCapture().also { it.setTouchEnabled(prefs.touchEnabled) }
+        touchCapture = TouchCapture().also {
+            it.setTouchEnabled(prefs.touchEnabled)
+            it.setTouchpadMode(prefs.touchpadMode)
+        }
         applyIntentExtras(intent, restart = false)
 
         // Close the host's latency measurement loop: every acknowledged frame

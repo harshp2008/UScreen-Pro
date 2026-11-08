@@ -75,9 +75,13 @@ Upstream `majmichu1/UScreen` is 40 commits ahead (up to `fae41ab`, release 1.2.1
 | `gui/src/main.rs` changes inside `6b9d36c`, `fae41ab`-era egui work | Legacy egui frontend. |
 | `f5bd728`, `ae8f1a0`, `8e0c630`, `c7164be`, `d1836d9` | Upstream's config reference (their schema), website files, wireless design note (this fork has its own pairing), changelog tidy. |
 
-### Evaluated, deferred
+### Touchpad mode (ported afterwards)
 
-Touchpad mode (`d30d203`, `74a9716`, `0394cb5`, `8fcfe9e`, #40): a relative-mouse uinput device on the host plus about 400 lines of gesture code and a new switch in the tablet's settings sheet. Upstream's changelog says it is not tried on a real tablet. It is a feature, not a fix, and needs a decision on how it should look in this fork's MD3 settings sheet and how it interacts with pointer hand-off, so it was left out rather than half-ported.
+`d30d203`, `74a9716`, `0394cb5`, `8fcfe9e` (#40) were first deferred, then ported on request.
+
+- Host: `UScreen Touchpad` relative-mouse uinput device (`input/uinput.rs`, made on first use and never mapped to an output), `rel` / `button` / `scroll` messages (`input/protocol.rs`, `input/events.rs`), held buttons released on disconnect. 3 new host tests.
+- Android: `TouchpadGestures.kt` (gesture recogniser, no Android types), hooks in `TouchCapture.handleMotionEvent`, `Prefs.touchpadMode`, a "Touchpad mode" switch in this fork's Compose `SettingsSheet`, applied live. `liftTouches()` now also cancels the recogniser, so disabling touch or blocking input while dragging cannot leave a button held. 14 JVM tests (`TouchpadGesturesTest`, needs `testImplementation junit`).
+- Adapted: the switch is disabled while "Touch input" is off, because touch input off already means no finger events.
 
 ### Verification of the sync
 

@@ -380,6 +380,13 @@ class TouchCapture {
                     sendPenEvent(event, actionIndex, 0, vw, vh)
                 } else {
                     if (penIsActive() || !touchEnabled) return true
+                    if (touchpadMode) {
+                        pad.down(
+                            event.getPointerId(actionIndex),
+                            event.getX(actionIndex), event.getY(actionIndex), event.eventTime
+                        )
+                        return true
+                    }
                     val slot = slotOf(event, actionIndex)
                     downSlots.add(slot)
                     val (nx, ny) = mapCoordinates(event.getX(actionIndex), event.getY(actionIndex), vw, vh)
@@ -418,6 +425,10 @@ class TouchCapture {
                         sendPenEvent(event, i, 2, vw, vh)
                     } else {
                         if (penIsActive() || !touchEnabled) continue
+                        if (touchpadMode) {
+                            pad.move(event.getPointerId(i), event.getX(i), event.getY(i))
+                            continue
+                        }
                         val (nx, ny) = mapCoordinates(event.getX(i), event.getY(i), vw, vh)
                         sendTouch(nx, ny, event.getPressure(i).toDouble(), 2, slotOf(event, i))
                     }
@@ -439,6 +450,10 @@ class TouchCapture {
                     notePenActivity()
                     sendPenEvent(event, actionIndex, 1, vw, vh)
                 } else {
+                    if (touchpadMode) {
+                        pad.up(event.getPointerId(actionIndex), event.eventTime)
+                        return true
+                    }
                     // Not filtered on palm: whatever the contact is called
                     // now, if we sent its DOWN we owe the host its UP.
                     val slot = slotOf(event, actionIndex)
@@ -450,6 +465,10 @@ class TouchCapture {
             }
 
             MotionEvent.ACTION_CANCEL -> {
+                if (touchpadMode) {
+                    pad.cancel()
+                    return true
+                }
                 for (i in 0 until pointerCount) {
                     if (isPalm(event, i)) continue
                     val (nx, ny) = mapCoordinates(event.getX(i), event.getY(i), vw, vh)
@@ -779,8 +798,44 @@ and consults it when choosing between the device's adb entries.
         liftTouches()
     }
 
-    /** Release every finger the host still thinks is pressed. */
+    /**
+     * Touchpad mode: fingers move the computer's pointer like a laptop touchpad instead of touching
+     * the screen where they land. The pen is not affected. Recognition happens here; the host only
+     * receives plain `rel`, `button` and `scroll` messages.
+     */
+    @Volatile var touchpadMode = false
+        private set
+
+    private val pad = TouchpadGestures(object : TouchpadGestures.Output {
+        override fun move(dx: Float, dy: Float) = sendRel("rel", dx, dy)
+        override fun scroll(dx: Float, dy: Float) = sendRel("scroll", dx, dy)
+        override fun button(button: Int, down: Boolean) {
+            webSocket?.send(JSONObject().apply {
+                put("type", "button")
+                put("button", button)
+                put("down", down)
+            }.toString())
+        }
+    })
+
+    /** Switch between direct touch and touchpad behaviour, letting go of anything the old mode held. */
+    fun setTouchpadMode(on: Boolean) {
+        if (touchpadMode == on) return
+        touchpadMode = on
+        liftTouches()
+    }
+
+    private fun sendRel(type: String, dx: Float, dy: Float) {
+        webSocket?.send(JSONObject().apply {
+            put("type", type)
+            put("dx", dx.toDouble())
+            put("dy", dy.toDouble())
+        }.toString())
+    }
+
+    /** Release every finger the host still thinks is pressed (and any button the touchpad holds). */
     private fun liftTouches() {
+        pad.cancel()
         if (downSlots.isNotEmpty()) {
             for (slot in downSlots.toList()) sendTouch(0f, 0f, 0.0, 1, slot)
             downSlots.clear()

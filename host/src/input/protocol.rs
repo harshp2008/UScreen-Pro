@@ -57,6 +57,19 @@ pub enum InputEvent {
     /// the other output and brings the virtual display up or down to match.
     #[serde(rename = "mode")]
     Mode { pen_only: bool },
+    /// Touchpad mode: the finger moved the pointer by this many tablet pixels, relative to where
+    /// it was. The tablet does the gesture recognition; the computer only gets plain mouse
+    /// events.
+    #[serde(rename = "rel")]
+    Rel { dx: f64, dy: f64 },
+    /// Touchpad mode: a mouse button went down or up. 0 = left, 1 = right, 2 = middle.
+    #[serde(rename = "button")]
+    Button { button: u8, down: bool },
+    /// Touchpad mode: two-finger scroll, in tablet pixels. Positive `dy` is the wheel turning
+    /// forward (the content moves down), positive `dx` the content moving right; the tablet
+    /// picks the direction it wants.
+    #[serde(rename = "scroll")]
+    Scroll { dx: f64, dy: f64 },
     /// Must be the first message on the socket. Proves the client is the
     /// tablet this daemon launched, not some other process on the loopback.
     #[serde(rename = "auth")]

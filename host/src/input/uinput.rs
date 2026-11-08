@@ -10,6 +10,7 @@ use super::*;
 // Linux input event constants
 pub(super) const EV_SYN: u16 = 0x00;
 pub(super) const EV_KEY: u16 = 0x01;
+pub(super) const EV_REL: u16 = 0x02;
 pub(super) const EV_ABS: u16 = 0x03;
 
 pub(super) const SYN_REPORT: u16 = 0x00;
@@ -32,12 +33,22 @@ pub(super) const ABS_TILT_Y: u16 = 0x1b;
 
 pub(super) const BTN_STYLUS: u16 = 0x14b;
 pub(super) const BTN_LEFT: u16 = 0x110;
+pub(super) const BTN_RIGHT: u16 = 0x111;
+pub(super) const BTN_MIDDLE: u16 = 0x112;
+
+pub(super) const REL_X: u16 = 0x00;
+pub(super) const REL_Y: u16 = 0x01;
+pub(super) const REL_HWHEEL: u16 = 0x06;
+pub(super) const REL_WHEEL: u16 = 0x08;
+pub(super) const REL_WHEEL_HI_RES: u16 = 0x0b;
+pub(super) const REL_HWHEEL_HI_RES: u16 = 0x0c;
 
 // uinput ioctl constants (modern UI_DEV_SETUP/UI_ABS_SETUP API — the legacy
 // uinput_user_dev write() API cannot declare axis resolution, which makes
 // libinput reject the device: "missing tablet capabilities ... resolution")
 pub(super) const UI_SET_EVBIT: libc::c_ulong = 0x40045564;
 pub(super) const UI_SET_KEYBIT: libc::c_ulong = 0x40045565;
+pub(super) const UI_SET_RELBIT: libc::c_ulong = 0x40045566;
 pub(super) const UI_SET_ABSBIT: libc::c_ulong = 0x40045567;
 pub(super) const UI_SET_PROPBIT: libc::c_ulong = 0x4004556e;
 pub(super) const UI_DEV_SETUP: libc::c_ulong = 0x405c5503;
@@ -60,9 +71,11 @@ pub(super) const UINPUT_VENDOR: u16 = 0x4553;
 pub(super) const PRODUCT_TOUCH: u16 = 0x0001;
 pub(super) const PRODUCT_PEN: u16 = 0x0002;
 pub(super) const PRODUCT_POINTER: u16 = 0x0003;
+pub(super) const PRODUCT_TOUCHPAD: u16 = 0x0004;
 pub(super) const TOUCH_DEVICE_NAME: &str = "UScreen Touch";
 pub(super) const PEN_DEVICE_NAME: &str = "UScreen Pen";
 pub(super) const POINTER_DEVICE_NAME: &str = "UScreen Pointer";
+pub(super) const TOUCHPAD_DEVICE_NAME: &str = "UScreen Touchpad";
 
 /// Device names and product ids for the N-th tablet. The first keeps the
 /// original names and ids so existing KWin input mappings stay valid; every
@@ -73,9 +86,13 @@ pub struct DeviceIdentity {
     pub touch: String,
     pub pen: String,
     pub pointer: String,
+    /// Plain relative mouse used by touchpad mode. Created on first use and never mapped to an
+    /// output (a relative device has no screen of its own).
+    pub touchpad: String,
     pub product_touch: u16,
     pub product_pen: u16,
     pub product_pointer: u16,
+    pub product_touchpad: u16,
     /// How many of the three devices exist: 2 when pointer_handoff is off.
     pub device_count: usize,
 }
@@ -93,9 +110,11 @@ impl DeviceIdentity {
             touch: format!("{}{}", TOUCH_DEVICE_NAME, suffix),
             pen: format!("{}{}", PEN_DEVICE_NAME, suffix),
             pointer: format!("{}{}", POINTER_DEVICE_NAME, suffix),
+            touchpad: format!("{}{}", TOUCHPAD_DEVICE_NAME, suffix),
             product_touch: PRODUCT_TOUCH + base,
             product_pen: PRODUCT_PEN + base,
             product_pointer: PRODUCT_POINTER + base,
+            product_touchpad: PRODUCT_TOUCHPAD + base,
             device_count: 3,
         }
     }
@@ -263,6 +282,90 @@ impl UInputDevice {
         info!("uinput pointer '{}' created", name);
         std::thread::sleep(std::time::Duration::from_millis(200));
         Ok(Self { file })
+    }
+
+    /// A plain relative mouse. Created the first time touchpad mode sends something, so people
+    /// who never use it never get the extra device.
+    pub(super) fn new_mouse(name: &str, product: u16) -> Result<Self> {
+        let file = Self::open_uinput()?;
+        let fd = file.as_raw_fd();
+
+        unsafe {
+            Self::ioctl_val(fd, UI_SET_EVBIT, EV_SYN as i32)?;
+            Self::ioctl_val(fd, UI_SET_EVBIT, EV_KEY as i32)?;
+            Self::ioctl_val(fd, UI_SET_EVBIT, EV_REL as i32)?;
+            for b in [BTN_LEFT, BTN_RIGHT, BTN_MIDDLE] {
+                Self::ioctl_val(fd, UI_SET_KEYBIT, b as i32)?;
+            }
+            for r in [
+                REL_X,
+                REL_Y,
+                REL_WHEEL,
+                REL_HWHEEL,
+                REL_WHEEL_HI_RES,
+                REL_HWHEEL_HI_RES,
+            ] {
+                Self::ioctl_val(fd, UI_SET_RELBIT, r as i32)?;
+            }
+            Self::dev_setup_and_create(fd, name, product)?;
+        }
+
+        info!("uinput mouse '{}' created", name);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        Ok(Self { file })
+    }
+
+    /// Move the pointer by whole pixels; a zero move writes nothing.
+    pub(super) fn move_by(&mut self, dx: i32, dy: i32) -> Result<()> {
+        if dx == 0 && dy == 0 {
+            return Ok(());
+        }
+        if dx != 0 {
+            self.emit(EV_REL, REL_X, dx)?;
+        }
+        if dy != 0 {
+            self.emit(EV_REL, REL_Y, dy)?;
+        }
+        self.syn()
+    }
+
+    /// Press or release a mouse button (0 left, 1 right, 2 middle).
+    pub(super) fn press(&mut self, button: u8, down: bool) -> Result<()> {
+        let code = match button {
+            1 => BTN_RIGHT,
+            2 => BTN_MIDDLE,
+            _ => BTN_LEFT,
+        };
+        self.emit(EV_KEY, code, down as i32)?;
+        self.syn()
+    }
+
+    /// Scroll by `dx`/`dy` in high-resolution units (120 per wheel notch, the kernel's
+    /// convention). The legacy whole-notch axes are fed from the remainder so applications that
+    /// ignore the hi-res ones still scroll.
+    pub(super) fn scroll_by(&mut self, dx: i32, dy: i32, rest: &mut (i32, i32)) -> Result<()> {
+        if dx == 0 && dy == 0 {
+            return Ok(());
+        }
+        if dy != 0 {
+            self.emit(EV_REL, REL_WHEEL_HI_RES, dy)?;
+            rest.1 += dy;
+            let notches = rest.1 / 120;
+            if notches != 0 {
+                self.emit(EV_REL, REL_WHEEL, notches)?;
+                rest.1 -= notches * 120;
+            }
+        }
+        if dx != 0 {
+            self.emit(EV_REL, REL_HWHEEL_HI_RES, dx)?;
+            rest.0 += dx;
+            let notches = rest.0 / 120;
+            if notches != 0 {
+                self.emit(EV_REL, REL_HWHEEL, notches)?;
+                rest.0 -= notches * 120;
+            }
+        }
+        self.syn()
     }
 
     unsafe fn abs_setup(fd: i32, code: u16, min: i32, max: i32, resolution: i32) -> Result<()> {
@@ -521,6 +624,17 @@ pub(super) struct InjectDevices {
     /// Takes over the cursor when the pen leaves proximity, so it stays where
     /// the user last pointed instead of vanishing.
     pub(super) pointer: Option<UInputDevice>,
+    /// Relative mouse for touchpad mode, made on first use.
+    pub(super) mouse: Option<UInputDevice>,
+    pub(super) mouse_name: String,
+    pub(super) mouse_product: u16,
+    /// Mouse buttons held down (bit 0 left, 1 right, 2 middle), so a dropped connection releases
+    /// them.
+    pub(super) mouse_buttons: u8,
+    /// Scroll left over after whole notches were sent, per axis.
+    pub(super) scroll_rest: (i32, i32),
+    /// Sub-pixel remainder of pointer movement.
+    pub(super) rel_rest: (f64, f64),
     pub(super) last_pen_pos: (i32, i32),
     /// Where the output the pen addresses sits on the desktop, as fractions
     /// of the whole desktop: (x, y, width, height).
@@ -579,5 +693,34 @@ impl InjectDevices {
             }
         }
         self.pen_button = false;
+
+        if self.mouse_buttons != 0 {
+            if let Some(ref mut dev) = self.mouse {
+                for (bit, code) in [(1u8, BTN_LEFT), (2, BTN_RIGHT), (4, BTN_MIDDLE)] {
+                    if self.mouse_buttons & bit != 0 {
+                        let _ = dev.emit(EV_KEY, code, 0);
+                    }
+                }
+                let _ = dev.syn();
+            }
+        }
+        self.mouse_buttons = 0;
+        self.rel_rest = (0.0, 0.0);
+        self.scroll_rest = (0, 0);
+    }
+
+    /// The touchpad-mode mouse, created on first use. `None` when uinput is not available, in
+    /// which case the events are dropped (and logged once, by the failed creation).
+    pub(super) fn mouse(&mut self) -> Option<&mut UInputDevice> {
+        if self.mouse.is_none() {
+            match UInputDevice::new_mouse(&self.mouse_name, self.mouse_product) {
+                Ok(dev) => self.mouse = Some(dev),
+                Err(e) => {
+                    warn!("No touchpad device: {}. Touchpad mode will do nothing.", e);
+                    return None;
+                }
+            }
+        }
+        self.mouse.as_mut()
     }
 }

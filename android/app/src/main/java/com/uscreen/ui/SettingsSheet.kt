@@ -119,6 +119,8 @@ fun SettingsSheet(
     onBlankPenOnlyChange: (Boolean) -> Unit,
     touchEnabled: Boolean,
     onTouchEnabledChange: (Boolean) -> Unit,
+    touchpadMode: Boolean = false,
+    onTouchpadModeChange: (Boolean) -> Unit = {},
     orientation: Int,
     onOrientationChange: (Int) -> Unit,
     onApply: (bitrateKbps: Int, fps: Int) -> Unit,
@@ -507,6 +509,29 @@ fun SettingsSheet(
                 Switch(
                     checked = touchEnabled,
                     onCheckedChange = onTouchEnabledChange,
+                    colors = SwitchDefaults.colors()
+                )
+            }
+            Spacer(Modifier.height(20.dp))
+
+            // Fingers as a laptop touchpad. Applies at once, like touch input.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Touchpad mode", fontSize = 14.sp, color = Muted)
+                    Text(
+                        "Fingers move the pointer like a laptop touchpad: tap to click, two fingers to scroll or right-click. The pen is unchanged. Turn on Graphics tablet as well to use the whole tablet as a touchpad with a dark screen",
+                        fontSize = 11.sp,
+                        color = Muted
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(
+                    checked = touchpadMode,
+                    onCheckedChange = onTouchpadModeChange,
+                    enabled = touchEnabled,
                     colors = SwitchDefaults.colors()
                 )
             }

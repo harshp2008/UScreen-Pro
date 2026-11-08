@@ -27,6 +27,12 @@ Ported from upstream UScreen 1.2.14 (backend only; see
 - Android: a decoder that fails fatally is rebuilt at the next fallback tier
   instead of leaving the picture frozen; settings the host already accepted are
   not replayed on reconnect.
+- Touchpad mode ([#40](https://github.com/majmichu1/UScreen/issues/40)): a
+  switch in the tablet's settings makes fingers move the computer's pointer like
+  a laptop touchpad. Tap clicks, tap and drag drags, two fingers scroll, a
+  two-finger tap right-clicks, three fingers middle-click. The pen is not
+  affected. The computer gets a plain mouse device ("UScreen Touchpad"), made
+  the first time it is used.
 - `uscreen check-encoder <name>` reports whether an encoder can encode a frame.
 - `uscreen doctor` mentions NVIDIA next to VAAPI and no longer says KWin 6.8.2
   always crashes (patched builds exist).
