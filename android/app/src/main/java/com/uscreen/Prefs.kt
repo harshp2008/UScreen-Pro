@@ -28,11 +28,34 @@ class Prefs(context: Context) {
         const val ORIENTATION_CAMERA_UP = 1
         const val ORIENTATION_CAMERA_DOWN = 2
 
+        /** Values of [themeMode]; the numbers are AppCompatDelegate's own MODE_NIGHT_* constants' order, not their values. */
+        const val THEME_SYSTEM = 0
+        const val THEME_LIGHT = 1
+        const val THEME_DARK = 2
+
         /** Values of [preferredTransport]. */
         const val TRANSPORT_AUTO = 0
         const val TRANSPORT_USB = 1
         const val TRANSPORT_WIFI = 2
     }
+
+    /** The host sent "unpaired" (Forget Device); cleared when the host greets this app again. */
+    var unpairedByHost: Boolean
+        get() = sp.getBoolean("unpaired_by_host", false)
+        set(v) = sp.edit().putBoolean("unpaired_by_host", v).apply()
+
+    /** Light, Dark or System default ([THEME_SYSTEM], the default). */
+    var themeMode: Int
+        get() = sp.getInt("theme_mode", THEME_SYSTEM)
+        set(v) = sp.edit().putInt("theme_mode", v).apply()
+
+    /**
+     * Forward touches while the device is locked. Off by default: a locked screen swallows taps meant for
+     * the lock screen, so the app covers the picture and sends nothing until it is unlocked.
+     */
+    var touchOnLockScreen: Boolean
+        get() = sp.getBoolean("touch_on_lock_screen", false)
+        set(v) = sp.edit().putBoolean("touch_on_lock_screen", v).apply()
 
     var preferredTransport: Int
         get() = sp.getInt("preferred_transport", TRANSPORT_AUTO)
@@ -120,4 +143,5 @@ class Prefs(context: Context) {
     var keepDisplayAliveWhenLocked: Boolean
         get() = sp.getBoolean("keep_display_alive_when_locked", true)
         set(v) = sp.edit().putBoolean("keep_display_alive_when_locked", v).apply()
+
 }

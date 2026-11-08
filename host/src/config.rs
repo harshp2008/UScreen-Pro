@@ -1,3 +1,9 @@
+//! `~/.config/uscreen/config.toml`: global stream settings plus one `[tablets.<id>]` profile per
+//! paired device. Shared with the GUI, so keys must stay backwards compatible.
+//!
+//! Loading clamps every numeric setting to a sane range because values arrive from the tablet
+//! and the GUI and, once saved, would otherwise persist a bad number forever.
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -10,12 +16,14 @@ use std::path::PathBuf;
 /// a bad number pushed once from the tablet stays in the config file and keeps
 /// poisoning every subsequent run.
 pub const MAX_BITRATE_KBPS: u32 = 60_000;
+/// Lowest bitrate accepted; below this the picture is unusable and rate control misbehaves.
 pub const MIN_BITRATE_KBPS: u32 = 1_000;
 
 /// The generated EDID caps the virtual mode at 90 Hz (EDID 1.4 stores the pixel
 /// clock in 16 bits, and 2960x1848@120 overflows it), so anything above 90
 /// would only ever produce duplicate frames.
 pub const MAX_FPS: u32 = 90;
+/// Lowest frame rate accepted.
 pub const MIN_FPS: u32 = 10;
 
 /// Constant-quality target for the encoder (lower = sharper, more bits).
@@ -26,7 +34,9 @@ pub const MIN_FPS: u32 = 10;
 /// free. Text sharpness is ultimately limited by 4:2:0 chroma subsampling, not
 /// by this number — below roughly 16 there is nothing left to gain.
 pub const DEFAULT_QUALITY: u32 = 18;
+/// Sharpest constant-quality value accepted; lower numbers only burn bandwidth.
 pub const MIN_QUALITY: u32 = 12;
+/// Blurriest constant-quality value accepted.
 pub const MAX_QUALITY: u32 = 32;
 
 /// What one device reported about itself, and anything set specifically for
@@ -77,13 +87,13 @@ pub struct TabletProfile {
     /// Preferred transport ("auto", "usb", "wifi") requested by the user or APK
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preferred_transport: Option<String>,
+    /// `Some(false)` when wireless setup was skipped in the GUI wizard; `None` counts as configured.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wireless_configured: Option<bool>,
     /// Android API level (SDK int, e.g. 36)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_level: Option<u32>,
 }
-
-#[allow(dead_code)]
-pub type DeviceProfile = TabletProfile;
 
 impl TabletProfile {
     /// Friendly display name: nickname if provided, else model label, else fallback.
@@ -196,6 +206,11 @@ pub struct FileConfig {
     pub hevc_low_latency_tuning: bool,
     /// Keep virtual display active when tablet disconnects (throttled to 1 FPS).
     pub keep_alive: bool,
+    /// Compatibility mode for the mouse cursor on the virtual screen: plain
+    /// libevdi compositing without the X11 boundary-nudge helper (slower, but it
+    /// depends on nothing compositor-specific). Off = the fast path.
+    #[serde(default)]
+    pub software_cursor: bool,
     /// Application window locking: allowed apps on the virtual monitor.
     #[serde(default)]
     pub locked_apps: Vec<String>,
@@ -206,6 +221,11 @@ pub struct FileConfig {
     /// Automatically enable Wi-Fi ADB when a device is plugged in via USB.
     #[serde(default = "default_true")]
     pub auto_enable_wifi_adb: bool,
+    /// Stream any device that shows up on adb, and save a profile for it. Off by default: a
+    /// device is paired explicitly (GUI "Add device"), which creates its `[tablets.<serial>]`
+    /// entry. Until then it is a "new device" and the daemon leaves it alone.
+    #[serde(default)]
+    pub auto_pair_new_devices: bool,
     /// Protocol/daemon version.
     #[serde(default = "default_version")]
     pub version: String,
@@ -247,9 +267,11 @@ impl Default for FileConfig {
             max_performance_mode: false,
             hevc_low_latency_tuning: true,
             keep_alive: false,
+            software_cursor: false,
             locked_apps: Vec::new(),
             allow_legacy_fallback: false,
             auto_enable_wifi_adb: true,
+            auto_pair_new_devices: false,
         }
     }
 }
@@ -264,6 +286,7 @@ pub enum Position {
 }
 
 impl Position {
+    /// Parse a position name case-insensitively; `top`/`bottom` are accepted as aliases of `above`/`below`.
     pub fn parse(s: &str) -> Option<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
             "right" => Some(Position::Right),
@@ -281,12 +304,18 @@ impl Position {
     }
 }
 
+/// Location of `config.toml`, shared with the Tauri GUI (`~/.config/uscreen/config.toml`).
 pub fn config_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
     PathBuf::from(home).join(".config/uscreen/config.toml")
 }
 
 impl FileConfig {
+    /// Read and sanitise the config file.
+    ///
+    /// A missing or unparsable file yields defaults, and out-of-range values are
+    /// clamped (with a warning) so a bad number pushed once cannot poison every
+    /// later run.
     pub fn load() -> Self {
         let path = config_path();
         let mut cfg = match std::fs::read_to_string(&path) {
@@ -336,6 +365,15 @@ impl FileConfig {
         }
     }
 
+    /// Whether a device has a saved profile, under its hardware serial or the adb serial it is
+    /// currently reached through (older profiles are keyed by `ip:port`).
+    pub fn is_paired(&self, hw_id: &str, serial: &str) -> bool {
+        self.auto_pair_new_devices
+            || self.tablets.contains_key(hw_id)
+            || self.tablets.contains_key(serial)
+    }
+
+    /// Write the config back as pretty TOML, logging which lines changed so settings that drift unexpectedly can be traced.
     pub fn save(&self) -> Result<()> {
         let path = config_path();
         if let Some(parent) = path.parent() {
@@ -345,15 +383,20 @@ impl FileConfig {
         // Say exactly which lines change. Settings that drift with nobody
         // touching them are impossible to chase down otherwise.
         if let Ok(old) = std::fs::read_to_string(&path) {
-            let before: std::collections::BTreeMap<&str, &str> = old
-                .lines()
-                .filter_map(|l| l.split_once(" = "))
-                .collect();
+            let before: std::collections::BTreeMap<&str, &str> =
+                old.lines().filter_map(|l| l.split_once(" = ")).collect();
             let changed: Vec<String> = text
                 .lines()
                 .filter_map(|l| l.split_once(" = "))
                 .filter(|(k, v)| before.get(k) != Some(v))
-                .map(|(k, v)| format!("{} = {} (was {})", k, v, before.get(k).unwrap_or(&"<unset>")))
+                .map(|(k, v)| {
+                    format!(
+                        "{} = {} (was {})",
+                        k,
+                        v,
+                        before.get(k).unwrap_or(&"<unset>")
+                    )
+                })
                 .collect();
             if !changed.is_empty() {
                 tracing::info!("Config written: {}", changed.join(", "));
@@ -404,7 +447,15 @@ height = 1080
         assert!(serialized.contains("encoder = \"hevc_vaapi\""));
         let re_parsed: FileConfig = toml::from_str(&serialized).expect("re-parse");
         assert_eq!(re_parsed.tablets.get("DEVICE_B").unwrap().encoder, None);
-        assert_eq!(re_parsed.tablets.get("DEVICE_A").unwrap().encoder.as_deref(), Some("hevc_vaapi"));
+        assert_eq!(
+            re_parsed
+                .tablets
+                .get("DEVICE_A")
+                .unwrap()
+                .encoder
+                .as_deref(),
+            Some("hevc_vaapi")
+        );
     }
 
     #[test]
@@ -415,7 +466,7 @@ fps = 60
 quality = 18
 bitrate = 20000
 
-[tablets.R52X708AEHK]
+[tablets.TABLET_SERIAL]
 label = "SM-X616B"
 nickname = "My Desk Tablet"
 width = 2560
@@ -430,8 +481,8 @@ position = "left"
 "#;
 
         let cfg: FileConfig = toml::from_str(toml_data).expect("parse config");
-        let profile = cfg.tablets.get("R52X708AEHK").expect("profile exists");
-        assert_eq!(profile.display_name("R52X708AEHK"), "My Desk Tablet");
+        let profile = cfg.tablets.get("TABLET_SERIAL").expect("profile exists");
+        assert_eq!(profile.display_name("TABLET_SERIAL"), "My Desk Tablet");
         assert_eq!(profile.nickname.as_deref(), Some("My Desk Tablet"));
         assert_eq!(profile.fps, Some(30));
         assert_eq!(profile.quality, Some(16));
@@ -447,7 +498,7 @@ position = "left"
         assert!(serialized.contains("fps = 30"));
 
         let reparsed: FileConfig = toml::from_str(&serialized).expect("reparse");
-        let p2 = reparsed.tablets.get("R52X708AEHK").unwrap();
+        let p2 = reparsed.tablets.get("TABLET_SERIAL").unwrap();
         assert_eq!(p2.nickname.as_deref(), Some("My Desk Tablet"));
         assert_eq!(p2.ten_bit, Some(true));
     }
@@ -488,6 +539,9 @@ locked_apps = ["com.google.android.youtube"]
         let p = cfg.tablets.get("R52WA0A0KED").unwrap();
         assert_eq!(p.keep_alive, Some(false));
         assert_eq!(p.wifi_address.as_deref(), Some("192.168.1.150:5555"));
-        assert_eq!(p.locked_apps.as_ref().unwrap(), &vec!["com.google.android.youtube"]);
+        assert_eq!(
+            p.locked_apps.as_ref().unwrap(),
+            &vec!["com.google.android.youtube"]
+        );
     }
 }

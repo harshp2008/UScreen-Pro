@@ -15,6 +15,15 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
+/**
+ * Receives the host's video stream over loopback TCP (port 8890, via `adb reverse`) and decodes it
+ * to a [SurfaceView] with MediaCodec.
+ *
+ * The wire format is length-prefixed packets of three kinds: codec config (SPS/PPS/VPS), frame,
+ * and host shutdown. The first 64 bytes sent are the session token. The receiver reconnects on its
+ * own, rebuilds the decoder when the surface or codec changes, and counts frames and bytes once a
+ * second for the on-screen stats.
+ */
 class VideoReceiver {
     companion object {
         const val HOST = "127.0.0.1"
@@ -25,6 +34,8 @@ class VideoReceiver {
         const val MAX_FRAME_SIZE = 8 * 1024 * 1024
         const val PACKET_TYPE_CONFIG = 0
         const val PACKET_TYPE_FRAME = 1
+        /** Sent by the daemon as it exits cleanly: payload is {"type":"host_shutdown"}. */
+        const val PACKET_TYPE_HOST_SHUTDOWN = 2
 
         /** type byte + 4-byte big-endian sequence number */
         const val FRAME_HEADER_SIZE = 5
@@ -54,22 +65,24 @@ class VideoReceiver {
     @Volatile private var codecAlive = false
     @Volatile var host: String = HOST
 
+    /**
+     * True between [start] and [stop].
+     */
     fun isRunning(): Boolean = isRunning
 
     var onConnected: (() -> Unit)? = null
     var onDisconnected: (() -> Unit)? = null
     var onDiagnosticUpdate: ((String) -> Unit)? = null
 
-    fun restartSocket() {
-        synchronized(this) {
-            try {
-                socket?.close()
-            } catch (_: Exception) {}
-            socket = null
-            inputStream = null
-            onDisconnected?.invoke()
-            onDiagnosticUpdate?.invoke("Restarting connection...")
-        }
+    /** True once the daemon announced it is stopping; the reconnect loop idles until [retryConnection]. */
+    @Volatile var hostShutdown = false
+        private set
+    var onHostShutdown: (() -> Unit)? = null
+
+    /** User-requested retry from the Host Offline screen: forget the shutdown and reconnect now. */
+    fun retryConnection() {
+        hostShutdown = false
+        try { socket?.close() } catch (_: Exception) {}
     }
 
     /**
@@ -79,16 +92,20 @@ class VideoReceiver {
      */
     var onFrameRendered: ((seq: Int, decodeUs: Int) -> Unit)? = null
 
-    /// Which bitstream the host is sending. Set from the host's greeting
-    /// before the stream starts; the frames carry nothing that says which
-    /// codec they are, so guessing wrong means a decoder that never outputs.
+    /**
+     * Which bitstream the host is sending. Set from the host's greeting
+     * before the stream starts; the frames carry nothing that says which
+     * codec they are, so guessing wrong means a decoder that never outputs.
+     */
     @Volatile var mimeType: String = MIME_TYPE
 
-    /// Host port to connect to for video stream. Defaults to PORT (8890).
+    /** Host port to connect to for video stream. Defaults to PORT (8890). */
     @Volatile var port: Int = PORT
 
-    /// Session token; written as the first 64 bytes on the socket. The host
-    /// sends nothing until it has seen it.
+    /**
+     * Session token; written as the first 64 bytes on the socket. The host
+     * sends nothing until it has seen it.
+     */
     @Volatile var token: String? = null
 
     private var frameCallbackThread: HandlerThread? = null
@@ -234,6 +251,9 @@ class VideoReceiver {
     private var job: Job? = null
     private var scope: CoroutineScope? = null
 
+    /**
+     * Provide the surface to decode onto; decoding starts once it is valid.
+     */
     fun setSurface(surfaceView: SurfaceView) {
         val surface = surfaceView.holder.surface
         if (surface == null || !surface.isValid) {
@@ -446,6 +466,9 @@ class VideoReceiver {
         }
     }
 
+    /**
+     * Launch the connect/receive loop and the once-a-second FPS and bitrate counter. Idempotent.
+     */
     fun start() {
         synchronized(this) {
             if (isRunning) return
@@ -479,6 +502,12 @@ class VideoReceiver {
                     delay(200)
                 }
                 if (!isRunning) return
+
+                // The daemon said it is gone: stop hammering the port until the user retries.
+                if (hostShutdown) {
+                    delay(250)
+                    continue
+                }
 
                 // Ensure codec is set up
                 val codecReady = synchronized(this@VideoReceiver) {
@@ -575,6 +604,13 @@ class VideoReceiver {
                                 ptsFor(seq)
                             )
                         }
+                        PACKET_TYPE_HOST_SHUTDOWN -> {
+                            Log.i(TAG, "Host announced shutdown")
+                            hostShutdown = true
+                            onDisconnected?.invoke()
+                            onHostShutdown?.invoke()
+                            break@receiveLoop
+                        }
                         else -> {
                             Log.w(TAG, "Unknown packet type: $packetType, reconnecting")
                             break@receiveLoop
@@ -582,7 +618,7 @@ class VideoReceiver {
                     }
                 }
             } catch (e: java.io.EOFException) {
-                if (isRunning) {
+                if (isRunning && !hostShutdown) {
                     Log.i(TAG, "Stream ended (server closed)")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke("Stream closed by host daemon.")
@@ -739,9 +775,18 @@ class VideoReceiver {
         }
     }
 
+    /**
+     * Frames received during the last full second.
+     */
     fun getFps(): Float = currentFps
+    /**
+     * Megabits received during the last full second.
+     */
     fun getMbps(): Float = currentMbps
 
+    /**
+     * Stop the loops, close the socket first (to unblock pending reads) and release the decoder.
+     */
     fun stop() {
         isRunning = false
         codecAlive = false

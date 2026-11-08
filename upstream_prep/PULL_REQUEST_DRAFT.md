@@ -171,6 +171,6 @@ Comprehensive documentation, experimental benchmarks, raw unedited kernel traces
 - [x] **GUI Lifecycle Decoupling**: Verified empirically that terminating `uscreen-gui` leaves `uscreen start`, `evdi_helper`, and `ffmpeg` running uninterrupted in the background.
 - [x] **Keep-Alive 1 FPS Standby**: Verified that force-stopping the client app retains the Mutter DRM output and throttles `evdi_helper` to 1 FPS via `SIGUSR1`, instantly resuming upon client restart.
 - [x] **App Locking Extension**: Verified GNOME Shell extension package (`extensions/uscreen-app-lock/`) loads cleanly and synchronizes with `app_lock.json` to move unauthorized windows to the primary display.
-- [x] **Empirical Process Routing**: Verified via `ps aux | grep -E "evdi_helper|ffmpeg"` that Device A (`R52X708AEHK`) runs `hevc_vaapi` at 30 FPS on EVDI card 2 while Device B (`RZCX809Y0FT`) simultaneously runs `h264_vaapi` at 90 FPS on EVDI card 0.
+- [x] **Empirical Process Routing**: Verified via `ps aux | grep -E "evdi_helper|ffmpeg"` that Device A (`TABLET_SERIAL`) runs `hevc_vaapi` at 30 FPS on EVDI card 2 while Device B (`PHONE_SERIAL`) simultaneously runs `h264_vaapi` at 90 FPS on EVDI card 0.
 - [x] **Android Client Validation**: Compiled and tested across Android 12, 13, and 14 with hardware HEVC and H.264 decoders.
 - [x] **End-to-End Latency**: Median encode-to-display latency clocked at **~19.8ms - 20.8ms** with wire transmission at **~4.0ms**.

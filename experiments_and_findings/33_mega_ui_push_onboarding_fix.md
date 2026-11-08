@@ -28,7 +28,7 @@ The UScreen system provides an ultra-low latency, hardware-accelerated Linux des
 
 3. **PC GUI Sidebar Alignment & Updater Modal UX (Task 3):**
    - *Sidebar Red Line Alignment Failure:* `egui::Button::selectable` and `SelectableLabel` center content and apply internal widget margins, causing the icons and labels of sidebar items to be indented inconsistently relative to the `"NAVIGATION"` and `"DEVICES"` section headers.
-   - *Unintuitive Updater Modal:* The modal previously displayed opaque serial numbers (e.g. `R52X708AEHK`) rather than the user-configured device Nickname (e.g., "Galaxy Tab S9 FE+"). The font sizes were small and dense, and the optional "Force clean reinstall" checkbox created cognitive burden. In a development and rapid-iteration environment, performing a clean uninstall prior to installation guarantees deterministic state.
+   - *Unintuitive Updater Modal:* The modal previously displayed opaque serial numbers (e.g. `TABLET_SERIAL`) rather than the user-configured device Nickname (e.g., "Galaxy Tab S9 FE+"). The font sizes were small and dense, and the optional "Force clean reinstall" checkbox created cognitive burden. In a development and rapid-iteration environment, performing a clean uninstall prior to installation guarantees deterministic state.
    - *Post-Installation Version Mismatch Lag:* When `adb install` completes, Android's `PackageManagerService` takes hundreds of milliseconds to flush package state. Querying `dumpsys package` immediately or waiting for the slow GUI status loop caused false "Version Mismatch" warnings.
 
 4. **Build Hash Desynchronization & Toast Clutter (Task 4):**
@@ -54,7 +54,7 @@ Official Android documentation (`android.hardware.usb.UsbManager` and `android.p
 
 ### 2.2 ADB Server Protocol: `track-devices` and `get-state`
 The ADB server (`adbd` host daemon communication protocol) supports persistent asynchronous socket tracking:
-- `adb track-devices`: Commands the ADB server to stream client attachment states. Each notification frame begins with a 4-hex-digit length header followed by lines formatted as `<serial>\t<state>\n` (e.g. `0013R52X708AEHK\tdevice\n`). When a cable is connected or disconnected, the ADB server immediately pushes a notification across the stdout pipe with 0ms polling delay.
+- `adb track-devices`: Commands the ADB server to stream client attachment states. Each notification frame begins with a 4-hex-digit length header followed by lines formatted as `<serial>\t<state>\n` (e.g. `0013TABLET_SERIAL\tdevice\n`). When a cable is connected or disconnected, the ADB server immediately pushes a notification across the stdout pipe with 0ms polling delay.
 - `adb -s <serial> get-state`: Queries the ADB server's internal state machine for `<serial>`. It returns `device`, `offline`, `unauthorized`, or `bootloader`. When the app is backgrounded, `get-state` continues to return `device`, unambiguously distinguishing between an unauthorized RSA key handshake failure and an idle/backgrounded client application.
 
 ### 2.3 Unified Build Scripting & Git Metadata Plumbing
@@ -122,7 +122,7 @@ To guarantee version synchronization across disparate compiler ecosystems (Rust 
 ### Task 0: Git Version Control & Lab Setup
 1. Verify clean checkout on branch `main`.
 2. Initialize this lab notebook (`experiments_and_findings/33_mega_ui_push_onboarding_fix.md`).
-3. Document baseline state, connected hardware (`R52X708AEHK`), and running processes.
+3. Document baseline state, connected hardware (`TABLET_SERIAL`), and running processes.
 
 ### Task 1: Interactive Android Onboarding & Troubleshooter
 1. In `android/app/src/main/java/com/uscreen/Prefs.kt`:
@@ -245,7 +245,7 @@ Starting uscreen daemon v8bb13b5-dirty
 $ strings target/release/uscreen-gui | grep -E "8bb13b5-dirty" | head -n 1
 UScreen version: 8bb13b5-dirty
 
-$ adb -s R52X708AEHK shell dumpsys package com.uscreen | grep versionName
+$ adb -s TABLET_SERIAL shell dumpsys package com.uscreen | grep versionName
     versionName=8bb13b5-dirty
 ```
 
@@ -253,14 +253,14 @@ $ adb -s R52X708AEHK shell dumpsys package com.uscreen | grep versionName
 Verified intent navigation:
 1. `Settings.ACTION_DEVICE_INFO_SETTINGS`:
 ```bash
-$ adb -s R52X708AEHK shell am start -a android.settings.DEVICE_INFO_SETTINGS
+$ adb -s TABLET_SERIAL shell am start -a android.settings.DEVICE_INFO_SETTINGS
 Starting: Intent { act=android.settings.DEVICE_INFO_SETTINGS }
 ```
 Successfully navigates directly to the Android "About Device" / "Build Number" page for tapping to enable Developer Options.
 
 2. `Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS`:
 ```bash
-$ adb -s R52X708AEHK shell am start -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS
+$ adb -s TABLET_SERIAL shell am start -a android.settings.APPLICATION_DEVELOPMENT_SETTINGS
 Starting: Intent { act=android.settings.APPLICATION_DEVELOPMENT_SETTINGS }
 ```
 Successfully navigates directly to Developer Options where USB and Wireless Debugging can be enabled.
@@ -270,10 +270,10 @@ Successfully navigates directly to Developer Options where USB and Wireless Debu
 Spawning `adb track-devices` streams device status transitions with 0ms polling delay:
 ```bash
 $ adb track-devices
-0013R52X708AEHK	device
+0013TABLET_SERIAL	device
 ```
 2. **Backgrounding & Reconnecting without RSA Warning**:
-App was backgrounded via `KEYCODE_HOME` on device `R52X708AEHK`.
+App was backgrounded via `KEYCODE_HOME` on device `TABLET_SERIAL`.
 The host verified `adb -s <serial> get-state` returned `device`, keeping state clean ("Waiting for app...") rather than throwing a false RSA Fingerprint error.
 Upon returning to the foreground, the app sent an instant reconnect ping, immediately re-asserting the `adb reverse` tunnels:
 

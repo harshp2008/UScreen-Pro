@@ -1,0 +1,7 @@
+=== after forgetting the USB tablet
+List of devices attached
+TABLET_SERIAL            device usb:3-6 product:gts9fepins model:SM_X616B device:gts9fep transport_id:24
+[tablets."192.168.1.101:5555"]
+known_hosts bytes: 0 (was 26)
+2026-11-06T22:18:14.435590Z  INFO uscreen::session: 1057: Forgot device TABLET_SERIAL: stopped ["slot 1"]
+2026-11-06T22:18:14.443788Z  INFO uscreen::session: 580: Device TABLET_SERIAL (TABLET_SERIAL) is connected but not paired; add it in the GUI (Add device) or set auto_pair_new_devices = true

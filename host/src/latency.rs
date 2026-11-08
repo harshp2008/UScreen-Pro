@@ -25,9 +25,61 @@ const MAX_TRACKED: usize = 256;
 /// Samples kept for the percentile report. One report covers ~5s.
 const MAX_SAMPLES: usize = 1024;
 
+/// One acknowledged frame, kept for ~60 s so `uscreen doctor --latency` can ask
+/// for the percentiles of "the last N seconds" over the control socket.
+struct Recent {
+    at: Instant,
+    /// Encoder output -> on the tablet's screen, microseconds.
+    total_us: u32,
+    /// Capture-ready -> on screen (host stages + wire/2 + decode), when the
+    /// helper gave detailed timing.
+    e2e_us: Option<u32>,
+    host_us: Option<u32>,
+}
+
+fn recent() -> &'static Mutex<VecDeque<Recent>> {
+    static R: std::sync::OnceLock<Mutex<VecDeque<Recent>>> = std::sync::OnceLock::new();
+    R.get_or_init(|| Mutex::new(VecDeque::new()))
+}
+
+/// Percentiles over the last `secs` seconds of acknowledged frames, as one JSON line.
+pub fn recent_json(secs: u64) -> String {
+    let now = Instant::now();
+    let (mut total, mut e2e, mut host) = (Vec::new(), Vec::new(), Vec::new());
+    if let Ok(g) = recent().lock() {
+        for r in g
+            .iter()
+            .filter(|r| now.duration_since(r.at).as_secs() < secs)
+        {
+            total.push(r.total_us);
+            e2e.extend(r.e2e_us);
+            host.extend(r.host_us);
+        }
+    }
+    let pct = |v: &mut Vec<u32>, p: f64| -> f64 {
+        if v.is_empty() {
+            return 0.0;
+        }
+        v.sort_unstable();
+        v[((v.len() as f64 - 1.0) * p).round() as usize] as f64 / 1000.0
+    };
+    serde_json::json!({
+        "secs": secs,
+        "samples": total.len(),
+        "encode_to_display_p50_ms": pct(&mut total, 0.50),
+        "encode_to_display_p95_ms": pct(&mut total, 0.95),
+        "true_e2e_samples": e2e.len(),
+        "true_e2e_p50_ms": pct(&mut e2e, 0.50),
+        "true_e2e_p95_ms": pct(&mut e2e, 0.95),
+        "host_stages_p50_ms": pct(&mut host, 0.50),
+        "host_stages_p95_ms": pct(&mut host, 0.95),
+    })
+    .to_string()
+}
+
+/// Per-stage host timings of one frame, in microseconds, as recorded by the helper's shared timing ring.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DetailedTiming {
-    #[allow(dead_code)]
     pub is_fresh: bool,
     pub req_to_ready_us: u32,
     pub grab_us: u32,
@@ -61,18 +113,20 @@ struct Inner {
     last_report: Option<Instant>,
 }
 
+/// Collects end-to-end latency samples (send time vs the tablet's render acknowledgement) and periodically logs percentiles. Cheap to clone; clones share state.
 #[derive(Clone, Default)]
 pub struct LatencyTracker {
     inner: Arc<Mutex<Inner>>,
 }
 
 impl LatencyTracker {
+    /// Create an empty tracker.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// An access unit just left the encoder without detailed timing.
-    #[allow(dead_code)]
+    #[cfg(feature = "inproc-encoder")]
     pub fn on_encoded(&self, seq: u32) {
         self.on_encoded_with_timing(seq, None);
     }
@@ -101,6 +155,12 @@ impl LatencyTracker {
         let (_, at, timing) = g.sent[pos];
         let micros = at.elapsed().as_micros().min(u32::MAX as u128) as u32;
         g.sent.drain(..=pos);
+        let mut rec = Recent {
+            at: Instant::now(),
+            total_us: micros,
+            e2e_us: None,
+            host_us: None,
+        };
         if g.samples.len() < MAX_SAMPLES {
             g.samples.push(micros);
             let dec = if decode_us > 0 {
@@ -124,8 +184,22 @@ impl LatencyTracker {
                     // Host total (ready -> encoded packet) + wire/2 (transit) + tablet decode & render
                     let e2e = t.host_total_us + (wire / 2) + dec;
                     g.e2e_samples.push(e2e);
+                    rec.e2e_us = Some(e2e);
+                    rec.host_us = Some(t.host_total_us);
                 }
                 g.encode_samples.push(t.encode_us);
+            }
+        }
+        if let Ok(mut r) = recent().lock() {
+            // Cheap bounded history: drop what is older than a minute.
+            while r
+                .front()
+                .is_some_and(|f| rec.at.duration_since(f.at).as_secs() > 60)
+            {
+                r.pop_front();
+            }
+            if r.len() < 30_000 {
+                r.push_back(rec);
             }
         }
     }

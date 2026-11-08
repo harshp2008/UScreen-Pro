@@ -78,11 +78,11 @@ if let Some(ref s0) = slot_0_serial.clone() {
     }
 }
 ```
-**Root Cause**: When Device A (e.g. tablet `R52X708AEHK`) is on USB in Slot 0 and disconnects:
-1. `tablets.get("R52X708AEHK")` has `wifi_address = None`.
-2. The code falls back to `file_cfg.wifi_address`, which points to `"192.168.1.74:5555"` (Device B / Galaxy A55!).
+**Root Cause**: When Device A (e.g. tablet `TABLET_SERIAL`) is on USB in Slot 0 and disconnects:
+1. `tablets.get("TABLET_SERIAL")` has `wifi_address = None`.
+2. The code falls back to `file_cfg.wifi_address`, which points to `"192.168.1.102:5555"` (Device B / Galaxy A55!).
 3. The daemon believes Device A has "handed off" to Device B's Wi-Fi!
-4. It calls `on_tablet_connected("192.168.1.74:5555", video_port, input_port)` on Slot 0!
+4. It calls `on_tablet_connected("192.168.1.102:5555", video_port, input_port)` on Slot 0!
 5. This clobbers Device B's running session on Slot 1, re-points ADB reverse ports `8890/8891` to Slot 0, and launches Slot 0's stream onto Device B!
 6. Device B freezes, and Device A's virtual output is sent to the wrong screen.
 
@@ -101,8 +101,8 @@ If Slot 0 is running any Wi-Fi device, plugging in **ANY USB device** (even a co
 
 ### 3.3 Hardware Identity Duplication (USB Serial vs Wi-Fi IP)
 When an Android device is connected via USB and `adb tcpip 5555` is enabled, ADB enumerates **two distinct entries** for the exact same physical device:
-1. Physical USB serial: `RZCX809Y0FT`
-2. Network IP address: `192.168.1.74:5555`
+1. Physical USB serial: `PHONE_SERIAL`
+2. Network IP address: `192.168.1.102:5555`
 - The daemon's `adb_monitor` treated these as two separate devices.
 - Because `max_tablets = 2`, the single phone consumed both slots (one on USB and one on Wi-Fi), preventing any actual second screen from connecting!
 - Both sessions concurrently executed `am start` and reverse port forwarding on the same physical phone, corrupting the app state.
@@ -212,14 +212,14 @@ Card enumeration previously checked `card > 0`, erroneously discarding `/dev/dri
 ## 6. Empirical Validation & Edge-Case Testing Logs
 
 Laboratory testing was executed on active physical hardware:
-- **Device A:** Samsung Galaxy Tab S9 FE (Serial: `R52X708AEHK`, Wi-Fi: `192.168.1.77:5555`)
-- **Device B:** Samsung Galaxy A55 5G (Serial: `RZCX809Y0FT`, Wi-Fi: `192.168.1.74:5555`)
+- **Device A:** Samsung Galaxy Tab S9 FE (Serial: `TABLET_SERIAL`, Wi-Fi: `192.168.1.101:5555`)
+- **Device B:** Samsung Galaxy A55 5G (Serial: `PHONE_SERIAL`, Wi-Fi: `192.168.1.102:5555`)
 
 ### 6.1 Test A: USB Isolation Test
 - **Protocol:** Connect both devices over USB. Start streams. Unplug Device A. Verify Device B continues streaming uninterrupted for 60 seconds. Re-plug Device A. Verify auto-reconnect.
 - **Unedited Log Segment (Disconnect & 60s Uninterrupted Stream on Device B):**
 ```text
-2026-11-05T10:05:57.866259Z  INFO uscreen: 1234: Device on Slot 1 disconnected (R52X708AEHK)
+2026-11-05T10:05:57.866259Z  INFO uscreen: 1234: Device on Slot 1 disconnected (TABLET_SERIAL)
 2026-11-05T10:05:57.878846Z  INFO uscreen::capture: 1407: Tablet disconnected but keep_alive is enabled — maintaining virtual display and throttling capture to 1 FPS
 [evdi-helper] Throttled to 1 FPS (keep-alive standby)
 frame=  971 fps= 42 q=-0.0 size=    2576kB time=00:00:10.80 bitrate=1954.2kbits/s speed=0.467x
@@ -233,7 +233,7 @@ frame=  994 fps= 42 q=-0.0 size=    2695kB time=00:00:11.05 bitrate=1997.2kbits/
 ```
 - **Unedited Log Segment (Device A Reconnect):**
 ```text
-2026-11-05T10:07:23.768136Z  INFO uscreen: 1292: Device connected on Slot 1 over USB (R52X708AEHK)
+2026-11-05T10:07:23.768136Z  INFO uscreen: 1292: Device connected on Slot 1 over USB (TABLET_SERIAL)
 2026-11-05T10:07:23.809448Z  INFO uscreen: 1752: ADB port forwarding set up (video=8890, input=8891)
 2026-11-05T10:07:23.910192Z  INFO uscreen: 1794: UScreen app launched on tablet
 2026-11-05T10:07:23.910250Z  INFO uscreen::capture: 1392: Tablet is a screen — enabling the virtual display
@@ -246,10 +246,10 @@ frame=  734 fps=6.6 q=-0.0 size=    2494kB time=00:00:08.16 bitrate=2501.9kbits/
 ---
 
 ### 6.2 Test B: Wi-Fi Isolation Test
-- **Protocol:** Connect both devices via Wi-Fi ADB (`192.168.1.77:5555` and `192.168.1.74:5555`). Start streams. Disconnect Device A. Verify Device B continues streaming uninterrupted for 60 seconds. Reconnect Device A and verify auto-reconnect.
+- **Protocol:** Connect both devices via Wi-Fi ADB (`192.168.1.101:5555` and `192.168.1.102:5555`). Start streams. Disconnect Device A. Verify Device B continues streaming uninterrupted for 60 seconds. Reconnect Device A and verify auto-reconnect.
 - **Unedited Log Segment (Disconnect & 60s Uninterrupted Stream on Device B):**
 ```text
-2026-11-05T10:09:43.458972Z  INFO uscreen: 1234: Device on Slot 1 disconnected (192.168.1.77:5555)
+2026-11-05T10:09:43.458972Z  INFO uscreen: 1234: Device on Slot 1 disconnected (192.168.1.101:5555)
 2026-11-05T10:09:43.481418Z  INFO uscreen::capture: 1407: Tablet disconnected but keep_alive is enabled — maintaining virtual display and throttling capture to 1 FPS
 [evdi-helper] Throttled to 1 FPS (keep-alive standby)
 frame=  995 fps= 46 q=-0.0 size=    2749kB time=00:00:11.06 bitrate=2035.0kbits/s speed=0.515x
@@ -262,7 +262,7 @@ frame=  995 fps= 46 q=-0.0 size=    2749kB time=00:00:11.06 bitrate=2035.0kbits/
 ```
 - **Unedited Log Segment (Device A Reconnect on Wi-Fi):**
 ```text
-2026-11-05T10:11:10.372751Z  INFO uscreen: 1292: Device connected on Slot 1 over Wi-Fi (192.168.1.77:5555)
+2026-11-05T10:11:10.372751Z  INFO uscreen: 1292: Device connected on Slot 1 over Wi-Fi (192.168.1.101:5555)
 2026-11-05T10:11:10.501974Z  INFO uscreen: 1752: ADB port forwarding set up (video=8890, input=8891)
 2026-11-05T10:11:10.614734Z  INFO uscreen: 1794: UScreen app launched on tablet
 2026-11-05T10:11:10.614908Z  INFO uscreen::capture: 1392: Tablet is a screen — enabling the virtual display
@@ -275,17 +275,17 @@ frame=  995 fps= 46 q=-0.0 size=    2749kB time=00:00:11.06 bitrate=2035.0kbits/
 ---
 
 ### 6.3 Test C: Mixed Transport Test
-- **Protocol:** Device A on USB (`R52X708AEHK`), Device B on Wi-Fi (`192.168.1.74:5555`). Unplug Device A. Verify Device B survives. Reconnect Device A on USB and verify it resumes.
+- **Protocol:** Device A on USB (`TABLET_SERIAL`), Device B on Wi-Fi (`192.168.1.102:5555`). Unplug Device A. Verify Device B survives. Reconnect Device A on USB and verify it resumes.
 - **Unedited Log Segment:**
 ```text
-2026-11-05T10:11:35.895172Z  INFO uscreen: 1234: Device on Slot 1 disconnected (R52X708AEHK)
+2026-11-05T10:11:35.895172Z  INFO uscreen: 1234: Device on Slot 1 disconnected (TABLET_SERIAL)
 2026-11-05T10:11:35.909439Z  INFO uscreen::capture: 1407: Tablet disconnected but keep_alive is enabled — maintaining virtual display and throttling capture to 1 FPS
 [evdi-helper] Throttled to 1 FPS (keep-alive standby)
 frame= 6198 fps= 46 q=-0.0 size=   16645kB time=00:01:08.87 bitrate=1979.7kbits/s speed=0.514x
 2026-11-05T10:11:37.341329Z  INFO uscreen::capture: 1624: Encoder: 232 access units in 5.0s, 0.1 MB/s (1052 kbps)
 2026-11-05T10:11:37.618062Z  INFO uscreen::latency: 179: Latency encode→display: p50 21.7ms  p95 39.9ms  max 65.4ms  (234 samples, 1 in flight, 0 aged out)
 ...
-2026-11-05T10:11:46.315671Z  INFO uscreen: 1292: Device connected on Slot 1 over USB (R52X708AEHK)
+2026-11-05T10:11:46.315671Z  INFO uscreen: 1292: Device connected on Slot 1 over USB (TABLET_SERIAL)
 2026-11-05T10:11:46.350395Z  INFO uscreen: 1752: ADB port forwarding set up (video=8890, input=8891)
 2026-11-05T10:11:46.441577Z  INFO uscreen: 1794: UScreen app launched on tablet
 2026-11-05T10:11:46.441701Z  INFO uscreen::capture: 1392: Tablet is a screen — enabling the virtual display

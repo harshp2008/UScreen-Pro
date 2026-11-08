@@ -49,8 +49,8 @@ According to the Google Android Open Source Project (AOSP) ADB specification:
   2. The service is broadcast over mDNS (Multicast DNS) under service type `_adb-tls-pairing._tcp`.
   3. The pairing client connects via `adb pair <ip>:<pairing_port> <pairing_code>`:
      ```bash
-     $ adb pair 192.168.1.77:38479 123456
-     Successfully paired to 192.168.1.77:38479 [guid=adb-R52X708AEHK-xxxx]
+     $ adb pair 192.168.1.101:38479 123456
+     Successfully paired to 192.168.1.101:38479 [guid=adb-TABLET_SERIAL-xxxx]
      ```
   4. The client and device exchange and trust each other's TLS certificates. This pairing relationship is persisted in `/data/misc/adb/adb_keys` on the device and `~/.android/adbkey` on the host.
 - **Connection Phase:**
@@ -58,12 +58,12 @@ According to the Google Android Open Source Project (AOSP) ADB specification:
   1. Querying `adb mdns services` lists:
      ```text
      List of discovered mdns services
-     adb-R52X708AEHK-123456  _adb-tls-connect._tcp.  192.168.1.77:41235
+     adb-TABLET_SERIAL-123456  _adb-tls-connect._tcp.  192.168.1.101:41235
      ```
   2. The host connects to the dynamic connect port:
      ```bash
-     $ adb connect 192.168.1.77:41235
-     connected to 192.168.1.77:41235
+     $ adb connect 192.168.1.101:41235
+     connected to 192.168.1.101:41235
      ```
   3. The device enters ADB state `device` with TLS encryption active. MITM attacks and eavesdropping are cryptographically prevented.
 
@@ -161,15 +161,15 @@ flowchart TD
 Execution of `adb devices -l`:
 ```text
 List of devices attached
-R52X708AEHK            device usb:3-1 product:gts9fepins model:SM_X616B device:gts9fep transport_id:224
-RZCX809Y0FT            device usb:3-6 product:a55xnsins model:SM_A556E device:a55x transport_id:234
+TABLET_SERIAL            device usb:3-1 product:gts9fepins model:SM_X616B device:gts9fep transport_id:224
+PHONE_SERIAL            device usb:3-6 product:a55xnsins model:SM_A556E device:a55x transport_id:234
 ```
 
 ### 5.2 Device SDK Version Query
 ```bash
-$ adb -s R52X708AEHK shell getprop ro.build.version.sdk
+$ adb -s TABLET_SERIAL shell getprop ro.build.version.sdk
 36
-$ adb -s RZCX809Y0FT shell getprop ro.build.version.sdk
+$ adb -s PHONE_SERIAL shell getprop ro.build.version.sdk
 36
 ```
 Both devices are running Android 16 (API 36), which is $\ge 30$. Under the new architectural gates:
@@ -177,15 +177,15 @@ Both devices are running Android 16 (API 36), which is $\ge 30$. Under the new a
 - Insecure `adb tcpip 5555` is disallowed unless legacy fallback is explicitly forced.
 
 ### 5.3 Active Network Interfaces
-- Host: `192.168.1.32` (`wlo1`)
-- Galaxy Tab S9 FE (`R52X708AEHK`): `192.168.1.77` (`wlan0`)
-- Galaxy A55 (`RZCX809Y0FT`): `192.168.1.74` (`wlan0`)
+- Host: `192.168.1.100` (`wlo1`)
+- Galaxy Tab S9 FE (`TABLET_SERIAL`): `192.168.1.101` (`wlan0`)
+- Galaxy A55 (`PHONE_SERIAL`): `192.168.1.102` (`wlan0`)
 
 ### 5.4 Process Tree Auditing
 Observation of background process tree revealed dozens of hanging `adb connect 192.168.1.x:5555` calls due to un-gated watchdog loops:
 ```text
-harsh    1494074  0.0  0.0  14812  7592 ?  S  00:18  0:00 adb connect 192.168.1.74:5555
-harsh    1494075  0.0  0.0  14812  7316 ?  S  00:18  0:00 adb connect 192.168.1.77:5555
+harsh    1494074  0.0  0.0  14812  7592 ?  S  00:18  0:00 adb connect 192.168.1.102:5555
+harsh    1494075  0.0  0.0  14812  7316 ?  S  00:18  0:00 adb connect 192.168.1.101:5555
 ... [40+ spawned instances]
 ```
 Root Cause: `host/src/main.rs` lines 1637–1655 blindly spawned async commands to unverified static addresses without checking connection state or pairing validity. This must be eliminated.
@@ -276,11 +276,11 @@ BUILD SUCCESSFUL in 10s
 ---
 
 ### 7.2 Verification of Task 1 & Task 4: In-App Android Setup Guide (UX) & Developer Intent
-**Device:** Samsung Galaxy Tab S9 FE (`R52X708AEHK`), Android 16 (API 36).  
-**Methodology:** The newly assembled debug APK was installed onto `R52X708AEHK` via `adb install -r`. The settings sheet was opened and the "🔗 Pairing Setup Guide" accordion clicked.  
+**Device:** Samsung Galaxy Tab S9 FE (`TABLET_SERIAL`), Android 16 (API 36).  
+**Methodology:** The newly assembled debug APK was installed onto `TABLET_SERIAL` via `adb install -r`. The settings sheet was opened and the "🔗 Pairing Setup Guide" accordion clicked.  
 **Raw Command:**
 ```bash
-$ adb -s R52X708AEHK shell input tap 1000 1010
+$ adb -s TABLET_SERIAL shell input tap 1000 1010
 ```
 **Screenshot Artifacts:**
 - Collapsed Guide: `experiments_and_findings/screenshots/tab_s9_fe_settings_scrolled.png`
@@ -296,7 +296,7 @@ $ adb -s R52X708AEHK shell input tap 1000 1010
    3. Enter the 6-digit code in the UScreen PC app.
    ```
 2. Tapping `[⚙ Open Developer Options]` successfully dispatched `Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)` directly opening system developer options.
-3. Tapping `[📋 Copy IP & Port]` copied `192.168.1.77:5555` to the system clipboard and displayed a confirmation Toast.
+3. Tapping `[📋 Copy IP & Port]` copied `192.168.1.101:5555` to the system clipboard and displayed a confirmation Toast.
 
 ---
 
@@ -319,7 +319,7 @@ $ adb -s R52X708AEHK shell input tap 1000 1010
 
 ### 7.4 Verification of Task 1.4 & Task 7: PC GUI Layout, Top-Right Version Card, and Secure Pairing Modal
 **Methodology:**
-1. Navigated to device details for `Galaxy Tab S9 FE` (`R52X708AEHK`).
+1. Navigated to device details for `Galaxy Tab S9 FE` (`TABLET_SERIAL`).
 2. Verified Version Status Card positioning and conditional reinstall button.
 3. Clicked `[🔒 Pair Securely]` to trigger the TLS Pairing modal.
 4. Clicked `[📲 Install Android App]` in the sidebar to open the APK Surgical Updater modal.
@@ -341,12 +341,12 @@ $ adb -s R52X708AEHK shell input tap 1000 1010
 
 ### 7.5 Verification of Task 5: Transport Preference Logic
 **Methodology:**
-Galaxy A55 (`SM-A556E`) was connected via both physical USB (`RZCX809Y0FT`) and TCP/IP (`10.238.4.217:5555`).
+Galaxy A55 (`SM-A556E`) was connected via both physical USB (`PHONE_SERIAL`) and TCP/IP (`10.238.4.100:5555`).
 `preferred_transport` was configured to `"wifi"` in `~/.config/uscreen/config.toml`:
 ```toml
-[tablets.RZCX809Y0FT]
+[tablets.PHONE_SERIAL]
 preferred_transport = "wifi"
-wifi_address = "10.238.4.217:5555"
+wifi_address = "10.238.4.100:5555"
 ```
 **Screenshot Artifact:** `experiments_and_findings/screenshots/gui_wifi_prioritized.png`  
 **Empirical Observations:**
@@ -357,7 +357,7 @@ wifi_address = "10.238.4.217:5555"
 
 ### 7.6 Verification of Task 6: Android-Side Version Mismatch Telemetry
 **Methodology:**
-To empirically verify the Android version mismatch banner without corrupting production builds, `USCREEN_MOCK_HOST_VERSION="v1.2.0-mismatch-test"` was provided when launching `target/release/uscreen start -d`. The Android APK on `R52X708AEHK` connected via WebSocket to port 8891.
+To empirically verify the Android version mismatch banner without corrupting production builds, `USCREEN_MOCK_HOST_VERSION="v1.2.0-mismatch-test"` was provided when launching `target/release/uscreen start -d`. The Android APK on `TABLET_SERIAL` connected via WebSocket to port 8891.
 **Screenshot Artifacts:**
 - Standby / Settings Open: `experiments_and_findings/screenshots/tab_s9_fe_version_mismatch.png`
 - Live Active Streaming: `experiments_and_findings/screenshots/tab_s9_fe_version_mismatch_streaming.png`

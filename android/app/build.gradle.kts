@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 // Release signing: keystore.properties is NOT committed — each maintainer
@@ -51,7 +52,7 @@ val gitVersionString = envVersion ?: if (isDirty) {
 
 android {
     namespace = "com.uscreen"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.uscreen"
@@ -92,10 +93,6 @@ android {
         buildConfig = true
     }
 
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.5"
-    }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -107,16 +104,19 @@ android {
 }
 
 dependencies {
-    // 2024.02.02 ships material3 1.2.1 built against compose 1.6.x — the
-    // 2024.01.00 BOM paired material3 1.1.2 with animation-core 1.6.0, which
-    // crashes with NoSuchMethodError in CircularProgressIndicator.
-    implementation(platform("androidx.compose:compose-bom:2024.02.02"))
+    // material3 is pinned to 1.5.0-alpha04: MotionScheme / MaterialExpressiveTheme are public API only from the 1.5 line (internal in 1.4.0, and the BOM maps 1.3.x).
+    implementation(platform("androidx.compose:compose-bom:2025.09.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha04")
+    // Path/shape morphing (Morph, RoundedPolygon) for the expressive Connect / Pair button.
+    implementation("androidx.graphics:graphics-shapes:1.1.0")
+    implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.activity:activity-compose:1.8.2")
+    // AppCompatActivity + AppCompatDelegate.setDefaultNightMode for the Light / Dark / System theme choice.
+    implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")

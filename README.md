@@ -199,6 +199,36 @@ More in [docs/faq.md](docs/faq.md).
 - [Benchmarks](docs/benchmarks.md) · [Compatibility](docs/compatibility.md) · [FAQ](docs/faq.md)
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
 
+## Codebase Architecture
+
+UScreen is architected as a modular, low-overhead system with decoupled backend, capture, and client subsystems:
+
+- **Host Daemon (`host/src/`)**:
+  - `main.rs`, `cli.rs`, `commands.rs`, `daemon.rs`: entry point and argument parsing; one-shot subcommands (`stop`, `status`, ...); the daemon event loop that wires everything together.
+  - `net/`: `adb.rs` (device detection, transport negotiation, reverse port forwarding, APK lifecycle), `pairing.rs` (wireless pairing, legacy `adb tcpip`), `installer.rs` (APK install queue), `stream.rs` (loopback video socket), `notices.rs` (status messages pushed to the tablet).
+  - `display/`: the virtual monitor — `edid.rs`, `vdisplay.rs` and one backend per compositor (`kwin.rs`, `gnome.rs`, `hyprland.rs`, `cosmic.rs`, `x11.rs`).
+  - `capture/`: the video pipeline — `supervisor.rs` (restart loop), `helper.rs` (EVDI helper), `spawn.rs` (encoder process), `display.rs` (monitor placement), `reader.rs` and `packetizer.rs` (Annex B parsing). `encoders.rs` probes which encoders actually work.
+  - `input/`: WebSocket input server — `server.rs`, `protocol.rs`, `events.rs`, `uinput.rs` (virtual devices) and `mapping.rs` (binding devices to the right output).
+  - `session.rs`: multi-device session state machine, EVDI card slot mapping, USB <-> Wi-Fi handoff, update pause/resume.
+  - `guard.rs`: compositor-safety boot-loop guard, hotplug limiter and stall watchdog.
+  - `config.rs`, `config_handler.rs`: `config.toml` schema; GNOME window-lock sync, Unix control socket, PID tracking.
+  - `doctor.rs`: environment diagnostic suite (DRM nodes, permissions, encoder health, latency).
+
+- **C EVDI Helper (`host/evdi/evdi_helper.c`)**:
+  - Event-driven display grabber communicating directly with the `evdi` kernel module via `libevdi`.
+  - Triple-buffered NV12 conversion with SIMD SWAR acceleration and per-buffer damage tracking.
+  - POSIX signal handling supporting active 60 FPS streaming, 1 FPS keep-alive standby throttle (`SIGUSR1`), and full keyframe refresh (`SIGUSR2`).
+
+- **Android Client (`android/`)**:
+  - `MainActivity.kt`: Thin Activity host managing Keyguard flags, WakeLocks, display refresh rate negotiation, and stylus hover event dispatching.
+  - `ui/Theme.kt`: Consistent high-contrast dark theme optimized for OLED tablet displays.
+  - `ui/ConnectionScreen.kt`: Primary video viewport (SurfaceView), stats chip overlay, and version mismatch telemetry.
+  - `ui/Onboarding.kt`: Guided Developer Options setup, real-time connection diagnostics, and interactive Troubleshooter bottom sheet.
+  - `ui/SettingsSheet.kt`: Settings sheet for bitrate/FPS tuning, orientation locks, preferred transport, and wireless pairing.
+  - `PlatformSupport.kt`: small platform queries (Wi-Fi IP, lock-screen touch support).
+  - `VideoReceiver.kt`: Low-latency `MediaCodec` hardware video decoder rendering directly to a native Surface.
+  - `TouchCapture.kt`: MotionEvent interception forwarding touch and S Pen events back to the host over WebSocket.
+
 ## Releases
 
 Regular releases go out **on Saturday evenings (US Eastern time)**, with

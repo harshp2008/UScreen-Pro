@@ -14,13 +14,9 @@ use ksni::{Handle, Status, ToolTip, Tray, TrayMethods};
 use tokio::sync::watch;
 use tracing::{info, warn};
 
-/// The project's own icons, installed into the hicolor theme by the packages
-/// and the installer. The pen variant carries the mode at a glance without a
-/// tooltip. The same pictures are also embedded as pixmaps below, so a tray
-/// that cannot find the theme icon (a build run from the source tree, a
-/// desktop with an odd icon path) still shows something recognisable.
-const ICON_SCREEN: &str = "uscreen";
-const ICON_TABLET: &str = "uscreen-pen";
+/// The emerald UScreen Pro icons, embedded as pixmaps. The tray deliberately names no theme icon:
+/// an old `uscreen` icon left in the hicolor theme by a previous install would otherwise win over the
+/// pixmap and show the retired logo. The pen variant carries the mode at a glance without a tooltip.
 const PIXMAP_SCREEN: &[u8] = include_bytes!("../../packaging/icons/uscreen-64.rgba");
 const PIXMAP_TABLET: &[u8] = include_bytes!("../../packaging/icons/uscreen-pen-64.rgba");
 const PIXMAP_SIDE: i32 = 64;
@@ -29,11 +25,18 @@ const PIXMAP_SIDE: i32 = 64;
 /// what StatusNotifierItem expects.
 fn pixmap(rgba: &[u8]) -> ksni::Icon {
     let mut data = Vec::with_capacity(rgba.len());
-    for px in rgba.chunks_exact(4) {
+    for px in rgba.as_chunks::<4>().0 {
         data.extend_from_slice(&[px[3], px[0], px[1], px[2]]);
     }
-    ksni::Icon { width: PIXMAP_SIDE, height: PIXMAP_SIDE, data }
+    ksni::Icon {
+        width: PIXMAP_SIDE,
+        height: PIXMAP_SIDE,
+        data,
+    }
 }
+
+/// The Tauri settings app. The retired `uscreen-gui` must never be launched from here.
+const GUI_BIN: &str = "uscreen-pro-gui";
 
 struct UScreenTray {
     pen_only: bool,
@@ -45,6 +48,14 @@ struct UScreenTray {
 }
 
 impl UScreenTray {
+    fn current_pixmap(&self) -> ksni::Icon {
+        pixmap(if self.pen_only {
+            PIXMAP_TABLET
+        } else {
+            PIXMAP_SCREEN
+        })
+    }
+
     fn state_line(&self) -> String {
         if !self.tablet_present {
             "No tablet connected".to_string()
@@ -58,23 +69,20 @@ impl UScreenTray {
 
 impl Tray for UScreenTray {
     fn id(&self) -> String {
-        "uscreen".into()
+        "uscreen-pro".into()
     }
 
     fn title(&self) -> String {
-        "UScreen".into()
+        "UScreen Pro".into()
     }
 
+    /// Empty on purpose, so the desktop uses [`Self::icon_pixmap`] (see the pixmap constants).
     fn icon_name(&self) -> String {
-        if self.pen_only {
-            ICON_TABLET.into()
-        } else {
-            ICON_SCREEN.into()
-        }
+        String::new()
     }
 
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
-        vec![pixmap(if self.pen_only { PIXMAP_TABLET } else { PIXMAP_SCREEN })]
+        vec![self.current_pixmap()]
     }
 
     /// Always visible. Passive lets the desktop hide the icon, and an icon you
@@ -89,10 +97,10 @@ impl Tray for UScreenTray {
             description.push_str(&format!("\nUpdate available: {}", v));
         }
         ToolTip {
-            icon_name: self.icon_name(),
-            title: "UScreen".into(),
+            icon_name: String::new(),
+            icon_pixmap: vec![self.current_pixmap()],
+            title: "UScreen Pro".into(),
             description,
-            ..Default::default()
         }
     }
 
@@ -103,14 +111,12 @@ impl Tray for UScreenTray {
     }
 
     fn menu(&self) -> Vec<MenuItem<Self>> {
-        let mut items: Vec<MenuItem<Self>> = vec![
-            StandardItem {
-                label: self.state_line(),
-                enabled: false,
-                ..Default::default()
-            }
-            .into(),
-        ];
+        let mut items: Vec<MenuItem<Self>> = vec![StandardItem {
+            label: self.state_line(),
+            enabled: false,
+            ..Default::default()
+        }
+        .into()];
         if let Some(v) = &self.update {
             items.push(
                 StandardItem {
@@ -144,14 +150,14 @@ impl Tray for UScreenTray {
             .into(),
             MenuItem::Separator,
             StandardItem {
-                label: "Settings…".into(),
+                label: "Show Window".into(),
                 icon_name: "configure".into(),
                 activate: Box::new(|_: &mut Self| open_settings()),
                 ..Default::default()
             }
             .into(),
             StandardItem {
-                label: "Quit".into(),
+                label: "Stop Daemon (Quit)".into(),
                 icon_name: "application-exit".into(),
                 activate: Box::new(|t: &mut Self| {
                     info!("Quit requested from the tray");
@@ -178,17 +184,66 @@ fn open_release_page() {
 /// Best effort: a missing GUI binary is worth a log line, not a crash in the
 /// middle of a menu callback.
 fn open_settings() {
+    // A second window of the same app is never what a click on the tray means.
+    let running = std::process::Command::new("pgrep")
+        .args(["-x", GUI_BIN])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+    if running {
+        // Ask the window manager to raise the existing window; harmless if wmctrl is absent.
+        let _ = std::process::Command::new("wmctrl")
+            .args(["-x", "-a", GUI_BIN])
+            .status();
+        info!("{} is already running; raised its window", GUI_BIN);
+        return;
+    }
     // Next to this binary first. Under systemd --user the PATH usually lacks
-    // ~/.local/bin, where install.sh puts both binaries, so a bare name would
+    // ~/.local/bin, where the installer puts both binaries, so a bare name would
     // fail for exactly the installs that start the daemon at login.
     let sibling = std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(|d| d.join("uscreen-gui")))
+        .and_then(|p| p.parent().map(|d| d.join(GUI_BIN)))
         .filter(|p| p.exists());
-    let program = sibling.unwrap_or_else(|| std::path::PathBuf::from("uscreen-gui"));
+    let program = sibling.unwrap_or_else(|| std::path::PathBuf::from(GUI_BIN));
+    // The window must outlive "Stop Daemon". A plain child of this process sits
+    // in uscreen.service's cgroup, and `systemctl stop` (KillMode=control-group)
+    // kills it along with the daemon, so stopping the daemon from inside the GUI
+    // closed the GUI (RCA 58). Start it as its own transient unit instead.
+    let unit = format!(
+        "uscreen-pro-gui-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0)
+    );
+    let mut sr = std::process::Command::new("systemd-run");
+    sr.args(["--user", "--collect", "--quiet", "--unit", &unit]);
+    for var in [
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+        "XDG_CURRENT_DESKTOP",
+        "XDG_SESSION_TYPE",
+        "DBUS_SESSION_BUS_ADDRESS",
+    ] {
+        if std::env::var_os(var).is_some() {
+            sr.arg(format!("--setenv={var}"));
+        }
+    }
+    sr.arg(&program);
+    match sr.status() {
+        Ok(s) if s.success() => {
+            info!("Opened settings from the tray (detached unit {})", unit);
+            return;
+        }
+        other => warn!(
+            "systemd-run could not detach {} ({:?}); starting it directly",
+            GUI_BIN, other
+        ),
+    }
     match std::process::Command::new(&program).spawn() {
         Ok(_) => info!("Opened settings from the tray"),
-        Err(e) => warn!("Could not launch uscreen-gui: {}", e),
+        Err(e) => warn!("Could not launch {}: {}", GUI_BIN, e),
     }
 }
 
@@ -203,23 +258,41 @@ pub async fn run(
     mut update_rx: watch::Receiver<crate::update::Available>,
 ) {
     let mut mode_rx = mode_tx.subscribe();
+    let mut shutdown_rx = shutdown_tx.subscribe();
 
-    let tray = UScreenTray {
-        pen_only: *mode_rx.borrow_and_update(),
-        tablet_present: *tablet_rx.borrow_and_update(),
-        update: update_rx.borrow_and_update().clone(),
-        mode_tx,
-        shutdown_tx,
-    };
-
-    let handle: Handle<UScreenTray> = match tray.spawn().await {
-        Ok(h) => {
-            info!("Tray icon registered");
-            h
-        }
-        Err(e) => {
-            warn!("No tray icon: {}. The daemon runs the same without one.", e);
-            return;
+    // The daemon starts with the session, usually before gnome-shell's
+    // StatusNotifierWatcher (the AppIndicator extension) is on the bus. Giving
+    // up on the first ServiceUnknown left the tray empty for the whole session,
+    // so keep trying until a watcher answers.
+    let mut delay = std::time::Duration::from_millis(500);
+    let mut warned = false;
+    let handle: Handle<UScreenTray> = loop {
+        let tray = UScreenTray {
+            pen_only: *mode_rx.borrow_and_update(),
+            tablet_present: *tablet_rx.borrow_and_update(),
+            update: update_rx.borrow_and_update().clone(),
+            mode_tx: mode_tx.clone(),
+            shutdown_tx: shutdown_tx.clone(),
+        };
+        match tray.spawn().await {
+            Ok(h) => {
+                info!("Tray icon registered");
+                break h;
+            }
+            Err(e) => {
+                if !warned {
+                    warned = true;
+                    info!(
+                        "No StatusNotifierWatcher yet ({}); retrying until one appears",
+                        e
+                    );
+                }
+                tokio::select! {
+                    _ = tokio::time::sleep(delay) => {}
+                    _ = shutdown_rx.changed() => return,
+                }
+                delay = (delay * 2).min(std::time::Duration::from_secs(5));
+            }
         }
     };
 

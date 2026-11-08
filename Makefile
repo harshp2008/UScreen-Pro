@@ -1,4 +1,9 @@
-.PHONY: all build build-helper install clean run android adb edid status stop list dist setup-system publish release-metadata
+# UScreen Unified Build & Deployment Makefile
+#
+# Coordinates host daemon compilation, C EVDI helper compilation,
+# Cargo workspace release builds, Android APK builds, and desktop installation.
+
+.PHONY: all build build-helper install clean run android adb edid status stop list dist dist-local setup-system publish release-metadata
 
 VERSION = 1.2.12
 
@@ -8,6 +13,7 @@ ADB = adb
 BIN_DIR = ${HOME}/.local/bin
 DATA_DIR = ${HOME}/.local/share/uscreen
 
+# Determine git commit hash and uncommitted dirty state for version synchronization
 GIT_HASH := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 GIT_DIRTY := $(shell git status --porcelain 2>/dev/null)
 ifneq ($(GIT_DIRTY),)
@@ -17,10 +23,11 @@ else
 endif
 export GIT_VERSION_STRING := $(GIT_VERSION)
 
+## all: Default target — builds EVDI helper, Rust release binaries, and Android APK
 all: build android
 	@echo "✓ Synchronized unified build complete: v$(GIT_VERSION_STRING)"
 
-# Generic -O3 (no -march=native): release binaries must run on any x86-64 CPU
+## build-helper: Compile C EVDI helper with O3 optimization and link with libevdi/X11
 build-helper:
 	$(CC) -O3 -o host/evdi/evdi_helper host/evdi/evdi_helper.c /lib/libevdi.so.1 -lpthread -lX11 -lXrandr -Ihost/evdi
 	mkdir -p target/release target/debug $(BIN_DIR)
@@ -29,13 +36,15 @@ build-helper:
 	cp host/evdi/evdi_helper $(BIN_DIR)/evdi_helper
 	@echo "✓ EVDI helper: host/evdi/evdi_helper"
 
+## build: Build all workspace binaries (uscreen daemon and uscreen-gui) in release profile
 build: build-helper
 	$(CARGO) build --release
 	@echo "✓ Binaries: $(PWD)/target/release/uscreen and uscreen-gui"
 
+## install: Install binaries, assets, desktop entry, systemd user service, and GNOME Shell extension
 install: build edid
 	mkdir -p $(BIN_DIR) $(DATA_DIR)/edid
-	# rm first: cp into a running binary fails with "text file busy"
+	# Remove old binaries first to avoid 'text file busy' errors if daemon is running
 	rm -f $(BIN_DIR)/uscreen $(BIN_DIR)/uscreen-gui $(BIN_DIR)/evdi_helper
 	cp target/release/uscreen $(BIN_DIR)/uscreen
 	cp target/release/uscreen-gui $(BIN_DIR)/uscreen-gui
@@ -59,8 +68,7 @@ install: build edid
 	cp extensions/uscreen-app-lock/metadata.json extensions/uscreen-app-lock/extension.js ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/ 2>/dev/null || true
 	@echo "✓ GNOME Shell extension installed: uscreen-app-lock@uscreen.app"
 
-# One-time system setup (needs sudo): pre-create an EVDI device at boot so
-# the daemon never needs root, and load the required modules.
+## setup-system: One-time kernel module and modprobe configuration (requires sudo)
 setup-system:
 	printf "options evdi initial_device_count=2\nsoftdep evdi pre: drm_kms_helper i915\n" | sudo tee /etc/modprobe.d/uscreen-evdi.conf
 	printf "evdi\nuinput\n" | sudo tee /etc/modules-load.d/uscreen.conf
@@ -71,55 +79,56 @@ setup-system:
 	fi
 	@echo "✓ System setup done (EVDI device available now and at every boot)"
 
+## run: Start the uscreen daemon in the foreground
 run: build
 	sudo modprobe -q evdi || true
 	sudo modprobe -q uinput || true
 	./target/release/uscreen start
 
+## adb: Manually forward TCP ports 8890 (video) and 8891 (input) over ADB reverse
 adb:
 	$(ADB) reverse tcp:8890 tcp:8890
 	$(ADB) reverse tcp:8891 tcp:8891
 	@echo "✓ ADB ports: 8890 (video), 8891 (input)"
 
+## android: Build debug APK using Gradle
 android:
 	cd android && ./gradlew assembleDebug --no-daemon
 	@echo "✓ APK: android/app/build/outputs/apk/debug/app-debug.apk"
 
+## android-install: Build and install debug APK onto connected Android device
 android-install: android
 	$(ADB) install -r android/app/build/outputs/apk/debug/app-debug.apk
 	@echo "✓ APK installed on device"
 
+## edid: Generate custom 2960x1848 60Hz binary EDID descriptor
 edid:
 	mkdir -p edid
 	python3 scripts/gen-edid.py 2960 1848 60 edid/s9ultra.bin
 	@echo "✓ EDID generated: edid/s9ultra.bin"
 
+## list: Query and print detected video outputs from display servers
 list:
 	./target/release/uscreen list-displays
 
+## status: Check active running daemon state and PID
 status:
 	./target/release/uscreen status
 
+## stop: Terminate running daemon process
 stop:
 	./target/release/uscreen stop
 
-# Release tarball: prebuilt binaries + installer. Upload to GitHub releases
-# together with the release APK (android/app/build/outputs/apk/release/).
-# Publish a complete release: builds everything, refuses if any of the five
-# files is missing, then creates the GitHub release and uploads them all.
-# Usage: GH_TOKEN=... make publish NOTES=path/to/notes.md
+## publish: Create GitHub release and upload distribution artifacts
 publish:
 	./scripts/publish-release.sh $(NOTES)
 
-# Write VERSION and the release date into the website, llms.txt, sitemap and
-# CITATION.cff. Usage: make release-metadata DATE=2026-09-15 (default: today)
+## release-metadata: Update release date and version across website and citation files
 release-metadata:
 	./scripts/update-release-metadata.sh $(VERSION) $(or $(DATE),$(shell date +%F))
 
+## dist: Create portable release tarball via distrobox container or local fallback
 dist:
-	@# Portable binaries (built against Debian 12 glibc) when the build
-	@# container exists; otherwise a local build, which only runs on
-	@# distributions at least as new as this machine.
 	@if distrobox list 2>/dev/null | grep -q ' uscreen-build '; then \
 		./scripts/build-release.sh && ./packaging/build-packages.sh; \
 	else \
@@ -127,6 +136,7 @@ dist:
 		$(MAKE) dist-local; \
 	fi
 
+## dist-local: Package release tarball locally
 dist-local: build
 	rm -rf dist/uscreen-$(VERSION)
 	mkdir -p dist/uscreen-$(VERSION)/bin dist/uscreen-$(VERSION)/scripts dist/uscreen-$(VERSION)/packaging
@@ -139,8 +149,9 @@ dist-local: build
 	tar -C dist -czf dist/uscreen-$(VERSION)-linux-x86_64.tar.gz uscreen-$(VERSION)
 	@echo "✓ Release: dist/uscreen-$(VERSION)-linux-x86_64.tar.gz"
 
+## clean: Remove build artifacts, binaries, and temporary release directories
 clean:
-	cd host && $(CARGO) clean
+	$(CARGO) clean
 	rm -f host/evdi/evdi_helper
 	rm -rf dist
 	@echo "✓ Cleaned"

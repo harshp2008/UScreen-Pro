@@ -1,7 +1,7 @@
 # Experiment & Finding 07: Android Immersive UI & Settings Overlay Concealment
 
 ## Overview
-- **Device Tested**: Samsung Galaxy Tab S9 FE+ (`SM-X616B`, Device ID: `R52X708AEHK`), Android 16
+- **Device Tested**: Samsung Galaxy Tab S9 FE+ (`SM-X616B`, Device ID: `TABLET_SERIAL`), Android 16
 - **Physical Panel Resolution**: 2560 x 1600 @ 90Hz
 - **Issue Addressed**: The UScreen tablet client previously rendered a persistent settings button (`⚙`) in the top-right corner and potential update badges directly over the active video stream. In secondary monitor operation, this permanently consumed physical screen real estate, blocked view of host UI elements (e.g., window close buttons / system tray in the top-right corner), and intercepted pointer clicks in that region.
 - **Objective**: Hide all Settings UI elements by default during active streaming to provide a 100% full-screen immersive display, and implement intuitive gestures and Back-button interactions to reveal and dismiss the Settings UI without disrupting the video stream, touch forwarding, or S-Pen drawing.
@@ -71,14 +71,14 @@ Implemented multiple interaction methods:
 
 2. **ADB Installation on Tablet**:
    ```bash
-   adb -s R52X708AEHK uninstall com.uscreen
-   adb -s R52X708AEHK install -r android/app/build/outputs/apk/debug/app-debug.apk
+   adb -s TABLET_SERIAL uninstall com.uscreen
+   adb -s TABLET_SERIAL install -r android/app/build/outputs/apk/debug/app-debug.apk
    ```
    - **Result**: `Performing Streamed Install` -> `Success`
 
 3. **App Launch & Verification**:
    ```bash
-   adb -s R52X708AEHK shell am start -n com.uscreen/.MainActivity
+   adb -s TABLET_SERIAL shell am start -n com.uscreen/.MainActivity
    ```
    - **Result**: `Starting: Intent { cmp=com.uscreen/.MainActivity }`
 

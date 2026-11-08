@@ -14,6 +14,7 @@ use tokio::sync::watch;
 use tracing::{debug, info};
 
 const RELEASES_API: &str = "https://api.github.com/repos/majmichu1/UScreen/releases/latest";
+/// Human-readable page the update notice points to.
 pub const RELEASES_PAGE: &str = "https://github.com/majmichu1/UScreen/releases/latest";
 
 /// Delay before the first check, so startup is not spent waiting on the
@@ -24,6 +25,7 @@ const INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 /// Version string of a newer release, if one exists.
 pub type Available = Option<String>;
 
+/// This build's semantic version (from Cargo).
 pub fn current_version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
@@ -40,6 +42,7 @@ fn parse(v: &str) -> (u32, u32, u32) {
     )
 }
 
+/// True when `candidate` is a strictly higher version than `current`.
 pub fn is_newer(candidate: &str, current: &str) -> bool {
     parse(candidate) > parse(current)
 }
@@ -51,6 +54,7 @@ fn tag_from_json(body: &str) -> Option<String> {
     v.get("tag_name")?.as_str().map(|s| s.to_string())
 }
 
+/// Fetch the latest release tag from GitHub with a short timeout; `None` on any failure.
 pub async fn latest_release_tag() -> Option<String> {
     let out = tokio::process::Command::new("curl")
         .args([

@@ -36,6 +36,7 @@ pub fn runtime_dir() -> PathBuf {
     dir
 }
 
+/// FIFO path of the first display.
 pub fn fifo_path() -> PathBuf {
     fifo_path_for(0)
 }
@@ -47,11 +48,6 @@ pub fn fifo_path_for(instance: u32) -> PathBuf {
     } else {
         runtime_dir().join(format!("capture-{}.fifo", instance))
     }
-}
-
-#[allow(dead_code)]
-pub fn timing_path() -> PathBuf {
-    timing_path_for(0)
 }
 
 /// Shared memory file for high-resolution stage timing tracking between evdi_helper and host.
@@ -122,6 +118,11 @@ mod tests {
         let dir = runtime_dir();
         let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
         // Either we created it 0700, or it is the user's own cache dir.
-        assert_eq!(mode & 0o077, 0, "runtime dir {} is group/world accessible", dir.display());
+        assert_eq!(
+            mode & 0o077,
+            0,
+            "runtime dir {} is group/world accessible",
+            dir.display()
+        );
     }
 }
