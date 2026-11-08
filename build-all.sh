@@ -24,6 +24,8 @@ echo "=========================================================="
 
 DIST_DIR="$SCRIPT_DIR/dist"
 mkdir -p "$DIST_DIR"
+# Drop old APKs so dist/ does not accumulate versions
+rm -f "$DIST_DIR"/*.apk
 
 # 2. Build Android APK via Gradle
 echo ""
