@@ -165,6 +165,7 @@ async fn probe_with(encoder: &str, vaapi_device_override: Option<&str>) -> Resul
     }
 }
 
+/// True when a one-frame test encode with `encoder` succeeds on this machine.
 pub async fn works(encoder: &str) -> bool {
     probe(encoder).await.is_ok()
 }

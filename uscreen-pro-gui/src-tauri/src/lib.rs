@@ -1,9 +1,17 @@
+//! Tauri backend of UScreen Pro: the IPC layer between the React UI and the host daemon.
+//!
+//! The GUI never touches video or input; it only manages things around the daemon — adb
+//! devices ([`adb`]), wireless pairing ([`pairing`]), the daemon's lifecycle and control
+//! socket ([`daemon`]), `config.toml` ([`config`]) and unpairing ([`forget`]). Every
+//! `#[tauri::command]` registered in [`run`] is callable from the frontend via `invoke()`.
+
 mod adb;
 mod config;
 mod daemon;
 mod forget;
 mod pairing;
 
+/// Build and run the Tauri application: register the IPC commands that the React frontend invokes.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

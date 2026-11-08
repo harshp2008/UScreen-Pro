@@ -81,6 +81,7 @@ const status = (): DaemonStatus => ({
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Install an in-browser fake of the Tauri IPC (including a log at `window.__ipcLog`) so the UI can be developed and screenshotted without the Rust backend. */
 export function installDevMock() {
   const log: { cmd: string; args: unknown }[] = [];
   (window as unknown as { __ipcLog: typeof log }).__ipcLog = log;

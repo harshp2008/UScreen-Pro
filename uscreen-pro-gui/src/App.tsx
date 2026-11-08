@@ -47,6 +47,14 @@ const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** Fingerprint of the global settings only; per-device edits have their own Save button. */
 const globalsKey = (c: AppConfig) => JSON.stringify({ ...c, tablets: {} });
 
+/**
+ * Root of the UScreen Pro window.
+ *
+ * Owns all shared state: it polls the daemon status (every 1 s while a pipeline is restarting,
+ * otherwise every 3 s), loads and saves `config.toml` through Tauri commands, tracks which device
+ * pages have unsaved edits, and routes between Settings, Advanced, Health and per-device views.
+ * Views below it are presentational and receive state and callbacks as props.
+ */
 export default function App() {
   const [view, setViewState] = useState<View>("settings");
   const scrollRef = useRef<HTMLDivElement>(null);

@@ -17,6 +17,7 @@ fn encode_manufacturer_id(s: &[u8; 3]) -> (u8, u8) {
 /// Physical size assumed when the tablet has not reported its own, in mm.
 /// Roughly a 14.6" 16:10 panel.
 pub const DEFAULT_WIDTH_MM: u32 = 310;
+/// Height counterpart of [`DEFAULT_WIDTH_MM`].
 pub const DEFAULT_HEIGHT_MM: u32 = 194;
 
 /// Build a 128-byte EDID with a single detailed timing descriptor.

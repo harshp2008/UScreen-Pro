@@ -19,13 +19,14 @@ const CONNECT_TYPE: &str = "_adb-tls-connect._tcp";
 /// Hard limit on the `adb mdns services` discovery loop. Many routers drop multicast, so
 /// waiting longer than this only leaves the user staring at a spinner.
 const QR_TIMEOUT: Duration = Duration::from_secs(30);
-/// Event the frontend listens for when discovery gave up.
 /// Event carrying the current pairing step as plain text.
 pub const PAIR_PROGRESS: &str = "pair_progress";
+/// Event the frontend listens for when discovery gave up.
 pub const MDNS_TIMEOUT_EVENT: &str = "mdns_timeout";
 const MDNS_TIMEOUT_MESSAGE: &str =
     "mDNS discovery timed out. Your Wi-Fi router may be blocking device discovery. Please use Manual Pairing.";
 
+/// Data the UI needs to render the wireless-pairing QR code.
 #[derive(Serialize, Clone, Debug)]
 pub struct QrPairingSession {
     pub service_name: String,
@@ -33,6 +34,7 @@ pub struct QrPairingSession {
     pub qr_payload: String,
 }
 
+/// Progress event streamed to the wizard while pairing runs.
 #[derive(Serialize, Clone, Debug)]
 pub struct PairingEvent {
     /// "searching" | "stalled" | "pairing" | "success" | "error" | "timeout"
@@ -42,6 +44,7 @@ pub struct PairingEvent {
     pub connect_endpoint: Option<String>,
 }
 
+/// Result of a manual `adb pair`.
 #[derive(Serialize, Clone, Debug)]
 pub struct ManualPairResult {
     pub message: String,
@@ -129,6 +132,10 @@ fn emit(app: &AppHandle, kind: &'static str, message: impl Into<String>, connect
     );
 }
 
+/// Tauri command: generate a one-time service name and code for the QR, then (in the background)
+/// watch for the tablet that scanned it to appear over mDNS, `adb pair` with it and `adb connect`.
+/// Progress and the outcome arrive as `pair_progress` / pairing events; the attempt gives up
+/// after [`QR_TIMEOUT`].
 #[tauri::command]
 pub async fn initiate_qr_pairing(
     app: AppHandle,
@@ -199,6 +206,7 @@ pub async fn initiate_qr_pairing(
     Ok(QrPairingSession { service_name, pairing_code, qr_payload })
 }
 
+/// Tauri command: invalidate the running QR attempt by bumping its generation counter.
 #[tauri::command]
 pub fn cancel_qr_pairing(state: State<'_, PairingState>) {
     state.0.fetch_add(1, Ordering::SeqCst);
@@ -237,6 +245,7 @@ pub async fn manual_adb_pair(
     Ok(ManualPairResult { message, connect_endpoint })
 }
 
+/// Tauri command: `adb connect` to a typed `ip:port`.
 #[tauri::command]
 pub async fn manual_adb_connect(endpoint: String) -> Result<String, String> {
     adb_connect(endpoint.trim()).await

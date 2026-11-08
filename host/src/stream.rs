@@ -1,3 +1,9 @@
+//! Video socket: fans encoded access units out to attached clients over loopback TCP.
+//!
+//! Loopback-only on purpose: the tablet reaches it through `adb reverse`, and the first client
+//! message must be the session token. A client that falls behind skips to the latest keyframe
+//! rather than accumulating latency.
+
 use crate::capture::VideoPacket;
 use anyhow::Result;
 use bytes::Bytes;
@@ -24,6 +30,7 @@ const MAX_BACKLOG: usize = 2;
 /// hide a genuinely slow link.
 const SEND_BUFFER_BYTES: libc::c_int = 128 * 1024;
 
+/// Listener settings for the video socket.
 pub struct StreamConfig {
     pub video_port: u16,
     /// This run's session token; `None` disables the check.
@@ -42,6 +49,7 @@ impl Default for StreamConfig {
 /// How long a client gets to present the token before the socket is closed.
 const AUTH_TIMEOUT: tokio::time::Duration = tokio::time::Duration::from_secs(3);
 
+/// Loopback TCP server that fans the encoded video out to attached clients (the tablet, via `adb reverse`), with token authentication and per-client backlog trimming.
 pub struct StreamServer {
     config: StreamConfig,
     running: Arc<AtomicBool>,
@@ -55,6 +63,7 @@ pub struct StreamServer {
 }
 
 impl StreamServer {
+    /// Create a server sharing the codec-config slot and keyframe flag with the capture manager.
     pub fn new(
         config: StreamConfig,
         codec_config: Arc<Mutex<Option<Bytes>>>,
@@ -69,11 +78,13 @@ impl StreamServer {
         }
     }
 
+    /// Attach the daemon's shutdown signal so clients are told `host_shutdown` before the socket closes.
     pub fn with_shutdown(mut self, rx: watch::Receiver<bool>) -> Self {
         self.shutdown = Some(rx);
         self
     }
 
+    /// Accept clients and serve them `video_rx` until shutdown.
     pub async fn run(&self, video_rx: broadcast::Receiver<VideoPacket>) -> Result<()> {
         self.running.store(true, Ordering::SeqCst);
 

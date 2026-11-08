@@ -58,6 +58,7 @@ const TRIP_BACKOFF: [Duration; 2] = [Duration::from_secs(60), Duration::from_sec
 
 // ---- boot-loop guard (pure logic + state file) -----------------------------
 
+/// Lifecycle state persisted by the boot-loop guard between daemon runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunState {
@@ -71,6 +72,7 @@ pub enum RunState {
     Stopped,
 }
 
+/// What the guard writes to its state file: which boot, what state, since when, and how many consecutive bad runs (`strikes`) preceded this one.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GuardRecord {
     pub boot_id: String,
@@ -80,6 +82,7 @@ pub struct GuardRecord {
     pub strikes: u32,
 }
 
+/// Outcome of [`evaluate`]: start normally, or stay in safe mode (no virtual display).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
     Normal,
@@ -107,6 +110,7 @@ pub fn evaluate(prev: Option<&GuardRecord>, boot_id: &str) -> Verdict {
     }
 }
 
+/// Where the guard state file lives (`$XDG_STATE_HOME/uscreen/guard.json`, falling back to `~/.local/state`). It sits outside the runtime dir so it survives reboots, which is the whole point.
 pub fn state_path() -> PathBuf {
     let base = std::env::var_os("XDG_STATE_HOME")
         .map(PathBuf::from)
@@ -167,6 +171,7 @@ pub fn reset() -> std::io::Result<bool> {
 
 // ---- hotplug limiter (pure) -------------------------------------------------
 
+/// Rate-limits virtual-monitor topology changes. Each add/remove makes the compositor re-layout, and doing it in a tight loop is what historically froze Mutter.
 #[derive(Default)]
 pub struct HotplugLimiter {
     changes: VecDeque<Instant>,
@@ -195,6 +200,7 @@ impl HotplugLimiter {
         gap
     }
 
+    /// Note that a topology change happened at `now`.
     pub fn record(&mut self, now: Instant) {
         self.changes.push_back(now);
     }
@@ -205,6 +211,7 @@ impl HotplugLimiter {
 /// One probe result: `None` = no answer within the timeout.
 pub type Sample = Option<Duration>;
 
+/// Counts consecutive compositor probes that failed or were slow; trips the breaker after [`STALLS_TO_TRIP`] in a row.
 #[derive(Default)]
 pub struct StallDetector {
     consecutive: u32,
@@ -221,6 +228,7 @@ impl StallDetector {
         }
         stalled && self.consecutive == STALLS_TO_TRIP
     }
+    /// Current run of consecutive stalled probes (for logging).
     pub fn consecutive(&self) -> u32 {
         self.consecutive
     }
@@ -376,6 +384,7 @@ pub async fn wait_compositor_ready(shutdown: &mut watch::Receiver<bool>) -> bool
 
 // ---- the guard handed to the capture manager ---------------------------------
 
+/// Answer to "may I create the virtual display now?" given to the capture manager.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Admission {
     Go,
@@ -384,6 +393,7 @@ pub enum Admission {
     Shutdown,
 }
 
+/// Runtime face of the safety system: combines the persisted boot verdict, the hotplug limiter and the stall-breaker latch, and tells the capture manager when it may bring the display up.
 pub struct Guard {
     verdict: Verdict,
     limiter: HotplugLimiter,
@@ -395,6 +405,7 @@ pub struct Guard {
 }
 
 impl Guard {
+    /// Load the previous run's record, judge it, and stamp a fresh record for this run.
     pub fn new() -> Self {
         let id = boot_id();
         let prev = load_record();
@@ -489,6 +500,7 @@ impl Guard {
         }
     }
 
+    /// Promote this run from `DisplayUp` to `Healthy` once the display has stayed stable for the grace period.
     pub fn healthy(&mut self) {
         if self.record.state == RunState::DisplayUp {
             info!(

@@ -25,6 +25,7 @@ const PROBE_PROP: &str = "available";
 
 const QDBUS_NAMES: [&str; 4] = ["qdbus", "qdbus6", "qdbus-qt6", "qdbus-qt5"];
 
+/// Tool used to talk to KWin over D-Bus: `busctl`, or one of the qdbus variants.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Backend {
     Busctl,
@@ -32,6 +33,7 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// Command name of the backend, for logs.
     pub fn name(self) -> &'static str {
         match self {
             Backend::Busctl => "busctl",
@@ -54,6 +56,7 @@ async fn output_of(cmd: &str, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// Does an `XDG_CURRENT_DESKTOP` value denote KDE? An empty value counts as KDE so a bare session is still tried.
 pub fn is_kde_session(desktop: &str) -> bool {
     if desktop.is_empty() {
         return true;
@@ -63,6 +66,7 @@ pub fn is_kde_session(desktop: &str) -> bool {
         .any(|entry| entry.eq_ignore_ascii_case("KDE"))
 }
 
+/// [`is_kde_session`] applied to the current environment.
 pub fn in_kde_session() -> bool {
     is_kde_session(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default())
 }

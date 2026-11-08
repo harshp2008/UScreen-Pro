@@ -8,6 +8,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 
+/// A device as the GUI shows it: one logical tablet, merged from its USB and Wi-Fi adb entries.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConnectedDevice {
     pub serial: String,
@@ -53,10 +54,12 @@ pub async fn run(serial: Option<&str>, args: &[&str], timeout: Duration) -> Resu
     }
 }
 
+/// Trimmed stdout of a finished command.
 pub fn stdout_of(out: &Output) -> String {
     String::from_utf8_lossy(&out.stdout).trim().to_string()
 }
 
+/// stdout and stderr joined for error messages; adb reports some failures on stdout and others on stderr.
 pub fn combined_of(out: &Output) -> String {
     let so = stdout_of(out);
     let se = String::from_utf8_lossy(&out.stderr).trim().to_string();
@@ -67,6 +70,7 @@ pub fn combined_of(out: &Output) -> String {
     }
 }
 
+/// Parse `adb devices -l` into raw entries (one per transport). Returns an empty list if adb is missing or slow.
 pub async fn list_entries() -> Vec<AdbEntry> {
     let Ok(out) = run(None, &["devices", "-l"], Duration::from_millis(2500)).await else {
         return Vec::new();
@@ -95,6 +99,7 @@ pub async fn list_entries() -> Vec<AdbEntry> {
         .collect()
 }
 
+/// Tauri command: raw adb entries for the wizard's device picker.
 #[tauri::command]
 pub async fn list_adb_devices() -> Vec<AdbEntry> {
     list_entries().await
@@ -113,10 +118,12 @@ struct Group {
     all_serials: Vec<String>,
 }
 
+/// Normalised model label used to match the same tablet across USB and Wi-Fi entries.
 pub(crate) fn norm_label(m: &str) -> String {
     norm_model(m)
 }
 
+/// Hardware serial (`ro.serialno`) of a device, which stays constant across transports unlike the adb serial.
 pub(crate) async fn ro_serial(serial: &str) -> Option<String> {
     let out = run(Some(serial), &["shell", "getprop", "ro.serialno"], Duration::from_millis(3000))
         .await
@@ -382,6 +389,7 @@ pub async fn launch_app(serial: &str) -> Result<(), String> {
     }
 }
 
+/// Tauri command: install the bundled APK on one device, emitting progress events to the UI.
 #[tauri::command]
 pub async fn install_apk_on_device(app: AppHandle, serial: String) -> Result<String, String> {
     install_apk(Some(&app), &serial, true).await
@@ -403,6 +411,7 @@ async fn start_intent(serial: Option<&str>, action: &str) -> Result<(), String> 
     }
 }
 
+/// Tauri command: open the Developer Options screen on the tablet so the user can enable USB/Wireless debugging.
 #[tauri::command]
 pub async fn open_developer_options(serial: String) -> Result<String, String> {
     require_serial(&serial)?;
@@ -411,6 +420,7 @@ pub async fn open_developer_options(serial: String) -> Result<String, String> {
         .map(|_| "Opened Developer Options on the device".to_string())
 }
 
+/// Tauri command: open Wireless Debugging on the tablet, falling back to Developer Options on builds that reject the intent.
 #[tauri::command]
 pub async fn open_wireless_debugging_settings(serial: String) -> Result<String, String> {
     require_serial(&serial)?;
@@ -521,6 +531,7 @@ pub async fn identify_device(serial: String, name: Option<String>) -> Result<Str
     }
 }
 
+/// Tauri command: `adb kill-server` then `start-server`, the standard cure for a wedged adb daemon.
 #[tauri::command]
 pub async fn restart_adb_server() -> Result<String, String> {
     let _ = run(None, &["kill-server"], Duration::from_secs(5)).await;
@@ -528,6 +539,7 @@ pub async fn restart_adb_server() -> Result<String, String> {
     Ok(combined_of(&out))
 }
 
+/// Identity of a device reached over Wi-Fi.
 #[derive(Serialize, Clone, Debug)]
 pub struct WirelessDeviceInfo {
     /// Hardware serial (`ro.serialno`), the key device profiles are stored under.

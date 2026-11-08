@@ -1,3 +1,8 @@
+//! Host-side pairing and wireless-transport helpers built on adb: `adb pair` with a code, mDNS
+//! discovery of the TLS connect endpoint, the legacy `adb tcpip` fallback for pre-Android-11
+//! devices (with unique per-device ports), and Wi-Fi provisioning over an existing USB link.
+//! The device's Android API level (see [`query_device_api_level`]) decides which path is used.
+
 use anyhow::{Context, Result};
 use tracing::{info, warn};
 

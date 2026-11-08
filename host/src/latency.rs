@@ -74,6 +74,7 @@ pub fn recent_json(secs: u64) -> String {
     .to_string()
 }
 
+/// Per-stage host timings of one frame, in microseconds, as recorded by the helper's shared timing ring.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct DetailedTiming {
     #[allow(dead_code)]
@@ -110,12 +111,14 @@ struct Inner {
     last_report: Option<Instant>,
 }
 
+/// Collects end-to-end latency samples (send time vs the tablet's render acknowledgement) and periodically logs percentiles. Cheap to clone; clones share state.
 #[derive(Clone, Default)]
 pub struct LatencyTracker {
     inner: Arc<Mutex<Inner>>,
 }
 
 impl LatencyTracker {
+    /// Create an empty tracker.
     pub fn new() -> Self {
         Self::default()
     }

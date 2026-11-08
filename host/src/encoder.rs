@@ -16,6 +16,7 @@
 use anyhow::{Context, Result};
 use bytes::Bytes;
 
+/// In-process libavcodec video encoder. Frames go in as raw pictures and come out as Annex B access units, avoiding the ffmpeg child process and its pipe copy.
 pub struct Encoder {
     inner: ffmpeg_next::encoder::Video,
     frame: ffmpeg_next::frame::Video,

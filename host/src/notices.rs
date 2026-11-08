@@ -68,18 +68,23 @@ pub fn forget(instance: u32) {
     }
 }
 
+/// Notice: the host paused this device's display.
 pub fn paused() -> Value {
     json!({ "type": "paused" })
 }
+/// Notice: the host resumed this device's display.
 pub fn resumed() -> Value {
     json!({ "type": "resumed" })
 }
+/// Notice: new stream settings are being applied.
 pub fn settings_updating() -> Value {
     json!({ "type": "settings_updating" })
 }
+/// Notice: the new stream settings are live.
 pub fn settings_applied() -> Value {
     json!({ "type": "settings_applied" })
 }
+/// Notice: the tablet's app is about to be replaced; carries both versions so the overlay can show them.
 pub fn updating(host: &str, device: &str) -> Value {
     json!({ "type": "updating", "host": host, "device": device })
 }
@@ -87,6 +92,7 @@ pub fn updating(host: &str, device: &str) -> Value {
 pub fn unpaired() -> Value {
     json!({ "type": "unpaired" })
 }
+/// Notice: the app update finished.
 pub fn update_done() -> Value {
     json!({ "type": "update_done" })
 }

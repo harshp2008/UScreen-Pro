@@ -25,6 +25,7 @@ interface Props {
   dirty: boolean;
 }
 
+/** Settings page of one paired device: stream overrides, transport, pause/update/wireless actions and Save for that device only. */
 export function DeviceSettings({
   serial,
   device,

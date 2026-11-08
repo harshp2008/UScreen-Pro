@@ -1,3 +1,10 @@
+//! Input path: a loopback WebSocket server that authenticates the tablet, answers its handshake
+//! and turns its touch / pen / mouse / key messages into events on virtual uinput devices.
+//!
+//! uinput is used instead of compositor APIs so the same code works on X11, GNOME, KDE and
+//! wlroots. Each tablet gets its own device set (see [`DeviceIdentity`]) and is mapped onto its
+//! own virtual output, so two tablets never fight over one screen.
+
 use crate::capture::EncoderSettings;
 use anyhow::{Context, Result};
 use futures_util::{SinkExt, StreamExt};
@@ -87,6 +94,7 @@ pub struct DeviceIdentity {
 }
 
 impl DeviceIdentity {
+    /// Identity for the n-th tablet: names get a numeric suffix and product ids are offset by 16 per instance so the compositor sees distinct devices.
     pub fn for_instance(instance: u32) -> Self {
         let suffix = if instance == 0 {
             String::new()
@@ -142,6 +150,7 @@ struct UinputSetup {
     ff_effects_max: u32,
 }
 
+/// One JSON message from the tablet's input WebSocket (touch, pen, mouse, keys, settings, pings...), discriminated by its `type` field.
 #[derive(Deserialize, Debug)]
 #[serde(tag = "type")]
 pub enum InputEvent {
@@ -225,6 +234,7 @@ pub enum InputEvent {
     PreferredTransport { transport: String },
 }
 
+/// The host's handshake reply after authentication: display size, codec and the current stream settings.
 #[derive(Serialize)]
 pub struct InputResponse {
     pub status: String,
@@ -251,6 +261,7 @@ pub struct InputResponse {
     pub host_version: Option<String>,
 }
 
+/// Static configuration of one tablet's input server.
 #[derive(Clone)]
 pub struct InputConfig {
     pub port: u16,
@@ -1125,6 +1136,7 @@ async fn target_output(
     }
 }
 
+/// Loopback WebSocket server that receives a tablet's input and settings messages and injects them into the desktop through uinput.
 pub struct InputServer {
     config: InputConfig,
     running: Arc<AtomicBool>,
@@ -1146,6 +1158,7 @@ pub struct InputServer {
 }
 
 impl InputServer {
+    /// Wire the server to the daemon's shared channels.
     pub fn new(
         config: InputConfig,
         settings_tx: Option<watch::Sender<EncoderSettings>>,
@@ -1167,6 +1180,7 @@ impl InputServer {
         }
     }
 
+    /// Accept tablet connections until the process exits.
     pub async fn run(&self) -> Result<()> {
         self.running.store(true, Ordering::SeqCst);
         // Loopback only — see the note in stream.rs. This socket injects real

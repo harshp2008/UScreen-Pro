@@ -149,6 +149,12 @@ function DebugTimeline() {
   );
 }
 
+/**
+ * Multi-step dialog that onboards a tablet: pick the device, install the APK over USB, then set up
+ * wireless access (QR pairing, manual code, or Tailscale) or skip it. With `reconfigure` set it
+ * opens directly on the wireless step for an already-paired device. Every adb call after the
+ * device is chosen is pinned to its serial so a second plugged-in tablet cannot be touched.
+ */
 export function AddDeviceWizard({
   open,
   onOpenChange,

@@ -36,6 +36,7 @@ pub fn runtime_dir() -> PathBuf {
     dir
 }
 
+/// FIFO path of the first display.
 pub fn fifo_path() -> PathBuf {
     fifo_path_for(0)
 }
@@ -49,6 +50,7 @@ pub fn fifo_path_for(instance: u32) -> PathBuf {
     }
 }
 
+/// Timing-ring path of the first display.
 #[allow(dead_code)]
 pub fn timing_path() -> PathBuf {
     timing_path_for(0)

@@ -1,3 +1,4 @@
+/** A tablet as reported by the backend (`DaemonStatus.devices`); mirrors the Rust struct of the same name. */
 export interface ConnectedDevice {
   serial: string;
   model: string;
@@ -12,6 +13,7 @@ export interface ConnectedDevice {
   install?: InstallStatus | null;
 }
 
+/** State of a device's job in the daemon's APK install queue. */
 export interface InstallStatus {
   state: "queued" | "installing" | "done" | "failed";
   detail: string;
@@ -28,6 +30,7 @@ export interface PipelineEvent {
   done: boolean;
 }
 
+/** What forgetting a device actually removed; mirrors the Rust `ForgetReport`. */
 export interface ForgetReport {
   removed_profiles: string[];
   session: string;
@@ -36,6 +39,7 @@ export interface ForgetReport {
   notes: string[];
 }
 
+/** One line of `adb devices -l`, before USB and Wi-Fi entries of the same tablet are merged. */
 export interface AdbEntry {
   serial: string;
   state: string;
@@ -43,6 +47,7 @@ export interface AdbEntry {
   is_wifi: boolean;
 }
 
+/** Snapshot of the host daemon polled by the UI. */
 export interface DaemonStatus {
   is_running: boolean;
   pid?: number;
@@ -53,6 +58,7 @@ export interface DaemonStatus {
   devices: ConnectedDevice[];
 }
 
+/** Per-device settings; mirrors `[tablets.<id>]` in config.toml. Unset fields inherit the global value. */
 export interface TabletProfile {
   label: string;
   nickname?: string;
@@ -74,6 +80,7 @@ export interface TabletProfile {
   wireless_configured?: boolean;
 }
 
+/** Global settings plus all device profiles; mirrors config.toml. */
 export interface AppConfig {
   encoder: string;
   fps: number;
@@ -106,25 +113,30 @@ export interface AppConfig {
   tablets: Record<string, TabletProfile>;
 }
 
+/** Which page is showing: a named page, or a device's own settings page. */
 export type View = "settings" | "advanced" | "health" | { device: string };
 
+/** Identity of a device reached over Wi-Fi. */
 export interface WirelessDeviceInfo {
   serial: string;
   model: string;
 }
 
+/** Progress of an in-flight wireless pairing attempt. */
 export interface PairingEvent {
   kind: "searching" | "pairing" | "success" | "error" | "timeout";
   message: string;
   connect_endpoint?: string | null;
 }
 
+/** Data for rendering the pairing QR code. */
 export interface QrPairingSession {
   service_name: string;
   pairing_code: string;
   qr_payload: string;
 }
 
+/** Result of pairing with a typed address and code. */
 export interface ManualPairResult {
   message: string;
   connect_endpoint?: string | null;

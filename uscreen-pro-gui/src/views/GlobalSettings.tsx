@@ -14,6 +14,7 @@ interface Props {
   onAutostart: (enabled: boolean) => void;
 }
 
+/** Settings page for the defaults every device inherits, plus the daemon autostart switch. */
 export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, onAutostart }: Props) {
   return (
     <div className="w-full space-y-2">

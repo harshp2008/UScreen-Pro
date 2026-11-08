@@ -82,6 +82,7 @@ async fn keyword(key: &str, value: &str) -> bool {
     }
 }
 
+/// One entry of `hyprctl monitors -j`, reduced to the fields placement needs.
 #[derive(Debug, Clone)]
 pub struct Monitor {
     pub name: String,
@@ -98,6 +99,7 @@ pub struct Monitor {
 }
 
 impl Monitor {
+    /// True when Hyprland has actually switched the monitor on (enabled and with a non-empty mode).
     pub fn is_on(&self) -> bool {
         !self.disabled && self.width > 0.0 && self.height > 0.0
     }

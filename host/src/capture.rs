@@ -1,3 +1,11 @@
+//! Video pipeline supervisor: spawns the EVDI helper (virtual monitor + frame grabber) and the
+//! encoder, parses the Annex B output into access units and broadcasts them to the stream
+//! server.
+//!
+//! Why it is this large: the pipeline has to survive helper crashes, compositor-chosen mode
+//! changes, live settings changes from the tablet and display hotplug storms, so supervision,
+//! mode negotiation and bitstream parsing all live next to the process management.
+
 use anyhow::{Context, Result};
 use bytes::Bytes;
 use std::path::PathBuf;
@@ -19,6 +27,10 @@ pub fn fifo_path() -> String {
     crate::runtime::fifo_path().to_string_lossy().into_owned()
 }
 
+/// Path of the frame FIFO for the n-th virtual display (instance 0 keeps the legacy name).
+///
+/// One FIFO per tablet is what lets two pipelines run side by side without
+/// interleaving their frames.
 pub fn fifo_path_for(instance: u32) -> String {
     crate::runtime::fifo_path_for(instance)
         .to_string_lossy()
@@ -40,6 +52,7 @@ pub enum Codec {
 }
 
 impl Codec {
+    /// Infer the bitstream from an ffmpeg encoder name (`hevc_vaapi`, `h265_nvenc`, ...); anything else is H.264.
     pub fn from_encoder(name: &str) -> Self {
         if name.contains("hevc") || name.contains("h265") || name.contains("265") {
             Codec::Hevc
@@ -177,6 +190,11 @@ fn evdi_setup_problem_in(dir: &std::path::Path) -> Option<String> {
     )
 }
 
+/// Everything one capture pipeline (EVDI helper + encoder) needs to start.
+///
+/// Built per device from the global config overlaid with the tablet's profile, so
+/// changing any field that affects ffmpeg or the helper arguments requires a
+/// pipeline restart.
 #[derive(Clone)]
 pub struct CaptureConfig {
     pub helper_path: PathBuf,
@@ -245,6 +263,14 @@ pub struct DetectedMode {
     pub refresh: u32,
 }
 
+/// Owns the child processes of one tablet's video pipeline: the `evdi_helper`
+/// (creates the virtual monitor and grabs its frames) and the encoder that turns
+/// those frames into an H.264/HEVC bitstream.
+///
+/// The manager also supervises them: it restarts a crashed helper with
+/// exponential backoff, asks the guard (see `guard.rs`) for permission before
+/// each display hotplug, and publishes the negotiated mode, card and codec
+/// config to the servers that need them.
 pub struct CaptureManager {
     config: CaptureConfig,
     helper_child: Option<Child>,
@@ -281,6 +307,7 @@ pub struct CaptureManager {
 }
 
 impl CaptureManager {
+    /// Create an idle manager; nothing is spawned until [`CaptureManager::stream_frames`] runs.
     pub fn new(config: CaptureConfig) -> Self {
         let (mode_tx, mode_rx) = watch::channel(None);
         let (stream_tx, stream_rx) = watch::channel(None);
@@ -319,6 +346,7 @@ impl CaptureManager {
         self.idr_wanted.clone()
     }
 
+    /// Shared slot holding the stream's parameter sets (SPS/PPS/VPS), which the stream server replays to every client that attaches mid-stream.
     pub fn codec_config_arc(&self) -> Arc<Mutex<Option<Bytes>>> {
         self.codec_config.clone()
     }
@@ -1110,6 +1138,12 @@ impl CaptureManager {
         Ok(())
     }
 
+    /// Run the pipeline until shutdown: start the helper and encoder, forward encoded access units to `tx`, and restart whichever child dies.
+    ///
+    /// `settings_rx` carries live encoder changes from the tablet, `display_rx` is the
+    /// on/off switch (false = tear the virtual display down), and `shutdown_rx` ends
+    /// the loop. Restarts back off exponentially because a crash-looping helper
+    /// generates display hotplug storms that can wedge the compositor.
     pub async fn stream_frames(
         &mut self,
         tx: broadcast::Sender<VideoPacket>,
@@ -1810,6 +1844,7 @@ impl CaptureManager {
         }
     }
 
+    /// Ask both children to exit with SIGTERM (so the helper can remove the virtual monitor cleanly) and stop reading the helper's stdout.
     pub fn stop(&mut self) {
         if let Some(task) = self.helper_stdout_task.take() {
             task.abort();

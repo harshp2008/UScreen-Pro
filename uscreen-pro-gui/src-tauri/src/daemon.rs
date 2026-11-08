@@ -9,6 +9,7 @@ use tokio::net::UnixStream;
 use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 
+/// Snapshot polled by the UI: is the daemon alive, is its control socket answering, which version, and which devices it knows.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct DaemonStatus {
     pub is_running: bool,
@@ -147,6 +148,7 @@ pub async fn restart_pipeline(app: &AppHandle, serial: Option<&str>) -> Result<S
     Ok("restart requested".into())
 }
 
+/// Progress of a pipeline restart, emitted to the frontend as the daemon respawns encoders.
 #[derive(Serialize, Clone, Debug)]
 pub struct PipelineEvent {
     /// Device the event is about; `None` means every device.
@@ -166,6 +168,7 @@ pub async fn forget_session(serial: &str) -> Result<String, String> {
     send_control_cmd(&format!("FORGET {serial}")).await
 }
 
+/// Tauri command: restart the video pipeline of one device.
 #[tauri::command]
 pub async fn restart_session(app: AppHandle, serial: String) -> Result<String, String> {
     restart_pipeline(&app, Some(&serial)).await
@@ -182,6 +185,7 @@ pub async fn queue_apk_install(serial: String) -> Result<String, String> {
     send_control_cmd(&format!("INSTALL {serial}")).await
 }
 
+/// Tauri command: gather [`DaemonStatus`] from the pid file, a control-socket `PING` and the adb device list.
 #[tauri::command]
 pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
     let pid = tokio::fs::read_to_string(pid_path())
@@ -305,6 +309,7 @@ pub async fn launch_daemon() -> Result<String, String> {
     }
 }
 
+/// Tauri command: stop the daemon via its systemd unit when it runs under one, otherwise through `uscreen stop`. Leaves the GUI window open.
 #[tauri::command]
 pub async fn stop_daemon() -> Result<String, String> {
     if !pid_alive().await && !unit_active().await {
@@ -333,6 +338,7 @@ pub async fn stop_daemon() -> Result<String, String> {
     }
 }
 
+/// Tauri command: is the user service enabled at login?
 #[tauri::command]
 pub async fn get_autostart_status() -> bool {
     Command::new("systemctl")
@@ -342,6 +348,7 @@ pub async fn get_autostart_status() -> bool {
         .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "enabled")
 }
 
+/// Tauri command: enable (and start) or disable the user service.
 #[tauri::command]
 pub async fn set_autostart_status(enabled: bool) -> Result<bool, String> {
     let verb = if enabled { "enable" } else { "disable" };

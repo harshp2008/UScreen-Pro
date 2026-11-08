@@ -56,7 +56,7 @@ fun lockScreenTouchSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION
  * hover dispatch, screen refresh rate negotiation, and system immersive UI flags.
  */
 class MainActivity : AppCompatActivity() {
-    /// Mirrors the host's mode so the UI can say what is going on.
+    /** Mirrors the host's mode so the UI can say what is going on. */
     private var penOnlyMode by mutableStateOf(false)
     private var hostVersion by mutableStateOf<String?>(null)
     private var hostNotice by mutableStateOf<HostNotice?>(null)
@@ -70,6 +70,10 @@ class MainActivity : AppCompatActivity() {
     private var isDeviceLocked by mutableStateOf(false)
     private var lockReceiver: BroadcastReceiver? = null
 
+    /**
+     * Let the activity stay visible and wake the screen over the keyguard when the user opted into
+     * "keep display alive when locked"; otherwise restore the default lock-screen behaviour.
+     */
     fun applyLockScreenFlags() {
         val keepAlive = prefs.keepDisplayAliveWhenLocked
         setShowWhenLocked(keepAlive)
@@ -425,6 +429,10 @@ class MainActivity : AppCompatActivity() {
         touchCapture?.sendPing()
     }
 
+    /**
+     * Switch between the default window insets and the opt-in immersive layout (content under the
+     * cutout, system bars hidden). Wrapped in try/catch because OEM window managers differ.
+     */
     fun applyImmersiveMode(optIn: Boolean = prefs.immersiveModeEnabled) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

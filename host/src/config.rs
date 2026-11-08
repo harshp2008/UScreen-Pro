@@ -1,3 +1,9 @@
+//! `~/.config/uscreen/config.toml`: global stream settings plus one `[tablets.<id>]` profile per
+//! paired device. Shared with the GUI, so keys must stay backwards compatible.
+//!
+//! Loading clamps every numeric setting to a sane range because values arrive from the tablet
+//! and the GUI and, once saved, would otherwise persist a bad number forever.
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -10,12 +16,14 @@ use std::path::PathBuf;
 /// a bad number pushed once from the tablet stays in the config file and keeps
 /// poisoning every subsequent run.
 pub const MAX_BITRATE_KBPS: u32 = 60_000;
+/// Lowest bitrate accepted; below this the picture is unusable and rate control misbehaves.
 pub const MIN_BITRATE_KBPS: u32 = 1_000;
 
 /// The generated EDID caps the virtual mode at 90 Hz (EDID 1.4 stores the pixel
 /// clock in 16 bits, and 2960x1848@120 overflows it), so anything above 90
 /// would only ever produce duplicate frames.
 pub const MAX_FPS: u32 = 90;
+/// Lowest frame rate accepted.
 pub const MIN_FPS: u32 = 10;
 
 /// Constant-quality target for the encoder (lower = sharper, more bits).
@@ -26,7 +34,9 @@ pub const MIN_FPS: u32 = 10;
 /// free. Text sharpness is ultimately limited by 4:2:0 chroma subsampling, not
 /// by this number — below roughly 16 there is nothing left to gain.
 pub const DEFAULT_QUALITY: u32 = 18;
+/// Sharpest constant-quality value accepted; lower numbers only burn bandwidth.
 pub const MIN_QUALITY: u32 = 12;
+/// Blurriest constant-quality value accepted.
 pub const MAX_QUALITY: u32 = 32;
 
 /// What one device reported about itself, and anything set specifically for
@@ -85,6 +95,7 @@ pub struct TabletProfile {
     pub api_level: Option<u32>,
 }
 
+/// Alias kept for call sites that predate the rename to `TabletProfile`.
 #[allow(dead_code)]
 pub type DeviceProfile = TabletProfile;
 
@@ -279,6 +290,7 @@ pub enum Position {
 }
 
 impl Position {
+    /// Parse a position name case-insensitively; `top`/`bottom` are accepted as aliases of `above`/`below`.
     pub fn parse(s: &str) -> Option<Self> {
         match s.trim().to_ascii_lowercase().as_str() {
             "right" => Some(Position::Right),
@@ -296,12 +308,18 @@ impl Position {
     }
 }
 
+/// Location of `config.toml`, shared with the Tauri GUI (`~/.config/uscreen/config.toml`).
 pub fn config_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
     PathBuf::from(home).join(".config/uscreen/config.toml")
 }
 
 impl FileConfig {
+    /// Read and sanitise the config file.
+    ///
+    /// A missing or unparsable file yields defaults, and out-of-range values are
+    /// clamped (with a warning) so a bad number pushed once cannot poison every
+    /// later run.
     pub fn load() -> Self {
         let path = config_path();
         let mut cfg = match std::fs::read_to_string(&path) {
@@ -359,6 +377,7 @@ impl FileConfig {
             || self.tablets.contains_key(serial)
     }
 
+    /// Write the config back as pretty TOML, logging which lines changed so settings that drift unexpectedly can be traced.
     pub fn save(&self) -> Result<()> {
         let path = config_path();
         if let Some(parent) = path.parent() {

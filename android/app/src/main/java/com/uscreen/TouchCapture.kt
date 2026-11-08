@@ -11,6 +11,14 @@ import okhttp3.*
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
+/**
+ * WebSocket client for the host's input server (loopback port 8891, reached through `adb reverse`).
+ *
+ * It authenticates with the session token, sends the display handshake (native resolution and
+ * physical size), and translates Android [MotionEvent]s into the JSON touch / pen / mouse messages
+ * the host injects through uinput. It also receives host notices (pause, settings, update) and
+ * reconnects with a fixed delay when the socket drops.
+ */
 class TouchCapture {
     companion object {
         const val TAG = "UScreenTouch"
@@ -23,16 +31,16 @@ class TouchCapture {
         const val RECONNECT_DELAY_MS = 2000L
     }
 
-    /// WebSocket port on 127.0.0.1. Defaults to 8891.
+    /** WebSocket port on 127.0.0.1. Defaults to 8891. */
     @Volatile var port: Int = DEFAULT_PORT
 
-    /// Host IP address for WebSocket connection. Defaults to 127.0.0.1 (ADB reverse forward).
+    /** Host IP address for WebSocket connection. Defaults to 127.0.0.1 (ADB reverse forward). */
     @Volatile var host: String = "127.0.0.1"
 
-    /// Target display ID (defaults to 0 or virtual display ID).
+    /** Target display ID (defaults to 0 or virtual display ID). */
     @Volatile var targetDisplayId: Int = 0
 
-    /// Virtual display resolution used for coordinate mapping.
+    /** Virtual display resolution used for coordinate mapping. */
     @Volatile var virtualWidth: Int = 0
     @Volatile var virtualHeight: Int = 0
 
@@ -60,9 +68,11 @@ class TouchCapture {
 
     @Volatile var currentPreferredTransport: String = "auto"
 
-    /// Session token from the host, delivered as an intent extra when the
-    /// daemon launches us over adb. Must be the first thing sent on the
-    /// socket; without it the host closes the connection unanswered.
+    /**
+     * Session token from the host, delivered as an intent extra when the
+     * daemon launches us over adb. Must be the first thing sent on the
+     * socket; without it the host closes the connection unanswered.
+     */
     @Volatile var token: String? = null
 
     /** Settings to (re)send to the host whenever the control channel connects */
@@ -79,6 +89,11 @@ class TouchCapture {
     @Volatile private var nativeWidthMm = 0
     @Volatile private var nativeHeightMm = 0
 
+    /**
+     * Record the panel's real pixel size and, when known, physical size in millimetres; the host uses
+     * them to build a matching virtual display. The virtual size defaults to the native size until the
+     * host answers with the mode it actually created.
+     */
     fun setNativeResolution(width: Int, height: Int, widthMm: Int = 0, heightMm: Int = 0) {
         nativeWidth = width
         nativeHeight = height
@@ -88,6 +103,9 @@ class TouchCapture {
         if (virtualHeight == 0) virtualHeight = height
     }
 
+    /**
+     * Size of the host-side virtual display, used to map touch coordinates onto it.
+     */
     fun setVirtualResolution(width: Int, height: Int) {
         virtualWidth = width
         virtualHeight = height
@@ -200,6 +218,9 @@ class TouchCapture {
     }
 
     // The surface only forwards touches to the host; there is no click to perform.
+    /**
+     * Attach the view whose touches are forwarded to the host and remember which display it is on.
+     */
     @android.annotation.SuppressLint("ClickableViewAccessibility")
     fun setSurfaceView(sv: SurfaceView) {
         surfaceView = sv
@@ -239,6 +260,9 @@ class TouchCapture {
         }
     }
 
+    /**
+     * Open the input WebSocket (idempotent) and start the authenticate-then-handshake sequence.
+     */
     fun connect() {
         penButtonDown = false
         // Idempotent: a second connect() must not leave the first socket
@@ -343,6 +367,13 @@ class TouchCapture {
         return copy
     }
 
+    /**
+     * Translate one [MotionEvent] into host messages.
+     *
+     * Palms are dropped, pens and fingers are routed to separate message types (a pen in range
+     * suppresses finger touches), and all coordinates are normalised against the given view size.
+     * Returns false when the socket is not connected so the caller can fall through.
+     */
     fun handleMotionEvent(event: MotionEvent, width: Int, height: Int): Boolean {
         if (!isConnected) return false
 
@@ -709,6 +740,10 @@ class TouchCapture {
         }
     }
 
+    /**
+     * Tell the host which transport (USB or Wi-Fi) the user prefers; the host stores it in this device's profile
+and consults it when choosing between the device's adb entries.
+     */
     fun sendPreferredTransport(transport: String) {
         currentPreferredTransport = transport
         val msg = JSONObject().apply {
@@ -767,6 +802,9 @@ class TouchCapture {
     @Volatile var inputBlocked = false
         private set
 
+    /**
+     * Block or unblock all input (used while the locked-device overlay is shown); blocking lifts anything pressed.
+     */
     fun setInputBlocked(blocked: Boolean) {
         inputBlocked = blocked
         if (blocked) liftTouches()
@@ -779,6 +817,9 @@ class TouchCapture {
     @Volatile var touchEnabled = true
         private set
 
+    /**
+     * Enable or disable finger input (the pen always works); disabling lifts anything pressed.
+     */
     fun setTouchEnabled(on: Boolean) {
         touchEnabled = on
         if (!on) liftTouches()
@@ -789,8 +830,14 @@ class TouchCapture {
     private fun isPalm(event: MotionEvent, index: Int): Boolean =
         event.getToolType(index) == TOOL_TYPE_PALM
 
+    /**
+     * True while the input WebSocket is open.
+     */
     fun isControlConnected(): Boolean = isConnected
 
+    /**
+     * Close the socket and cancel the reconnect loop.
+     */
     fun disconnect() {
         reconnectJob?.cancel()
         webSocket?.close(1000, "Client closing")

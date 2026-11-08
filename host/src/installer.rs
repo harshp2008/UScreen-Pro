@@ -17,6 +17,7 @@ use tokio::process::Command;
 use tokio::sync::Semaphore;
 use tracing::{info, warn};
 
+/// How many APK installs may run at once; more than this saturates adb and slows every install.
 pub const MAX_CONCURRENT: usize = 2;
 const INSTALL_TIMEOUT: Duration = Duration::from_secs(180);
 /// A finished job stays visible this long so the GUI's 3 s poll is guaranteed to see it.
@@ -28,6 +29,7 @@ const AUTO_COOLDOWN: Duration = Duration::from_secs(600);
 /// Time the "Updating App..." overlay gets on the tablet before adb replaces the package.
 const OVERLAY_LEAD: Duration = Duration::from_millis(1500);
 
+/// Lifecycle of one APK install job as shown in the GUI.
 #[derive(Clone, Debug, PartialEq)]
 pub enum State {
     Queued,
@@ -182,6 +184,7 @@ fn parse_version_name(dumpsys: &str) -> Option<String> {
         .filter(|v| !v.is_empty())
 }
 
+/// Version stamp of this host binary, compared against the app's reported version to decide whether the tablet needs an update.
 pub fn host_version() -> &'static str {
     env!("GIT_VERSION_STRING")
 }

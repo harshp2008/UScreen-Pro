@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
 
+/// What `forget_device` removed, reported back so the UI can show an honest summary.
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct ForgetReport {
     /// Config keys removed (`tablets.<key>`).

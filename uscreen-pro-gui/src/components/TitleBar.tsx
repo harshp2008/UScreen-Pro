@@ -48,6 +48,7 @@ const THEMES: { id: ThemePref; label: string; icon: LucideIcon }[] = [
   { id: "system", label: "System (Auto)", icon: Monitor },
 ];
 
+/** Custom window title bar (the native decorations are off) with drag region, window controls and the theme picker. */
 export function TitleBar({ theme, onThemeChange }: { theme: ThemePref; onThemeChange: (t: ThemePref) => void }) {
   const current = THEMES.find((t) => t.id === theme) ?? THEMES[2];
   const CurrentIcon = current.icon;

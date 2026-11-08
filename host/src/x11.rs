@@ -22,6 +22,7 @@ fn command_exists(name: &str) -> bool {
         .any(|d| std::path::Path::new(d).join(name).exists())
 }
 
+/// Is this an X11 session in which `xrandr` is the right tool to place the virtual monitor?
 pub fn active() -> bool {
     let session = std::env::var("XDG_SESSION_TYPE").unwrap_or_default();
     let desktop = std::env::var("XDG_CURRENT_DESKTOP")
@@ -48,6 +49,7 @@ async fn run(program: &str, args: &[&str]) -> Option<(bool, String)> {
     Some((out.status.success(), text))
 }
 
+/// One connected/disconnected output as parsed from `xrandr --prop`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Output {
     pub name: String,
@@ -217,6 +219,7 @@ pub async fn enable_output(names: &[String], position: crate::config::Position) 
     warn!("The EVDI output did not appear in `xrandr --prop` within 3s");
 }
 
+/// Switch off the virtual outputs named in `names` so the desktop does not keep a dead screen after the helper exits.
 pub async fn disable_output(names: &[String]) {
     let targets = targets_for(names);
     let Some(all) = outputs().await else { return };

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// Per-device section (`[tablets.<serial>]`) of config.toml; mirrors the host's `TabletProfile`.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default)]
 pub struct TabletProfile {
@@ -49,6 +50,7 @@ pub struct TabletProfile {
     pub extra: toml::value::Table,
 }
 
+/// The GUI's view of config.toml: global stream settings plus the per-device profiles. Unknown keys are tolerated so host-side additions never break the GUI.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default)]
 pub struct AppConfig {
@@ -125,14 +127,17 @@ impl Default for AppConfig {
     }
 }
 
+/// The user's home directory (`$HOME`), or an empty path if unset.
 pub fn home_dir() -> PathBuf {
     std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
 }
 
+/// Same file the host daemon reads: `~/.config/uscreen/config.toml`.
 pub fn config_path() -> PathBuf {
     home_dir().join(".config/uscreen/config.toml")
 }
 
+/// Read the config, falling back to defaults when missing or unparsable.
 pub async fn load() -> AppConfig {
     match tokio::fs::read_to_string(config_path()).await {
         Ok(content) => toml::from_str(&content).unwrap_or_default(),
@@ -140,6 +145,7 @@ pub async fn load() -> AppConfig {
     }
 }
 
+/// Serialise and write the config, creating the directory if needed.
 pub async fn store(config: &AppConfig) -> Result<(), String> {
     let path = config_path();
     if let Some(parent) = path.parent() {
@@ -154,6 +160,7 @@ pub async fn store(config: &AppConfig) -> Result<(), String> {
         .map_err(|e| format!("Failed to write config: {e}"))
 }
 
+/// Tauri command: current config for the settings views.
 #[tauri::command]
 pub async fn get_config() -> Result<AppConfig, String> {
     Ok(load().await)
@@ -172,6 +179,7 @@ fn profile_args_differ(a: Option<&TabletProfile>, b: &TabletProfile) -> bool {
     a.map(key) != Some(key(b))
 }
 
+/// Tauri command: persist global settings and, if any of them changes the pipeline arguments, restart the affected pipelines.
 #[tauri::command]
 pub async fn save_config(app: tauri::AppHandle, config: AppConfig) -> Result<(), String> {
     let previous = load().await;
@@ -184,6 +192,7 @@ pub async fn save_config(app: tauri::AppHandle, config: AppConfig) -> Result<(),
     Ok(())
 }
 
+/// Tauri command: persist one device's profile and restart only that device's pipeline if its stream arguments changed.
 #[tauri::command]
 pub async fn save_device_profile(app: tauri::AppHandle, serial: String, profile: TabletProfile) -> Result<(), String> {
     let mut cfg = load().await;

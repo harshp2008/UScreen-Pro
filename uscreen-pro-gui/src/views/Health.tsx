@@ -20,6 +20,7 @@ function Card({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+/** Diagnostics page: daemon, control socket and adb state, with one-click remedies (restart adb, reinstall the APK). */
 export function Health({
   status,
   onRestartAdb,

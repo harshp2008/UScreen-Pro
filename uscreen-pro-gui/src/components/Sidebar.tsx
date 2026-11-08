@@ -76,6 +76,10 @@ function deviceStatus(d: ConnectedDevice, restarting: ReadonlySet<string>): { te
   return undefined;
 }
 
+/**
+ * Left navigation: global pages, one entry per paired device (with live status text) and the
+ * daemon state at the bottom.
+ */
 export function Sidebar({
   view,
   devices,

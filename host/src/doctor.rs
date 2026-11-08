@@ -980,6 +980,7 @@ fn check_config(r: &mut Report, cfg: &FileConfig) {
     );
 }
 
+/// Entry point of `uscreen doctor`: probe the kernel, EVDI, compositor, encoders and adb, and print a pass/warn/fail report with remediation hints.
 pub async fn run() -> Result<()> {
     println!("=== uscreen doctor ===");
 

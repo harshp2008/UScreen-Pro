@@ -12,6 +12,13 @@ import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.util.Log
 
+/**
+ * Foreground service that keeps the process (and thus the video and input sockets) alive while the
+ * activity is in the background, holding a partial wake lock and a Wi-Fi lock for the duration.
+ *
+ * Streaming itself does not depend on it: if the platform refuses the foreground start the service
+ * stops itself instead of crashing the app.
+ */
 class StreamingService : Service() {
     companion object {
         const val CHANNEL_ID = "uscreen_streaming"

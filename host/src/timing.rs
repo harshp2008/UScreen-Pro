@@ -1,10 +1,18 @@
+//! Shared-memory ring of per-frame stage timestamps written by `evdi_helper` and read by the
+//! host, so the latency report can split a frame's journey into grab / convert / queue / encode.
+//! The layout is `#[repr(C)]` and must match `host/evdi/evdi_helper.c`.
+
 use std::fs::OpenOptions;
 use std::path::Path;
 
+/// Number of slots in the shared timing ring; must match `evdi_helper.c`.
 pub const TIMING_RING_SIZE: usize = 1024;
+/// Magic number the helper writes once the ring is initialised.
 pub const TIMING_MAGIC: u32 = 0x55534352; // 'USCR'
+/// Layout version of the ring; bump together with the C side.
 pub const TIMING_VERSION: u32 = 1;
 
+/// Stage timestamps of one frame (monotonic microseconds), written by the helper.
 #[repr(C)]
 #[derive(Clone, Copy, Default, Debug)]
 pub struct FrameTimingRecord {
@@ -17,6 +25,7 @@ pub struct FrameTimingRecord {
     pub t_fifo_write_us: u64,
 }
 
+/// Memory layout of the mmapped timing file; `#[repr(C)]` because the C helper writes it.
 #[repr(C)]
 pub struct SharedTimingRing {
     pub magic: u32,
@@ -24,6 +33,7 @@ pub struct SharedTimingRing {
     pub records: [FrameTimingRecord; TIMING_RING_SIZE],
 }
 
+/// Read-only mapping of the helper's timing ring.
 pub struct TimingReader {
     mmap_ptr: *const SharedTimingRing,
     len: usize,
@@ -33,6 +43,7 @@ unsafe impl Send for TimingReader {}
 unsafe impl Sync for TimingReader {}
 
 impl TimingReader {
+    /// Create/size the file if needed and map it read-only; `None` if the mapping fails.
     pub fn open(path: &Path) -> Option<Self> {
         let file = OpenOptions::new()
             .read(true)
@@ -66,6 +77,7 @@ impl TimingReader {
         }
     }
 
+    /// Look up the record for frame `seq`, or `None` if the helper has not written it (or already overwrote it).
     pub fn get_record(&self, seq: u32) -> Option<FrameTimingRecord> {
         if self.mmap_ptr.is_null() {
             return None;
@@ -102,6 +114,7 @@ impl Drop for TimingReader {
     }
 }
 
+/// `CLOCK_MONOTONIC` in microseconds — the clock the helper stamps records with, so differences are comparable.
 pub fn now_monotonic_us() -> u64 {
     let mut ts = libc::timespec {
         tv_sec: 0,
