@@ -108,8 +108,6 @@ impl InputServer {
                 mouse_product: ident_bg.product_touchpad,
                 keyboard_name: ident_bg.keyboard.clone(),
                 keyboard_product: ident_bg.product_keyboard,
-                gestures_name: ident_bg.gestures.clone(),
-                gestures_product: ident_bg.product_gestures,
                 ..InjectDevices::headless()
             }
         })
@@ -294,8 +292,6 @@ pub(super) async fn handle_connection(
     // Per-device options (touchpad mode, immersive mode, battery saver, idle dimming). Sent right
     // after the greeting and again whenever they change, whoever changed them.
     let mut options_rx = crate::options::options_rx(config.instance);
-    // The stylus profile list, sent after the options and again whenever a profile changes.
-    let mut profiles_rx = crate::stylus_profile::subscribe();
 
     // Authenticate before anything else happens: no greeting, no events.
     if let Some(expected) = config.token.as_deref() {
@@ -357,21 +353,8 @@ pub(super) async fn handle_connection(
         .send(Message::Text(first_options.to_string()))
         .await?;
 
-    let first_profiles = profiles_rx.borrow_and_update().clone();
-    ws_sender.send(Message::Text(first_profiles)).await?;
-
     loop {
         let msg = tokio::select! {
-            changed = profiles_rx.changed() => {
-                if changed.is_err() {
-                    break;
-                }
-                let update = profiles_rx.borrow_and_update().clone();
-                if ws_sender.send(Message::Text(update)).await.is_err() {
-                    break;
-                }
-                continue;
-            }
             notice = notice_rx.recv() => {
                 match notice {
                     Ok(text) => {

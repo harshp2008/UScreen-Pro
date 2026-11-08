@@ -194,11 +194,6 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putBoolean("keep_display_alive_when_locked", v).apply()
 
 
-    /** Active stylus profile id (`standard`, `samsung_spen` or a custom profile), synced with the computer. */
-    var stylusProfile: String
-        get() = sp.getString("stylus_profile", "standard") ?: "standard"
-        set(v) = sp.edit().putString("stylus_profile", v).apply()
-
     /** Light vibration on touchpad clicks, synced with the computer. */
     var touchpadHaptics: Boolean
         get() = sp.getBoolean("touchpad_haptics", true)

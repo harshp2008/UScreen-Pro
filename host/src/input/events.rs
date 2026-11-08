@@ -38,83 +38,9 @@ pub(super) fn note_pen_action(action: u8) {
 /// 40 px, about what a laptop touchpad feels like.
 const SCROLL_UNITS_PER_PX: f64 = 3.0;
 
-/// Wheel units per tablet pixel of pinch travel (Ctrl + wheel zooms) and of rotation arc
-/// (Alt + wheel): a 100 px pinch is about five notches.
+/// Wheel units per tablet pixel of pinch travel (Ctrl + wheel zooms): a 100 px pinch is about five
+/// notches.
 const PINCH_UNITS_PER_PX: f64 = 6.0;
-const ROTATE_UNITS_PER_PX: f64 = 4.0;
-
-use crate::stylus_profile::{self as profiles, HostAction, StylusButton, StylusEvent};
-
-/// Run the active profile's action for each event; side buttons the profile does not map pass
-/// through to the virtual pen as `BTN_STYLUS`, exactly as before profiles existed.
-fn dispatch_stylus(
-    guard: &mut InjectDevices,
-    events: Vec<StylusEvent>,
-    profile: &dyn profiles::StylusProfile,
-) {
-    for ev in events {
-        if let Some(action) = profile.map(&ev) {
-            info!("Stylus {:?} -> {}", ev.trigger().unwrap_or("?"), action);
-            guard.run_action(&action);
-        }
-    }
-}
-
-/// The profile that applies to this tablet's pen right now. In Touchpad mode no profile applies:
-/// the pen keeps its plain behaviour and nothing a profile maps can fire.
-fn active_profile(instance: u32) -> Arc<dyn profiles::StylusProfile> {
-    if crate::options::current_mode(instance) == crate::config::InputMode::Touchpad {
-        Arc::new(profiles::StandardProfile)
-    } else {
-        profiles::resolve(&crate::options::current_stylus_profile(instance))
-    }
-}
-
-/// The primary stylus button (pen action 5 = down, 6 = up).
-fn primary_button(profile: &dyn profiles::StylusProfile, down: bool, guard: &mut InjectDevices) {
-    if down {
-        if let Some(action) = profile.map(&StylusEvent::ButtonPress(StylusButton::Primary)) {
-            info!("Stylus button_primary -> {}", action);
-            guard.pen_button_consumed = true;
-            guard.run_action(&action);
-            return;
-        }
-    } else if guard.pen_button_consumed {
-        guard.pen_button_consumed = false;
-        return;
-    }
-    if let Some(ref mut dev) = guard.pen {
-        if dev
-            .inject_pen(0, 0, 0, 0, 0, if down { 5 } else { 6 }, false)
-            .is_ok()
-        {
-            guard.pen_button = down;
-        }
-    }
-}
-
-/// The second stylus button: same rules as the primary one.
-fn secondary_button(profile: &dyn profiles::StylusProfile, down: bool, guard: &mut InjectDevices) {
-    if down {
-        if let Some(action) = profile.map(&StylusEvent::ButtonPress(StylusButton::Secondary)) {
-            info!("Stylus button_secondary -> {}", action);
-            guard.pen_button2_consumed = true;
-            guard.run_action(&action);
-            return;
-        }
-    } else if guard.pen_button2_consumed {
-        guard.pen_button2_consumed = false;
-        return;
-    }
-    if let Some(ref mut dev) = guard.pen {
-        if dev
-            .inject_pen(0, 0, 0, 0, 0, if down { 5 } else { 6 }, false)
-            .is_ok()
-        {
-            guard.pen_button = down;
-        }
-    }
-}
 
 pub(super) fn handle_event(
     instance: u32,
@@ -177,16 +103,6 @@ pub(super) fn handle_event(
                         _ => {}
                     }
                 }
-            }
-        }
-        InputEvent::Pen {
-            action: a @ (5 | 6),
-            ..
-        } => {
-            note_pen_action(a);
-            let profile = active_profile(instance);
-            if let Ok(mut guard) = uinput.lock() {
-                primary_button(profile.as_ref(), a == 5, &mut guard);
             }
         }
         InputEvent::Pen {
@@ -418,108 +334,17 @@ pub(super) fn handle_event(
             crate::options::set_from_device(instance, "input_mode", &serde_json::json!(mode));
         }
 
-        InputEvent::Transform { zoom, rotation } => {
-            if let Ok(mut guard) = uinput.lock() {
-                guard.transform(zoom, rotation);
-            }
-        }
-        InputEvent::TransformEnd => {
-            if let Ok(mut guard) = uinput.lock() {
-                guard.transform_end();
-            }
-        }
-
         InputEvent::Gesture { kind, amount } => {
             if let Ok(mut guard) = uinput.lock() {
                 match kind.as_str() {
-                    // Ctrl + wheel zooms in most applications; fingers apart zoom in.
-                    "pinch" => guard.scroll_with_modifier(
-                        profiles::Modifier::Ctrl.code(),
-                        (amount * PINCH_UNITS_PER_PX) as i32,
-                    ),
-                    // Alt + wheel; clockwise turns the wheel back.
-                    "rotate" => guard.scroll_with_modifier(
-                        profiles::Modifier::Alt.code(),
-                        (-amount * ROTATE_UNITS_PER_PX) as i32,
-                    ),
-                    "workspace_prev" => guard.run_action(&HostAction::KeyPress {
-                        mods: vec![profiles::Modifier::Meta],
-                        key: "pageup",
-                    }),
-                    "workspace_next" => guard.run_action(&HostAction::KeyPress {
-                        mods: vec![profiles::Modifier::Meta],
-                        key: "pagedown",
-                    }),
+                    // Ctrl + wheel zooms in browsers and most viewers; fingers apart zoom in.
+                    "pinch" => guard
+                        .scroll_with_modifier(KEY_LEFTCTRL, (amount * PINCH_UNITS_PER_PX) as i32),
+                    "workspace_prev" => guard.tap_key_combo(&[KEY_LEFTMETA, KEY_PAGEUP]),
+                    "workspace_next" => guard.tap_key_combo(&[KEY_LEFTMETA, KEY_PAGEDOWN]),
                     other => warn!("Unknown gesture {:?}", other),
                 }
             }
-        }
-
-        InputEvent::StylusEvent {
-            event,
-            pressed,
-            dx,
-            dy,
-            radians,
-        } => {
-            let profile = active_profile(instance);
-            if let Ok(mut guard) = uinput.lock() {
-                match event.as_str() {
-                    "button_secondary" => secondary_button(profile.as_ref(), pressed, &mut guard),
-                    "air_button" => {
-                        let evs = guard.stylus.air_button(pressed);
-                        dispatch_stylus(&mut guard, evs, profile.as_ref());
-                    }
-                    "air_motion" => {
-                        let evs = guard.stylus.air_motion(dx, dy);
-                        dispatch_stylus(&mut guard, evs, profile.as_ref());
-                    }
-                    "pen_gone" => guard.stylus.pen_gone(),
-                    "orientation" => {
-                        let evs = guard.stylus.orientation(radians);
-                        dispatch_stylus(&mut guard, evs, profile.as_ref());
-                    }
-                    other => warn!("Unknown stylus event {:?}", other),
-                }
-            }
-        }
-
-        InputEvent::StylusTest { action } => {
-            let reply = match action.parse::<HostAction>() {
-                Ok(a) => {
-                    info!("Stylus test: {}", a);
-                    if let Ok(mut guard) = uinput.lock() {
-                        guard.run_action(&a);
-                    }
-                    serde_json::json!({"type":"stylus_result","op":"test","ok":true,"message":a.to_string()})
-                }
-                Err(e) => {
-                    serde_json::json!({"type":"stylus_result","op":"test","ok":false,"message":e})
-                }
-            };
-            crate::net::notices::send(instance, reply);
-        }
-        InputEvent::StylusProfileSave { profile } => {
-            let reply = match profiles::save(&profile) {
-                Ok(id) => {
-                    serde_json::json!({"type":"stylus_result","op":"save","ok":true,"message":id})
-                }
-                Err(e) => {
-                    serde_json::json!({"type":"stylus_result","op":"save","ok":false,"message":e})
-                }
-            };
-            crate::net::notices::send(instance, reply);
-        }
-        InputEvent::StylusProfileDelete { id } => {
-            let reply = match profiles::delete(&id) {
-                Ok(()) => {
-                    serde_json::json!({"type":"stylus_result","op":"delete","ok":true,"message":id})
-                }
-                Err(e) => {
-                    serde_json::json!({"type":"stylus_result","op":"delete","ok":false,"message":e})
-                }
-            };
-            crate::net::notices::send(instance, reply);
         }
 
         InputEvent::Wake => {
@@ -734,201 +559,30 @@ mod tests {
     #[test]
     fn key_combinations_press_modifiers_first_and_release_in_reverse() {
         let (mut dev, path) = device_over_file("keys");
-        let codes = "ctrl+shift+z"
-            .parse::<crate::stylus_profile::HostAction>()
-            .unwrap()
-            .key_codes();
-        dev.tap_keys(&codes).unwrap();
+        dev.tap_keys(&[KEY_LEFTMETA, KEY_PAGEUP]).unwrap();
         let f = frames(&path);
         let _ = std::fs::remove_file(&path);
         assert_eq!(
             f,
             vec![
-                vec![(EV_KEY, 29, 1), (EV_KEY, 42, 1), (EV_KEY, 44, 1)],
-                vec![(EV_KEY, 44, 0), (EV_KEY, 42, 0), (EV_KEY, 29, 0)],
-            ]
-        );
-    }
-
-    fn custom(mappings: serde_json::Value) -> profiles::CustomProfile {
-        profiles::CustomProfile::from_json(
-            "t",
-            &serde_json::json!({"id":"t","name":"T","mappings":mappings}),
-        )
-        .unwrap()
-    }
-
-    /// Devices backed by files, so what a stylus event turns into can be read back as evdev frames.
-    fn devices_over_files(name: &str) -> (InjectDevices, std::path::PathBuf, std::path::PathBuf) {
-        let (kb, kb_path) = device_over_file(&format!("{name}-kb"));
-        let (pen, pen_path) = device_over_file(&format!("{name}-pen"));
-        let mut d = InjectDevices::headless();
-        d.keyboard = Some(kb);
-        d.pen = Some(pen);
-        (d, kb_path, pen_path)
-    }
-
-    #[test]
-    fn a_custom_profile_turns_the_side_button_into_ctrl_c_and_swallows_the_stylus_button() {
-        let (mut d, kb, pen) = devices_over_files("mapped");
-        let profile = custom(serde_json::json!({"button_primary":"ctrl+c"}));
-        primary_button(&profile, true, &mut d);
-        primary_button(&profile, false, &mut d);
-        let (keys, pen_frames) = (frames(&kb), frames(&pen));
-        let _ = (std::fs::remove_file(&kb), std::fs::remove_file(&pen));
-        assert_eq!(
-            keys,
-            vec![
-                vec![(EV_KEY, 29, 1), (EV_KEY, 46, 1)],
-                vec![(EV_KEY, 46, 0), (EV_KEY, 29, 0)],
-            ]
-        );
-        assert!(
-            pen_frames.is_empty(),
-            "a mapped button must not also reach applications as BTN_STYLUS"
-        );
-        assert!(!d.pen_button_consumed, "the release clears the flag");
-    }
-
-    #[test]
-    fn an_unmapped_side_button_still_reaches_applications_as_btn_stylus() {
-        let (mut d, kb, pen) = devices_over_files("passthrough");
-        for profile in [
-            &profiles::StandardProfile as &dyn profiles::StylusProfile,
-            &custom(serde_json::json!({"roll_cw":"ctrl+z"})),
-        ] {
-            primary_button(profile, true, &mut d);
-            primary_button(profile, false, &mut d);
-        }
-        let (keys, pen_frames) = (frames(&kb), frames(&pen));
-        let _ = (std::fs::remove_file(&kb), std::fs::remove_file(&pen));
-        assert!(keys.is_empty());
-        assert_eq!(
-            pen_frames,
-            vec![
-                vec![(EV_KEY, BTN_STYLUS, 1)],
-                vec![(EV_KEY, BTN_STYLUS, 0)],
-                vec![(EV_KEY, BTN_STYLUS, 1)],
-                vec![(EV_KEY, BTN_STYLUS, 0)],
+                vec![(EV_KEY, KEY_LEFTMETA, 1), (EV_KEY, KEY_PAGEUP, 1)],
+                vec![(EV_KEY, KEY_PAGEUP, 0), (EV_KEY, KEY_LEFTMETA, 0)],
             ]
         );
     }
 
     #[test]
-    fn the_samsung_profile_turns_an_air_swipe_into_an_arrow_key() {
-        let (mut d, kb, pen) = devices_over_files("air");
-        let profile = profiles::SamsungSPenProfile;
-        let mut events = d.stylus.air_button(true);
-        events.extend(d.stylus.air_motion(-20.0, 1.0));
-        events.extend(d.stylus.air_motion(-20.0, 1.0));
-        events.extend(d.stylus.air_button(false));
-        dispatch_stylus(&mut d, events, &profile);
-        let keys = frames(&kb);
-        let _ = (std::fs::remove_file(&kb), std::fs::remove_file(&pen));
-        assert_eq!(
-            keys,
-            vec![vec![(EV_KEY, 105, 1)], vec![(EV_KEY, 105, 0)]],
-            "one swipe left, one KEY_LEFT tap"
-        );
-    }
-
-    #[test]
-    fn a_pinch_is_two_fingers_on_the_gesture_pad_that_move_apart() {
-        let (pad, path) = device_over_file("pinch");
-        let mut d = InjectDevices::headless();
-        d.gestures = Some(pad);
-        d.transform(1.0, 0.0); // begin (both fingers down) + a no-change move
-        d.transform(1.5, 0.0); // fingers 50% further apart
-        d.transform_end();
-        let f = frames(&path);
-        let _ = std::fs::remove_file(&path);
-        // begin, move, move, end
-        assert_eq!(f.len(), 4);
-        let has = |frame: &Vec<(u16, u16, i32)>, ev: (u16, u16, i32)| frame.contains(&ev);
-        assert!(has(&f[0], (EV_KEY, BTN_TOOL_DOUBLETAP, 1)) && has(&f[0], (EV_KEY, BTN_TOUCH, 1)));
-        // Slot 0 then slot 1 positions: 600 apart at the start, 900 after the 1.5x step.
-        let xs = |frame: &Vec<(u16, u16, i32)>| -> Vec<i32> {
-            frame
-                .iter()
-                .filter(|e| e.1 == ABS_MT_POSITION_X)
-                .map(|e| e.2)
-                .collect()
-        };
-        assert_eq!(xs(&f[0]), vec![700, 1300]);
-        assert_eq!(xs(&f[2]), vec![550, 1450]);
-        assert!(
-            has(&f[3], (EV_KEY, BTN_TOOL_DOUBLETAP, 0))
-                && has(&f[3], (EV_ABS, ABS_MT_TRACKING_ID, -1))
-        );
-        assert!(d.pinch.is_none());
-    }
-
-    #[test]
-    fn rotating_turns_the_virtual_fingers_clockwise_on_screen() {
-        let (pad, path) = device_over_file("rotate");
-        let mut d = InjectDevices::headless();
-        d.gestures = Some(pad);
-        d.transform(1.0, 0.0);
-        d.transform(1.0, 90.0);
-        let f = frames(&path);
-        let _ = std::fs::remove_file(&path);
-        let ys: Vec<i32> = f[2]
-            .iter()
-            .filter(|e| e.1 == ABS_MT_POSITION_Y)
-            .map(|e| e.2)
-            .collect();
-        // A quarter turn clockwise (y grows downwards): the left finger goes up, the right one down.
-        assert_eq!(ys, vec![300, 900]);
-    }
-
-    #[test]
-    fn a_pinch_that_runs_out_of_pad_restarts_instead_of_leaving_it() {
-        let (pad, path) = device_over_file("restart");
-        let mut d = InjectDevices::headless();
-        d.gestures = Some(pad);
-        for _ in 0..6 {
-            d.transform(1.2, 0.0);
-        }
-        let f = frames(&path);
-        let _ = std::fs::remove_file(&path);
-        let max_x = f
-            .iter()
-            .flatten()
-            .filter(|e| e.1 == ABS_MT_POSITION_X)
-            .map(|e| e.2)
-            .max()
-            .unwrap();
-        assert!(max_x < PAD_W, "fingers stay on the pad");
-        let begins = f
-            .iter()
-            .filter(|fr| fr.contains(&(EV_KEY, BTN_TOOL_DOUBLETAP, 1)))
-            .count();
-        assert!(
-            begins >= 2,
-            "a new set of fingers was put down when the range ran out"
-        );
-    }
-
-    #[test]
-    fn stylus_mode_has_no_relative_mouse_and_no_gesture_pad() {
+    fn stylus_mode_has_no_relative_mouse() {
         let (mouse, mpath) = device_over_file("stylus-mouse");
-        let (pad, ppath) = device_over_file("stylus-pad");
         let mut d = InjectDevices::headless();
         d.mouse = Some(mouse);
-        d.gestures = Some(pad);
         d.set_stylus_mode(true);
-        assert!(
-            d.mouse.is_none() && d.gestures.is_none(),
-            "both devices are destroyed"
-        );
+        assert!(d.mouse.is_none(), "the relative mouse is destroyed");
         assert!(
             d.mouse().is_none(),
             "and not made again while in Stylus mode"
         );
-        d.transform(1.3, 10.0);
-        d.transform_end();
-        let _ = (std::fs::remove_file(&mpath), std::fs::remove_file(&ppath));
-        assert!(d.pinch.is_none() && d.gestures.is_none());
+        let _ = std::fs::remove_file(&mpath);
         d.set_stylus_mode(false);
         assert!(!d.stylus_mode);
     }
@@ -936,72 +590,29 @@ mod tests {
     #[test]
     fn entering_touchpad_mode_lifts_the_stylus_policy_and_keeps_existing_devices() {
         let (mouse, mpath) = device_over_file("ensure-mouse");
-        let (pad, ppath) = device_over_file("ensure-pad");
         let (kb, kpath) = device_over_file("ensure-kb");
         let mut d = InjectDevices::headless();
         d.mouse = Some(mouse);
-        d.gestures = Some(pad);
         d.keyboard = Some(kb);
         d.stylus_mode = true;
         d.ensure_devices_for(crate::config::InputMode::Touchpad);
         assert!(!d.stylus_mode, "Touchpad mode is not Stylus mode");
-        assert!(d.mouse.is_some() && d.gestures.is_some() && d.keyboard.is_some());
+        assert!(d.mouse.is_some() && d.keyboard.is_some());
         // Display mode needs none of them and leaves what exists alone.
         d.ensure_devices_for(crate::config::InputMode::Display);
         assert!(d.mouse.is_some());
-        for p in [mpath, ppath, kpath] {
+        for p in [mpath, kpath] {
             let _ = std::fs::remove_file(p);
         }
     }
 
     #[test]
-    fn in_stylus_mode_a_profiles_click_goes_through_the_absolute_pointer() {
-        let (pointer, path) = device_over_file("stylus-click");
-        let mut d = InjectDevices::headless();
-        d.pointer = Some(pointer);
-        d.last_pen_pos = (1000, 2000);
-        d.set_stylus_mode(true);
-        d.run_action(&crate::stylus_profile::HostAction::MouseClick(
-            crate::stylus_profile::MouseButton::Right,
-        ));
-        let f = frames(&path);
-        let _ = std::fs::remove_file(&path);
-        assert!(d.mouse.is_none(), "no relative mouse was made for it");
-        assert_eq!(
-            f,
-            vec![
-                vec![(EV_ABS, ABS_X, 1000), (EV_ABS, ABS_Y, 2000)],
-                vec![(EV_KEY, BTN_RIGHT, 1)],
-                vec![(EV_KEY, BTN_RIGHT, 0)],
-            ]
-        );
-    }
-
-    #[test]
-    fn stylus_and_gesture_messages_parse() {
+    fn gesture_messages_parse() {
         let g: InputEvent =
             serde_json::from_str(r#"{"type":"gesture","kind":"pinch","amount":-12.5}"#).unwrap();
         assert!(
             matches!(g, InputEvent::Gesture { ref kind, amount } if kind == "pinch" && amount == -12.5)
         );
-        let e: InputEvent =
-            serde_json::from_str(r#"{"type":"stylus_event","event":"air_motion","dx":3,"dy":-4}"#)
-                .unwrap();
-        assert!(
-            matches!(e, InputEvent::StylusEvent { dx, dy, pressed: false, .. } if dx == 3.0 && dy == -4.0)
-        );
-        let tr: InputEvent =
-            serde_json::from_str(r#"{"type":"transform","zoom":1.04,"rotation":-2.5}"#).unwrap();
-        assert!(
-            matches!(tr, InputEvent::Transform { zoom, rotation } if zoom == 1.04 && rotation == -2.5)
-        );
-        assert!(matches!(
-            serde_json::from_str::<InputEvent>(r#"{"type":"transform_end"}"#).unwrap(),
-            InputEvent::TransformEnd
-        ));
-        let t: InputEvent =
-            serde_json::from_str(r#"{"type":"stylus_test","action":"ctrl+c"}"#).unwrap();
-        assert!(matches!(t, InputEvent::StylusTest { ref action } if action == "ctrl+c"));
     }
 
     #[test]

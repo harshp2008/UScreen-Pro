@@ -84,11 +84,8 @@ class HostLinkTest {
     @Test
     fun newSettingsFollowTheSameRulesAsTheOthers() {
         val base = HostConfig()
-        assertEquals("standard", base.stylusProfile)
         assertTrue(base.touchpadHaptics)
         assertEquals(HostConfig.RIGHT_CLICK_ZONE, base.rightClickMethod)
-        assertEquals("copy-pen", base.withSetting("stylus_profile", "copy-pen")?.stylusProfile)
-        assertEquals(null, base.withSetting("stylus_profile", ""))
         assertEquals(false, base.withSetting("touchpad_haptics", false)?.touchpadHaptics)
         assertEquals(
             HostConfig.RIGHT_CLICK_TWO_FINGER,
@@ -96,10 +93,9 @@ class HostLinkTest {
         )
         assertEquals(null, base.withSetting("right_click_method", "triple_tap"))
         val o = org.json.JSONObject(
-            """{"stylus_profile":"p","touchpad_haptics":false,"right_click_method":"two_finger_tap"}"""
+            """{"touchpad_haptics":false,"right_click_method":"two_finger_tap"}"""
         )
         val c = HostConfig.fromJson(o, base)
-        assertEquals("p", c.stylusProfile)
         assertFalse(c.touchpadHaptics)
         assertEquals("two_finger_tap", c.rightClickMethod)
         // A message without the keys, or with a bad method, leaves the base alone.
@@ -136,31 +132,5 @@ class HostLinkTest {
         assertEquals(TouchpadShape.Bounds(0f, 0f, 2560f, 1600f), TouchpadShape.bounds(TouchpadShape.FULL, 2560f, 1600f))
         assertTrue(std.contains(1280f, 800f))
         assertFalse(std.contains(10f, 800f))
-    }
-
-    @Test
-    fun stylusCatalogParsesTheHostsList() {
-        val c = StylusCatalog.fromJson(
-            org.json.JSONObject(
-                """{"type":"stylus_profiles",
-                    "profiles":[{"id":"standard","name":"Standard","builtin":true,"mappings":{}},
-                                {"id":"copy","name":"Copy","builtin":false,"mappings":{"button_primary":"ctrl+c"}}],
-                    "triggers":[{"key":"button_primary","label":"Press side button"}]}"""
-            )
-        )
-        assertEquals(2, c.profiles.size)
-        assertEquals("ctrl+c", c.profiles[1].mappings["button_primary"])
-        assertFalse(c.profiles[1].builtin)
-        assertEquals("button_primary", c.triggers.single().key)
-    }
-
-    @Test
-    fun stylusActionsAreCheckedLikeTheHostDoes() {
-        for (ok in listOf("", "mouse_middle", "ctrl+c", "Ctrl+Shift+Z", "meta+pageup", "f5", "alt+f4")) {
-            assertTrue(ok, StylusActions.isValid(ok))
-        }
-        for (bad in listOf("ctrl+", "hyper+c", "ctrl+nonsense", "ctrl+cc", "+c")) {
-            assertFalse(bad, StylusActions.isValid(bad))
-        }
     }
 }

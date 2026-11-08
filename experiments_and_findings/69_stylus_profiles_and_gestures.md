@@ -1,5 +1,7 @@
 # 69: Stylus profiles, touchpad gestures, haptics, warnings
 
+> **Superseded by `72_input_engine_rewrite.md`.** The stylus profile system and the gesture engine described here were removed: they did not hold up in real-world use.
+
 Branch `feat/upstream-sync`, nothing committed. Tablet used: Galaxy Tab S9 FE+ (SM-X616B, Android 16).
 
 ## What was built

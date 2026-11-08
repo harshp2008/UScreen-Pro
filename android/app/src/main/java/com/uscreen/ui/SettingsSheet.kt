@@ -25,7 +25,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Settings
@@ -218,7 +217,6 @@ fun SettingsSheet(
     hostConfig: HostConfig,
     onSetting: (key: String, value: Any) -> Unit,
     onApply: (bitrateKbps: Int, fps: Int) -> Unit,
-    touchCapture: com.uscreen.TouchCapture? = null,
     touchOnLockScreenSupported: Boolean = true,
     preferredTransport: Int = Prefs.TRANSPORT_AUTO,
     onPreferredTransportChange: (Int) -> Unit = {},
@@ -416,12 +414,6 @@ fun SettingsSheet(
                                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
                             )
                         }
-                    }
-                    Spacer(Modifier.height(12.dp))
-
-                    // ---- Stylus Profile Manager -----------------------------------------------------
-                    SettingsSection("Stylus Profile Manager", Icons.Default.Edit, startExpanded = mode == HostConfig.MODE_STYLUS) {
-                        StylusProfileManager(hostConfig, touchCapture, onSetting)
                     }
                     Spacer(Modifier.height(12.dp))
 

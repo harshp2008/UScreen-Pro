@@ -106,7 +106,6 @@ export interface TabletProfile {
   undim_curve?: string;
   dim_duration_ms?: number;
   undim_duration_ms?: number;
-  stylus_profile?: string;
   touchpad_haptics?: boolean;
   right_click_method?: string;
   touchpad_shape?: string;
@@ -165,8 +164,6 @@ export interface AppConfig {
   undim_curve: string;
   dim_duration_ms: number;
   undim_duration_ms: number;
-  /** Active stylus profile id: `standard`, `samsung_spen` or a custom profile. */
-  stylus_profile: string;
   /** Light vibration on touchpad clicks. */
   touchpad_haptics: boolean;
   /** `bottom_right_zone` or `two_finger_tap`. */
@@ -177,26 +174,6 @@ export interface AppConfig {
   curve_presets: CurvePreset[];
   version: string;
   tablets: Record<string, TabletProfile>;
-}
-
-/** One stylus profile as `uscreen stylus-profiles` lists it: `mappings` is event key to action text (`ctrl+c`, `mouse_middle`). */
-export interface StylusProfile {
-  id: string;
-  name: string;
-  builtin: boolean;
-  mappings: Record<string, string>;
-}
-
-/** A stylus event a profile can map, e.g. `button_primary` / "Press S Pen / stylus side button". */
-export interface StylusTrigger {
-  key: string;
-  label: string;
-}
-
-/** What the daemon returns for the profile list. */
-export interface StylusCatalog {
-  profiles: StylusProfile[];
-  triggers: StylusTrigger[];
 }
 
 /** Which page is showing: a named page, or a device's own settings page. */

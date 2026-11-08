@@ -115,36 +115,3 @@ export const TOUCHPAD_SHAPES: Option[] = [
   { value: "standard_rectangle", label: "Standard Rectangle" },
   { value: "wide_rectangle", label: "Wide Rectangle" },
 ];
-
-/** Actions offered for a stylus event; the value is the text form the daemon parses. Empty means "not mapped". */
-export const STYLUS_ACTIONS: Option[] = [
-  { value: "", label: "None (pass through)" },
-  { value: "mouse_left", label: "Left click" },
-  { value: "mouse_right", label: "Right click" },
-  { value: "mouse_middle", label: "Middle click" },
-  { value: "scroll_up", label: "Scroll up" },
-  { value: "scroll_down", label: "Scroll down" },
-  { value: "ctrl+z", label: "Undo (Ctrl+Z)" },
-  { value: "ctrl+shift+z", label: "Redo (Ctrl+Shift+Z)" },
-  { value: "ctrl+c", label: "Copy (Ctrl+C)" },
-  { value: "ctrl+v", label: "Paste (Ctrl+V)" },
-  { value: "ctrl+x", label: "Cut (Ctrl+X)" },
-  { value: "ctrl+s", label: "Save (Ctrl+S)" },
-  { value: "ctrl+a", label: "Select all (Ctrl+A)" },
-  { value: "esc", label: "Escape" },
-  { value: "enter", label: "Enter" },
-  { value: "pageup", label: "Page up" },
-  { value: "pagedown", label: "Page down" },
-];
-
-/** Marks the "Custom..." entry of the action menu. */
-export const CUSTOM_ACTION = "__custom__";
-
-const ACTION_KEY =
-  /^(?:(?:ctrl|control|shift|alt|meta|super)\+)*(?:[a-z0-9]|f(?:[1-9]|1[0-2])|esc|tab|enter|space|backspace|delete|insert|home|end|pageup|pagedown|up|down|left|right|minus|equal)$/;
-
-/** True when the daemon will accept this action text: empty, a preset, or a key combination it knows (same rules as `HostAction::from_str`). */
-export function isValidStylusAction(text: string): boolean {
-  const t = text.trim().toLowerCase();
-  return t === "" || STYLUS_ACTIONS.some((o) => o.value === t) || ACTION_KEY.test(t.replace(/ /g, ""));
-}

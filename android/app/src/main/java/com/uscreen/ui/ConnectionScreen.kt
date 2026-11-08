@@ -182,7 +182,7 @@ private fun TouchpadArea(shape: String, showRightClickZone: Boolean) {
                 drawRect(line, topLeft, area, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
             }
             if (showRightClickZone) {
-                val y = b.bottom - b.height * com.uscreen.TouchpadGestures.ZONE_FRACTION
+                val y = b.bottom - b.height * com.uscreen.TouchpadShape.ZONE_FRACTION
                 val mid = (b.left + b.right) / 2f
                 drawLine(line, androidx.compose.ui.geometry.Offset(b.left, y), androidx.compose.ui.geometry.Offset(b.right, y), strokeWidth = 2f)
                 drawLine(line, androidx.compose.ui.geometry.Offset(mid, y), androidx.compose.ui.geometry.Offset(mid, b.bottom), strokeWidth = 2f)
@@ -664,7 +664,6 @@ fun UScreenMain(
                     prefs?.fps = newFps
                     touchCapture?.sendConfig(bitrateKbps, newFps)
                 },
-                touchCapture = touchCapture,
                 touchOnLockScreenSupported = lockTouchSupported,
                 preferredTransport = preferredTransport,
                 onPreferredTransportChange = {

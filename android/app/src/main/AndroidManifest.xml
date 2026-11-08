@@ -26,14 +26,6 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <!-- Light click feedback in touchpad mode (a normal permission, granted at install). -->
     <uses-permission android:name="android.permission.VIBRATE" />
-    <!-- Samsung S Pen Remote (Air Actions): bind permission for the air-command service, and
-         package visibility so the SDK can see whether that service exists. Both are inert on
-         other devices. -->
-    <uses-permission android:name="com.samsung.android.sdk.penremote.BIND_SPEN_REMOTE" />
-    <queries>
-        <package android:name="com.samsung.android.service.aircommand" />
-    </queries>
-
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

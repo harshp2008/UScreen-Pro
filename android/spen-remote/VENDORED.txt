@@ -1,2 +1,0 @@
-Vendored from https://github.com/david-allison/S-Pen-Remote-Open-SDK @ 471944586c721358c358617b6b9282b40803786c (Apache-2.0), unmodified lib/ module.
-Local change: build.gradle.kts drops the androidx/material dependencies the sources never import. Sources are untouched.

@@ -234,9 +234,6 @@ pub struct TabletProfile {
     /// Length of the undim fade in milliseconds. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub undim_duration_ms: Option<u32>,
-    /// Active stylus profile id (`standard`, `samsung_spen` or a custom profile's file stem). Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stylus_profile: Option<String>,
     /// Light vibration on touchpad clicks. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_haptics: Option<bool>,
@@ -435,8 +432,6 @@ pub struct FileConfig {
     pub dim_duration_ms: u32,
     /// Length of the undim fade in milliseconds.
     pub undim_duration_ms: u32,
-    /// Active stylus profile id: `standard`, `samsung_spen` or a custom profile in `~/.config/uscreen/stylus_profiles/`.
-    pub stylus_profile: String,
     /// Light vibration on touchpad clicks.
     pub touchpad_haptics: bool,
     /// How a touchpad right click is made: `bottom_right_zone` or `two_finger_tap`.
@@ -526,7 +521,6 @@ impl Default for FileConfig {
             undim_curve: "ease_in".into(),
             dim_duration_ms: 3000,
             undim_duration_ms: 500,
-            stylus_profile: "standard".into(),
             touchpad_haptics: true,
             right_click_method: "bottom_right_zone".into(),
             touchpad_shape: "full_screen".into(),
@@ -645,14 +639,9 @@ impl FileConfig {
             t @ ("system" | "light" | "dark") => t.to_string(),
             _ => "system".into(),
         };
-        self.stylus_profile = crate::stylus_profile::clean_id(&self.stylus_profile)
-            .unwrap_or_else(|| "standard".into());
         self.right_click_method = clean_right_click(&self.right_click_method);
         self.touchpad_shape = clean_shape(&self.touchpad_shape);
         for p in self.tablets.values_mut() {
-            if let Some(id) = p.stylus_profile.take() {
-                p.stylus_profile = crate::stylus_profile::clean_id(&id);
-            }
             if let Some(m) = p.right_click_method.take() {
                 p.right_click_method = Some(clean_right_click(&m));
             }

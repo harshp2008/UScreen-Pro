@@ -5,9 +5,3 @@
   a separate shared library. Source: https://github.com/DisplayLink/evdi
 - The evdi kernel module is not part of this project; it is installed from
   your distribution or built from the same upstream repository.
-- S Pen Remote Open SDK (android/spen-remote/, vendored unmodified apart from
-  its build file) is copyright David Allison and licensed under the Apache
-  License, Version 2.0 (android/spen-remote/LICENSE.txt). It is a clean-room
-  reimplementation of the API of Samsung's proprietary S Pen Remote SDK, so no
-  Samsung JARs are distributed. Source:
-  https://github.com/david-allison/S-Pen-Remote-Open-SDK

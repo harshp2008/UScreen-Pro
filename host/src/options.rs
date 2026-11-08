@@ -47,8 +47,6 @@ pub struct DeviceOptions {
     pub undim_curve: String,
     pub dim_duration_ms: u32,
     pub undim_duration_ms: u32,
-    /// Active stylus profile id.
-    pub stylus_profile: String,
     pub touchpad_haptics: bool,
     /// `bottom_right_zone` or `two_finger_tap`.
     pub right_click_method: String,
@@ -88,7 +86,6 @@ impl DeviceOptions {
         g.undim_curve = pick!(undim_curve);
         g.dim_duration_ms = pick!(dim_duration_ms);
         g.undim_duration_ms = pick!(undim_duration_ms);
-        g.stylus_profile = pick!(stylus_profile);
         g.touchpad_haptics = pick!(touchpad_haptics);
         g.right_click_method = pick!(right_click_method);
         g.touchpad_shape = pick!(touchpad_shape);
@@ -118,7 +115,6 @@ impl DeviceOptions {
             undim_curve: resolve_curve(&g.undim_curve, &cfg.curve_presets, "ease_in"),
             dim_duration_ms: g.dim_duration_ms,
             undim_duration_ms: g.undim_duration_ms,
-            stylus_profile: g.stylus_profile.clone(),
             touchpad_haptics: g.touchpad_haptics,
             right_click_method: g.right_click_method.clone(),
             touchpad_shape: g.touchpad_shape.clone(),
@@ -148,7 +144,6 @@ impl DeviceOptions {
             "undim_curve": self.undim_curve,
             "dim_duration_ms": self.dim_duration_ms,
             "undim_duration_ms": self.undim_duration_ms,
-            "stylus_profile": self.stylus_profile,
             "touchpad_haptics": self.touchpad_haptics,
             "right_click_method": self.right_click_method,
             "touchpad_shape": self.touchpad_shape,
@@ -201,10 +196,6 @@ fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Result<bool, ()>
         "battery_saver_lock" => set(&mut p.battery_saver_lock, b?),
         "idle_dim_enabled" => set(&mut p.idle_dim_enabled, b?),
         "idle_dim_timeout_secs" => set(&mut p.idle_dim_timeout_secs, n?),
-        "stylus_profile" => set(
-            &mut p.stylus_profile,
-            crate::stylus_profile::clean_id(&s?).ok_or(())?,
-        ),
         "touchpad_haptics" => set(&mut p.touchpad_haptics, b?),
         "touchpad_shape" => match s?.as_str() {
             m @ ("full_screen" | "standard_rectangle" | "wide_rectangle") => {
@@ -265,11 +256,6 @@ pub fn options_rx(instance: u32) -> watch::Receiver<DeviceOptions> {
 /// Whether the slot's device is in Stylus mode, live.
 pub fn pen_only_rx(instance: u32) -> watch::Receiver<bool> {
     with_slot(instance, |s| s.pen_only.subscribe())
-}
-
-/// The slot's active stylus profile id.
-pub fn current_stylus_profile(instance: u32) -> String {
-    with_slot(instance, |s| s.tx.borrow().stylus_profile.clone())
 }
 
 /// The slot's current input mode.
@@ -604,7 +590,6 @@ mod tests {
             "undim_curve",
             "dim_duration_ms",
             "undim_duration_ms",
-            "stylus_profile",
             "touchpad_haptics",
             "right_click_method",
             "touchpad_shape",

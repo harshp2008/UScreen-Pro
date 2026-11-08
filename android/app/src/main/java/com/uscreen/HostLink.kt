@@ -43,7 +43,6 @@ data class HostConfig(
     val dimDurationMs: Long = 3000,
     val undimDurationMs: Long = 500,
     val wifiConfigured: Boolean = false,
-    val stylusProfile: String = "standard",
     val touchpadHaptics: Boolean = true,
     val rightClickMethod: String = RIGHT_CLICK_ZONE,
     val touchpadShape: String = TouchpadShape.FULL,
@@ -67,7 +66,6 @@ data class HostConfig(
         "battery_saver_lock" -> (value as? Boolean)?.let { copy(batterySaverLock = it) }
         "idle_dim_enabled" -> (value as? Boolean)?.let { copy(idleDimEnabled = it) }
         "idle_dim_timeout_secs" -> (value as? Int)?.let { copy(idleDimTimeoutSecs = it) }
-        "stylus_profile" -> (value as? String)?.takeIf { it.isNotBlank() }?.let { copy(stylusProfile = it) }
         "touchpad_shape" -> (value as? String)?.takeIf { it in TouchpadShape.SHAPES }?.let { copy(touchpadShape = it) }
         "touchpad_haptics" -> (value as? Boolean)?.let { copy(touchpadHaptics = it) }
         "right_click_method" -> (value as? String)?.takeIf { it in RIGHT_CLICK_METHODS }?.let { copy(rightClickMethod = it) }
@@ -108,7 +106,6 @@ data class HostConfig(
             dimDurationMs = o.optLong("dim_duration_ms", base.dimDurationMs),
             undimDurationMs = o.optLong("undim_duration_ms", base.undimDurationMs),
             wifiConfigured = o.optBoolean("wifi_configured", base.wifiConfigured),
-            stylusProfile = o.optString("stylus_profile", base.stylusProfile).ifBlank { base.stylusProfile },
             touchpadHaptics = o.optBoolean("touchpad_haptics", base.touchpadHaptics),
             rightClickMethod = o.optString("right_click_method", base.rightClickMethod)
                 .takeIf { it in RIGHT_CLICK_METHODS } ?: base.rightClickMethod,
@@ -131,90 +128,11 @@ data class HostConfig(
             batterySaverOnDisconnect = prefs.batterySaverOnDisconnect,
             batterySaverLock = prefs.batterySaverLock,
             wifiConfigured = prefs.wifiConfigured,
-            stylusProfile = prefs.stylusProfile,
             touchpadHaptics = prefs.touchpadHaptics,
             rightClickMethod = prefs.rightClickMethod,
             touchpadShape = prefs.touchpadShape,
         )
     }
-}
-
-/** One stylus profile as the host lists it: [mappings] is trigger key to action text (`ctrl+c`, `mouse_middle`...). */
-data class StylusProfileInfo(
-    val id: String,
-    val name: String,
-    val builtin: Boolean,
-    val mappings: Map<String, String>,
-)
-
-/** What a profile can react to, e.g. `button_primary` / "Press S Pen / stylus side button". */
-data class StylusTrigger(val key: String, val label: String)
-
-/** The host's `stylus_profiles` message: every profile plus the events they may map. */
-data class StylusCatalog(
-    val profiles: List<StylusProfileInfo> = listOf(
-        StylusProfileInfo("standard", "Standard (any stylus)", true, emptyMap()),
-    ),
-    val triggers: List<StylusTrigger> = emptyList(),
-) {
-    companion object {
-        fun fromJson(o: JSONObject): StylusCatalog {
-            val ps = o.optJSONArray("profiles")
-            val profiles = (0 until (ps?.length() ?: 0)).mapNotNull { i ->
-                val p = ps!!.optJSONObject(i) ?: return@mapNotNull null
-                val m = p.optJSONObject("mappings")
-                StylusProfileInfo(
-                    id = p.optString("id").ifBlank { return@mapNotNull null },
-                    name = p.optString("name"),
-                    builtin = p.optBoolean("builtin"),
-                    mappings = m?.keys()?.asSequence()?.associateWith { m.optString(it) } ?: emptyMap(),
-                )
-            }
-            val ts = o.optJSONArray("triggers")
-            val triggers = (0 until (ts?.length() ?: 0)).mapNotNull { i ->
-                val t = ts!!.optJSONObject(i) ?: return@mapNotNull null
-                StylusTrigger(t.optString("key").ifBlank { return@mapNotNull null }, t.optString("label"))
-            }
-            return StylusCatalog(profiles, triggers)
-        }
-    }
-}
-
-/**
- * Actions offered in the profile editor, as (host action text, label). "Custom" lets the user type any
- * key combination such as `ctrl+alt+t`; the host validates it when the profile is saved.
- */
-object StylusActions {
-    val PRESETS = listOf(
-        "" to "None (pass through)",
-        "mouse_left" to "Left click",
-        "mouse_right" to "Right click",
-        "mouse_middle" to "Middle click",
-        "scroll_up" to "Scroll up",
-        "scroll_down" to "Scroll down",
-        "ctrl+z" to "Undo (Ctrl+Z)",
-        "ctrl+shift+z" to "Redo (Ctrl+Shift+Z)",
-        "ctrl+c" to "Copy (Ctrl+C)",
-        "ctrl+v" to "Paste (Ctrl+V)",
-        "ctrl+x" to "Cut (Ctrl+X)",
-        "ctrl+s" to "Save (Ctrl+S)",
-        "ctrl+a" to "Select all (Ctrl+A)",
-        "esc" to "Escape",
-        "enter" to "Enter",
-        "pageup" to "Page up",
-        "pagedown" to "Page down",
-    )
-
-    private val KEY = Regex("^(?:(?:ctrl|control|shift|alt|meta|super)\\+)*(?:[a-z0-9]|f(?:[1-9]|1[0-2])|esc|tab|enter|space|backspace|delete|insert|home|end|pageup|pagedown|up|down|left|right|minus|equal)$")
-
-    /** True when [text] is something the host will accept: a preset, or a key combination it knows. */
-    fun isValid(text: String): Boolean {
-        val t = text.trim().lowercase()
-        return t.isEmpty() || PRESETS.any { it.first == t } || KEY.matches(t.replace(" ", ""))
-    }
-
-    /** Label of a preset, or the raw text for a custom combination. */
-    fun label(text: String): String = PRESETS.firstOrNull { it.first == text }?.second ?: text
 }
 
 /**

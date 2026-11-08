@@ -74,7 +74,6 @@ export function DeviceSettings({
     undim_curve: p.undim_curve ?? g.undim_curve,
     dim_duration_ms: p.dim_duration_ms ?? g.dim_duration_ms,
     undim_duration_ms: p.undim_duration_ms ?? g.undim_duration_ms,
-    stylus_profile: p.stylus_profile ?? g.stylus_profile,
     touchpad_haptics: p.touchpad_haptics ?? g.touchpad_haptics,
     right_click_method: p.right_click_method ?? g.right_click_method,
     touchpad_shape: p.touchpad_shape ?? g.touchpad_shape,

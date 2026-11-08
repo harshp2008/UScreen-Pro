@@ -1,5 +1,7 @@
 # 71: Touchpad shape, native gestures, multi-finger taps, S Pen debugging
 
+> **Superseded by `72_input_engine_rewrite.md`.** The stylus profile system and the gesture engine described here were removed: they did not hold up in real-world use.
+
 Branch `feat/upstream-sync`, nothing committed. Tablet: Galaxy Tab S9 FE+ (SM-X616B, 2560x1600).
 
 ## What changed

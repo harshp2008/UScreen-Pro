@@ -17,8 +17,6 @@ pub(super) const SYN_REPORT: u16 = 0x00;
 
 pub(super) const BTN_TOUCH: u16 = 0x14a;
 pub(super) const BTN_TOOL_FINGER: u16 = 0x145;
-pub(super) const BTN_TOOL_DOUBLETAP: u16 = 0x14d;
-pub(super) const BTN_TOOL_TRIPLETAP: u16 = 0x14e;
 pub(super) const BTN_TOOL_PEN: u16 = 0x140;
 pub(super) const BTN_TOOL_RUBBER: u16 = 0x141;
 
@@ -37,6 +35,11 @@ pub(super) const BTN_STYLUS: u16 = 0x14b;
 pub(super) const BTN_LEFT: u16 = 0x110;
 pub(super) const BTN_RIGHT: u16 = 0x111;
 pub(super) const BTN_MIDDLE: u16 = 0x112;
+
+pub(super) const KEY_LEFTCTRL: u16 = 29;
+pub(super) const KEY_LEFTMETA: u16 = 125;
+pub(super) const KEY_PAGEUP: u16 = 104;
+pub(super) const KEY_PAGEDOWN: u16 = 109;
 
 pub(super) const REL_X: u16 = 0x00;
 pub(super) const REL_Y: u16 = 0x01;
@@ -60,7 +63,6 @@ pub(super) const UI_DEV_DESTROY: libc::c_ulong = 0x5502;
 
 pub(super) const BUS_VIRTUAL: u16 = 0x06;
 pub(super) const INPUT_PROP_DIRECT: i32 = 0x01;
-pub(super) const INPUT_PROP_BUTTONPAD: i32 = 0x02;
 /// "This is a pointing device that needs a cursor" (value 0). Declared on the touchpad-mode mouse
 /// so the compositor treats it as an ordinary mouse. Deliberately not set on it: INPUT_PROP_DIRECT
 /// (touchscreen), INPUT_PROP_BUTTONPAD and INPUT_PROP_SEMI_MT (touchpad classes).
@@ -80,28 +82,11 @@ pub(super) const PRODUCT_PEN: u16 = 0x0002;
 pub(super) const PRODUCT_POINTER: u16 = 0x0003;
 pub(super) const PRODUCT_TOUCHPAD: u16 = 0x0004;
 pub(super) const PRODUCT_KEYBOARD: u16 = 0x0005;
-pub(super) const PRODUCT_GESTURES: u16 = 0x0006;
 pub(super) const TOUCH_DEVICE_NAME: &str = "UScreen Touch";
 pub(super) const PEN_DEVICE_NAME: &str = "UScreen Pen";
 pub(super) const POINTER_DEVICE_NAME: &str = "UScreen Pointer";
 pub(super) const TOUCHPAD_DEVICE_NAME: &str = "UScreen Touchpad";
 pub(super) const KEYBOARD_DEVICE_NAME: &str = "UScreen Keyboard";
-pub(super) const GESTURES_DEVICE_NAME: &str = "UScreen Gestures";
-
-/// The virtual gesture pad is 100 x 60 mm (20 units per mm): a laptop-sized touchpad, so libinput's
-/// millimetre thresholds for a pinch behave as they do on real hardware.
-pub(super) const PAD_W: i32 = 2000;
-pub(super) const PAD_H: i32 = 1200;
-pub(super) const PAD_UNITS_PER_MM: i32 = 20;
-/// Distance between the two virtual fingers when a pinch begins (30 mm), and the range they are
-/// kept inside. A pinch that would leave the range ends and begins again from the start distance.
-const PINCH_START: f64 = 600.0;
-const PINCH_MIN: f64 = 240.0;
-const PINCH_MAX: f64 = 1100.0;
-/// Wheel units per natural-log unit of zoom for the Ctrl + wheel fallback (used only when the
-/// gesture pad cannot be created): zooming to 1.5x is about 2.4 notches.
-const FALLBACK_UNITS_PER_LN: f64 = 700.0;
-
 /// Device names and product ids for the N-th tablet. The first keeps the
 /// original names and ids so existing KWin input mappings stay valid; every
 /// further one gets a numbered name and its own product range, since KWin
@@ -114,17 +99,14 @@ pub struct DeviceIdentity {
     /// Plain relative mouse used by touchpad mode. Created on first use and never mapped to an
     /// output (a relative device has no screen of its own).
     pub touchpad: String,
-    /// Virtual keyboard for stylus-profile key combinations and touchpad gestures. Created on
+    /// Virtual keyboard for touchpad gestures (workspace switch, zoom modifier). Created on
     /// first use.
     pub keyboard: String,
-    /// Virtual multi-touch touchpad that carries pinch / rotate gestures. Created on first use.
-    pub gestures: String,
     pub product_touch: u16,
     pub product_pen: u16,
     pub product_pointer: u16,
     pub product_touchpad: u16,
     pub product_keyboard: u16,
-    pub product_gestures: u16,
     /// How many of the three devices exist: 2 when pointer_handoff is off.
     pub device_count: usize,
 }
@@ -144,13 +126,11 @@ impl DeviceIdentity {
             pointer: format!("{}{}", POINTER_DEVICE_NAME, suffix),
             touchpad: format!("{}{}", TOUCHPAD_DEVICE_NAME, suffix),
             keyboard: format!("{}{}", KEYBOARD_DEVICE_NAME, suffix),
-            gestures: format!("{}{}", GESTURES_DEVICE_NAME, suffix),
             product_touch: PRODUCT_TOUCH + base,
             product_pen: PRODUCT_PEN + base,
             product_pointer: PRODUCT_POINTER + base,
             product_touchpad: PRODUCT_TOUCHPAD + base,
             product_keyboard: PRODUCT_KEYBOARD + base,
-            product_gestures: PRODUCT_GESTURES + base,
             device_count: 3,
         }
     }
@@ -309,8 +289,8 @@ impl UInputDevice {
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_SYN as i32)?;
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_KEY as i32)?;
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_ABS as i32)?;
-            // Right / middle button and the wheel exist so a stylus profile can click and scroll in
-            // Stylus mode without a relative mouse (which Stylus mode must not have).
+            // Right / middle button and the wheel exist so the pen's buttons can click in Stylus mode
+            // without a relative mouse (which Stylus mode must not have).
             Self::ioctl_val(fd, UI_SET_EVBIT, EV_REL as i32)?;
             for b in [BTN_LEFT, BTN_RIGHT, BTN_MIDDLE] {
                 Self::ioctl_val(fd, UI_SET_KEYBIT, b as i32)?;
@@ -365,7 +345,7 @@ impl UInputDevice {
         Ok(Self { file })
     }
 
-    /// A plain keyboard, made the first time a stylus profile or touchpad gesture needs a key.
+    /// A plain keyboard, made the first time a touchpad gesture needs a key.
     /// It declares the ordinary keys (1..=248 covers letters, digits, function keys, arrows and
     /// the modifiers) and nothing else, so it reads as a standard keyboard.
     pub(super) fn new_keyboard(name: &str, product: u16) -> Result<Self> {
@@ -384,83 +364,6 @@ impl UInputDevice {
         info!("uinput keyboard '{}' created", name);
         std::thread::sleep(std::time::Duration::from_millis(200));
         Ok(Self { file })
-    }
-
-    /// A multi-touch touchpad that is only ever touched by two synthetic fingers during a pinch or
-    /// rotate. It is a real touchpad as far as udev, libinput and the compositor can tell
-    /// (INPUT_PROP_POINTER + BUTTONPAD, `BTN_TOOL_*TAP`, MT slots), so they recognise the two
-    /// fingers' motion as a pinch gesture and hand it to the application natively.
-    pub(super) fn new_gesture_pad(name: &str, product: u16) -> Result<Self> {
-        let file = Self::open_uinput()?;
-        let fd = file.as_raw_fd();
-
-        unsafe {
-            Self::ioctl_val(fd, UI_SET_PROPBIT, INPUT_PROP_POINTER)?;
-            Self::ioctl_val(fd, UI_SET_PROPBIT, INPUT_PROP_BUTTONPAD)?;
-            Self::ioctl_val(fd, UI_SET_EVBIT, EV_SYN as i32)?;
-            Self::ioctl_val(fd, UI_SET_EVBIT, EV_KEY as i32)?;
-            Self::ioctl_val(fd, UI_SET_EVBIT, EV_ABS as i32)?;
-            for k in [
-                BTN_LEFT,
-                BTN_TOUCH,
-                BTN_TOOL_FINGER,
-                BTN_TOOL_DOUBLETAP,
-                BTN_TOOL_TRIPLETAP,
-            ] {
-                Self::ioctl_val(fd, UI_SET_KEYBIT, k as i32)?;
-            }
-            Self::abs_setup(fd, ABS_X, 0, PAD_W - 1, PAD_UNITS_PER_MM)?;
-            Self::abs_setup(fd, ABS_Y, 0, PAD_H - 1, PAD_UNITS_PER_MM)?;
-            Self::abs_setup(fd, ABS_MT_SLOT, 0, 4, 0)?;
-            Self::abs_setup(fd, ABS_MT_POSITION_X, 0, PAD_W - 1, PAD_UNITS_PER_MM)?;
-            Self::abs_setup(fd, ABS_MT_POSITION_Y, 0, PAD_H - 1, PAD_UNITS_PER_MM)?;
-            Self::abs_setup(fd, ABS_MT_TRACKING_ID, 0, 65535, 0)?;
-            Self::dev_setup_and_create(fd, name, product)?;
-        }
-
-        info!("uinput gesture pad '{}' created", name);
-        std::thread::sleep(std::time::Duration::from_millis(200));
-        Ok(Self { file })
-    }
-
-    /// Both virtual fingers down, `PINCH_START` apart on the horizontal.
-    pub(super) fn pad_begin(&mut self, tracking_base: i32) -> Result<()> {
-        let (x0, x1, y) = pinch_points(PINCH_START, 0.0);
-        for (slot, x) in [(0, x0), (1, x1)] {
-            self.emit(EV_ABS, ABS_MT_SLOT, slot)?;
-            self.emit(EV_ABS, ABS_MT_TRACKING_ID, tracking_base + slot)?;
-            self.emit(EV_ABS, ABS_MT_POSITION_X, x)?;
-            self.emit(EV_ABS, ABS_MT_POSITION_Y, y.0)?;
-        }
-        self.emit(EV_KEY, BTN_TOUCH, 1)?;
-        self.emit(EV_KEY, BTN_TOOL_DOUBLETAP, 1)?;
-        self.emit(EV_ABS, ABS_X, x0)?;
-        self.emit(EV_ABS, ABS_Y, y.0)?;
-        self.syn()
-    }
-
-    /// Move the two fingers to `dist` apart at `angle` radians (clockwise on screen) around the pad centre.
-    pub(super) fn pad_move(&mut self, dist: f64, angle: f64) -> Result<()> {
-        let (x0, x1, (y0, y1)) = pinch_points(dist, angle);
-        for (slot, x, y) in [(0, x0, y0), (1, x1, y1)] {
-            self.emit(EV_ABS, ABS_MT_SLOT, slot)?;
-            self.emit(EV_ABS, ABS_MT_POSITION_X, x)?;
-            self.emit(EV_ABS, ABS_MT_POSITION_Y, y)?;
-        }
-        self.emit(EV_ABS, ABS_X, x0)?;
-        self.emit(EV_ABS, ABS_Y, y0)?;
-        self.syn()
-    }
-
-    /// Both virtual fingers up.
-    pub(super) fn pad_end(&mut self) -> Result<()> {
-        for slot in 0..2 {
-            self.emit(EV_ABS, ABS_MT_SLOT, slot)?;
-            self.emit(EV_ABS, ABS_MT_TRACKING_ID, -1)?;
-        }
-        self.emit(EV_KEY, BTN_TOUCH, 0)?;
-        self.emit(EV_KEY, BTN_TOOL_DOUBLETAP, 0)?;
-        self.syn()
     }
 
     /// Tap a key combination: press every code in order, then release them in reverse.
@@ -770,27 +673,6 @@ impl UInputDevice {
     }
 }
 
-/// Positions of the two virtual fingers for a pinch `dist` apart, turned `angle` radians clockwise
-/// on screen (y grows downwards), around the middle of the pad. Returns (x0, x1, (y0, y1)), kept on the pad.
-fn pinch_points(dist: f64, angle: f64) -> (i32, i32, (i32, i32)) {
-    let r = dist / 2.0;
-    let (cx, cy) = (PAD_W as f64 / 2.0, PAD_H as f64 / 2.0);
-    let (dx, dy) = (r * angle.cos(), r * angle.sin());
-    let cl = |v: f64, max: i32| (v.round() as i32).clamp(0, max - 1);
-    (
-        cl(cx - dx, PAD_W),
-        cl(cx + dx, PAD_W),
-        (cl(cy - dy, PAD_H), cl(cy + dy, PAD_H)),
-    )
-}
-
-/// The two synthetic fingers of a pinch in progress.
-#[derive(Clone, Copy, Debug)]
-pub(super) struct Pinch {
-    pub(super) dist: f64,
-    pub(super) angle: f64,
-}
-
 impl Drop for UInputDevice {
     fn drop(&mut self) {
         unsafe {
@@ -816,25 +698,8 @@ pub(super) struct InjectDevices {
     pub(super) keyboard: Option<UInputDevice>,
     pub(super) keyboard_name: String,
     pub(super) keyboard_product: u16,
-    /// Multi-touch pad for native pinch / rotate, made on first use.
-    pub(super) gestures: Option<UInputDevice>,
-    pub(super) gestures_name: String,
-    pub(super) gestures_product: u16,
-    /// Set when creating the gesture pad failed, so it is not retried on every message.
-    pub(super) gestures_unavailable: bool,
-    pub(super) pinch: Option<Pinch>,
-    /// Counts pinches, so every set of virtual fingers gets fresh tracking ids.
-    pub(super) pinch_count: i32,
-    /// Stylus mode: the relative mouse and the gesture pad must not exist, and a profile's clicks
-    /// and scrolls go through the absolute pointer instead.
+    /// Stylus mode: the relative mouse must not exist.
     pub(super) stylus_mode: bool,
-    /// Per-connection stylus state: air gestures and pen roll.
-    pub(super) stylus: crate::stylus_profile::StylusTracker,
-    /// The primary stylus button went down and a profile consumed it, so its release must not
-    /// reach the virtual pen either.
-    pub(super) pen_button_consumed: bool,
-    /// Same for the second stylus button.
-    pub(super) pen_button2_consumed: bool,
     /// Mouse buttons held down (bit 0 left, 1 right, 2 middle), so a dropped connection releases
     /// them.
     pub(super) mouse_buttons: u8,
@@ -875,16 +740,7 @@ impl InjectDevices {
             keyboard: None,
             keyboard_name: KEYBOARD_DEVICE_NAME.into(),
             keyboard_product: PRODUCT_KEYBOARD,
-            gestures: None,
-            gestures_name: GESTURES_DEVICE_NAME.into(),
-            gestures_product: PRODUCT_GESTURES,
-            gestures_unavailable: false,
-            pinch: None,
-            pinch_count: 0,
             stylus_mode: false,
-            stylus: Default::default(),
-            pen_button_consumed: false,
-            pen_button2_consumed: false,
             mouse_buttons: 0,
             scroll_rest: (0, 0),
             rel_rest: (0.0, 0.0),
@@ -945,14 +801,6 @@ impl InjectDevices {
             }
         }
         self.mouse_buttons = 0;
-        if self.pinch.take().is_some() {
-            if let Some(ref mut dev) = self.gestures {
-                let _ = dev.pad_end();
-            }
-        }
-        self.pen_button_consumed = false;
-        self.pen_button2_consumed = false;
-        self.stylus.pen_gone();
         self.rel_rest = (0.0, 0.0);
         self.scroll_rest = (0, 0);
     }
@@ -971,19 +819,15 @@ impl InjectDevices {
         self.keyboard.as_mut()
     }
 
-    /// Enter or leave Stylus mode. Entering it destroys the relative mouse and the gesture pad (and
-    /// ends any pinch): in Stylus mode only the pen and the absolute pointer exist, so a second
-    /// pointing device can never fight the pen for the cursor.
+    /// Enter or leave Stylus mode. Entering it destroys the relative mouse: in Stylus mode only the
+    /// pen and the absolute pointer exist, so a second pointing device can never fight the pen for
+    /// the cursor.
     pub(super) fn set_stylus_mode(&mut self, on: bool) {
         self.stylus_mode = on;
         if on {
-            // Both taken, never short-circuited: each drop destroys its device.
-            let had_mouse = self.mouse.take().is_some();
-            let had_pad = self.gestures.take().is_some();
-            if had_mouse || had_pad {
-                info!("Stylus mode: relative mouse and gesture pad removed");
+            if self.mouse.take().is_some() {
+                info!("Stylus mode: relative mouse removed");
             }
-            self.pinch = None;
             self.mouse_buttons = 0;
             self.rel_rest = (0.0, 0.0);
             self.scroll_rest = (0, 0);
@@ -992,21 +836,17 @@ impl InjectDevices {
 
     /// Create the virtual devices the current mode will need now, so the first click or key of a
     /// gesture is not lost to the compositor still discovering a device made at that moment.
-    /// Touchpad mode wants the relative mouse, the gesture pad and the keyboard (workspace taps);
-    /// Stylus mode only the keyboard (profile key combinations); Display mode none of them.
+    /// Touchpad mode wants the relative mouse and the keyboard (pinch and workspace gestures);
+    /// Stylus and Display mode none of them.
     pub(super) fn ensure_devices_for(&mut self, mode: crate::config::InputMode) {
         use crate::config::InputMode;
         match mode {
             InputMode::Touchpad => {
                 self.set_stylus_mode(false);
                 self.mouse();
-                self.gesture_pad();
                 self.keyboard();
             }
-            InputMode::Stylus => {
-                self.keyboard();
-            }
-            InputMode::Display => {}
+            InputMode::Stylus | InputMode::Display => {}
         }
     }
 
@@ -1031,143 +871,16 @@ impl InjectDevices {
         }
     }
 
-    /// The gesture pad, created on first use. `None` if it cannot be created.
-    fn gesture_pad(&mut self) -> Option<&mut UInputDevice> {
-        if self.gestures.is_none() && !self.gestures_unavailable {
-            match UInputDevice::new_gesture_pad(&self.gestures_name, self.gestures_product) {
-                Ok(dev) => self.gestures = Some(dev),
-                Err(e) => {
-                    warn!("No gesture pad: {}. Pinch falls back to Ctrl + wheel.", e);
-                    self.gestures_unavailable = true;
-                }
-            }
-        }
-        self.gestures.as_mut()
-    }
-
-    /// Replay a tablet pinch / rotate step as two fingers on the gesture pad, so the compositor and
-    /// the application get a native pinch gesture (libinput `GESTURE_PINCH_*`: scale and angle).
-    /// Without the pad, zoom falls back to Ctrl + wheel and rotation is dropped.
-    pub(super) fn transform(&mut self, zoom: f64, rotation_deg: f64) {
-        if self.stylus_mode || !zoom.is_finite() || !rotation_deg.is_finite() {
-            return;
-        }
-        let zoom = zoom.clamp(0.5, 2.0);
-        if self.gesture_pad().is_none() {
-            self.scroll_with_modifier(
-                crate::stylus_profile::Modifier::Ctrl.code(),
-                (zoom.ln() * FALLBACK_UNITS_PER_LN) as i32,
-            );
-            return;
-        }
-        let base = self.pinch_count * 2;
-        let mut p = match self.pinch {
-            Some(p) => p,
-            None => {
-                self.pinch_count = (self.pinch_count + 1) % 30000;
-                if let Some(dev) = self.gestures.as_mut() {
-                    let _ = dev.pad_begin(base);
-                }
-                Pinch {
-                    dist: PINCH_START,
-                    angle: 0.0,
-                }
-            }
-        };
-        p.dist *= zoom;
-        p.angle += rotation_deg.to_radians();
-        if let Some(dev) = self.gestures.as_mut() {
-            if !(PINCH_MIN..=PINCH_MAX).contains(&p.dist) {
-                // Out of room on the pad: lift and put the fingers down again at the start distance.
-                let _ = dev.pad_end();
-                self.pinch_count = (self.pinch_count + 1) % 30000;
-                let _ = dev.pad_begin(self.pinch_count * 2);
-                p.dist = PINCH_START;
-            }
-            let _ = dev.pad_move(p.dist, p.angle);
-        }
-        self.pinch = Some(p);
-    }
-
-    /// The tablet's two-finger transform ended: lift the virtual fingers.
-    pub(super) fn transform_end(&mut self) {
-        if self.pinch.take().is_some() {
-            if let Some(dev) = self.gestures.as_mut() {
-                let _ = dev.pad_end();
+    /// Tap a key combination on the virtual keyboard (modifiers first, released in reverse).
+    pub(super) fn tap_key_combo(&mut self, codes: &[u16]) {
+        if let Some(dev) = self.keyboard() {
+            if let Err(e) = dev.tap_keys(codes) {
+                warn!("Failed to send keys: {}", e);
             }
         }
     }
 
-    /// Click through the absolute pointer at the pen's last position (Stylus mode has no relative mouse).
-    fn pointer_click(&mut self, button: u16) {
-        self.park_pointer();
-        if let Some(ref mut dev) = self.pointer {
-            let _ = dev.emit(EV_KEY, button, 1);
-            let _ = dev.syn();
-            let _ = dev.emit(EV_KEY, button, 0);
-            let _ = dev.syn();
-        }
-    }
-
-    /// Carry out a stylus-profile action: click, one wheel notch, or a key combination.
-    pub(super) fn run_action(&mut self, action: &crate::stylus_profile::HostAction) {
-        use crate::stylus_profile::{HostAction, MouseButton, ScrollDir};
-        match action {
-            HostAction::MouseClick(b) if self.stylus_mode => self.pointer_click(match b {
-                MouseButton::Left => BTN_LEFT,
-                MouseButton::Right => BTN_RIGHT,
-                MouseButton::Middle => BTN_MIDDLE,
-            }),
-            HostAction::Scroll(d) if self.stylus_mode => {
-                let (dx, dy) = match d {
-                    ScrollDir::Up => (0, 120),
-                    ScrollDir::Down => (0, -120),
-                    ScrollDir::Left => (-120, 0),
-                    ScrollDir::Right => (120, 0),
-                };
-                self.park_pointer();
-                let mut rest = self.scroll_rest;
-                if let Some(ref mut dev) = self.pointer {
-                    let _ = dev.scroll_by(dx, dy, &mut rest);
-                }
-                self.scroll_rest = rest;
-            }
-            HostAction::MouseClick(b) => {
-                let n = match b {
-                    MouseButton::Left => 0,
-                    MouseButton::Right => 1,
-                    MouseButton::Middle => 2,
-                };
-                if let Some(dev) = self.mouse() {
-                    let _ = dev.press(n, true);
-                    let _ = dev.press(n, false);
-                }
-            }
-            HostAction::Scroll(d) => {
-                let (dx, dy) = match d {
-                    ScrollDir::Up => (0, 120),
-                    ScrollDir::Down => (0, -120),
-                    ScrollDir::Left => (-120, 0),
-                    ScrollDir::Right => (120, 0),
-                };
-                let mut rest = self.scroll_rest;
-                if let Some(dev) = self.mouse() {
-                    let _ = dev.scroll_by(dx, dy, &mut rest);
-                }
-                self.scroll_rest = rest;
-            }
-            HostAction::KeyPress { .. } => {
-                let codes = action.key_codes();
-                if let Some(dev) = self.keyboard() {
-                    if let Err(e) = dev.tap_keys(&codes) {
-                        warn!("Failed to send keys: {}", e);
-                    }
-                }
-            }
-        }
-    }
-
-    /// Scroll with a modifier held (Ctrl for zoom, Alt for rotate): the modifier goes down, the
+    /// Scroll with a modifier held (Ctrl for zoom): the modifier goes down, the
     /// wheel turns, the modifier comes up, so a lost connection can never leave it stuck.
     pub(super) fn scroll_with_modifier(&mut self, modifier: u16, dy: i32) {
         if dy == 0 {

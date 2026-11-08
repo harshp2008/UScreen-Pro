@@ -70,49 +70,15 @@ pub enum InputEvent {
     /// picks the direction it wants.
     #[serde(rename = "scroll")]
     Scroll { dx: f64, dy: f64 },
-    /// Touchpad gesture the tablet recognised that needs a modifier held on the computer:
-    /// `pinch` (Ctrl + scroll, `amount` in tablet pixels, positive = fingers apart), `rotate`
-    /// (Alt + scroll, positive = clockwise) or a workspace switch (`workspace_prev` /
-    /// `workspace_next`, Super + Page Up / Page Down).
+    /// Touchpad gesture the tablet recognised that needs keys on the computer: `pinch` (Ctrl +
+    /// scroll, `amount` in tablet pixels, positive = fingers apart) or a workspace switch
+    /// (`workspace_prev` / `workspace_next`, Super + Page Up / Page Down).
     #[serde(rename = "gesture")]
     Gesture {
         kind: String,
         #[serde(default)]
         amount: f64,
     },
-    /// Two-finger pinch / rotate on the tablet, as the change since the last message: `zoom` is the
-    /// factor the finger spread changed by (above 1 is apart) and `rotation` the turn in degrees
-    /// (positive is clockwise). The host replays it as two fingers on a virtual touchpad, so the
-    /// compositor and the application see a native pinch gesture.
-    #[serde(rename = "transform")]
-    Transform { zoom: f64, rotation: f64 },
-    /// The two-finger transform is over: lift the virtual fingers.
-    #[serde(rename = "transform_end")]
-    TransformEnd,
-    /// A stylus fact for the active stylus profile: `button_secondary` / `air_button`
-    /// (`pressed`), `air_motion` (`dx`, `dy`) or `orientation` (`radians`). The primary side
-    /// button keeps arriving as a pen action 5 / 6.
-    #[serde(rename = "stylus_event")]
-    StylusEvent {
-        event: String,
-        #[serde(default)]
-        pressed: bool,
-        #[serde(default)]
-        dx: f64,
-        #[serde(default)]
-        dy: f64,
-        #[serde(default)]
-        radians: f64,
-    },
-    /// Run one stylus action now, so a profile mapping can be tried before it is saved.
-    #[serde(rename = "stylus_test")]
-    StylusTest { action: String },
-    /// Create or replace a custom stylus profile (the JSON file's contents).
-    #[serde(rename = "stylus_profile_save")]
-    StylusProfileSave { profile: serde_json::Value },
-    /// Delete a custom stylus profile.
-    #[serde(rename = "stylus_profile_delete")]
-    StylusProfileDelete { id: String },
     /// The user touched the tablet while it was dimmed, or put a finger on the touchpad.
     #[serde(rename = "wake")]
     Wake,

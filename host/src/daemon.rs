@@ -215,7 +215,6 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
     // Only Display mode runs the pipeline: Touchpad and Stylus mode keep it down (no EVDI capture,
     // no ffmpeg, nothing on the USB link but input).
     options::spawn_config_watcher();
-    crate::stylus_profile::spawn_watcher();
     let mut touchpad_rx_gate = options::options_rx(0);
     tokio::spawn(async move {
         let mut last = false;

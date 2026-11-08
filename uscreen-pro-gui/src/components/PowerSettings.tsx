@@ -1,5 +1,4 @@
 import { CurveEditor } from "./CurveEditor";
-import { StylusProfileManager } from "./StylusProfileManager";
 import { NumberInput, Segmented } from "./ui/controls";
 import { Section, SettingRow, SwitchRow, type Override } from "./ui/layout";
 import {
@@ -38,7 +37,6 @@ export interface PowerValues {
   undim_curve: string;
   dim_duration_ms: number;
   undim_duration_ms: number;
-  stylus_profile: string;
   touchpad_haptics: boolean;
   right_click_method: string;
   touchpad_shape: string;
@@ -199,12 +197,6 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
           </SettingRow>
         </Section>
       )}
-
-      <StylusProfileManager
-        value={v.stylus_profile}
-        onChange={(stylus_profile) => onChange({ stylus_profile })}
-        override={ov("stylus_profile", v.stylus_profile)}
-      />
 
       <Section title="Power & Battery" hint={hint}>
         <SwitchRow

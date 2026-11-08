@@ -113,21 +113,6 @@ pub(crate) enum Commands {
         #[arg(long)]
         sparse: bool,
     },
-    /// Run one stylus-profile action once (for example `ctrl+c`, `mouse_middle`, `scroll_down`)
-    /// on a temporary virtual device, to try a mapping without a tablet
-    StylusTest {
-        /// The action, in the text form profiles use
-        action: String,
-    },
-    /// Print the stylus profiles (built-in and custom) and the events they can map, as JSON
-    StylusProfiles,
-    /// Validate a custom stylus profile read from stdin (JSON) and save it to the profiles folder
-    StylusProfileSave,
-    /// Delete a custom stylus profile
-    StylusProfileDelete {
-        /// Id of the profile (its file name without .json)
-        id: String,
-    },
     /// Clear the compositor-safety record so the virtual display may be created
     /// again after a safe-mode start (restart the daemon afterwards)
     ResetGuard,

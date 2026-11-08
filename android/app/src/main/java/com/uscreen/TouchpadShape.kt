@@ -11,6 +11,9 @@ object TouchpadShape {
     const val WIDE = "wide_rectangle"
     val SHAPES = listOf(FULL, STANDARD, WIDE)
 
+    /** Height of the right-click strip along the bottom edge, as a fraction of the touch area. */
+    const val ZONE_FRACTION = 0.15f
+
     /** Left, top, right, bottom of the touch area, in the pixels of the surface it sits on. */
     data class Bounds(val left: Float, val top: Float, val right: Float, val bottom: Float) {
         val width get() = right - left
