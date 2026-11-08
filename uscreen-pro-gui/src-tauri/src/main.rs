@@ -1,3 +1,5 @@
+//! Binary entry point of the UScreen Pro desktop app; all logic lives in the library crate (`lib.rs`).
+
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 

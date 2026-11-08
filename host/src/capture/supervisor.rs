@@ -35,7 +35,7 @@ impl CaptureManager {
         let mut is_throttled = false;
         let mut applied_nonce = settings_rx.borrow().restart_nonce;
 
-        // Compositor safety (see guard.rs and experiments_and_findings/56_*):
+        // Compositor safety (see crate::guard and experiments_and_findings/56_*):
         // the virtual monitor is only created once the compositor is up and idle,
         // hotplugs are spaced out, and a stall watchdog removes the monitor again
         // if the compositor stops answering while it exists.

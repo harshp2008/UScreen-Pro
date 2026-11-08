@@ -51,7 +51,7 @@ impl InputServer {
     /// Accept tablet connections until the process exits.
     pub async fn run(&self) -> Result<()> {
         self.running.store(true, Ordering::SeqCst);
-        // Loopback only — see the note in stream.rs. This socket injects real
+        // Loopback only — see the note in net/stream.rs. This socket injects real
         // mouse/pen/touch events into the desktop through uinput, so exposing
         // it on the network hands over control of the machine.
         let addr = format!("127.0.0.1:{}", self.config.port);

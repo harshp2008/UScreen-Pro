@@ -4,6 +4,10 @@
 //! uinput is used instead of compositor APIs so the same code works on X11, GNOME, KDE and
 //! wlroots. Each tablet gets its own device set (see [`DeviceIdentity`]) and is mapped onto its
 //! own virtual output, so two tablets never fight over one screen.
+//!
+//! Layout: `protocol` (wire types), `server` (WebSocket accept / auth / dispatch), `events`
+//! (event -> evdev writes), `uinput` (device creation and constants) and `mapping` (binding the
+//! devices to the right output on each compositor).
 
 use crate::capture::EncoderSettings;
 use anyhow::{Context, Result};

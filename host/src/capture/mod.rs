@@ -2,9 +2,16 @@
 //! encoder, parses the Annex B output into access units and broadcasts them to the stream
 //! server.
 //!
-//! Why it is this large: the pipeline has to survive helper crashes, compositor-chosen mode
-//! changes, live settings changes from the tablet and display hotplug storms, so supervision,
-//! mode negotiation and bitstream parsing all live next to the process management.
+//! This module root holds the shared types ([`Codec`], [`VideoPacket`], [`EncoderSettings`],
+//! [`CaptureConfig`], [`DetectedMode`]) and the [`CaptureManager`] lifecycle. The pipeline has to
+//! survive helper crashes, compositor-chosen mode changes, live settings changes from the tablet
+//! and display hotplug storms, so the work is split by responsibility:
+//!
+//! - `display`: EVDI setup diagnosis, the frame FIFO, enabling / placing / removing the monitor.
+//! - `helper`: spawning `evdi_helper` and reading its handshake.
+//! - `spawn`: starting the encoder (ffmpeg child or in-process libavcodec).
+//! - `supervisor`: the `stream_frames` restart loop with backoff.
+//! - `reader` and `packetizer` (CLI encoder only): Annex B parsing into access units.
 
 use anyhow::{Context, Result};
 use bytes::Bytes;
@@ -187,7 +194,7 @@ pub struct DetectedMode {
 /// those frames into an H.264/HEVC bitstream.
 ///
 /// The manager also supervises them: it restarts a crashed helper with
-/// exponential backoff, asks the guard (see `guard.rs`) for permission before
+/// exponential backoff, asks the guard (see `guard.rs` at the crate root) for permission before
 /// each display hotplug, and publishes the negotiated mode, card and codec
 /// config to the servers that need them.
 pub struct CaptureManager {

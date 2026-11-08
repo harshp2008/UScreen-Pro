@@ -201,7 +201,7 @@ pub(super) async fn map_devices_on_hyprland(
 }
 
 /// GNOME on Wayland: per-device settings keyed on the EDID triple; see
-/// `gnome.rs`. The plain pointer has no such setting, so it keeps whatever
+/// `display/gnome.rs`. The plain pointer has no such setting, so it keeps whatever
 /// GNOME does with an absolute pointer.
 pub(super) async fn map_devices_on_gnome(
     pen_only: bool,
@@ -223,7 +223,7 @@ pub(super) async fn map_devices_on_gnome(
     .await
 }
 
-/// Real X11 sessions other than Plasma: `xinput map-to-output`; see `x11.rs`.
+/// Real X11 sessions other than Plasma: `xinput map-to-output`; see `display/x11.rs`.
 pub(super) async fn map_devices_on_x11(
     pen_only: bool,
     ident: &DeviceIdentity,

@@ -204,13 +204,15 @@ More in [docs/faq.md](docs/faq.md).
 UScreen is architected as a modular, low-overhead system with decoupled backend, capture, and client subsystems:
 
 - **Host Daemon (`host/src/`)**:
-  - `main.rs`: CLI parsing, entry point orchestration, signal handling, and logging.
-  - `adb.rs`: Asynchronous ADB device detection, transport negotiation (`Transport::Usb` vs `Transport::Network`), reverse port forwarding, and APK lifecycle intents.
-  - `session.rs`: Multi-device display session state machine, EVDI card slot mapping, seamless USB <-> Wi-Fi transport handoff, and surgical update pause/resume handlers.
-  - `config_handler.rs`: GNOME Shell window-lock synchronization, Unix domain socket control server, and PID tracking.
-  - `capture.rs`, `encoders.rs`: Hardware encoder pipeline (NVENC, VAAPI, software H.264/HEVC) and EVDI frame grabber ring buffers.
-  - `input.rs`: WebSocket input server mapping multi-touch, stylus pressure/tilt/eraser/buttons into Linux `uinput` devices.
-  - `doctor.rs`: Comprehensive environment diagnostic suite verifying DRM nodes, permissions, and encoder health.
+  - `main.rs`, `cli.rs`, `commands.rs`, `daemon.rs`: entry point and argument parsing; one-shot subcommands (`stop`, `status`, ...); the daemon event loop that wires everything together.
+  - `net/`: `adb.rs` (device detection, transport negotiation, reverse port forwarding, APK lifecycle), `pairing.rs` (wireless pairing, legacy `adb tcpip`), `installer.rs` (APK install queue), `stream.rs` (loopback video socket), `notices.rs` (status messages pushed to the tablet).
+  - `display/`: the virtual monitor — `edid.rs`, `vdisplay.rs` and one backend per compositor (`kwin.rs`, `gnome.rs`, `hyprland.rs`, `cosmic.rs`, `x11.rs`).
+  - `capture/`: the video pipeline — `supervisor.rs` (restart loop), `helper.rs` (EVDI helper), `spawn.rs` (encoder process), `display.rs` (monitor placement), `reader.rs` and `packetizer.rs` (Annex B parsing). `encoders.rs` probes which encoders actually work.
+  - `input/`: WebSocket input server — `server.rs`, `protocol.rs`, `events.rs`, `uinput.rs` (virtual devices) and `mapping.rs` (binding devices to the right output).
+  - `session.rs`: multi-device session state machine, EVDI card slot mapping, USB <-> Wi-Fi handoff, update pause/resume.
+  - `guard.rs`: compositor-safety boot-loop guard, hotplug limiter and stall watchdog.
+  - `config.rs`, `config_handler.rs`: `config.toml` schema; GNOME window-lock sync, Unix control socket, PID tracking.
+  - `doctor.rs`: environment diagnostic suite (DRM nodes, permissions, encoder health, latency).
 
 - **C EVDI Helper (`host/evdi/evdi_helper.c`)**:
   - Event-driven display grabber communicating directly with the `evdi` kernel module via `libevdi`.
@@ -223,6 +225,7 @@ UScreen is architected as a modular, low-overhead system with decoupled backend,
   - `ui/ConnectionScreen.kt`: Primary video viewport (SurfaceView), stats chip overlay, and version mismatch telemetry.
   - `ui/Onboarding.kt`: Guided Developer Options setup, real-time connection diagnostics, and interactive Troubleshooter bottom sheet.
   - `ui/SettingsSheet.kt`: Settings sheet for bitrate/FPS tuning, orientation locks, preferred transport, and wireless pairing.
+  - `PlatformSupport.kt`: small platform queries (Wi-Fi IP, lock-screen touch support).
   - `VideoReceiver.kt`: Low-latency `MediaCodec` hardware video decoder rendering directly to a native Surface.
   - `TouchCapture.kt`: MotionEvent interception forwarding touch and S Pen events back to the host over WebSocket.
 
