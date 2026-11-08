@@ -204,6 +204,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("native_gestures", true)
         set(v) = sp.edit().putBoolean("native_gestures", v).apply()
 
+    /** Touchpad sensitivity in percent (50-200), synced with the computer. */
+    var touchpadSensitivity: Int
+        get() = sp.getInt("touchpad_sensitivity", 100).coerceIn(50, 200)
+        set(v) = sp.edit().putInt("touchpad_sensitivity", v.coerceIn(50, 200)).apply()
+
     /** `bottom_right_zone` or `two_finger_tap`, synced with the computer. */
     var rightClickMethod: String
         get() = sp.getString("right_click_method", HostConfig.RIGHT_CLICK_ZONE) ?: HostConfig.RIGHT_CLICK_ZONE

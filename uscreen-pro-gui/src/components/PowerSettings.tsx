@@ -1,6 +1,6 @@
 import { CurveEditor } from "./CurveEditor";
 import { NumberInput, Segmented } from "./ui/controls";
-import { Section, SettingRow, SwitchRow, type Override } from "./ui/layout";
+import { Section, SettingRow, SliderRow, SwitchRow, type Override } from "./ui/layout";
 import {
   CURVES,
   FADE_MAX_MS,
@@ -41,6 +41,7 @@ export interface PowerValues {
   undim_duration_ms: number;
   touchpad_haptics: boolean;
   native_gestures: boolean;
+  touchpad_sensitivity: number;
   right_click_method: string;
   touchpad_shape: string;
   stylus_style: string;
@@ -73,7 +74,7 @@ interface Props {
  */
 export function PowerSettings({ values: v, onChange, override, modeTip, presets, onPresetsChange }: Props) {
   const ov = (key: keyof PowerValues, inherited: string) => override?.(key, inherited);
-  const hint = override ? "Switch on to override the global value" : undefined;
+  const hint = override ? "Click a grey value to override it for this device" : undefined;
   return (
     <>
       <Section title="Input mode" hint={hint}>
@@ -96,13 +97,15 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
       </Section>
 
       <Section title="Tablet app" hint={hint}>
-        <SwitchRow
-          label="Touch input"
-          tip="Off sends only the pen, so a resting hand does nothing. Touchpad mode always uses fingers."
-          checked={v.touch_input}
-          onChange={(touch_input) => onChange({ touch_input })}
-          override={ov("touch_input", onOff(v.touch_input))}
-        />
+        {v.input_mode !== "touchpad" && (
+          <SwitchRow
+            label="Touch input"
+            tip="Off sends only the pen, so a resting hand does nothing."
+            checked={v.touch_input}
+            onChange={(touch_input) => onChange({ touch_input })}
+            override={ov("touch_input", onOff(v.touch_input))}
+          />
+        )}
         {v.input_mode === "stylus" && (
           <>
             <SettingRow
@@ -214,6 +217,17 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
 
       {v.input_mode === "touchpad" && (
         <Section title="Touchpad" hint={hint}>
+          <SliderRow
+            label="Sensitivity"
+            tip="How far the pointer and swipes travel per finger movement on the tablet (100% is the finger's real distance on the tablet). Applies with native gestures. Pointer acceleration on top of it is your desktop's touchpad speed setting."
+            formatValue={(n) => `${Math.round(n)}%`}
+            value={v.touchpad_sensitivity}
+            min={50}
+            max={200}
+            step={5}
+            onChange={(touchpad_sensitivity) => onChange({ touchpad_sensitivity })}
+            override={ov("touchpad_sensitivity", `${v.touchpad_sensitivity}%`)}
+          />
           <SwitchRow
             label="Touchpad Haptics"
             tip="A light 50 ms vibration on the tablet for left, right and middle clicks."

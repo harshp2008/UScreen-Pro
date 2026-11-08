@@ -241,6 +241,9 @@ pub struct TabletProfile {
     /// recognises swipes and pinches itself. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub native_gestures: Option<bool>,
+    /// Touchpad pointer and swipe sensitivity in percent (50-200). Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_sensitivity: Option<u32>,
     /// How a touchpad right click is made: `bottom_right_zone` or `two_finger_tap`. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub right_click_method: Option<String>,
@@ -452,6 +455,9 @@ pub struct FileConfig {
     /// Off, or on X11 and desktops without libinput gestures, the tablet recognises gestures and
     /// the host sends keys.
     pub native_gestures: bool,
+    /// How far the touchpad moves things per finger travel, in percent (50-200, 100 = the
+    /// finger's physical distance on the tablet). Only used with native gestures.
+    pub touchpad_sensitivity: u32,
     /// How a touchpad right click is made: `bottom_right_zone` or `two_finger_tap`.
     pub right_click_method: String,
     /// Which part of the tablet acts as the touchpad: `full_screen`, `standard_rectangle` or `wide_rectangle`.
@@ -563,6 +569,7 @@ impl Default for FileConfig {
             undim_duration_ms: 500,
             touchpad_haptics: true,
             native_gestures: true,
+            touchpad_sensitivity: 100,
             right_click_method: "bottom_right_zone".into(),
             touchpad_shape: "full_screen".into(),
             stylus_style: "mouse".into(),
@@ -655,6 +662,7 @@ impl FileConfig {
         self.idle_dim_timeout_secs = self
             .idle_dim_timeout_secs
             .clamp(MIN_IDLE_TIMEOUT_SECS, MAX_IDLE_TIMEOUT_SECS);
+        self.touchpad_sensitivity = self.touchpad_sensitivity.clamp(50, 200);
         self.dim_duration_ms = self.dim_duration_ms.clamp(MIN_FADE_MS, MAX_FADE_MS);
         self.undim_duration_ms = self.undim_duration_ms.clamp(MIN_FADE_MS, MAX_FADE_MS);
         self.curve_presets.retain(|p| !p.name.trim().is_empty());

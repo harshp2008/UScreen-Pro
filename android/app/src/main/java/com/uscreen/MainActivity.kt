@@ -384,6 +384,7 @@ class MainActivity : AppCompatActivity() {
         prefs.wifiConfigured = cfg.wifiConfigured
         prefs.touchpadHaptics = cfg.touchpadHaptics
         prefs.nativeGestures = cfg.nativeGestures
+        prefs.touchpadSensitivity = cfg.touchpadSensitivity
         prefs.rightClickMethod = cfg.rightClickMethod
         prefs.touchpadShape = cfg.touchpadShape
         prefs.stylusStyle = cfg.stylusStyle

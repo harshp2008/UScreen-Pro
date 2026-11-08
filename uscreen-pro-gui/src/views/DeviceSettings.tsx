@@ -76,6 +76,7 @@ export function DeviceSettings({
     undim_duration_ms: p.undim_duration_ms ?? g.undim_duration_ms,
     touchpad_haptics: p.touchpad_haptics ?? g.touchpad_haptics,
     native_gestures: p.native_gestures ?? g.native_gestures,
+    touchpad_sensitivity: p.touchpad_sensitivity ?? g.touchpad_sensitivity,
     right_click_method: p.right_click_method ?? g.right_click_method,
     touchpad_shape: p.touchpad_shape ?? g.touchpad_shape,
     stylus_style: p.stylus_style ?? g.stylus_style,
@@ -164,7 +165,9 @@ export function DeviceSettings({
         </SettingRow>
       </Section>
 
-      <Section title="Overrides" hint="Switch on to override the global value">
+      {/* Video settings only exist where video is streamed: Extended Display. Touchpad and Stylus stream nothing. */}
+      {power.input_mode === "display" && (
+      <Section title="Display & video" hint="Click a grey value to override it for this device">
         <SettingRow
           label="Encoder"
           tip="Codec for this tablet only."
@@ -267,6 +270,7 @@ export function DeviceSettings({
           </div>
         </SettingRow>
       </Section>
+      )}
 
       <PowerSettings
         values={power}

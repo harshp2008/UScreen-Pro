@@ -57,6 +57,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -364,6 +365,30 @@ fun SettingsSheet(
                                 hostConfig.nativeGestures,
                                 { onSetting("native_gestures", it) }
                             )
+                            if (hostConfig.nativeGestures) {
+                                var sens by remember(hostConfig.touchpadSensitivity) {
+                                    mutableFloatStateOf(hostConfig.touchpadSensitivity.toFloat())
+                                }
+                                Text(
+                                    "Sensitivity: ${sens.roundToInt()}%",
+                                    fontSize = 14.sp,
+                                    color = OnSurface,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                                Slider(
+                                    value = sens,
+                                    onValueChange = { sens = it },
+                                    onValueChangeFinished = { onSetting("touchpad_sensitivity", sens.roundToInt()) },
+                                    valueRange = 50f..200f,
+                                    colors = SliderDefaults.colors()
+                                )
+                                Text(
+                                    "How far the pointer and swipes travel for each centimetre of finger movement. " +
+                                        "Pointer acceleration on top of it is your desktop's touchpad speed setting.",
+                                    fontSize = 11.sp,
+                                    color = Muted
+                                )
+                            }
                             ChipChoice(
                                 "Right Click Method",
                                 listOf(

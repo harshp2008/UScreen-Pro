@@ -161,12 +161,13 @@ pub(super) const RESOLUTION_UNITS_PER_MM: i32 = 211;
 /// The virtual pen's pressure axis runs 0..=PEN_PRESSURE_MAX.
 pub(super) const PEN_PRESSURE_MAX: i32 = 4096;
 
-/// The virtual touchpad's surface, in the physical size libinput reasons about. The tablet sends
-/// finger positions in millimetres from the corner of its touch area, so the pad has to be at
-/// least as large as the largest tablet's: 400 x 260 mm at 40 units/mm.
+/// The virtual touchpad's surface, in the physical size libinput reasons about: 640 x 420 mm at
+/// 40 units/mm. The tablet centres its touch area on the pad and scales finger positions by the
+/// sensitivity setting (up to 2x), so even the largest tablet at the highest sensitivity stays
+/// clear of libinput's edge-palm zones and the clickpad button area along the pad's border.
 pub(super) const PAD_UNITS_PER_MM: i32 = 40;
-pub(super) const PAD_WIDTH_MM: f64 = 400.0;
-pub(super) const PAD_HEIGHT_MM: f64 = 260.0;
+pub(super) const PAD_WIDTH_MM: f64 = 640.0;
+pub(super) const PAD_HEIGHT_MM: f64 = 420.0;
 /// Contacts the pad can hold at once (slots 0..PAD_SLOTS).
 pub(super) const PAD_SLOTS: usize = 10;
 /// ABS_MT_PRESSURE runs 0..=PAD_PRESSURE_MAX. Android pressure is a 0..1 estimate that is often

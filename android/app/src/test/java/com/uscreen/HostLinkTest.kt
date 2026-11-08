@@ -145,6 +145,18 @@ class HostLinkTest {
     }
 
     @Test
+    fun touchpadSensitivityDefaultsTo100AndStaysInRange() {
+        val base = HostConfig()
+        assertEquals(100, base.touchpadSensitivity)
+        assertEquals(150, base.withSetting("touchpad_sensitivity", 150)?.touchpadSensitivity)
+        assertEquals(200, base.withSetting("touchpad_sensitivity", 900)?.touchpadSensitivity)
+        assertEquals(50, base.withSetting("touchpad_sensitivity", 1)?.touchpadSensitivity)
+        assertEquals(null, base.withSetting("touchpad_sensitivity", "fast"))
+        assertEquals(120, HostConfig.fromJson(org.json.JSONObject("""{"touchpad_sensitivity":120}"""), base).touchpadSensitivity)
+        assertEquals(100, HostConfig.fromJson(org.json.JSONObject("""{"touchpad_shape":"full_screen"}"""), base).touchpadSensitivity)
+    }
+
+    @Test
     fun theRectanglesAreCentredAndAsLargeAsTheirRatioAllows() {
         // The tablet itself: 2560x1600 (16:10).
         val std = TouchpadShape.bounds(TouchpadShape.STANDARD, 2560f, 1600f)

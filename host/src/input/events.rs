@@ -403,7 +403,12 @@ pub(super) fn handle_event(
             // finger came down on the touchpad). Count it as use and, in touchpad mode, wake the
             // host cursor: Mutter hides an idle pointer, and a 1 px out-and-back brings it back.
             crate::options::note_activity(instance);
-            if crate::options::current_mode(instance) == crate::config::InputMode::Touchpad {
+            // Not with native gestures: the virtual touchpad's own motion shows the cursor, and a
+            // second device twitching beside it only confuses the compositor.
+            let opts = crate::options::current_options(instance);
+            if opts.input_mode == crate::config::InputMode::Touchpad
+                && !opts.native_gestures_effective()
+            {
                 if let Ok(mut guard) = uinput.lock() {
                     if let Some(dev) = guard.mouse() {
                         let _ = dev.move_by(1, 0);
@@ -833,7 +838,7 @@ mod tests {
         let again = &f[2];
         assert!(again.contains(&(EV_ABS, ABS_MT_SLOT, 0)), "the lowest free slot");
         assert!(again.contains(&(EV_ABS, ABS_MT_TRACKING_ID, 1)), "never reuses a tracking id");
-        assert!(again.contains(&(EV_ABS, ABS_MT_POSITION_X, 16000 - 1)), "clamped to the pad");
+        assert!(again.contains(&(EV_ABS, ABS_MT_POSITION_X, 640 * 40 - 1)), "clamped to the pad");
         assert!(again.contains(&(EV_ABS, ABS_MT_POSITION_Y, 0)));
     }
 
@@ -943,6 +948,28 @@ mod tests {
                 "tap" => {
                     d.touchpad_raw(&[finger(1, 200.0, 120.0)]);
                     pause(60);
+                    d.touchpad_raw(&[]);
+                }
+                // One finger at a steady 100 mm/s: a frame every 8 ms ...
+                "glide_even" => {
+                    d.touchpad_raw(&[finger(1, 100.0, 120.0)]);
+                    pause(30);
+                    for k in 1..=60 {
+                        d.touchpad_raw(&[finger(1, 100.0 + 0.8 * k as f64, 120.0)]);
+                        pause(8);
+                    }
+                    d.touchpad_raw(&[]);
+                }
+                // ... and the same speed arriving as two frames 2 ms apart every 16 ms.
+                "glide_pairs" => {
+                    d.touchpad_raw(&[finger(1, 100.0, 120.0)]);
+                    pause(30);
+                    for k in 1..=30 {
+                        d.touchpad_raw(&[finger(1, 100.0 + 1.6 * k as f64 - 0.8, 120.0)]);
+                        pause(2);
+                        d.touchpad_raw(&[finger(1, 100.0 + 1.6 * k as f64, 120.0)]);
+                        pause(14);
+                    }
                     d.touchpad_raw(&[]);
                 }
                 other => panic!("unknown PAD_SCRIPT step {other}"),

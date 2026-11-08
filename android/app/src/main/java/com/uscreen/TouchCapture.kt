@@ -36,6 +36,10 @@ class TouchCapture {
         /** Pointer speed: pixels sent to the computer per pixel of finger travel. */
         private const val PAD_GAIN = 1.6f
 
+        /** The host's virtual touchpad surface in millimetres (see PAD_WIDTH_MM in uinput.rs). */
+        private const val NATIVE_PAD_W_MM = 640f
+        private const val NATIVE_PAD_H_MM = 420f
+
         /** How long the pen may be out of range before a held side button is let go. */
         private const val PEN_BUTTON_GRACE_MS = 250L
 
@@ -271,6 +275,12 @@ class TouchCapture {
                 liftTouches()
                 return@setOnTouchListener true
             }
+            // Deliver touches as the panel reports them. Batched to the screen refresh, Android
+            // resamples the newest point ahead of the real ones, which reaches the computer as
+            // alternating tiny and large steps; unbuffered, a touchpad sees the stream a touchpad would.
+            if (touchpadMode && event.actionMasked == MotionEvent.ACTION_DOWN) {
+                view.requestUnbufferedDispatch(event)
+            }
             handleMotionEvent(event, view.width, view.height)
             true
         }
@@ -447,7 +457,9 @@ class TouchCapture {
                             return true
                         }
                         outsideIds.remove(id)
-                        if (maskedAction == MotionEvent.ACTION_DOWN) sendWake(force = false)
+                        // The virtual touchpad's own motion shows the cursor; the host's 1 px nudge
+                        // is only for the engine path.
+                        if (maskedAction == MotionEvent.ACTION_DOWN && !nativeActive()) sendWake(force = false)
                         if (nativeActive()) feedRaw(event, padBounds, -1, actionIndex)
                         else feedPad(event, padBounds, -1)
                         return true
@@ -1077,6 +1089,7 @@ and consults it when choosing between the device's adb entries.
             }
         }
 
+        val sens = hostConfig.touchpadSensitivity.coerceIn(50, 200) / 100f
         val history = if (event.actionMasked == MotionEvent.ACTION_MOVE) event.historySize else 0
         for (h in 0..history) {
             val sample = if (h < history) h else -1
@@ -1088,10 +1101,12 @@ and consults it when choosing between the device's adb entries.
                 val x = if (sample >= 0) event.getHistoricalX(i, sample) else event.getX(i)
                 val y = if (sample >= 0) event.getHistoricalY(i, sample) else event.getY(i)
                 val p = if (sample >= 0) event.getHistoricalPressure(i, sample) else event.getPressure(i)
+                // The touch area sits in the middle of the host's pad, scaled by the sensitivity, so
+                // libinput's edge and button zones along the pad's border are never reached.
                 slots.put(JSONObject().apply {
                     put("id", id)
-                    put("x", ((bounds.clampX(x) - bounds.left) * k).toDouble())
-                    put("y", ((bounds.clampY(y) - bounds.top) * k).toDouble())
+                    put("x", (NATIVE_PAD_W_MM / 2f + ((bounds.clampX(x) - bounds.left) - bounds.width / 2f) * k * sens).toDouble())
+                    put("y", (NATIVE_PAD_H_MM / 2f + ((bounds.clampY(y) - bounds.top) - bounds.height / 2f) * k * sens).toDouble())
                     put("pressure", p.toDouble())
                 })
             }

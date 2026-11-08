@@ -51,6 +51,8 @@ pub struct DeviceOptions {
     /// The setting "Use Native Gestures (Wayland/libinput)". Whether it is in effect also depends
     /// on the desktop: see [`DeviceOptions::native_gestures_effective`].
     pub native_gestures: bool,
+    /// Touchpad sensitivity in percent (50-200).
+    pub touchpad_sensitivity: u32,
     /// `bottom_right_zone` or `two_finger_tap`.
     pub right_click_method: String,
     /// `full_screen`, `standard_rectangle` or `wide_rectangle`.
@@ -96,6 +98,7 @@ impl DeviceOptions {
         g.undim_duration_ms = pick!(undim_duration_ms);
         g.touchpad_haptics = pick!(touchpad_haptics);
         g.native_gestures = p.native_gestures.unwrap_or(cfg.native_gestures);
+        g.touchpad_sensitivity = pick!(touchpad_sensitivity);
         g.right_click_method = pick!(right_click_method);
         g.touchpad_shape = pick!(touchpad_shape);
         g.stylus_style = pick!(stylus_style);
@@ -129,6 +132,7 @@ impl DeviceOptions {
             undim_duration_ms: g.undim_duration_ms,
             touchpad_haptics: g.touchpad_haptics,
             native_gestures: g.native_gestures,
+            touchpad_sensitivity: g.touchpad_sensitivity,
             right_click_method: g.right_click_method.clone(),
             touchpad_shape: g.touchpad_shape.clone(),
             stylus_style: g.stylus_style.clone(),
@@ -165,6 +169,7 @@ impl DeviceOptions {
             // What the tablet acts on is the effective value, so it falls back to its own gesture
             // recogniser on X11 and on desktops that do nothing with libinput gestures.
             "native_gestures": self.native_gestures_effective(),
+            "touchpad_sensitivity": self.touchpad_sensitivity,
             "touchpad_shape": self.touchpad_shape,
             "stylus_style": self.stylus_style,
             "stylus_button_primary": self.stylus_button_primary,
@@ -244,6 +249,7 @@ fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Result<bool, ()>
         "idle_dim_timeout_secs" => set(&mut p.idle_dim_timeout_secs, n?),
         "touchpad_haptics" => set(&mut p.touchpad_haptics, b?),
         "native_gestures" => set(&mut p.native_gestures, b?),
+        "touchpad_sensitivity" => set(&mut p.touchpad_sensitivity, n?.clamp(50, 200)),
         "touchpad_shape" => match s?.as_str() {
             m @ ("full_screen" | "standard_rectangle" | "wide_rectangle") => {
                 set(&mut p.touchpad_shape, m.to_string())
@@ -657,6 +663,7 @@ mod tests {
             "touchpad_haptics",
             "right_click_method",
             "native_gestures",
+            "touchpad_sensitivity",
             "touchpad_shape",
             "stylus_style",
             "stylus_button_primary",

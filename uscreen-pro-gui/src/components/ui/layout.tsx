@@ -1,6 +1,7 @@
-import { Info } from "lucide-react";
+import { Info, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { QUALITY_MAX, QUALITY_MIN, qualityLabel } from "@/lib/options";
 import { Slider } from "./controls";
@@ -48,19 +49,46 @@ export interface Override {
   inherited: string;
 }
 
-export function OverrideToggle({ override, label }: { override: Override; label: string }) {
+/**
+ * What a row that inherits the global value shows where its control would be: the global value in grey.
+ * Clicking it turns it into an override for this device (seeded with the global value). It replaces the
+ * old switch on the far right, so the controls of every row stay on one right-aligned edge.
+ */
+export function InheritedValue({ override, label }: { override: Override; label: string }) {
   return (
-    <div className="flex items-center gap-2" title="Override the global value for this device">
-      <Switch aria-label={`Override ${label}`} checked={override.enabled} onCheckedChange={override.onChange} />
-    </div>
+    <button
+      type="button"
+      aria-label={`Override ${label} for this device`}
+      title="Click to override the global value for this device"
+      onClick={() => override.onChange(true)}
+      className="rounded-md px-2 py-1 text-[12px] text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+    >
+      {override.inherited}
+    </button>
   );
 }
 
-export function Label({ label, tip }: { label: string; tip?: string }) {
+/**
+ * Row label. An overridden row is highlighted and carries a small reset icon right after the label (never
+ * beside the control, which would push it off the right edge); the icon puts the row back on the global value.
+ */
+export function Label({ label, tip, override }: { label: string; tip?: string; override?: Override }) {
+  const overridden = override?.enabled === true;
   return (
     <div className="flex min-w-0 items-center gap-1">
-      <span className="truncate text-foreground">{label}</span>
+      <span className={cn("truncate", overridden ? "font-medium text-primary" : "text-foreground")}>{label}</span>
       {tip && <InfoTip text={tip} />}
+      {overridden && (
+        <button
+          type="button"
+          aria-label={`Reset ${label} to global`}
+          title="Reset to global"
+          onClick={() => override.onChange(false)}
+          className="inline-flex size-5 items-center justify-center rounded-md text-primary transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        >
+          <RotateCcw className="size-3" />
+        </button>
+      )}
     </div>
   );
 }
@@ -80,14 +108,9 @@ export function SettingRow({
   const showControl = !override || override.enabled;
   return (
     <div className="flex min-h-10 items-center justify-between gap-4 px-3">
-      <Label label={label} tip={tip} />
-      <div className="flex shrink-0 items-center gap-3">
-        {showControl ? (
-          children
-        ) : (
-          <span className="text-[11px] text-muted-foreground">{override.inherited}</span>
-        )}
-        {override && <OverrideToggle override={override} label={label} />}
+      <Label label={label} tip={tip} override={override} />
+      <div className="flex shrink-0 items-center">
+        {showControl ? children : <InheritedValue override={override} label={label} />}
       </div>
     </div>
   );
@@ -115,11 +138,10 @@ export function BlockRow({
   return (
     <div className="space-y-2 px-3 py-2.5">
       <div className="flex min-h-6 items-center justify-between gap-4">
-        <Label label={label} tip={tip} />
-        <div className="flex shrink-0 items-center gap-3">
-          {!active && <span className="text-[11px] text-muted-foreground">{override?.inherited}</span>}
+        <Label label={label} tip={tip} override={override} />
+        <div className="flex shrink-0 items-center">
+          {!active && override && <InheritedValue override={override} label={label} />}
           {active && summary && <span className="text-xs font-medium text-foreground">{summary}</span>}
-          {override && <OverrideToggle override={override} label={label} />}
         </div>
       </div>
       {active && children}
@@ -160,12 +182,13 @@ export function SliderRow({
   return (
     <div className="space-y-1.5 px-3 py-2.5">
       <div className="flex min-h-6 items-center justify-between gap-4">
-        <Label label={label} tip={tip} />
-        <div className="flex shrink-0 items-center gap-3">
-          <span className="text-xs font-medium tabular-nums text-foreground">
-            {active ? formatValue(value) : <span className="text-muted-foreground">{override?.inherited}</span>}
-          </span>
-          {override && <OverrideToggle override={override} label={label} />}
+        <Label label={label} tip={tip} override={override} />
+        <div className="flex shrink-0 items-center">
+          {active ? (
+            <span className="text-xs font-medium tabular-nums text-foreground">{formatValue(value)}</span>
+          ) : (
+            override && <InheritedValue override={override} label={label} />
+          )}
         </div>
       </div>
       {active && (
