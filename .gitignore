@@ -56,3 +56,4 @@ __pycache__/
 
 # raw RCA evidence (LAN IPs, device serials, system logs) - keep local
 experiments_and_findings/56_evidence/
+android/.kotlin/
