@@ -18,38 +18,9 @@ import androidx.activity.compose.setContent
 import androidx.compose.runtime.mutableStateOf
 import com.uscreen.ui.UScreenMain
 import com.uscreen.ui.UScreenTheme
-import java.net.Inet4Address
-import java.net.NetworkInterface
-import java.util.Collections
 import kotlin.math.roundToInt
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
-
-/**
- * Retrieve the active IPv4 address assigned to the device's wireless (`wlan`) interface.
- */
-fun getLocalWifiIp(@Suppress("UNUSED_PARAMETER") context: Context? = null): String? {
-    try {
-        val interfaces = Collections.list(NetworkInterface.getNetworkInterfaces())
-        for (intf in interfaces) {
-            if (intf.name.startsWith("wlan")) {
-                for (addr in Collections.list(intf.inetAddresses)) {
-                    if (!addr.isLoopbackAddress && addr is Inet4Address) {
-                        return addr.hostAddress
-                    }
-                }
-            }
-        }
-    } catch (_: Exception) {}
-    return null
-}
-
-/**
- * Whether touches can reach the app while the keyguard is up. The activity can only be drawn over the
- * lock screen through `setShowWhenLocked`, which arrived in API 27; below that the window is never
- * shown while locked, so there is nothing to touch.
- */
-fun lockScreenTouchSupported(): Boolean = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1
 
 /**
  * Primary Android Activity managing lifecycle, hardware video rendering, low-latency touch/stylus

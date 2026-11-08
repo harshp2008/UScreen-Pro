@@ -207,7 +207,7 @@ async fn check_processes(r: &mut Report) {
 
     // The PID file is the daemon's single slot; anything running beside it is
     // untracked and `uscreen stop` will never reach it.
-    let pid_file = crate::get_pid_path();
+    let pid_file = crate::config_handler::get_pid_path();
     let tracked: Option<u32> = std::fs::read_to_string(&pid_file)
         .ok()
         .and_then(|t| t.trim().parse().ok())
