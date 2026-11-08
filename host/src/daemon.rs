@@ -385,16 +385,21 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
             }
         });
     }
-    // The tray's "Graphics tablet" switch asks for a new *global* default here. Only that: a mode
-    // change that merely mirrors slot 0 (a tablet's own setting, a per-device override from the GUI)
-    // must never be written back as the global default, which is what used to happen.
-    let (mode_request_tx, mut mode_request_rx) = tokio::sync::mpsc::unbounded_channel::<bool>();
+    let mut mode_rx_save = mode_tx.subscribe();
     let mode_save_handle = tokio::spawn(async move {
-        while let Some(pen_only) = mode_request_rx.recv().await {
+        while mode_rx_save.changed().await.is_ok() {
+            // The tray's switch is the global Stylus toggle; it must not override a Touchpad
+            // default that was chosen separately.
+            let pen_only = *mode_rx_save.borrow();
             let mut cfg = config::FileConfig::load();
-            if !cfg.set_global_stylus(pen_only) {
+            if (cfg.input_mode == Some(config::InputMode::Stylus)) == pen_only {
                 continue;
             }
+            cfg.input_mode = Some(if pen_only {
+                config::InputMode::Stylus
+            } else {
+                config::InputMode::Display
+            });
             if let Err(e) = cfg.save() {
                 warn!("Failed to persist mode: {}", e);
             }
@@ -411,14 +416,7 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
     let tray_mode_tx = mode_tx.clone();
     let tray_shutdown_tx = shutdown_tx.clone();
     let tray_handle = tokio::spawn(async move {
-        tray::run(
-            tray_mode_tx,
-            mode_request_tx,
-            tray_tablet_rx,
-            tray_shutdown_tx,
-            update_rx,
-        )
-        .await;
+        tray::run(tray_mode_tx, tray_tablet_rx, tray_shutdown_tx, update_rx).await;
     });
 
     let auto_launch = file_cfg.auto_launch_app;

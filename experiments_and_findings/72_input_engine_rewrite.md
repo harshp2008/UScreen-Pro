@@ -1,5 +1,7 @@
 # 72: Input engine rewrite
 
+> **Superseded by `73_input_engine_rewrite_v2.md`.** The engine described here was reverted again: it passed injected input but failed with real hands and a real pen.
+
 The previous touchpad and stylus work (docs 69 and 71) did not hold up in real use. My earlier verification
 fed synthetic events through the plumbing and I reported it as working; real hands and a real pen showed it was
 not. This document records what was removed, what was studied, what replaced it, and what is still unproven.

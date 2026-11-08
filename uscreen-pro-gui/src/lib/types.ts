@@ -109,8 +109,6 @@ export interface TabletProfile {
   touchpad_haptics?: boolean;
   right_click_method?: string;
   touchpad_shape?: string;
-  stylus_button_primary?: string;
-  stylus_button_secondary?: string;
   app_version?: string;
   preferred_transport?: string;
   /** false when the user skipped wireless setup in the wizard; absent on older profiles means configured. */
@@ -172,10 +170,6 @@ export interface AppConfig {
   right_click_method: string;
   /** `full_screen`, `standard_rectangle` or `wide_rectangle`. */
   touchpad_shape: string;
-  /** What the pen's side button does: `middle_click`, `right_click`, `left_click`, `stylus_button` or `none`. */
-  stylus_button_primary: string;
-  /** What the pen's second button does (same values). */
-  stylus_button_secondary: string;
   /** Fade curves saved in the curve editor; referenced as `preset:<name>`. */
   curve_presets: CurvePreset[];
   version: string;

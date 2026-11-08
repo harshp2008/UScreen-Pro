@@ -242,14 +242,11 @@ class TouchCapture {
     @android.annotation.SuppressLint("ClickableViewAccessibility")
     fun setSurfaceView(sv: SurfaceView) {
         surfaceView = sv
-        if (engine == null) engine = createEngine(sv.context)
         try {
             targetDisplayId = sv.display?.displayId ?: 0
         } catch (_: Exception) {}
 
         sv.setOnTouchListener { view, event ->
-            // Keep the pen stroke (and every finger) ours: a parent that starts scrolling would cancel it.
-            if (event.actionMasked == MotionEvent.ACTION_DOWN) view.parent?.requestDisallowInterceptTouchEvent(true)
             if (inputBlocked) {
                 liftTouches()
                 return@setOnTouchListener true
@@ -289,7 +286,6 @@ class TouchCapture {
         // not quietly bring the link back; only the Retry button does, by setting autoReconnect first.
         if (!autoReconnect) return
         penButtonDown = false
-        penButton2Down = false
         // Idempotent: a second connect() must not leave the first socket
         // alive with its listener still flipping isConnected. onStart and a
         // token delivered through onNewIntent can both call this.
@@ -399,25 +395,10 @@ class TouchCapture {
         val vw = width.coerceAtLeast(1).toFloat()
         val vh = height.coerceAtLeast(1).toFloat()
 
+        val padBounds = TouchpadShape.bounds(touchpadShape, vw, vh)
         val pointerCount = event.pointerCount
         val actionIndex = event.actionIndex
         val maskedAction = event.actionMasked
-
-        // Touchpad mode: every finger event belongs to the touchpad engine. (The pen keeps its own
-        // path below, so a pen over the pad still draws.)
-        if (touchpadMode && !stylusMode && maskedAction != MotionEvent.ACTION_BUTTON_PRESS &&
-            maskedAction != MotionEvent.ACTION_BUTTON_RELEASE
-        ) {
-            val lead = when (maskedAction) {
-                MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN,
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_POINTER_UP -> actionIndex
-                else -> 0
-            }
-            if (maskedAction == MotionEvent.ACTION_CANCEL || !isPenLike(event, lead)) {
-                feedTouchpad(event, vw, vh)
-                return true
-            }
-        }
 
         when (maskedAction) {
             MotionEvent.ACTION_DOWN,
@@ -434,6 +415,21 @@ class TouchCapture {
                 } else {
                     // Stylus mode is a graphics tablet: only the pen and its eraser count.
                     if (stylusMode || penIsActive() || !touchEnabled) return true
+                    if (touchpadMode) {
+                        // A finger that lands outside the touch area is ignored for its whole life:
+                        // nothing is sent and no gesture sees it.
+                        val id = event.getPointerId(actionIndex)
+                        val x = event.getX(actionIndex)
+                        val y = event.getY(actionIndex)
+                        if (!padBounds.contains(x, y)) {
+                            outsideIds.add(id)
+                            return true
+                        }
+                        outsideIds.remove(id)
+                        if (maskedAction == MotionEvent.ACTION_DOWN) sendWake(force = false)
+                        pad.down(id, x, y, event.eventTime)
+                        return true
+                    }
                     val slot = slotOf(event, actionIndex)
                     downSlots.add(slot)
                     val (nx, ny) = mapCoordinates(event.getX(actionIndex), event.getY(actionIndex), vw, vh)
@@ -472,6 +468,13 @@ class TouchCapture {
                         sendPenEvent(event, i, 2, vw, vh)
                     } else {
                         if (stylusMode || penIsActive() || !touchEnabled) continue
+                        if (touchpadMode) {
+                            val id = event.getPointerId(i)
+                            if (id in outsideIds) continue
+                            // A finger that slides out stops at the edge, like on a real pad.
+                            pad.move(id, padBounds.clampX(event.getX(i)), padBounds.clampY(event.getY(i)))
+                            continue
+                        }
                         val (nx, ny) = mapCoordinates(event.getX(i), event.getY(i), vw, vh)
                         sendTouch(nx, ny, event.getPressure(i).toDouble(), 2, slotOf(event, i))
                     }
@@ -494,6 +497,12 @@ class TouchCapture {
                     sendPenEvent(event, actionIndex, 1, vw, vh)
                 } else {
                     if (stylusMode) return true
+                    if (touchpadMode) {
+                        val id = event.getPointerId(actionIndex)
+                        if (outsideIds.remove(id)) return true
+                        pad.up(id, event.eventTime)
+                        return true
+                    }
                     // Not filtered on palm: whatever the contact is called
                     // now, if we sent its DOWN we owe the host its UP.
                     val slot = slotOf(event, actionIndex)
@@ -506,6 +515,11 @@ class TouchCapture {
 
             MotionEvent.ACTION_CANCEL -> {
                 if (stylusMode) return true
+                if (touchpadMode) {
+                    outsideIds.clear()
+                    pad.cancel()
+                    return true
+                }
                 for (i in 0 until pointerCount) {
                     if (isPalm(event, i)) continue
                     val (nx, ny) = mapCoordinates(event.getX(i), event.getY(i), vw, vh)
@@ -628,24 +642,15 @@ class TouchCapture {
      * (#23, #25).
      */
     private fun syncPenButton(event: MotionEvent) {
-        // The pen's first (side) button. Some Samsung builds report it as a secondary mouse button
-        // instead of the stylus one.
-        val first = (event.buttonState and
+        // Some Samsung builds report the S Pen button as a secondary mouse
+        // button instead of the stylus one.
+        val down = (event.buttonState and
             (MotionEvent.BUTTON_STYLUS_PRIMARY or MotionEvent.BUTTON_SECONDARY)) != 0
-        if (first != penButtonDown) {
-            penButtonDown = first
-            sendPenButton(first, second = false)
-        }
-        // A pen with a second barrel button.
-        val second = (event.buttonState and MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
-        if (second != penButton2Down) {
-            penButton2Down = second
-            sendPenButton(second, second = true)
+        if (down != penButtonDown) {
+            penButtonDown = down
+            sendPenButton(down)
         }
     }
-
-    /** The pen's second button as the host last heard it. */
-    private var penButton2Down = false
 
     private fun emitPen(x: Double, y: Double, pressure: Double,
                         tiltX: Double, tiltY: Double, eraser: Boolean, action: Int) {
@@ -663,12 +668,7 @@ class TouchCapture {
         webSocket?.send(msg.toString())
     }
 
-    /**
-     * Tell the host a pen button changed: action 5 / 6 for the side button down / up, 7 / 8 for the
-     * second one. What each does (middle click, right click, the stylus button...) is a setting the
-     * host applies.
-     */
-    private fun sendPenButton(down: Boolean, second: Boolean) {
+    private fun sendPenButton(down: Boolean) {
         val msg = JSONObject().apply {
             put("type", "pen")
             put("x", 0.0)
@@ -677,7 +677,8 @@ class TouchCapture {
             put("tilt_x", 0.0)
             put("tilt_y", 0.0)
             put("eraser", false)
-            put("action", (if (second) 7 else 5) + if (down) 0 else 1)
+            // 5 = stylus button down, 6 = stylus button up
+            put("action", if (down) 5 else 6)
         }
         webSocket?.send(msg.toString())
     }
@@ -687,11 +688,7 @@ class TouchCapture {
         // host until the next press.
         if (penButtonDown) {
             penButtonDown = false
-            sendPenButton(false, second = false)
-        }
-        if (penButton2Down) {
-            penButton2Down = false
-            sendPenButton(false, second = true)
+            sendPenButton(false)
         }
         val msg = JSONObject().apply {
             put("type", "pen")
@@ -889,17 +886,9 @@ and consults it when choosing between the device's adb entries.
     @Volatile var touchpadMode = false
         private set
 
-    /**
-     * The touchpad engine, created with the surface (it needs a [android.content.Context] for
-     * Android's gesture detectors). Its output is turned into plain host messages here.
-     */
-    private var engine: TouchpadEngine? = null
-
-    private fun createEngine(context: android.content.Context) = TouchpadEngine(context, object : TouchpadEngine.Output {
-        override fun move(dx: Int, dy: Int) = sendRel("rel", dx.toFloat(), dy.toFloat())
-
-        override fun scroll(dx: Int, dy: Int) = sendRel("scroll", dx.toFloat(), dy.toFloat())
-
+    private val pad = TouchpadGestures(object : TouchpadGestures.Output {
+        override fun move(dx: Float, dy: Float) = sendRel("rel", dx, dy)
+        override fun scroll(dx: Float, dy: Float) = sendRel("scroll", dx, dy)
         override fun button(button: Int, down: Boolean) {
             webSocket?.send(JSONObject().apply {
                 put("type", "button")
@@ -908,55 +897,10 @@ and consults it when choosing between the device's adb entries.
             }.toString())
             if (down) onHaptic?.invoke()
         }
+    })
 
-        override fun pinch(amount: Float) = sendGesture("pinch", amount)
-
-        override fun pinchEnd() = sendGesture("pinch_end", 0f)
-
-        override fun workspace(direction: Int) =
-            sendGesture(if (direction < 0) "workspace_prev" else "workspace_next", 0f)
-
-        override fun touched() = sendWake(force = false)
-    }).also {
-        it.setPanelDensity(pixelsPerMm)
-        it.rightClickZone = rightClickZone
-    }
-
-    private fun sendGesture(kind: String, amount: Float) {
-        webSocket?.send(JSONObject().apply {
-            put("type", "gesture")
-            put("kind", kind)
-            put("amount", amount.toDouble())
-        }.toString())
-    }
-
-    @Volatile private var pixelsPerMm = 10f
-    @Volatile private var rightClickZone = true
-
-    /** Panel density, so the touchpad's tolerances are millimetres, not pixels. */
-    fun setPanelDensity(pixelsPerMm: Float) {
-        this.pixelsPerMm = pixelsPerMm
-        engine?.setPanelDensity(pixelsPerMm)
-    }
-
-    /** Right-click method: true taps the bottom-right strip, false uses a two-finger tap. */
-    fun setRightClickZone(on: Boolean) {
-        rightClickZone = on
-        engine?.rightClickZone = on
-    }
-
-    /** Hand a finger event to the engine, with the touch area for the current shape. */
-    private fun feedTouchpad(event: MotionEvent, vw: Float, vh: Float) {
-        val e = engine ?: return
-        // The pen owns the screen while it is near, and fingers that are not wanted at all drop out.
-        if (event.actionMasked != MotionEvent.ACTION_CANCEL && (penIsActive() || !touchEnabled)) {
-            e.cancel()
-            return
-        }
-        val b = TouchpadShape.bounds(touchpadShape, vw, vh)
-        e.setBounds(b.left, b.top, b.right, b.bottom)
-        e.onTouchEvent(event)
-    }
+    /** Pointer ids whose finger landed outside the touch area; they are ignored until they lift. */
+    private val outsideIds = HashSet<Int>()
 
     /** Which part of the screen is the touchpad (`full_screen`, `standard_rectangle`, `wide_rectangle`). */
     @Volatile var touchpadShape = TouchpadShape.FULL
@@ -966,7 +910,8 @@ and consults it when choosing between the device's adb entries.
         if (touchpadShape == shape) return
         touchpadShape = shape
         // Fingers that were down belong to the old area.
-        engine?.cancel()
+        outsideIds.clear()
+        pad.cancel()
     }
 
     /**
@@ -999,7 +944,7 @@ and consults it when choosing between the device's adb entries.
 
     /** Release every finger the host still thinks is pressed (and any button the touchpad holds). */
     private fun liftTouches() {
-        engine?.cancel()
+        pad.cancel()
         if (downSlots.isNotEmpty()) {
             for (slot in downSlots.toList()) sendTouch(0f, 0f, 0.0, 1, slot)
             downSlots.clear()

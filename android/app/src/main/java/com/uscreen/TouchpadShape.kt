@@ -21,6 +21,9 @@ object TouchpadShape {
 
         fun contains(x: Float, y: Float) = x >= left && x <= right && y >= top && y <= bottom
 
+        /** The point of this rectangle nearest to ([x], [y]). */
+        fun clampX(x: Float) = x.coerceIn(left, right)
+        fun clampY(y: Float) = y.coerceIn(top, bottom)
     }
 
     /** Width over height of a rectangle shape, or null for the full screen. */

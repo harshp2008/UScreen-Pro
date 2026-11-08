@@ -52,9 +52,6 @@ pub struct DeviceOptions {
     pub right_click_method: String,
     /// `full_screen`, `standard_rectangle` or `wide_rectangle`.
     pub touchpad_shape: String,
-    /// What the pen's two buttons do (see `config::PEN_BUTTON_ACTIONS`).
-    pub stylus_button_primary: String,
-    pub stylus_button_secondary: String,
     /// Informational: a Wi-Fi address is configured for this device, so the app hides its
     /// "Setup Wireless Pairing" button.
     pub wifi_configured: bool,
@@ -92,8 +89,6 @@ impl DeviceOptions {
         g.touchpad_haptics = pick!(touchpad_haptics);
         g.right_click_method = pick!(right_click_method);
         g.touchpad_shape = pick!(touchpad_shape);
-        g.stylus_button_primary = pick!(stylus_button_primary);
-        g.stylus_button_secondary = pick!(stylus_button_secondary);
         g.sanitize();
         let global_mode = CLI_MODE
             .get()
@@ -123,8 +118,6 @@ impl DeviceOptions {
             touchpad_haptics: g.touchpad_haptics,
             right_click_method: g.right_click_method.clone(),
             touchpad_shape: g.touchpad_shape.clone(),
-            stylus_button_primary: g.stylus_button_primary.clone(),
-            stylus_button_secondary: g.stylus_button_secondary.clone(),
             wifi_configured: wifi(&p.wifi_address) || !cfg.wifi_address.trim().is_empty(),
         }
     }
@@ -154,8 +147,6 @@ impl DeviceOptions {
             "touchpad_haptics": self.touchpad_haptics,
             "right_click_method": self.right_click_method,
             "touchpad_shape": self.touchpad_shape,
-            "stylus_button_primary": self.stylus_button_primary,
-            "stylus_button_secondary": self.stylus_button_secondary,
             "wifi_configured": self.wifi_configured,
         })
     }
@@ -206,17 +197,6 @@ fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Result<bool, ()>
         "idle_dim_enabled" => set(&mut p.idle_dim_enabled, b?),
         "idle_dim_timeout_secs" => set(&mut p.idle_dim_timeout_secs, n?),
         "touchpad_haptics" => set(&mut p.touchpad_haptics, b?),
-        "stylus_button_primary" | "stylus_button_secondary" => {
-            let v = s?;
-            if !crate::config::PEN_BUTTON_ACTIONS.contains(&v.as_str()) {
-                return Err(());
-            }
-            if key == "stylus_button_primary" {
-                set(&mut p.stylus_button_primary, v)
-            } else {
-                set(&mut p.stylus_button_secondary, v)
-            }
-        }
         "touchpad_shape" => match s?.as_str() {
             m @ ("full_screen" | "standard_rectangle" | "wide_rectangle") => {
                 set(&mut p.touchpad_shape, m.to_string())
@@ -276,17 +256,6 @@ pub fn options_rx(instance: u32) -> watch::Receiver<DeviceOptions> {
 /// Whether the slot's device is in Stylus mode, live.
 pub fn pen_only_rx(instance: u32) -> watch::Receiver<bool> {
     with_slot(instance, |s| s.pen_only.subscribe())
-}
-
-/// What the slot's pen buttons do right now: (side button, second button).
-pub fn current_pen_buttons(instance: u32) -> (String, String) {
-    with_slot(instance, |s| {
-        let o = s.tx.borrow();
-        (
-            o.stylus_button_primary.clone(),
-            o.stylus_button_secondary.clone(),
-        )
-    })
 }
 
 /// The slot's current input mode.
@@ -624,8 +593,6 @@ mod tests {
             "touchpad_haptics",
             "right_click_method",
             "touchpad_shape",
-            "stylus_button_primary",
-            "stylus_button_secondary",
             "wifi_configured",
         ] {
             assert!(v.get(k).is_some(), "missing {k}");

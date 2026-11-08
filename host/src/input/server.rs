@@ -198,19 +198,6 @@ impl InputServer {
             });
         }
 
-        // A pinch holds Ctrl for its whole length; if the tablet never says it ended, let go.
-        {
-            let devices = uinput.clone();
-            tokio::spawn(async move {
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-                    if let Ok(mut guard) = devices.lock() {
-                        guard.release_stale_pinch();
-                    }
-                }
-            });
-        }
-
         let config = self.config.clone();
         let running = self.running.clone();
 

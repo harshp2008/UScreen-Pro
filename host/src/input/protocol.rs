@@ -70,10 +70,9 @@ pub enum InputEvent {
     /// picks the direction it wants.
     #[serde(rename = "scroll")]
     Scroll { dx: f64, dy: f64 },
-    /// Touchpad gesture the tablet recognised that needs keys on the computer: `pinch` (Ctrl held
-    /// while the wheel turns, `amount` in tablet pixels, positive = fingers apart), `pinch_end`
-    /// (the pinch is over: release Ctrl) or a workspace switch (`workspace_prev` /
-    /// `workspace_next`, Super + Page Up / Page Down).
+    /// Touchpad gesture the tablet recognised that needs keys on the computer: `pinch` (Ctrl +
+    /// scroll, `amount` in tablet pixels, positive = fingers apart) or a workspace switch
+    /// (`workspace_prev` / `workspace_next`, Super + Page Up / Page Down).
     #[serde(rename = "gesture")]
     Gesture {
         kind: String,

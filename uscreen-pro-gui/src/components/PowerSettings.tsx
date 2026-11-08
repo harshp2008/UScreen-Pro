@@ -1,5 +1,5 @@
 import { CurveEditor } from "./CurveEditor";
-import { NumberInput, Segmented, Select } from "./ui/controls";
+import { NumberInput, Segmented } from "./ui/controls";
 import { Section, SettingRow, SwitchRow, type Override } from "./ui/layout";
 import {
   CURVES,
@@ -10,7 +10,6 @@ import {
   INPUT_MODES,
   INPUT_MODE_HELP,
   ORIENTATIONS,
-  PEN_BUTTON_ACTIONS,
   RIGHT_CLICK_METHODS,
   TOUCHPAD_SHAPES,
   THEME_MODES,
@@ -41,8 +40,6 @@ export interface PowerValues {
   touchpad_haptics: boolean;
   right_click_method: string;
   touchpad_shape: string;
-  stylus_button_primary: string;
-  stylus_button_secondary: string;
 }
 
 /** Tooltip of the Input mode row of a device: where the power goes and what to do about it. */
@@ -196,35 +193,6 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
               value={v.right_click_method}
               options={RIGHT_CLICK_METHODS}
               onValueChange={(right_click_method) => onChange({ right_click_method })}
-            />
-          </SettingRow>
-        </Section>
-      )}
-
-      {v.input_mode === "stylus" && (
-        <Section title="Stylus" hint={hint}>
-          <SettingRow
-            label="Pen button 1 (side button)"
-            tip="What the pen's side button does. A mouse button is held for as long as the pen button is, so you can drag with it. Only the pen and its eraser work in Stylus mode; fingers are ignored."
-            override={ov("stylus_button_primary", labelOf(PEN_BUTTON_ACTIONS, v.stylus_button_primary))}
-          >
-            <Select
-              label="Pen button 1"
-              value={v.stylus_button_primary}
-              options={PEN_BUTTON_ACTIONS}
-              onValueChange={(stylus_button_primary) => onChange({ stylus_button_primary })}
-            />
-          </SettingRow>
-          <SettingRow
-            label="Pen button 2"
-            tip="What the pen's second button does, for pens that have one."
-            override={ov("stylus_button_secondary", labelOf(PEN_BUTTON_ACTIONS, v.stylus_button_secondary))}
-          >
-            <Select
-              label="Pen button 2"
-              value={v.stylus_button_secondary}
-              options={PEN_BUTTON_ACTIONS}
-              onValueChange={(stylus_button_secondary) => onChange({ stylus_button_secondary })}
             />
           </SettingRow>
         </Section>

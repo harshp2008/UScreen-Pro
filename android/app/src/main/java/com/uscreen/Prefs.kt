@@ -208,14 +208,4 @@ class Prefs(context: Context) {
     var touchpadShape: String
         get() = sp.getString("touchpad_shape", TouchpadShape.FULL) ?: TouchpadShape.FULL
         set(v) = sp.edit().putString("touchpad_shape", v).apply()
-
-    /** What the pen's side button does (`middle_click`, `right_click`, `left_click`, `stylus_button`, `none`), synced with the computer. */
-    var stylusButtonPrimary: String
-        get() = sp.getString("stylus_button_primary", HostConfig.PEN_MIDDLE) ?: HostConfig.PEN_MIDDLE
-        set(v) = sp.edit().putString("stylus_button_primary", v).apply()
-
-    /** What the pen's second button does (same values), synced with the computer. */
-    var stylusButtonSecondary: String
-        get() = sp.getString("stylus_button_secondary", HostConfig.PEN_RIGHT) ?: HostConfig.PEN_RIGHT
-        set(v) = sp.edit().putString("stylus_button_secondary", v).apply()
 }
