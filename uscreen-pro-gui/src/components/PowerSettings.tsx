@@ -40,6 +40,7 @@ export interface PowerValues {
   dim_duration_ms: number;
   undim_duration_ms: number;
   touchpad_haptics: boolean;
+  native_gestures: boolean;
   right_click_method: string;
   touchpad_shape: string;
   stylus_style: string;
@@ -219,6 +220,13 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
             checked={v.touchpad_haptics}
             onChange={(touchpad_haptics) => onChange({ touchpad_haptics })}
             override={ov("touchpad_haptics", onOff(v.touchpad_haptics))}
+          />
+          <SwitchRow
+            label="Use Native Gestures (Wayland/libinput)"
+            tip="On: the tablet's fingers are passed to this computer as a real touchpad, so motion, taps, scrolling, pinch zoom and 3 / 4 finger workspace swipes are handled by GNOME or KDE exactly as on a laptop trackpad (the workspace follows your hand). Off, or on X11 and desktops that do nothing with libinput gestures: the tablet recognises gestures itself and sends key presses (Super + Page Up / Down, Ctrl + scroll)."
+            checked={v.native_gestures}
+            onChange={(native_gestures) => onChange({ native_gestures })}
+            override={ov("native_gestures", onOff(v.native_gestures))}
           />
           <SettingRow
             label="Touchpad Shape"

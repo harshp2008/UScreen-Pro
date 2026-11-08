@@ -356,6 +356,14 @@ fun SettingsSheet(
                                 hostConfig.touchpadHaptics,
                                 { onSetting("touchpad_haptics", it) }
                             )
+                            SwitchRow(
+                                "Use Native Gestures (Wayland/libinput)",
+                                "Your fingers are passed to the computer as a real touchpad, so swipes, pinch and " +
+                                    "workspace gestures follow your hand. Turns itself off on X11 and desktops " +
+                                    "without libinput gestures.",
+                                hostConfig.nativeGestures,
+                                { onSetting("native_gestures", it) }
+                            )
                             ChipChoice(
                                 "Right Click Method",
                                 listOf(
@@ -381,8 +389,10 @@ fun SettingsSheet(
                             )
                             Text(
                                 "Bottom Right Zone: tap the right half of the strip along the bottom edge of the touch area. " +
-                                    "Two-finger tap is also a right click, three-finger tap is middle click, and swiping " +
-                                    "three or four fingers sideways switches workspace (up or down: overview).",
+                                    "With native gestures the computer decides the rest: tap-to-click, two-finger tap, " +
+                                    "and 3 / 4 finger swipes use its own touchpad settings. Without them, two-finger tap is " +
+                                    "also a right click, three-finger tap is middle click, and swiping three or four " +
+                                    "fingers sideways switches workspace (up or down: overview).",
                                 fontSize = 11.sp,
                                 color = Muted
                             )

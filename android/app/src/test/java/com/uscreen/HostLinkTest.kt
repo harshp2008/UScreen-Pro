@@ -133,6 +133,18 @@ class HostLinkTest {
     }
 
     @Test
+    fun nativeGesturesAreOnByDefaultAndFollowTheHost() {
+        val base = HostConfig()
+        assertEquals(true, base.nativeGestures)
+        assertEquals(false, base.withSetting("native_gestures", false)?.nativeGestures)
+        assertEquals(null, base.withSetting("native_gestures", "yes"))
+        val off = HostConfig.fromJson(org.json.JSONObject("""{"native_gestures":false}"""), base)
+        assertEquals(false, off.nativeGestures)
+        // A config_update without the field (an older host) leaves the value alone.
+        assertEquals(true, HostConfig.fromJson(org.json.JSONObject("""{"touchpad_shape":"full_screen"}"""), base).nativeGestures)
+    }
+
+    @Test
     fun theRectanglesAreCentredAndAsLargeAsTheirRatioAllows() {
         // The tablet itself: 2560x1600 (16:10).
         val std = TouchpadShape.bounds(TouchpadShape.STANDARD, 2560f, 1600f)

@@ -48,6 +48,9 @@ pub struct DeviceOptions {
     pub dim_duration_ms: u32,
     pub undim_duration_ms: u32,
     pub touchpad_haptics: bool,
+    /// The setting "Use Native Gestures (Wayland/libinput)". Whether it is in effect also depends
+    /// on the desktop: see [`DeviceOptions::native_gestures_effective`].
+    pub native_gestures: bool,
     /// `bottom_right_zone` or `two_finger_tap`.
     pub right_click_method: String,
     /// `full_screen`, `standard_rectangle` or `wide_rectangle`.
@@ -92,6 +95,7 @@ impl DeviceOptions {
         g.dim_duration_ms = pick!(dim_duration_ms);
         g.undim_duration_ms = pick!(undim_duration_ms);
         g.touchpad_haptics = pick!(touchpad_haptics);
+        g.native_gestures = p.native_gestures.unwrap_or(cfg.native_gestures);
         g.right_click_method = pick!(right_click_method);
         g.touchpad_shape = pick!(touchpad_shape);
         g.stylus_style = pick!(stylus_style);
@@ -124,6 +128,7 @@ impl DeviceOptions {
             dim_duration_ms: g.dim_duration_ms,
             undim_duration_ms: g.undim_duration_ms,
             touchpad_haptics: g.touchpad_haptics,
+            native_gestures: g.native_gestures,
             right_click_method: g.right_click_method.clone(),
             touchpad_shape: g.touchpad_shape.clone(),
             stylus_style: g.stylus_style.clone(),
@@ -157,12 +162,27 @@ impl DeviceOptions {
             "undim_duration_ms": self.undim_duration_ms,
             "touchpad_haptics": self.touchpad_haptics,
             "right_click_method": self.right_click_method,
+            // What the tablet acts on is the effective value, so it falls back to its own gesture
+            // recogniser on X11 and on desktops that do nothing with libinput gestures.
+            "native_gestures": self.native_gestures_effective(),
             "touchpad_shape": self.touchpad_shape,
             "stylus_style": self.stylus_style,
             "stylus_button_primary": self.stylus_button_primary,
             "stylus_button_secondary": self.stylus_button_secondary,
             "wifi_configured": self.wifi_configured,
         })
+    }
+
+    /// Whether touchpad mode really uses the virtual multi-touch touchpad: the setting is on and
+    /// the desktop turns libinput's swipe and pinch events into something (GNOME and KDE on
+    /// Wayland). On X11, Cinnamon, wlroots compositors and the like the tablet recognises the
+    /// gestures itself and the host sends keys, as it did before.
+    pub fn native_gestures_effective(&self) -> bool {
+        self.native_gestures
+            && native_gestures_supported(
+                &std::env::var("XDG_SESSION_TYPE").unwrap_or_default(),
+                &std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default(),
+            )
     }
 
     fn dim_message(&self) -> Value {
@@ -172,6 +192,18 @@ impl DeviceOptions {
     fn undim_message(&self) -> Value {
         json!({ "type": "undim_screen", "duration": self.undim_duration_ms, "curve": self.undim_curve })
     }
+}
+
+/// Whether this session's compositor consumes libinput swipe / pinch events itself: GNOME (Mutter)
+/// and KDE (KWin), both on Wayland. `session` is `XDG_SESSION_TYPE`, `desktop` is
+/// `XDG_CURRENT_DESKTOP` (a colon-separated list such as `ubuntu:GNOME`).
+pub fn native_gestures_supported(session: &str, desktop: &str) -> bool {
+    if !session.eq_ignore_ascii_case("wayland") {
+        return false;
+    }
+    desktop
+        .split(':')
+        .any(|d| matches!(d.trim().to_ascii_uppercase().as_str(), "GNOME" | "KDE"))
 }
 
 /// Store one setting pushed by the tablet as the device's override. `Ok(true)` when it changed.
@@ -211,6 +243,7 @@ fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Result<bool, ()>
         "idle_dim_enabled" => set(&mut p.idle_dim_enabled, b?),
         "idle_dim_timeout_secs" => set(&mut p.idle_dim_timeout_secs, n?),
         "touchpad_haptics" => set(&mut p.touchpad_haptics, b?),
+        "native_gestures" => set(&mut p.native_gestures, b?),
         "touchpad_shape" => match s?.as_str() {
             m @ ("full_screen" | "standard_rectangle" | "wide_rectangle") => {
                 set(&mut p.touchpad_shape, m.to_string())
@@ -623,6 +656,7 @@ mod tests {
             "undim_duration_ms",
             "touchpad_haptics",
             "right_click_method",
+            "native_gestures",
             "touchpad_shape",
             "stylus_style",
             "stylus_button_primary",

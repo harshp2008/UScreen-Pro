@@ -383,6 +383,7 @@ class MainActivity : AppCompatActivity() {
         prefs.batterySaverLock = cfg.batterySaverLock
         prefs.wifiConfigured = cfg.wifiConfigured
         prefs.touchpadHaptics = cfg.touchpadHaptics
+        prefs.nativeGestures = cfg.nativeGestures
         prefs.rightClickMethod = cfg.rightClickMethod
         prefs.touchpadShape = cfg.touchpadShape
         prefs.stylusStyle = cfg.stylusStyle
@@ -393,6 +394,7 @@ class MainActivity : AppCompatActivity() {
         touchCapture?.setTouchpadMode(cfg.inputMode == HostConfig.MODE_TOUCHPAD)
         touchCapture?.setStylusMode(cfg.inputMode == HostConfig.MODE_STYLUS)
         touchCapture?.setTouchpadShape(cfg.touchpadShape)
+        touchCapture?.refreshNativeGestures()
         if (prev.immersiveMode != cfg.immersiveMode) applyImmersiveMode(cfg.immersiveMode)
         if (prev.keepDisplayAliveWhenLocked != cfg.keepDisplayAliveWhenLocked) applyLockScreenFlags()
         if (prev.orientation != cfg.orientation) applyOrientation()

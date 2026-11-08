@@ -70,6 +70,11 @@ pub enum InputEvent {
     /// picks the direction it wants.
     #[serde(rename = "scroll")]
     Scroll { dx: f64, dy: f64 },
+    /// Touchpad mode with native gestures: every finger that is down on the tablet's touch area
+    /// right now, raw. The host replays them on a virtual multi-touch touchpad and libinput and
+    /// the desktop recognise the gestures themselves. An empty list means all fingers lifted.
+    #[serde(rename = "touchpad_raw")]
+    TouchpadRaw { slots: Vec<RawSlot> },
     /// Touchpad gesture the tablet recognised that needs keys on the computer: `pinch` (Ctrl +
     /// scroll, `amount` in tablet pixels, positive = fingers apart) or a workspace switch
     /// (`workspace_prev` / `workspace_next`, Super + Page Up / Page Down).
@@ -112,6 +117,19 @@ pub enum InputEvent {
     /// Explicit preferred transport requested by the APK ("auto", "usb", "wifi")
     #[serde(rename = "preferred_transport")]
     PreferredTransport { transport: String },
+}
+
+/// One finger of a [`InputEvent::TouchpadRaw`] frame.
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct RawSlot {
+    /// The tablet's pointer id, stable for the life of the finger.
+    pub id: i32,
+    /// Position in millimetres from the top-left corner of the touch area.
+    pub x: f64,
+    pub y: f64,
+    /// Android's 0..1 pressure estimate.
+    #[serde(default)]
+    pub pressure: f64,
 }
 
 /// The host's handshake reply after authentication: display size, codec and the current stream settings.

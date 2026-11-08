@@ -57,6 +57,7 @@ const config: AppConfig = {
   dim_duration_ms: 3000,
   undim_duration_ms: 500,
   touchpad_haptics: true,
+  native_gestures: true,
   right_click_method: "bottom_right_zone",
   touchpad_shape: "full_screen",
   stylus_style: "mouse",

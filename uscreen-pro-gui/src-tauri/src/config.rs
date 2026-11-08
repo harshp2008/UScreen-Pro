@@ -87,6 +87,8 @@ pub struct TabletProfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_haptics: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub native_gestures: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub right_click_method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_shape: Option<String>,
@@ -167,6 +169,8 @@ pub struct AppConfig {
     pub undim_duration_ms: u32,
     /// Light vibration on touchpad clicks.
     pub touchpad_haptics: bool,
+    /// Use native gestures (Wayland / libinput): the tablet's fingers are replayed on a virtual touchpad.
+    pub native_gestures: bool,
     /// `bottom_right_zone` or `two_finger_tap`.
     pub right_click_method: String,
     /// `full_screen`, `standard_rectangle` or `wide_rectangle`.
@@ -235,6 +239,7 @@ impl Default for AppConfig {
             dim_duration_ms: 3000,
             undim_duration_ms: 500,
             touchpad_haptics: true,
+            native_gestures: true,
             right_click_method: "bottom_right_zone".into(),
             touchpad_shape: "full_screen".into(),
             stylus_style: "mouse".into(),

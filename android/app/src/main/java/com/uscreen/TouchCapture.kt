@@ -42,6 +42,10 @@ class TouchCapture {
         /** A typical 11 inch tablet, used until the host tells us the real panel size. */
         private const val DEFAULT_MM_PER_PX = 0.0927f
 
+        /** A tap in the click strip must be this short and stay this still to be a right click. */
+        private const val ZONE_TAP_MS = 300L
+        private const val ZONE_TAP_SLOP_MM = 3f
+
         /** `adb logcat -s UScreenInput` shows every palm, tap and gesture decision. */
         private const val DEBUG_INPUT = true
     }
@@ -444,7 +448,8 @@ class TouchCapture {
                         }
                         outsideIds.remove(id)
                         if (maskedAction == MotionEvent.ACTION_DOWN) sendWake(force = false)
-                        feedPad(event, padBounds, -1)
+                        if (nativeActive()) feedRaw(event, padBounds, -1, actionIndex)
+                        else feedPad(event, padBounds, -1)
                         return true
                     }
                     val slot = slotOf(event, actionIndex)
@@ -495,7 +500,9 @@ class TouchCapture {
                     }
                 }
                 // One frame per sample Android batched, so the engine sees the same stream a pad would.
-                if (sawPadFinger) feedPad(event, padBounds, -1)
+                if (sawPadFinger) {
+                    if (nativeActive()) feedRaw(event, padBounds, -1, -1) else feedPad(event, padBounds, -1)
+                }
             }
 
             // S-Pen side button. Fired as a discrete event while hovering or
@@ -517,7 +524,8 @@ class TouchCapture {
                     if (touchpadMode) {
                         val id = event.getPointerId(actionIndex)
                         if (outsideIds.remove(id)) return true
-                        feedPad(event, padBounds, actionIndex)
+                        if (nativeActive()) feedRaw(event, padBounds, actionIndex, -1, lifted = id)
+                        else feedPad(event, padBounds, actionIndex)
                         return true
                     }
                     // Not filtered on palm: whatever the contact is called
@@ -535,6 +543,7 @@ class TouchCapture {
                 if (touchpadMode) {
                     outsideIds.clear()
                     pad.cancel()
+                    liftRaw()
                     return true
                 }
                 for (i in 0 until pointerCount) {
@@ -1011,6 +1020,136 @@ and consults it when choosing between the device's adb entries.
         }
     }
 
+
+    // ---- Native gestures: raw fingers for the computer's libinput -------------------------------
+    //
+    // With native gestures the tablet does not recognise anything. Every finger that is down is sent
+    // as it is (position in millimetres from the corner of the touch area, pressure) and the host
+    // replays them on a virtual multi-touch touchpad; libinput and GNOME / KDE do the motion, taps,
+    // scrolling, pinch and 3 / 4 finger swipes. Only the touch area (shape) and the bottom-right
+    // click strip are decided here, on the raw coordinates, before anything is sent.
+
+    /** True when Touchpad mode should send raw fingers instead of running the gesture engine. */
+    private fun nativeActive(): Boolean = touchpadMode && hostConfig.nativeGestures
+
+    /** Whether the last raw frame had fingers in it, so a lift is only sent when one is owed. */
+    private var rawDown = false
+
+    /** The first finger of a touch when it landed in the click strip: held back, a tap there is a right click. */
+    private data class ZoneFinger(val id: Int, val downMs: Long, val x: Float, val y: Float, var moved: Boolean)
+    private var zoneFinger: ZoneFinger? = null
+
+    /**
+     * Send the fingers of [event] as raw frames: one for each sample Android batched into a move, one
+     * for anything else. [excludeIndex] is a pointer that has just lifted ([lifted] is its id);
+     * [downIndex] one that has just landed.
+     */
+    private fun feedRaw(event: MotionEvent, bounds: TouchpadShape.Bounds, excludeIndex: Int, downIndex: Int, lifted: Int = -1) {
+        val k = mmPerPx()
+        val now = event.eventTime
+        val zoneOn = hostConfig.rightClickMethod == HostConfig.RIGHT_CLICK_ZONE
+        // A finger landing alone in the bottom-right strip is a possible right click and is not sent.
+        if (downIndex >= 0 && zoneOn && zoneFinger == null && rawDown.not()) {
+            val x = event.getX(downIndex)
+            val y = event.getY(downIndex)
+            val inZone = x >= bounds.left + bounds.width / 2f && y >= bounds.top + bounds.height * (1f - TouchpadShape.ZONE_FRACTION)
+            if (inZone && countPadFingers(event, excludeIndex) == 1) {
+                zoneFinger = ZoneFinger(event.getPointerId(downIndex), now, x, y, false)
+            }
+        } else if (downIndex >= 0 && zoneFinger != null && event.getPointerId(downIndex) != zoneFinger?.id) {
+            // A second finger: the held one is part of a multi-finger gesture after all, so it joins it.
+            zoneFinger = null
+        }
+        zoneFinger?.let { z ->
+            for (i in 0 until event.pointerCount) {
+                if (event.getPointerId(i) != z.id || i == excludeIndex) continue
+                val dx = (event.getX(i) - z.x) * k
+                val dy = (event.getY(i) - z.y) * k
+                if (dx * dx + dy * dy > ZONE_TAP_SLOP_MM * ZONE_TAP_SLOP_MM) z.moved = true
+            }
+        }
+        if (lifted >= 0) {
+            zoneFinger?.let { z ->
+                if (z.id == lifted) {
+                    if (!z.moved && now - z.downMs <= ZONE_TAP_MS) sendRightClick()
+                    zoneFinger = null
+                }
+            }
+        }
+
+        val history = if (event.actionMasked == MotionEvent.ACTION_MOVE) event.historySize else 0
+        for (h in 0..history) {
+            val sample = if (h < history) h else -1
+            val slots = org.json.JSONArray()
+            for (i in 0 until event.pointerCount) {
+                if (i == excludeIndex || isPenLike(event, i) || isPalm(event, i)) continue
+                val id = event.getPointerId(i)
+                if (id in outsideIds || id == zoneFinger?.id) continue
+                val x = if (sample >= 0) event.getHistoricalX(i, sample) else event.getX(i)
+                val y = if (sample >= 0) event.getHistoricalY(i, sample) else event.getY(i)
+                val p = if (sample >= 0) event.getHistoricalPressure(i, sample) else event.getPressure(i)
+                slots.put(JSONObject().apply {
+                    put("id", id)
+                    put("x", ((bounds.clampX(x) - bounds.left) * k).toDouble())
+                    put("y", ((bounds.clampY(y) - bounds.top) * k).toDouble())
+                    put("pressure", p.toDouble())
+                })
+            }
+            sendRaw(slots)
+        }
+    }
+
+    private fun countPadFingers(event: MotionEvent, excludeIndex: Int): Int {
+        var n = 0
+        for (i in 0 until event.pointerCount) {
+            if (i == excludeIndex || isPenLike(event, i) || isPalm(event, i)) continue
+            if (event.getPointerId(i) in outsideIds) continue
+            n++
+        }
+        return n
+    }
+
+    private fun sendRaw(slots: org.json.JSONArray) {
+        val empty = slots.length() == 0
+        if (empty && !rawDown) return
+        rawDown = !empty
+        webSocket?.send(JSONObject().apply {
+            put("type", "touchpad_raw")
+            put("slots", slots)
+        }.toString())
+    }
+
+    /** Right click from the click strip: the host's relative mouse, since the pad only sees fingers. */
+    private fun sendRightClick() {
+        for (down in listOf(true, false)) {
+            webSocket?.send(JSONObject().apply {
+                put("type", "button")
+                put("button", 1)
+                put("down", down)
+            }.toString())
+        }
+        onHaptic?.invoke()
+    }
+
+    /** Lift every finger the host's touchpad still holds, and forget a click-strip finger. */
+    private fun liftRaw() {
+        zoneFinger = null
+        if (rawDown) sendRaw(org.json.JSONArray())
+    }
+
+    /**
+     * The native-gestures setting (the host's effective value) may have changed: whatever the old
+     * mode was holding is let go, so a finger cannot be left on the host's pad or in the engine.
+     */
+    fun refreshNativeGestures() {
+        val now = nativeActive()
+        if (now == lastNative) return
+        lastNative = now
+        pad.cancel()
+        liftRaw()
+    }
+    private var lastNative = false
+
     /** Pointer ids whose finger landed outside the touch area; they are ignored until they lift. */
     private val outsideIds = HashSet<Int>()
 
@@ -1057,6 +1196,7 @@ and consults it when choosing between the device's adb entries.
     /** Release every finger the host still thinks is pressed (and any button the touchpad holds). */
     private fun liftTouches() {
         pad.cancel()
+        liftRaw()
         if (downSlots.isNotEmpty()) {
             for (slot in downSlots.toList()) sendTouch(0f, 0f, 0.0, 1, slot)
             downSlots.clear()

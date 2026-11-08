@@ -107,6 +107,7 @@ export interface TabletProfile {
   dim_duration_ms?: number;
   undim_duration_ms?: number;
   touchpad_haptics?: boolean;
+  native_gestures?: boolean;
   right_click_method?: string;
   touchpad_shape?: string;
   stylus_style?: string;
@@ -169,6 +170,7 @@ export interface AppConfig {
   undim_duration_ms: number;
   /** Light vibration on touchpad clicks. */
   touchpad_haptics: boolean;
+  native_gestures: boolean;
   /** `bottom_right_zone` or `two_finger_tap`. */
   right_click_method: string;
   /** `full_screen`, `standard_rectangle` or `wide_rectangle`. */

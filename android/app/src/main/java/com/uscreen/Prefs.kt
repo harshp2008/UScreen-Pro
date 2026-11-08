@@ -199,6 +199,11 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("touchpad_haptics", true)
         set(v) = sp.edit().putBoolean("touchpad_haptics", v).apply()
 
+    /** Raw fingers for the computer's libinput instead of gestures recognised here; the host's effective value. */
+    var nativeGestures: Boolean
+        get() = sp.getBoolean("native_gestures", true)
+        set(v) = sp.edit().putBoolean("native_gestures", v).apply()
+
     /** `bottom_right_zone` or `two_finger_tap`, synced with the computer. */
     var rightClickMethod: String
         get() = sp.getString("right_click_method", HostConfig.RIGHT_CLICK_ZONE) ?: HostConfig.RIGHT_CLICK_ZONE

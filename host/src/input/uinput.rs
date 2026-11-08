@@ -17,6 +17,10 @@ pub(super) const SYN_REPORT: u16 = 0x00;
 
 pub(super) const BTN_TOUCH: u16 = 0x14a;
 pub(super) const BTN_TOOL_FINGER: u16 = 0x145;
+pub(super) const BTN_TOOL_QUINTTAP: u16 = 0x148;
+pub(super) const BTN_TOOL_DOUBLETAP: u16 = 0x14d;
+pub(super) const BTN_TOOL_TRIPLETAP: u16 = 0x14e;
+pub(super) const BTN_TOOL_QUADTAP: u16 = 0x14f;
 pub(super) const BTN_TOOL_PEN: u16 = 0x140;
 pub(super) const BTN_TOOL_RUBBER: u16 = 0x141;
 
@@ -67,6 +71,9 @@ pub(super) const INPUT_PROP_DIRECT: i32 = 0x01;
 /// so the compositor treats it as an ordinary mouse. Deliberately not set on it: INPUT_PROP_DIRECT
 /// (touchscreen), INPUT_PROP_BUTTONPAD and INPUT_PROP_SEMI_MT (touchpad classes).
 pub(super) const INPUT_PROP_POINTER: i32 = 0x00;
+/// "The touchpad has no separate buttons, the whole pad clicks" (value 2). Set on the virtual
+/// touchpad so libinput treats it like a laptop clickpad.
+pub(super) const INPUT_PROP_BUTTONPAD: i32 = 0x02;
 
 /// Coordinates are injected in a fixed 0..65535 space — the compositor maps
 /// the device onto the output, so the virtual display resolution can change
@@ -82,11 +89,15 @@ pub(super) const PRODUCT_PEN: u16 = 0x0002;
 pub(super) const PRODUCT_POINTER: u16 = 0x0003;
 pub(super) const PRODUCT_TOUCHPAD: u16 = 0x0004;
 pub(super) const PRODUCT_KEYBOARD: u16 = 0x0005;
+pub(super) const PRODUCT_MOUSE: u16 = 0x0006;
 pub(super) const TOUCH_DEVICE_NAME: &str = "UScreen Touch";
 pub(super) const PEN_DEVICE_NAME: &str = "UScreen Pen";
 pub(super) const POINTER_DEVICE_NAME: &str = "UScreen Pointer";
 pub(super) const TOUCHPAD_DEVICE_NAME: &str = "UScreen Touchpad";
 pub(super) const KEYBOARD_DEVICE_NAME: &str = "UScreen Keyboard";
+/// The plain relative mouse (right-click zone, wake nudge, and the whole of touchpad mode when
+/// native gestures are off). The multi-touch pad owns the name "UScreen Touchpad".
+pub(super) const MOUSE_DEVICE_NAME: &str = "UScreen Mouse";
 /// Device names and product ids for the N-th tablet. The first keeps the
 /// original names and ids so existing KWin input mappings stay valid; every
 /// further one gets a numbered name and its own product range, since KWin
@@ -96,9 +107,12 @@ pub struct DeviceIdentity {
     pub touch: String,
     pub pen: String,
     pub pointer: String,
-    /// Plain relative mouse used by touchpad mode. Created on first use and never mapped to an
-    /// output (a relative device has no screen of its own).
+    /// The virtual multi-touch touchpad (`UScreen Touchpad`) that native gestures are replayed on.
+    /// Only made while the input mode is Touchpad, and never mapped to an output.
     pub touchpad: String,
+    /// Plain relative mouse used for clicks the pad cannot make and by touchpad mode without
+    /// native gestures. Created on first use and never mapped to an output.
+    pub mouse: String,
     /// Virtual keyboard for touchpad gestures (workspace switch, zoom modifier). Created on
     /// first use.
     pub keyboard: String,
@@ -106,6 +120,7 @@ pub struct DeviceIdentity {
     pub product_pen: u16,
     pub product_pointer: u16,
     pub product_touchpad: u16,
+    pub product_mouse: u16,
     pub product_keyboard: u16,
     /// How many of the three devices exist: 2 when pointer_handoff is off.
     pub device_count: usize,
@@ -125,11 +140,13 @@ impl DeviceIdentity {
             pen: format!("{}{}", PEN_DEVICE_NAME, suffix),
             pointer: format!("{}{}", POINTER_DEVICE_NAME, suffix),
             touchpad: format!("{}{}", TOUCHPAD_DEVICE_NAME, suffix),
+            mouse: format!("{}{}", MOUSE_DEVICE_NAME, suffix),
             keyboard: format!("{}{}", KEYBOARD_DEVICE_NAME, suffix),
             product_touch: PRODUCT_TOUCH + base,
             product_pen: PRODUCT_PEN + base,
             product_pointer: PRODUCT_POINTER + base,
             product_touchpad: PRODUCT_TOUCHPAD + base,
+            product_mouse: PRODUCT_MOUSE + base,
             product_keyboard: PRODUCT_KEYBOARD + base,
             device_count: 3,
         }
@@ -143,6 +160,54 @@ impl DeviceIdentity {
 pub(super) const RESOLUTION_UNITS_PER_MM: i32 = 211;
 /// The virtual pen's pressure axis runs 0..=PEN_PRESSURE_MAX.
 pub(super) const PEN_PRESSURE_MAX: i32 = 4096;
+
+/// The virtual touchpad's surface, in the physical size libinput reasons about. The tablet sends
+/// finger positions in millimetres from the corner of its touch area, so the pad has to be at
+/// least as large as the largest tablet's: 400 x 260 mm at 40 units/mm.
+pub(super) const PAD_UNITS_PER_MM: i32 = 40;
+pub(super) const PAD_WIDTH_MM: f64 = 400.0;
+pub(super) const PAD_HEIGHT_MM: f64 = 260.0;
+/// Contacts the pad can hold at once (slots 0..PAD_SLOTS).
+pub(super) const PAD_SLOTS: usize = 10;
+/// ABS_MT_PRESSURE runs 0..=PAD_PRESSURE_MAX. Android pressure is a 0..1 estimate that is often
+/// tiny; libinput drops contacts below its "touching" threshold and treats very high ones as palms,
+/// so the tablet's value is squeezed into a band that is always a plain finger.
+pub(super) const PAD_PRESSURE_MAX: i32 = 255;
+const PAD_PRESSURE_LOW: f64 = 50.0;
+const PAD_PRESSURE_SPAN: f64 = 40.0;
+
+/// One finger on the tablet's touchpad, as the host receives it: Android pointer id and a
+/// position in millimetres from the touch area's top-left corner.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct PadFinger {
+    pub(super) id: i32,
+    pub(super) x_mm: f64,
+    pub(super) y_mm: f64,
+    /// Android's 0..1 pressure estimate.
+    pub(super) pressure: f64,
+}
+
+/// What the virtual touchpad has been told so far: which Android pointer id sits in which MT slot,
+/// the next tracking id, and which `BTN_TOOL_*` finger-count code is currently set.
+#[derive(Debug)]
+pub(super) struct PadState {
+    pub(super) slots: [Option<i32>; PAD_SLOTS],
+    pub(super) next_tracking: i32,
+    pub(super) tool: Option<u16>,
+}
+
+impl PadState {
+    pub(super) fn new() -> Self {
+        Self {
+            slots: [None; PAD_SLOTS],
+            next_tracking: 0,
+            tool: None,
+        }
+    }
+    pub(super) fn count(&self) -> usize {
+        self.slots.iter().flatten().count()
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Default)]
@@ -310,6 +375,136 @@ impl UInputDevice {
         info!("uinput pointer '{}' created", name);
         std::thread::sleep(std::time::Duration::from_millis(200));
         Ok(Self { file })
+    }
+
+    /// A multi-touch touchpad, like the clickpad of a laptop. The tablet's raw fingers are replayed
+    /// on it and libinput does the rest: pointer motion, taps, two-finger scroll, pinch, and 3 / 4
+    /// finger swipes, which GNOME and KDE turn into workspace and overview gestures.
+    ///
+    /// Declared the way a real clickpad is: MT protocol B slots with tracking ids, finger-count tool
+    /// buttons (`BTN_TOOL_FINGER` .. `BTN_TOOL_QUINTTAP`), a pressure axis, a real resolution (libinput
+    /// measures every threshold in millimetres), INPUT_PROP_POINTER and INPUT_PROP_BUTTONPAD. Not
+    /// INPUT_PROP_DIRECT: that is a touchscreen and would put the finger on the screen.
+    pub(super) fn new_touchpad(name: &str, product: u16) -> Result<Self> {
+        let file = Self::open_uinput()?;
+        let fd = file.as_raw_fd();
+        let w = (PAD_WIDTH_MM * PAD_UNITS_PER_MM as f64) as i32;
+        let h = (PAD_HEIGHT_MM * PAD_UNITS_PER_MM as f64) as i32;
+
+        unsafe {
+            Self::ioctl_val(fd, UI_SET_PROPBIT, INPUT_PROP_POINTER)?;
+            Self::ioctl_val(fd, UI_SET_PROPBIT, INPUT_PROP_BUTTONPAD)?;
+            Self::ioctl_val(fd, UI_SET_EVBIT, EV_SYN as i32)?;
+            Self::ioctl_val(fd, UI_SET_EVBIT, EV_KEY as i32)?;
+            Self::ioctl_val(fd, UI_SET_EVBIT, EV_ABS as i32)?;
+
+            for key in [
+                BTN_LEFT,
+                BTN_TOUCH,
+                BTN_TOOL_FINGER,
+                BTN_TOOL_DOUBLETAP,
+                BTN_TOOL_TRIPLETAP,
+                BTN_TOOL_QUADTAP,
+                BTN_TOOL_QUINTTAP,
+            ] {
+                Self::ioctl_val(fd, UI_SET_KEYBIT, key as i32)?;
+            }
+
+            Self::abs_setup(fd, ABS_X, 0, w - 1, PAD_UNITS_PER_MM)?;
+            Self::abs_setup(fd, ABS_Y, 0, h - 1, PAD_UNITS_PER_MM)?;
+            Self::abs_setup(fd, ABS_PRESSURE, 0, PAD_PRESSURE_MAX, 0)?;
+            Self::abs_setup(fd, ABS_MT_SLOT, 0, PAD_SLOTS as i32 - 1, 0)?;
+            Self::abs_setup(fd, ABS_MT_POSITION_X, 0, w - 1, PAD_UNITS_PER_MM)?;
+            Self::abs_setup(fd, ABS_MT_POSITION_Y, 0, h - 1, PAD_UNITS_PER_MM)?;
+            Self::abs_setup(fd, ABS_MT_TRACKING_ID, 0, 65535, 0)?;
+            Self::abs_setup(fd, ABS_MT_PRESSURE, 0, PAD_PRESSURE_MAX, 0)?;
+
+            Self::dev_setup_and_create(fd, name, product)?;
+        }
+
+        info!("uinput touchpad '{}' created", name);
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        Ok(Self { file })
+    }
+
+    /// Put the tablet's fingers on the pad: the full set that is down right now. Fingers that are
+    /// no longer listed are lifted (tracking id -1), new ones get the lowest free slot and a fresh
+    /// tracking id, the rest just move. The finger-count tool button follows the count and the
+    /// frame ends with one SYN_REPORT, the way a real pad reports.
+    ///
+    /// Sending the whole set every time (instead of down / move / up events) means a lost message
+    /// can never leave a finger stuck on the pad: the next frame simply does not list it.
+    pub(super) fn inject_pad(&mut self, st: &mut PadState, fingers: &[PadFinger]) -> Result<()> {
+        if fingers.is_empty() && st.count() == 0 {
+            return Ok(());
+        }
+        // Lift what is gone.
+        for slot in 0..PAD_SLOTS {
+            if let Some(id) = st.slots[slot] {
+                if !fingers.iter().any(|f| f.id == id) {
+                    self.emit(EV_ABS, ABS_MT_SLOT, slot as i32)?;
+                    self.emit(EV_ABS, ABS_MT_TRACKING_ID, -1)?;
+                    st.slots[slot] = None;
+                }
+            }
+        }
+        // Place and move what is down.
+        let mut first: Option<(i32, i32)> = None;
+        for f in fingers {
+            let (slot, is_new) = match st.slots.iter().position(|s| *s == Some(f.id)) {
+                Some(s) => (s, false),
+                None => match st.slots.iter().position(|s| s.is_none()) {
+                    Some(s) => {
+                        st.slots[s] = Some(f.id);
+                        (s, true)
+                    }
+                    None => continue, // more fingers than the pad has slots
+                },
+            };
+            let x = ((f.x_mm * PAD_UNITS_PER_MM as f64) as i32)
+                .clamp(0, (PAD_WIDTH_MM * PAD_UNITS_PER_MM as f64) as i32 - 1);
+            let y = ((f.y_mm * PAD_UNITS_PER_MM as f64) as i32)
+                .clamp(0, (PAD_HEIGHT_MM * PAD_UNITS_PER_MM as f64) as i32 - 1);
+            let pressure = (PAD_PRESSURE_LOW + f.pressure.clamp(0.0, 1.0) * PAD_PRESSURE_SPAN) as i32;
+            self.emit(EV_ABS, ABS_MT_SLOT, slot as i32)?;
+            if is_new {
+                self.emit(EV_ABS, ABS_MT_TRACKING_ID, st.next_tracking)?;
+                st.next_tracking = (st.next_tracking + 1) & 0xffff;
+            }
+            self.emit(EV_ABS, ABS_MT_POSITION_X, x)?;
+            self.emit(EV_ABS, ABS_MT_POSITION_Y, y)?;
+            self.emit(EV_ABS, ABS_MT_PRESSURE, pressure)?;
+            if first.is_none() {
+                first = Some((x, y));
+            }
+        }
+        // Single-touch mirror of the first finger, and the finger-count buttons.
+        let count = st.count();
+        if let Some((x, y)) = first {
+            self.emit(EV_ABS, ABS_X, x)?;
+            self.emit(EV_ABS, ABS_Y, y)?;
+        }
+        let tool = match count {
+            0 => None,
+            1 => Some(BTN_TOOL_FINGER),
+            2 => Some(BTN_TOOL_DOUBLETAP),
+            3 => Some(BTN_TOOL_TRIPLETAP),
+            4 => Some(BTN_TOOL_QUADTAP),
+            _ => Some(BTN_TOOL_QUINTTAP),
+        };
+        if tool != st.tool {
+            if let Some(old) = st.tool {
+                self.emit(EV_KEY, old, 0)?;
+            }
+            if let Some(new) = tool {
+                self.emit(EV_KEY, new, 1)?;
+            }
+            if st.tool.is_none() || tool.is_none() {
+                self.emit(EV_KEY, BTN_TOUCH, tool.is_some() as i32)?;
+            }
+            st.tool = tool;
+        }
+        self.syn()
     }
 
     /// A plain relative mouse. Created the first time touchpad mode sends something, so people
@@ -698,6 +893,12 @@ pub(super) struct InjectDevices {
     pub(super) mouse: Option<UInputDevice>,
     pub(super) mouse_name: String,
     pub(super) mouse_product: u16,
+    /// The multi-touch touchpad native gestures are replayed on. Exists only while the input mode
+    /// is Touchpad and native gestures are in use.
+    pub(super) pad: Option<UInputDevice>,
+    pub(super) pad_name: String,
+    pub(super) pad_product: u16,
+    pub(super) pad_state: PadState,
     /// Keyboard for key combinations, made on first use.
     pub(super) keyboard: Option<UInputDevice>,
     pub(super) keyboard_name: String,
@@ -744,8 +945,12 @@ impl InjectDevices {
             pen: None,
             pointer: None,
             mouse: None,
-            mouse_name: TOUCHPAD_DEVICE_NAME.into(),
-            mouse_product: PRODUCT_TOUCHPAD,
+            mouse_name: MOUSE_DEVICE_NAME.into(),
+            mouse_product: PRODUCT_MOUSE,
+            pad: None,
+            pad_name: TOUCHPAD_DEVICE_NAME.into(),
+            pad_product: PRODUCT_TOUCHPAD,
+            pad_state: PadState::new(),
             keyboard: None,
             keyboard_name: KEYBOARD_DEVICE_NAME.into(),
             keyboard_product: PRODUCT_KEYBOARD,
@@ -781,6 +986,7 @@ impl InjectDevices {
             }
         }
         self.active_slots = 0;
+        self.release_pad();
 
         if self.pen_proximity {
             if let Some(ref mut dev) = self.pen {
@@ -841,6 +1047,7 @@ impl InjectDevices {
             if self.mouse.take().is_some() {
                 info!("Stylus mode: relative mouse removed");
             }
+            self.drop_pad();
             self.mouse_buttons = 0;
             self.rel_rest = (0.0, 0.0);
             self.scroll_rest = (0, 0);
@@ -849,18 +1056,77 @@ impl InjectDevices {
 
     /// Create the virtual devices the current mode will need now, so the first click or key of a
     /// gesture is not lost to the compositor still discovering a device made at that moment.
-    /// Touchpad mode wants the relative mouse and the keyboard (pinch and workspace gestures);
-    /// Stylus and Display mode none of them.
-    pub(super) fn ensure_devices_for(&mut self, mode: crate::config::InputMode) {
+    /// Touchpad mode with native gestures wants the multi-touch touchpad and a relative mouse (the
+    /// right-click zone and the wake nudge); without them it wants the mouse and the keyboard for
+    /// the key-combo gestures. Stylus and Display mode need none of them, and the touchpad is
+    /// removed there so a second pointing device can never fight the pen or the screen.
+    pub(super) fn ensure_devices_for(&mut self, mode: crate::config::InputMode, native: bool) {
         use crate::config::InputMode;
         match mode {
             InputMode::Touchpad => {
                 self.set_stylus_mode(false);
                 self.mouse();
-                self.keyboard();
+                if native {
+                    self.pad();
+                } else {
+                    self.drop_pad();
+                    self.keyboard();
+                }
             }
-            InputMode::Stylus | InputMode::Display => {}
+            InputMode::Stylus | InputMode::Display => self.drop_pad(),
         }
+    }
+
+    /// The virtual multi-touch touchpad, created on first use. `None` in Stylus mode or when uinput
+    /// is not available (logged once, by the failed creation).
+    pub(super) fn pad(&mut self) -> Option<&mut UInputDevice> {
+        if self.stylus_mode {
+            return None;
+        }
+        if self.pad.is_none() {
+            match UInputDevice::new_touchpad(&self.pad_name, self.pad_product) {
+                Ok(dev) => {
+                    self.pad = Some(dev);
+                    self.pad_state = PadState::new();
+                }
+                Err(e) => {
+                    warn!("No multi-touch touchpad: {}. Native gestures will do nothing.", e);
+                    return None;
+                }
+            }
+        }
+        self.pad.as_mut()
+    }
+
+    /// Replay the tablet's fingers on the touchpad (see [`UInputDevice::inject_pad`]).
+    pub(super) fn touchpad_raw(&mut self, fingers: &[PadFinger]) {
+        if self.pad().is_none() {
+            return;
+        }
+        let mut state = std::mem::replace(&mut self.pad_state, PadState::new());
+        if let Some(dev) = self.pad.as_mut() {
+            if let Err(e) = dev.inject_pad(&mut state, fingers) {
+                warn!("Failed to inject touchpad fingers: {}", e);
+            }
+        }
+        self.pad_state = state;
+    }
+
+    /// Lift every finger still on the touchpad, so no swipe or pinch stays open.
+    pub(super) fn release_pad(&mut self) {
+        if self.pad_state.count() > 0 {
+            self.touchpad_raw(&[]);
+        }
+    }
+
+    /// Remove the touchpad (leaving Touchpad mode, or native gestures turned off).
+    pub(super) fn drop_pad(&mut self) {
+        if self.pad.is_some() {
+            self.release_pad();
+            self.pad = None;
+            info!("Touchpad mode left: multi-touch touchpad removed");
+        }
+        self.pad_state = PadState::new();
     }
 
     /// Pen coordinates (0..=COORD_MAX over the pen's output) as pointer coordinates over the whole

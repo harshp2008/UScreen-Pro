@@ -44,6 +44,8 @@ data class HostConfig(
     val undimDurationMs: Long = 500,
     val wifiConfigured: Boolean = false,
     val touchpadHaptics: Boolean = true,
+    /** Touchpad mode sends raw fingers for the computer's libinput to recognise (the host's effective value). */
+    val nativeGestures: Boolean = true,
     val rightClickMethod: String = RIGHT_CLICK_ZONE,
     val touchpadShape: String = TouchpadShape.FULL,
     val stylusStyle: String = STYLUS_MOUSE,
@@ -71,6 +73,7 @@ data class HostConfig(
         "idle_dim_timeout_secs" -> (value as? Int)?.let { copy(idleDimTimeoutSecs = it) }
         "touchpad_shape" -> (value as? String)?.takeIf { it in TouchpadShape.SHAPES }?.let { copy(touchpadShape = it) }
         "touchpad_haptics" -> (value as? Boolean)?.let { copy(touchpadHaptics = it) }
+        "native_gestures" -> (value as? Boolean)?.let { copy(nativeGestures = it) }
         "right_click_method" -> (value as? String)?.takeIf { it in RIGHT_CLICK_METHODS }?.let { copy(rightClickMethod = it) }
         "stylus_style" -> (value as? String)?.takeIf { it in STYLUS_STYLES }?.let { copy(stylusStyle = it) }
         "stylus_button_primary" -> (value as? String)?.takeIf { it in PEN_BUTTONS }?.let { copy(stylusButtonPrimary = it) }
@@ -124,6 +127,7 @@ data class HostConfig(
             undimDurationMs = o.optLong("undim_duration_ms", base.undimDurationMs),
             wifiConfigured = o.optBoolean("wifi_configured", base.wifiConfigured),
             touchpadHaptics = o.optBoolean("touchpad_haptics", base.touchpadHaptics),
+            nativeGestures = o.optBoolean("native_gestures", base.nativeGestures),
             rightClickMethod = o.optString("right_click_method", base.rightClickMethod)
                 .takeIf { it in RIGHT_CLICK_METHODS } ?: base.rightClickMethod,
             touchpadShape = o.optString("touchpad_shape", base.touchpadShape)
@@ -152,6 +156,7 @@ data class HostConfig(
             batterySaverLock = prefs.batterySaverLock,
             wifiConfigured = prefs.wifiConfigured,
             touchpadHaptics = prefs.touchpadHaptics,
+            nativeGestures = prefs.nativeGestures,
             rightClickMethod = prefs.rightClickMethod,
             touchpadShape = prefs.touchpadShape,
             stylusStyle = prefs.stylusStyle,

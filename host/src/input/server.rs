@@ -104,8 +104,10 @@ impl InputServer {
                 touch,
                 pen,
                 pointer,
-                mouse_name: ident_bg.touchpad.clone(),
-                mouse_product: ident_bg.product_touchpad,
+                mouse_name: ident_bg.mouse.clone(),
+                mouse_product: ident_bg.product_mouse,
+                pad_name: ident_bg.touchpad.clone(),
+                pad_product: ident_bg.product_touchpad,
                 keyboard_name: ident_bg.keyboard.clone(),
                 keyboard_product: ident_bg.product_keyboard,
                 ..InjectDevices::headless()
@@ -183,11 +185,14 @@ impl InputServer {
             let devices = uinput.clone();
             tokio::spawn(async move {
                 loop {
-                    let mode = opts_rx.borrow_and_update().input_mode;
+                    let (mode, native) = {
+                        let o = opts_rx.borrow_and_update();
+                        (o.input_mode, o.native_gestures_effective())
+                    };
                     let d = devices.clone();
                     let _ = tokio::task::spawn_blocking(move || {
                         if let Ok(mut guard) = d.lock() {
-                            guard.ensure_devices_for(mode);
+                            guard.ensure_devices_for(mode, native);
                         }
                     })
                     .await;
