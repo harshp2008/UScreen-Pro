@@ -19,9 +19,11 @@ mod guard;
 mod input;
 mod latency;
 mod net;
+mod options;
 mod osk;
 mod runtime;
 mod session;
+mod stylus_profile;
 pub mod timing;
 mod tray;
 mod update;
@@ -100,6 +102,22 @@ async fn main() -> Result<()> {
             vaapi_device,
         }) => commands::check_encoder(encoder, vaapi_device.as_deref()).await?,
         Some(Commands::Doctor { .. }) => doctor::run().await?,
+        Some(Commands::StylusTest { action }) => {
+            let a: stylus_profile::HostAction = action.parse().map_err(anyhow::Error::msg)?;
+            input::run_action_once(&a)?;
+            println!("ran {a}");
+        }
+        Some(Commands::StylusProfiles) => println!("{}", stylus_profile::list_message()),
+        Some(Commands::StylusProfileSave) => {
+            let mut text = String::new();
+            std::io::Read::read_to_string(&mut std::io::stdin(), &mut text)?;
+            let profile: serde_json::Value = serde_json::from_str(&text)?;
+            let id = stylus_profile::save(&profile).map_err(anyhow::Error::msg)?;
+            println!("{id}");
+        }
+        Some(Commands::StylusProfileDelete { id }) => {
+            stylus_profile::delete(id).map_err(anyhow::Error::msg)?
+        }
         Some(Commands::ResetGuard) => match guard::reset() {
             Ok(true) => println!(
                 "Safety record cleared. Restart the daemon to re-enable the virtual display."

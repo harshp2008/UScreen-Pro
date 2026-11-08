@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow } from "../components/ui/layout";
 import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL } from "../lib/options";
-import type { AppConfig } from "../lib/types";
+import { PowerSettings } from "../components/PowerSettings";
+import type { AppConfig, CurvePreset } from "../lib/types";
 
 interface Props {
   config: AppConfig;
@@ -12,10 +13,12 @@ interface Props {
   onChange: (patch: Partial<AppConfig>) => void;
   onSave: () => void;
   onAutostart: (enabled: boolean) => void;
+  /** Persist the saved fade curves immediately. */
+  onPresetsChange: (presets: CurvePreset[]) => void;
 }
 
 /** Settings page for the defaults every device inherits, plus the daemon autostart switch. */
-export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, onAutostart }: Props) {
+export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, onAutostart, onPresetsChange }: Props) {
   return (
     <div className="w-full space-y-2">
       <PageHeader title="Settings">
@@ -125,12 +128,6 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
 
       <Section title="Input and behaviour">
         <SwitchRow
-          label="Stylus mode (graphics tablet)"
-          tip="Use the tablet purely as a pen input device with no video stream."
-          checked={c.pen_only}
-          onChange={(pen_only) => onChange({ pen_only })}
-        />
-        <SwitchRow
           label="Auto-launch app"
           tip="Start the UScreen app on the tablet when it is plugged in."
           checked={c.auto_launch_app}
@@ -149,6 +146,13 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           onChange={(max_performance_mode) => onChange({ max_performance_mode })}
         />
       </Section>
+
+      <PowerSettings
+        values={c}
+        onChange={onChange}
+        presets={c.curve_presets}
+        onPresetsChange={onPresetsChange}
+      />
 
       <Section title="Connection and security">
         <SwitchRow

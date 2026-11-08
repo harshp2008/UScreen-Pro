@@ -121,6 +121,8 @@ impl CaptureManager {
         }
 
         let mut child = cmd.spawn().context("Failed to spawn evdi-helper")?;
+        // A fresh helper has not reported the pointer yet; never dim on stale information.
+        crate::options::set_pointer(self.config.instance, true);
 
         let stdout = child
             .stdout
@@ -164,8 +166,15 @@ impl CaptureManager {
         }
         let mode_tx = self.mode_tx.clone();
         let stream_tx = self.stream_tx.clone();
+        let instance = self.config.instance;
         self.helper_stdout_task = Some(tokio::spawn(async move {
             while let Ok(Some(line)) = lines.next_line().await {
+                // The helper watches the X pointer against this output's rectangle and reports
+                // each crossing; the idle-dim timer starts when the pointer leaves.
+                if let Some(rest) = line.strip_prefix("POINTER_IN_TABLET ") {
+                    crate::options::set_pointer(instance, rest.trim() == "1");
+                    continue;
+                }
                 if let Some(rest) = line.strip_prefix("STREAM_SIZE ") {
                     let mut p = rest.split_whitespace();
                     if let (Some(Ok(w)), Some(Ok(h))) = (

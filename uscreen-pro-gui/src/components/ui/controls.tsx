@@ -3,7 +3,7 @@
  * (option arrays, string values, single-value sliders) so call sites stay terse; every control
  * is the shadcn component, sized for a dense desktop layout.
  */
-import type { KeyboardEventHandler } from "react";
+import { useEffect, useState, type KeyboardEventHandler } from "react";
 import type { Option } from "@/lib/options";
 import { Input } from "@/components/ui/input";
 import { Select as UiSelect, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -154,5 +154,64 @@ export function TextInput({
       step={step}
       className={cn("w-52 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none", className)}
     />
+  );
+}
+
+/**
+ * Number field for exact values (1500 ms, 60 s). The text is kept as typed and only committed, clamped
+ * to [min, max], on blur or Enter, so typing "1500" never passes through a clamped "1".
+ */
+export function NumberInput({
+  value,
+  onCommit,
+  min,
+  max,
+  step = 1,
+  unit,
+  label,
+  className,
+  disabled,
+}: {
+  value: number;
+  onCommit: (v: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+  unit?: string;
+  label: string;
+  className?: string;
+  disabled?: boolean;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => setDraft(String(value)), [value]);
+  const commit = () => {
+    const n = Number(draft);
+    if (!Number.isFinite(n) || draft.trim() === "") {
+      setDraft(String(value));
+      return;
+    }
+    const next = Math.min(max, Math.max(min, n));
+    setDraft(String(next));
+    if (next !== value) onCommit(next);
+  };
+  return (
+    <div className="flex items-center gap-1.5">
+      <Input
+        type="number"
+        aria-label={label}
+        disabled={disabled}
+        value={draft}
+        min={min}
+        max={max}
+        step={step}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+        }}
+        className={cn("w-24 font-mono [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none", className)}
+      />
+      {unit && <span className="text-xs text-muted-foreground">{unit}</span>}
+    </div>
   );
 }

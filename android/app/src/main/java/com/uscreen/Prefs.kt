@@ -33,6 +33,31 @@ class Prefs(context: Context) {
         const val THEME_LIGHT = 1
         const val THEME_DARK = 2
 
+        /** The wire names the host uses for [orientation] and [themeMode]. */
+        fun orientationName(v: Int) = when (v) {
+            ORIENTATION_CAMERA_UP -> "camera_up"
+            ORIENTATION_CAMERA_DOWN -> "camera_down"
+            else -> "auto"
+        }
+
+        fun orientationFromName(n: String) = when (n) {
+            "camera_up" -> ORIENTATION_CAMERA_UP
+            "camera_down" -> ORIENTATION_CAMERA_DOWN
+            else -> ORIENTATION_AUTO
+        }
+
+        fun themeName(v: Int) = when (v) {
+            THEME_LIGHT -> "light"
+            THEME_DARK -> "dark"
+            else -> "system"
+        }
+
+        fun themeFromName(n: String) = when (n) {
+            "light" -> THEME_LIGHT
+            "dark" -> THEME_DARK
+            else -> THEME_SYSTEM
+        }
+
         /** Values of [preferredTransport]. */
         const val TRANSPORT_AUTO = 0
         const val TRANSPORT_USB = 1
@@ -93,10 +118,29 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("touch_enabled", true)
         set(v) = sp.edit().putBoolean("touch_enabled", v).apply()
 
-    /** Fingers act as a laptop touchpad for the computer's pointer instead of touching where they land. */
-    var touchpadMode: Boolean
-        get() = sp.getBoolean("touchpad_mode", false)
-        set(v) = sp.edit().putBoolean("touchpad_mode", v).apply()
+    /** `display`, `touchpad` or `stylus`: exactly one is active, synced with the computer. */
+    var inputMode: String
+        get() = sp.getString("input_mode", null)
+            ?: if (sp.getBoolean("touchpad_mode", false)) HostConfig.MODE_TOUCHPAD else HostConfig.MODE_DISPLAY
+        set(v) = sp.edit().putString("input_mode", v).apply()
+
+    /** Battery saver also locks the screen with Device Admin (off: dim and stop retrying only). */
+    var batterySaverLock: Boolean
+        get() = sp.getBoolean("battery_saver_lock", false)
+        set(v) = sp.edit().putBoolean("battery_saver_lock", v).apply()
+
+    /** The computer has a Wi-Fi address for this tablet (so the pairing button stays hidden). */
+    var wifiConfigured: Boolean
+        get() = sp.getBoolean("wifi_configured", false)
+        set(v) = sp.edit().putBoolean("wifi_configured", v).apply()
+
+    /**
+     * After the host has been unreachable for two minutes: stop retrying, dim to 10% and lock the
+     * tablet. Synced with the computer (global default, per-device override).
+     */
+    var batterySaverOnDisconnect: Boolean
+        get() = sp.getBoolean("battery_saver_on_disconnect", false)
+        set(v) = sp.edit().putBoolean("battery_saver_on_disconnect", v).apply()
 
     /**
      * Opt-in immersive mode: hides the settings handle, expands into cutout,
@@ -149,4 +193,24 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("keep_display_alive_when_locked", true)
         set(v) = sp.edit().putBoolean("keep_display_alive_when_locked", v).apply()
 
+
+    /** Active stylus profile id (`standard`, `samsung_spen` or a custom profile), synced with the computer. */
+    var stylusProfile: String
+        get() = sp.getString("stylus_profile", "standard") ?: "standard"
+        set(v) = sp.edit().putString("stylus_profile", v).apply()
+
+    /** Light vibration on touchpad clicks, synced with the computer. */
+    var touchpadHaptics: Boolean
+        get() = sp.getBoolean("touchpad_haptics", true)
+        set(v) = sp.edit().putBoolean("touchpad_haptics", v).apply()
+
+    /** `bottom_right_zone` or `two_finger_tap`, synced with the computer. */
+    var rightClickMethod: String
+        get() = sp.getString("right_click_method", HostConfig.RIGHT_CLICK_ZONE) ?: HostConfig.RIGHT_CLICK_ZONE
+        set(v) = sp.edit().putString("right_click_method", v).apply()
+
+    /** `full_screen`, `standard_rectangle` or `wide_rectangle`, synced with the computer. */
+    var touchpadShape: String
+        get() = sp.getString("touchpad_shape", TouchpadShape.FULL) ?: TouchpadShape.FULL
+        set(v) = sp.edit().putString("touchpad_shape", v).apply()
 }

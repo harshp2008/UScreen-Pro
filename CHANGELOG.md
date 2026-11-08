@@ -5,6 +5,36 @@ Full notes for each version are on the
 
 ## Unreleased
 
+Touchpad shape, native pinch, multi-finger taps (see
+`experiments_and_findings/71_touchpad_restrictions_and_gestures.md`):
+
+- Touchpad Shape setting (Full Screen, Standard Rectangle 4:3, Wide Rectangle 16:9):
+  touches outside the drawn rectangle are ignored; the right-click zone follows it.
+- Pinch and rotate are replayed on the computer as a native touchpad gesture (a
+  virtual multi-touch pad that libinput recognises), not Ctrl + scroll.
+- Three and four finger taps work: tolerances are now physical, not fixed pixels.
+- Stylus mode has no relative mouse or gesture pad; stylus profiles never apply in
+  Touchpad mode; the devices a mode needs are made as soon as it is entered.
+
+Stylus profiles, touchpad gestures and onboarding warnings (see
+`experiments_and_findings/69_stylus_profiles_and_gestures.md`):
+
+- Stylus mode ignores fingers completely in the tablet app and on the host;
+  only the pen and its eraser are sent, as absolute coordinates.
+- Stylus profiles map pen events (side buttons, S Pen air button and swipes,
+  pen roll) to a click, a scroll notch or a key combination such as
+  `Ctrl+Shift+Z`. Built in: Standard and Samsung S Pen Remote (through the
+  vendored Apache-2.0 S Pen Remote Open SDK). Custom profiles are JSON files in
+  `~/.config/uscreen/stylus_profiles/`, edited in the Stylus Profile Manager in
+  both the desktop app and the tablet app, each with a Test button.
+- Touchpad: pinch is Ctrl + scroll, two-finger rotate is Alt + scroll, four and
+  five finger taps switch workspace, clicks vibrate (setting Touchpad Haptics,
+  on by default) and the right click is a tap in the bottom-right strip (a
+  faint line marks it) or a two-finger tap (setting Right Click Method).
+- The fps / bandwidth overlay and its switch exist in Extended Display mode only.
+- The wizard marks Tailscale as experimental and has a Connection Failed? box
+  that explains MAC randomization.
+
 Ported from upstream UScreen 1.2.14 (backend only; see
 `experiments_and_findings/60_cleansing_and_upstream_sync.md`):
 

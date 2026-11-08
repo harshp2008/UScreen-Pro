@@ -46,6 +46,12 @@ else
     exit 1
 fi
 
+# 2b. EVDI helper (C). It reports pointer crossings for idle dimming, so the daemon and the helper
+#     must be built together; `make build-helper` also installs it next to the daemon.
+echo ""
+echo "==> [1b/4] Building EVDI helper (make build-helper)..."
+make build-helper
+
 # 3. Build Rust Host Daemon
 echo ""
 echo "==> [2/4] Building Rust Host Daemon (cargo build --release -p uscreen)..."

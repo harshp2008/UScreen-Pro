@@ -3,6 +3,7 @@ package com.uscreen
 import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceView
+import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -27,7 +28,6 @@ class TouchCapture {
         // it is 5 in AOSP (0 unknown, 1 finger, 2 stylus, 3 mouse, 4 eraser,
         // 5 palm). It was 6 here until 1.2.5, so no palm was ever filtered.
         private const val TOOL_TYPE_PALM = 5
-        const val RECONNECT_DELAY_MS = 2000L
     }
 
     /** WebSocket port on 127.0.0.1. Defaults to 8891. */
@@ -60,6 +60,20 @@ class TouchCapture {
     var onHostVersionKnown: ((version: String) -> Unit)? = null
     /** Host-pushed state that needs an overlay: paused, settings updating, app updating. null clears it. */
     var onHostNotice: ((HostNotice?) -> Unit)? = null
+    /** The host pushed its per-device settings ({"type":"config_update"}); [hostConfig] is already updated. */
+    var onHostConfig: ((HostConfig) -> Unit)? = null
+    /** The latest settings the host pushed, or the saved copy until it does. */
+    @Volatile var hostConfig = HostConfig()
+    /** Idle dimming from the host: `dim` true fades down, false fades back up. Durations in ms. */
+    var onDimCommand: ((dim: Boolean, durationMs: Long, curve: String) -> Unit)? = null
+    /** The host's stylus profile list ({"type":"stylus_profiles"}); [stylusCatalog] is already updated. */
+    var onStylusProfiles: ((StylusCatalog) -> Unit)? = null
+    @Volatile var stylusCatalog = StylusCatalog()
+        private set
+    /** The host's answer to a profile test, save or delete: (operation, ok, message). */
+    var onStylusResult: ((op: String, ok: Boolean, message: String) -> Unit)? = null
+    /** A touchpad click happened and the tablet should vibrate; set by the activity, which owns the vibrator. */
+    var onHaptic: (() -> Unit)? = null
     /** The host forgot this device ({"type":"unpaired"}). */
     var onUnpaired: (() -> Unit)? = null
     /** The host sent a normal greeting/mode message: this app is paired. */
@@ -171,6 +185,31 @@ class TouchCapture {
                     }
                     "update_done" -> { onHostNotice?.invoke(null); return }
                     "unpaired" -> { onUnpaired?.invoke(); return }
+                    "stylus_profiles" -> {
+                        val cat = StylusCatalog.fromJson(o)
+                        stylusCatalog = cat
+                        onStylusProfiles?.invoke(cat)
+                        return
+                    }
+                    "stylus_result" -> {
+                        onStylusResult?.invoke(o.optString("op"), o.optBoolean("ok"), o.optString("message"))
+                        return
+                    }
+                    "config_update" -> {
+                        val next = HostConfig.fromJson(o, hostConfig)
+                        hostConfig = next
+                        onPairedGreeting?.invoke()
+                        onHostConfig?.invoke(next)
+                        return
+                    }
+                    "dim_screen" -> {
+                        onDimCommand?.invoke(true, o.optLong("duration", 3000), o.optString("curve", "linear"))
+                        return
+                    }
+                    "undim_screen" -> {
+                        onDimCommand?.invoke(false, o.optLong("duration", 500), o.optString("curve", "linear"))
+                        return
+                    }
                 }
                 if (o.has("codec") || o.has("host_version") || o.has("pen_only")) onPairedGreeting?.invoke()
                 if (o.has("codec")) {
@@ -259,6 +298,9 @@ class TouchCapture {
      * Open the input WebSocket (idempotent) and start the authenticate-then-handshake sequence.
      */
     fun connect() {
+        // Battery saver gave up on the host: onStart / onResume (which the lock screen triggers) must
+        // not quietly bring the link back; only the Retry button does, by setting autoReconnect first.
+        if (!autoReconnect) return
         penButtonDown = false
         // Idempotent: a second connect() must not leave the first socket
         // alive with its listener still flipping isConnected. onStart and a
@@ -280,11 +322,18 @@ class TouchCapture {
         webSocket = client.newWebSocket(request, wsListener)
     }
 
+    /**
+     * False while battery saver has given up on the host: a dropped socket then stays dropped until
+     * [connect] is called again (the Retry button).
+     */
+    @Volatile var autoReconnect = true
+
     private fun scheduleReconnect() {
+        if (!autoReconnect) return
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
-            delay(RECONNECT_DELAY_MS)
-            if (!isConnected) {
+            delay(ReconnectPolicy.RETRY_INTERVAL_MS)
+            if (!isConnected && autoReconnect) {
                 connectWebSocket()
             }
         }
@@ -362,6 +411,8 @@ class TouchCapture {
         val vw = width.coerceAtLeast(1).toFloat()
         val vh = height.coerceAtLeast(1).toFloat()
 
+        val padBounds = TouchpadShape.bounds(touchpadShape, vw, vh)
+        pad.setBounds(padBounds.left, padBounds.top, padBounds.right, padBounds.bottom)
         val pointerCount = event.pointerCount
         val actionIndex = event.actionIndex
         val maskedAction = event.actionMasked
@@ -379,12 +430,21 @@ class TouchCapture {
                     notePenActivity()
                     sendPenEvent(event, actionIndex, 0, vw, vh)
                 } else {
-                    if (penIsActive() || !touchEnabled) return true
+                    // Stylus mode is a graphics tablet: only the pen and its eraser count.
+                    if (stylusMode || penIsActive() || !touchEnabled) return true
                     if (touchpadMode) {
-                        pad.down(
-                            event.getPointerId(actionIndex),
-                            event.getX(actionIndex), event.getY(actionIndex), event.eventTime
-                        )
+                        // A finger that lands outside the touch area is ignored for its whole life:
+                        // nothing is sent and no gesture sees it.
+                        val id = event.getPointerId(actionIndex)
+                        val x = event.getX(actionIndex)
+                        val y = event.getY(actionIndex)
+                        if (!padBounds.contains(x, y)) {
+                            outsideIds.add(id)
+                            return true
+                        }
+                        outsideIds.remove(id)
+                        if (maskedAction == MotionEvent.ACTION_DOWN) sendWake(force = false)
+                        pad.down(id, x, y, event.eventTime)
                         return true
                     }
                     val slot = slotOf(event, actionIndex)
@@ -424,9 +484,12 @@ class TouchCapture {
                         }
                         sendPenEvent(event, i, 2, vw, vh)
                     } else {
-                        if (penIsActive() || !touchEnabled) continue
+                        if (stylusMode || penIsActive() || !touchEnabled) continue
                         if (touchpadMode) {
-                            pad.move(event.getPointerId(i), event.getX(i), event.getY(i))
+                            val id = event.getPointerId(i)
+                            if (id in outsideIds) continue
+                            // A finger that slides out stops at the edge, like on a real pad.
+                            pad.move(id, padBounds.clampX(event.getX(i)), padBounds.clampY(event.getY(i)))
                             continue
                         }
                         val (nx, ny) = mapCoordinates(event.getX(i), event.getY(i), vw, vh)
@@ -450,8 +513,11 @@ class TouchCapture {
                     notePenActivity()
                     sendPenEvent(event, actionIndex, 1, vw, vh)
                 } else {
+                    if (stylusMode) return true
                     if (touchpadMode) {
-                        pad.up(event.getPointerId(actionIndex), event.eventTime)
+                        val id = event.getPointerId(actionIndex)
+                        if (outsideIds.remove(id)) return true
+                        pad.up(id, event.eventTime)
                         return true
                     }
                     // Not filtered on palm: whatever the contact is called
@@ -465,7 +531,9 @@ class TouchCapture {
             }
 
             MotionEvent.ACTION_CANCEL -> {
+                if (stylusMode) return true
                 if (touchpadMode) {
+                    outsideIds.clear()
                     pad.cancel()
                     return true
                 }
@@ -576,6 +644,7 @@ class TouchCapture {
         emitPen(x.toDouble(), y.toDouble(), pressure, tiltX, tiltY,
             isEraser(event, index), action)
         syncPenButton(event)
+        if (action == 3) sendOrientation(event, index)
     }
 
     /** The S Pen side button as the host last heard it. */
@@ -599,6 +668,76 @@ class TouchCapture {
             penButtonDown = down
             sendPenButton(down)
         }
+        // A second barrel button is its own stylus event, so a profile can map it separately.
+        val down2 = (event.buttonState and MotionEvent.BUTTON_STYLUS_SECONDARY) != 0
+        if (down2 != penButton2Down) {
+            penButton2Down = down2
+            sendStylusEvent("button_secondary", pressed = down2)
+        }
+    }
+
+    /** The second stylus button as the host last heard it. */
+    private var penButton2Down = false
+
+    private var lastOrientation = Float.NaN
+    private var lastOrientationNs = 0L
+
+    /**
+     * Forward the pen's `AXIS_ORIENTATION` while it hovers, for profiles that map pen roll. Throttled
+     * to a change of about 3 degrees and 20 messages a second.
+     */
+    private fun sendOrientation(event: MotionEvent, index: Int) {
+        val o = event.getAxisValue(MotionEvent.AXIS_ORIENTATION, index)
+        val now = System.nanoTime()
+        if (!lastOrientation.isNaN() && abs(o - lastOrientation) < 0.05f) return
+        if (now - lastOrientationNs < 50_000_000L) return
+        lastOrientation = o
+        lastOrientationNs = now
+        sendStylusEvent("orientation", radians = o.toDouble())
+    }
+
+    /**
+     * Send a stylus fact for the active profile. [event] is `button_secondary` / `air_button`
+     * (with [pressed]), `air_motion` (with [dx], [dy]), `orientation` (with [radians]) or `pen_gone`.
+     */
+    fun sendStylusEvent(
+        event: String, pressed: Boolean = false, dx: Double = 0.0, dy: Double = 0.0, radians: Double = 0.0,
+    ) {
+        webSocket?.send(JSONObject().apply {
+            put("type", "stylus_event")
+            put("event", event)
+            put("pressed", pressed)
+            put("dx", dx)
+            put("dy", dy)
+            put("radians", radians)
+        }.toString())
+    }
+
+    /** Run one action on the computer now (`ctrl+c`, `mouse_middle`...), to try a mapping before saving it. */
+    fun testStylusAction(action: String) {
+        webSocket?.send(JSONObject().apply {
+            put("type", "stylus_test")
+            put("action", action)
+        }.toString())
+    }
+
+    /** Create or replace a custom profile; the host answers with a `stylus_result` and a fresh profile list. */
+    fun saveStylusProfile(id: String, name: String, mappings: Map<String, String>) {
+        webSocket?.send(JSONObject().apply {
+            put("type", "stylus_profile_save")
+            put("profile", JSONObject().apply {
+                put("id", id)
+                put("name", name)
+                put("mappings", JSONObject(mappings))
+            })
+        }.toString())
+    }
+
+    fun deleteStylusProfile(id: String) {
+        webSocket?.send(JSONObject().apply {
+            put("type", "stylus_profile_delete")
+            put("id", id)
+        }.toString())
     }
 
     private fun emitPen(x: Double, y: Double, pressure: Double,
@@ -633,6 +772,12 @@ class TouchCapture {
     }
 
     private fun sendPenProximityExit() {
+        lastOrientation = Float.NaN
+        sendStylusEvent("pen_gone")
+        if (penButton2Down) {
+            penButton2Down = false
+            sendStylusEvent("button_secondary", pressed = false)
+        }
         // A button still held when the pen leaves would stay pressed on the
         // host until the next press.
         if (penButtonDown) {
@@ -736,6 +881,35 @@ class TouchCapture {
     }
 
     /**
+     * Tell the host a setting was changed on this tablet (`touchpad_mode`, `immersive_mode`,
+     * `battery_saver_on_disconnect`). The host stores it as this device's override and answers with a
+     * `config_update`, which is what the UI follows. Dropped while offline: the host is the source of
+     * truth, so a stale choice must not overwrite what was set on the computer in the meantime.
+     */
+    fun sendSetting(key: String, value: Any) {
+        if (!isConnected) return
+        webSocket?.send(JSONObject().apply {
+            put("type", "setting")
+            put("key", key)
+            put("value", value)
+        }.toString())
+    }
+
+    private var lastWakeMs = 0L
+
+    /**
+     * Tell the host the user touched the tablet (the app swallowed a touch to wake a dimmed screen, or a
+     * finger came down on the touchpad). It counts as use for the idle timer and, in touchpad mode, makes
+     * the host nudge its pointer by one pixel so an auto-hidden cursor reappears. Throttled to one a second.
+     */
+    fun sendWake(force: Boolean = true) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (!force && now - lastWakeMs < 1000) return
+        lastWakeMs = now
+        if (isConnected) webSocket?.send("""{"type":"wake"}""")
+    }
+
+    /**
      * Send a foreground hello/reconnect ping to the host so it re-asserts
      * adb reverse port forwarding immediately upon app resume.
      */
@@ -815,8 +989,73 @@ and consults it when choosing between the device's adb entries.
                 put("button", button)
                 put("down", down)
             }.toString())
+            if (down) onHaptic?.invoke()
         }
+        override fun transform(zoom: Float, rotationDeg: Float) {
+            webSocket?.send(JSONObject().apply {
+                put("type", "transform")
+                put("zoom", zoom.toDouble())
+                put("rotation", rotationDeg.toDouble())
+            }.toString())
+        }
+        override fun transformEnd() {
+            webSocket?.send("""{"type":"transform_end"}""")
+        }
+        override fun workspace(direction: Int) =
+            sendGesture(if (direction < 0) "workspace_prev" else "workspace_next", 0f)
     })
+
+    private fun sendGesture(kind: String, amount: Float) {
+        webSocket?.send(JSONObject().apply {
+            put("type", "gesture")
+            put("kind", kind)
+            put("amount", amount.toDouble())
+        }.toString())
+    }
+
+    /** Pointer ids whose finger landed outside the touch area; they are ignored until they lift. */
+    private val outsideIds = HashSet<Int>()
+
+    /** Which part of the screen is the touchpad (`full_screen`, `standard_rectangle`, `wide_rectangle`). */
+    @Volatile var touchpadShape = TouchpadShape.FULL
+        private set
+
+    fun setTouchpadShape(shape: String) {
+        if (touchpadShape == shape) return
+        touchpadShape = shape
+        // Fingers that were down belong to the old area.
+        outsideIds.clear()
+        pad.cancel()
+    }
+
+    /**
+     * Tune the gesture tolerances to the panel: a touch may wander about 1.5 mm before it is a
+     * movement, and with three or more fingers down about 4 mm before it stops being a tap. Fixed
+     * pixel values were far too tight on a dense panel, which is why multi-finger taps never fired.
+     */
+    fun setPanelDensity(pixelsPerMm: Float) {
+        if (pixelsPerMm <= 0f) return
+        pad.slopPx = 1.5f * pixelsPerMm
+        pad.multiSlopPx = 4f * pixelsPerMm
+    }
+
+    /** Right-click method for the touchpad: true taps the bottom-right strip, false uses a two-finger tap. */
+    fun setRightClickZone(on: Boolean) {
+        pad.rightClickZone = on
+    }
+
+    /**
+     * Stylus mode: only the pen and its eraser are sent, as absolute coordinates; every finger is
+     * ignored. Switching drops whatever a finger still held.
+     */
+    @Volatile var stylusMode = false
+        private set
+
+    fun setStylusMode(on: Boolean) {
+        if (stylusMode == on) return
+        stylusMode = on
+        liftTouches()
+    }
 
     /** Switch between direct touch and touchpad behaviour, letting go of anything the old mode held. */
     fun setTouchpadMode(on: Boolean) {

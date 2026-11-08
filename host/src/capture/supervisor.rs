@@ -29,6 +29,9 @@ impl CaptureManager {
         let mut pipeline_started_at = Instant::now();
         let mut mode_rx = self.mode_rx.clone();
         let mut stream_rx = self.stream_rx.clone();
+        // Touchpad and Stylus mode switch the whole pipeline off for this tablet, keep_alive included:
+        // a throttled 1 fps stream would still run ffmpeg and the capture loop.
+        let touchpad_rx = crate::options::options_rx(self.config.instance);
         // Frame size the running encoder was configured for, so a later mode
         // change can be detected as a mismatch rather than silently skewing.
         let mut encoder_mode: Option<(u32, u32)> = None;
@@ -108,7 +111,8 @@ impl CaptureManager {
                 self.config.height_mm = s.height_mm;
                 self.config.stream_scale = s.stream_scale;
                 self.config.ten_bit = s.ten_bit;
-                self.config.keep_alive = s.keep_alive;
+                self.config.keep_alive =
+                    s.keep_alive && touchpad_rx.borrow().input_mode.streams_video();
             }
 
             // No tablet being used as a screen: no helper, and so no EVDI
@@ -444,7 +448,7 @@ impl CaptureManager {
                             info!("Restored target capture FPS and triggered full keyframe refresh (client active)");
                             resume_same_encoder = true;
                         } else {
-                            if self.config.keep_alive {
+                            if self.config.keep_alive && touchpad_rx.borrow().input_mode.streams_video() {
                                 info!("Tablet disconnected but keep_alive is enabled — maintaining virtual display and throttling capture to 1 FPS");
                                 if !is_throttled {
                                     is_throttled = true;

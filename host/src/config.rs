@@ -39,6 +39,105 @@ pub const MIN_QUALITY: u32 = 12;
 /// Blurriest constant-quality value accepted.
 pub const MAX_QUALITY: u32 = 32;
 
+/// Fade curves the tablet app knows how to animate; anything else falls back to the default.
+pub const CURVES: [&str; 5] = [
+    "linear",
+    "ease_in",
+    "ease_out",
+    "ease_in_out",
+    "exponential",
+];
+/// Highest and lowest control-point y of a custom Bezier fade (x is limited to 0..1).
+pub const BEZIER_Y_MIN: f64 = -2.0;
+pub const BEZIER_Y_MAX: f64 = 3.0;
+
+/// How the tablet is used. Exactly one is active per device.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum InputMode {
+    /// Extended display: video is streamed and touch is absolute.
+    #[default]
+    Display,
+    /// Laptop touchpad: no video, finger motion moves the pointer.
+    Touchpad,
+    /// Graphics tablet: no video, the pen drives the computer's own screen.
+    Stylus,
+}
+
+impl InputMode {
+    /// Whether this mode runs the capture and encoding pipeline.
+    pub fn streams_video(self) -> bool {
+        self == InputMode::Display
+    }
+
+    /// Wire / config name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            InputMode::Display => "display",
+            InputMode::Touchpad => "touchpad",
+            InputMode::Stylus => "stylus",
+        }
+    }
+}
+
+/// A fade curve the user saved in the GUI: a CSS-style cubic Bezier through (0,0) and (1,1).
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(default)]
+pub struct CurvePreset {
+    pub name: String,
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+}
+
+/// Parse `bezier:x1,y1,x2,y2` into clamped control points.
+fn parse_bezier(text: &str) -> Option<(f64, f64, f64, f64)> {
+    let rest = text.strip_prefix("bezier:")?;
+    let v: Vec<f64> = rest
+        .split(',')
+        .map(|p| p.trim().parse::<f64>())
+        .collect::<Result<_, _>>()
+        .ok()?;
+    if v.len() != 4 || v.iter().any(|n| !n.is_finite()) {
+        return None;
+    }
+    let x = |n: f64| n.clamp(0.0, 1.0);
+    let y = |n: f64| n.clamp(BEZIER_Y_MIN, BEZIER_Y_MAX);
+    Some((x(v[0]), y(v[1]), x(v[2]), y(v[3])))
+}
+
+/// The wire form the tablet understands for a stored curve: a preset name, or
+/// `bezier:x1,y1,x2,y2` for a custom or saved one (`preset:<name>` is looked up in `presets`).
+/// Anything unusable becomes `fallback`.
+pub fn resolve_curve(curve: &str, presets: &[CurvePreset], fallback: &str) -> String {
+    let c = curve.trim();
+    if let Some(name) = c.strip_prefix("preset:") {
+        return presets
+            .iter()
+            .find(|p| p.name == name)
+            .and_then(|p| parse_bezier(&format!("bezier:{},{},{},{}", p.x1, p.y1, p.x2, p.y2)))
+            .map(|b| format!("bezier:{},{},{},{}", b.0, b.1, b.2, b.3))
+            .unwrap_or_else(|| fallback.to_string());
+    }
+    if let Some(b) = parse_bezier(c) {
+        return format!("bezier:{},{},{},{}", b.0, b.1, b.2, b.3);
+    }
+    let lower = c.to_ascii_lowercase();
+    if CURVES.contains(&lower.as_str()) {
+        lower
+    } else {
+        fallback.to_string()
+    }
+}
+
+/// Shortest and longest idle timeout (seconds) before the tablet is dimmed.
+pub const MIN_IDLE_TIMEOUT_SECS: u32 = 10;
+pub const MAX_IDLE_TIMEOUT_SECS: u32 = 300;
+/// Shortest and longest fade (milliseconds) of the idle dim / undim animation.
+pub const MIN_FADE_MS: u32 = 100;
+pub const MAX_FADE_MS: u32 = 30_000;
+
 /// What one device reported about itself, and anything set specifically for
 /// it, keyed in the config by its adb serial.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
@@ -78,6 +177,75 @@ pub struct TabletProfile {
     /// Application window locking: allowed apps on this monitor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub locked_apps: Option<Vec<String>>,
+    /// Input mode of this device (`display`, `touchpad`, `stylus`); unset inherits the global one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_mode: Option<InputMode>,
+    /// Legacy override, read once to migrate to `input_mode`; never written.
+    #[serde(skip_serializing)]
+    pub touchpad_mode: Option<bool>,
+    /// Hide the settings handle and draw under the cutout on the tablet. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub immersive_mode: Option<bool>,
+    /// Show the fps / Mbps overlay on the tablet. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_stats: Option<bool>,
+    /// Send finger touches to the computer (the pen always works). Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touch_input: Option<bool>,
+    /// Forward touches while the tablet is locked. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touch_on_lock_screen: Option<bool>,
+    /// Keep the app on screen over the tablet's lock screen. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keep_display_alive_when_locked: Option<bool>,
+    /// Keep the sockets open when the app is in the background. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keep_connected_in_background: Option<bool>,
+    /// Black out the tablet screen a few seconds after Stylus mode starts. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blank_pen_only: Option<bool>,
+    /// Landscape direction on the tablet: auto, camera_up or camera_down. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orientation: Option<String>,
+    /// Tablet app theme: system, light or dark. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme_mode: Option<String>,
+    /// After the host has been unreachable for two minutes: stop retrying and dim to 10%. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub battery_saver_on_disconnect: Option<bool>,
+    /// Battery saver also locks the tablet (needs the Device Admin permission). Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub battery_saver_lock: Option<bool>,
+    /// Dim the tablet while the pointer is away from it. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idle_dim_enabled: Option<bool>,
+    /// Seconds of idleness before the tablet dims. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idle_dim_timeout_secs: Option<u32>,
+    /// Dim fade curve: a preset name, `bezier:x1,y1,x2,y2` or `preset:<name>`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dim_curve: Option<String>,
+    /// Undim fade curve (same forms as `dim_curve`). Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub undim_curve: Option<String>,
+    /// Length of the dim fade in milliseconds. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dim_duration_ms: Option<u32>,
+    /// Length of the undim fade in milliseconds. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub undim_duration_ms: Option<u32>,
+    /// Active stylus profile id (`standard`, `samsung_spen` or a custom profile's file stem). Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_profile: Option<String>,
+    /// Light vibration on touchpad clicks. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_haptics: Option<bool>,
+    /// How a touchpad right click is made: `bottom_right_zone` or `two_finger_tap`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub right_click_method: Option<String>,
+    /// Which part of the tablet acts as the touchpad: `full_screen`, `standard_rectangle` or `wide_rectangle`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_shape: Option<String>,
     /// Firmware/APK version reported by the connected Android client.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,
@@ -226,9 +394,76 @@ pub struct FileConfig {
     /// entry. Until then it is a "new device" and the daemon leaves it alone.
     #[serde(default)]
     pub auto_pair_new_devices: bool,
+    /// Input mode default: `display` (extended screen), `touchpad` or `stylus`. Absent in old
+    /// files; sanitising fills it from the legacy `pen_only` / `touchpad_mode` flags.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_mode: Option<InputMode>,
+    /// Legacy flag, read once to migrate to `input_mode`; never written.
+    #[serde(default, skip_serializing)]
+    pub touchpad_mode: bool,
+    /// Hide the settings handle and draw under the cutout on the tablet.
+    pub immersive_mode: bool,
+    /// Show the fps / Mbps overlay on the tablet.
+    pub show_stats: bool,
+    /// Send finger touches to the computer (the pen always works).
+    pub touch_input: bool,
+    /// Forward touches while the tablet is locked.
+    pub touch_on_lock_screen: bool,
+    /// Keep the app on screen over the tablet's lock screen.
+    pub keep_display_alive_when_locked: bool,
+    /// Keep the sockets open when the app is in the background.
+    pub keep_connected_in_background: bool,
+    /// Black out the tablet screen a few seconds after Stylus mode starts.
+    pub blank_pen_only: bool,
+    /// Landscape direction on the tablet: auto, camera_up or camera_down.
+    pub orientation: String,
+    /// Tablet app theme: system, light or dark.
+    pub theme_mode: String,
+    /// After the host has been unreachable for two minutes: stop retrying and dim to 10%.
+    pub battery_saver_on_disconnect: bool,
+    /// Battery saver also locks the tablet (needs the Device Admin permission).
+    pub battery_saver_lock: bool,
+    /// Dim the tablet while the pointer is away from it.
+    pub idle_dim_enabled: bool,
+    /// Seconds of idleness before the tablet dims.
+    pub idle_dim_timeout_secs: u32,
+    /// Dim fade curve: a preset name, `bezier:x1,y1,x2,y2` or `preset:<name>`.
+    pub dim_curve: String,
+    /// Undim fade curve (same forms as `dim_curve`).
+    pub undim_curve: String,
+    /// Length of the dim fade in milliseconds.
+    pub dim_duration_ms: u32,
+    /// Length of the undim fade in milliseconds.
+    pub undim_duration_ms: u32,
+    /// Active stylus profile id: `standard`, `samsung_spen` or a custom profile in `~/.config/uscreen/stylus_profiles/`.
+    pub stylus_profile: String,
+    /// Light vibration on touchpad clicks.
+    pub touchpad_haptics: bool,
+    /// How a touchpad right click is made: `bottom_right_zone` or `two_finger_tap`.
+    pub right_click_method: String,
+    /// Which part of the tablet acts as the touchpad: `full_screen`, `standard_rectangle` or `wide_rectangle`.
+    pub touchpad_shape: String,
+    /// Fade curves saved by the user in the GUI's curve editor, usable as `preset:<name>`.
+    pub curve_presets: Vec<CurvePreset>,
     /// Protocol/daemon version.
     #[serde(default = "default_version")]
     pub version: String,
+}
+
+/// `full_screen` (default), `standard_rectangle` or `wide_rectangle`; anything else falls back to the default.
+pub fn clean_shape(v: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        s @ ("standard_rectangle" | "wide_rectangle") => s.to_string(),
+        _ => "full_screen".into(),
+    }
+}
+
+/// `bottom_right_zone` (default) or `two_finger_tap`; anything else falls back to the default.
+fn clean_right_click(v: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        "two_finger_tap" => "two_finger_tap".into(),
+        _ => "bottom_right_zone".into(),
+    }
 }
 
 fn default_true() -> bool {
@@ -272,6 +507,30 @@ impl Default for FileConfig {
             allow_legacy_fallback: false,
             auto_enable_wifi_adb: true,
             auto_pair_new_devices: false,
+            input_mode: Some(InputMode::Display),
+            touchpad_mode: false,
+            immersive_mode: false,
+            show_stats: false,
+            touch_input: true,
+            touch_on_lock_screen: false,
+            keep_display_alive_when_locked: true,
+            keep_connected_in_background: false,
+            blank_pen_only: true,
+            orientation: "auto".into(),
+            theme_mode: "system".into(),
+            battery_saver_on_disconnect: false,
+            battery_saver_lock: false,
+            idle_dim_enabled: false,
+            idle_dim_timeout_secs: 60,
+            dim_curve: "ease_out".into(),
+            undim_curve: "ease_in".into(),
+            dim_duration_ms: 3000,
+            undim_duration_ms: 500,
+            stylus_profile: "standard".into(),
+            touchpad_haptics: true,
+            right_click_method: "bottom_right_zone".into(),
+            touchpad_shape: "full_screen".into(),
+            curve_presets: Vec::new(),
         }
     }
 }
@@ -355,6 +614,70 @@ impl FileConfig {
         self.max_tablets = self.max_tablets.clamp(1, 4);
         self.width = self.width.clamp(640, 8192);
         self.height = self.height.clamp(480, 8192);
+        self.idle_dim_timeout_secs = self
+            .idle_dim_timeout_secs
+            .clamp(MIN_IDLE_TIMEOUT_SECS, MAX_IDLE_TIMEOUT_SECS);
+        self.dim_duration_ms = self.dim_duration_ms.clamp(MIN_FADE_MS, MAX_FADE_MS);
+        self.undim_duration_ms = self.undim_duration_ms.clamp(MIN_FADE_MS, MAX_FADE_MS);
+        self.curve_presets.retain(|p| !p.name.trim().is_empty());
+        for p in &mut self.curve_presets {
+            p.name = p.name.trim().to_string();
+            p.x1 = p.x1.clamp(0.0, 1.0);
+            p.x2 = p.x2.clamp(0.0, 1.0);
+            p.y1 = p.y1.clamp(BEZIER_Y_MIN, BEZIER_Y_MAX);
+            p.y2 = p.y2.clamp(BEZIER_Y_MIN, BEZIER_Y_MAX);
+        }
+        for (curve, fallback) in [
+            (&mut self.dim_curve, "ease_out"),
+            (&mut self.undim_curve, "ease_in"),
+        ] {
+            // A `preset:` reference stays even when its preset was deleted: it resolves to the
+            // default wherever it is used. Everything else is normalised here.
+            if !curve.starts_with("preset:") {
+                *curve = resolve_curve(curve, &self.curve_presets, fallback);
+            }
+        }
+        self.orientation = match self.orientation.trim().to_ascii_lowercase().as_str() {
+            o @ ("auto" | "camera_up" | "camera_down") => o.to_string(),
+            _ => "auto".into(),
+        };
+        self.theme_mode = match self.theme_mode.trim().to_ascii_lowercase().as_str() {
+            t @ ("system" | "light" | "dark") => t.to_string(),
+            _ => "system".into(),
+        };
+        self.stylus_profile = crate::stylus_profile::clean_id(&self.stylus_profile)
+            .unwrap_or_else(|| "standard".into());
+        self.right_click_method = clean_right_click(&self.right_click_method);
+        self.touchpad_shape = clean_shape(&self.touchpad_shape);
+        for p in self.tablets.values_mut() {
+            if let Some(id) = p.stylus_profile.take() {
+                p.stylus_profile = crate::stylus_profile::clean_id(&id);
+            }
+            if let Some(m) = p.right_click_method.take() {
+                p.right_click_method = Some(clean_right_click(&m));
+            }
+            if let Some(m) = p.touchpad_shape.take() {
+                p.touchpad_shape = Some(clean_shape(&m));
+            }
+        }
+        // One-time migration from the two booleans this enum replaced.
+        if self.input_mode.is_none() {
+            self.input_mode = Some(if self.touchpad_mode {
+                InputMode::Touchpad
+            } else if self.pen_only {
+                InputMode::Stylus
+            } else {
+                InputMode::Display
+            });
+        }
+        self.touchpad_mode = false;
+        self.pen_only = self.input_mode == Some(InputMode::Stylus);
+        for p in self.tablets.values_mut() {
+            if p.input_mode.is_none() && p.touchpad_mode == Some(true) {
+                p.input_mode = Some(InputMode::Touchpad);
+            }
+            p.touchpad_mode = None;
+        }
 
         if Position::parse(&self.position).is_none() {
             tracing::warn!(

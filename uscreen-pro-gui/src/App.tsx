@@ -9,7 +9,7 @@ import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
 import { TooltipProvider } from "./components/ui/layout";
 import { Notifications, toast } from "./lib/toast";
-import type { AppConfig, DaemonStatus, ForgetReport, PipelineEvent, TabletProfile, View } from "./lib/types";
+import type { AppConfig, CurvePreset, DaemonStatus, ForgetReport, PipelineEvent, TabletProfile, View } from "./lib/types";
 import { DeviceSettings } from "./views/DeviceSettings";
 import { Advanced } from "./views/Advanced";
 import { GlobalSettings } from "./views/GlobalSettings";
@@ -207,6 +207,27 @@ export default function App() {
       toast.success("Settings saved");
     }, "Save failed");
 
+  /*
+   * Saved fade curves belong to the global config but are used from every device page, which saves only
+   * its own profile. So they are written the moment they change, and the "unsaved" fingerprint of the
+   * globals is updated for just that key, leaving other pending edits pending.
+   */
+  const savePresets = async (curve_presets: CurvePreset[]) => {
+    try {
+      await invoke("save_curve_presets", { presets: curve_presets });
+      patchConfig({ curve_presets });
+      setSavedConfig((prev) => {
+        try {
+          return JSON.stringify({ ...JSON.parse(prev), curve_presets });
+        } catch {
+          return prev;
+        }
+      });
+    } catch (e) {
+      toast.error(`Could not save presets: ${errText(e)}`);
+    }
+  };
+
   const toggleAutostart = async (enabled: boolean) => {
     try {
       setAutostart(await invoke<boolean>("set_autostart_status", { enabled }));
@@ -342,6 +363,7 @@ export default function App() {
                     onChange={patchConfig}
                     onSave={saveConfig}
                     onAutostart={toggleAutostart}
+                    onPresetsChange={savePresets}
                   />
                 )}
                 {view === "advanced" && config && (
@@ -357,6 +379,7 @@ export default function App() {
                     config={config}
                     hostVersion={status?.host_version}
                     onChange={patchProfile}
+                    onPresetsChange={savePresets}
                     onSave={saveProfile}
                     onDelete={deleteProfile}
                     onTogglePause={togglePause}

@@ -17,7 +17,7 @@ use crate::config_handler::{
 use crate::display::{edid, vdisplay};
 use crate::net::stream;
 use crate::session::{adb_monitor, DaemonControlMsg, ExtraSessionTemplate};
-use crate::{capture, config, encoders, input, osk, runtime, tray, update};
+use crate::{capture, config, encoders, input, options, osk, runtime, tray, update};
 
 /// Execute the primary uscreen daemon event loop.
 ///
@@ -108,7 +108,10 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
     let input_port = cli.input_port.unwrap_or(file_cfg.input_port);
     let quality = cli.quality.unwrap_or(file_cfg.quality);
     let stream_scale = cli.stream_scale.unwrap_or(file_cfg.stream_scale);
-    let pen_only = cli.pen_only || file_cfg.pen_only;
+    if cli.pen_only {
+        options::set_cli_mode(config::InputMode::Stylus);
+    }
+    let pen_only = cli.pen_only || file_cfg.input_mode == Some(config::InputMode::Stylus);
     let max_performance_mode = cli.max_performance || file_cfg.max_performance_mode;
 
     let cap_config = capture::CaptureConfig {
@@ -188,7 +191,6 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
     let input_srv = input::InputServer::new(
         input_config,
         Some(settings_tx.clone()),
-        mode_tx.clone(),
         latency,
         relaunch.clone(),
         card_rx.clone(),
@@ -210,18 +212,23 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
     let tray_tablet_rx = tablet_tx.subscribe();
 
     let (gate_tx, gate_rx) = watch::channel(false);
-    let mut mode_rx_gate = mode_tx.subscribe();
+    // Only Display mode runs the pipeline: Touchpad and Stylus mode keep it down (no EVDI capture,
+    // no ffmpeg, nothing on the USB link but input).
+    options::spawn_config_watcher();
+    crate::stylus_profile::spawn_watcher();
+    let mut touchpad_rx_gate = options::options_rx(0);
     tokio::spawn(async move {
         let mut last = false;
         loop {
-            let active = *tablet_rx.borrow() && !*mode_rx_gate.borrow();
+            let streams = touchpad_rx_gate.borrow().input_mode.streams_video();
+            let active = *tablet_rx.borrow() && streams;
             if active != last {
                 last = active;
                 let _ = gate_tx.send(active);
             }
             tokio::select! {
                 r = tablet_rx.changed() => if r.is_err() { break },
-                r = mode_rx_gate.changed() => if r.is_err() { break },
+                r = touchpad_rx_gate.changed() => if r.is_err() { break },
             }
         }
     });
@@ -364,12 +371,36 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
         }
     });
 
+    // Keep the tray's switch in step with slot 0's real mode (a GUI or tablet change).
+    {
+        let mut slot0_pen = options::pen_only_rx(0);
+        let tray_tx = mode_tx.clone();
+        tokio::spawn(async move {
+            while slot0_pen.changed().await.is_ok() {
+                let stylus = *slot0_pen.borrow();
+                tray_tx.send_if_modified(|cur| {
+                    let changed = *cur != stylus;
+                    *cur = stylus;
+                    changed
+                });
+            }
+        });
+    }
     let mut mode_rx_save = mode_tx.subscribe();
     let mode_save_handle = tokio::spawn(async move {
         while mode_rx_save.changed().await.is_ok() {
+            // The tray's switch is the global Stylus toggle; it must not override a Touchpad
+            // default that was chosen separately.
             let pen_only = *mode_rx_save.borrow();
             let mut cfg = config::FileConfig::load();
-            cfg.pen_only = pen_only;
+            if (cfg.input_mode == Some(config::InputMode::Stylus)) == pen_only {
+                continue;
+            }
+            cfg.input_mode = Some(if pen_only {
+                config::InputMode::Stylus
+            } else {
+                config::InputMode::Display
+            });
             if let Err(e) = cfg.save() {
                 warn!("Failed to persist mode: {}", e);
             }
@@ -415,7 +446,6 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
         video_port,
         input_port,
         token: token.clone(),
-        mode_tx: mode_tx.clone(),
         shutdown_rx: shutdown_tx.subscribe(),
         ping_notify: ping_notify.clone(),
     };

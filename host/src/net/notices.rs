@@ -60,6 +60,14 @@ pub fn release(instance: u32, msg: Value) {
     let _ = slot.tx.send(text);
 }
 
+/// Broadcast a one-off message that is not a state: it is not replayed to a client that connects later.
+pub fn send(instance: u32, msg: Value) {
+    let text = msg.to_string();
+    let mut map = slots().lock().unwrap_or_else(|e| e.into_inner());
+    let slot = slot_entry(&mut map, instance);
+    let _ = slot.tx.send(text);
+}
+
 /// Drop any sticky state without telling the client (the device is gone or forgotten).
 pub fn forget(instance: u32) {
     let mut map = slots().lock().unwrap_or_else(|e| e.into_inner());

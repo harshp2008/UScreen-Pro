@@ -283,6 +283,8 @@ static int g_nudge_mapped = 0;
 static char g_my_connector[32] = "";
 static volatile int g_pointer_in_tablet = 0;
 static volatile long long g_last_exit_time_us = 0;
+/* Last POINTER_IN_TABLET value written to stdout; -1 = nothing reported yet. */
+static int g_reported_in_tablet = -1;
 
 static inline void timespec_add_ns(struct timespec *ts, long long ns) {
   ts->tv_nsec += ns;
@@ -414,6 +416,15 @@ static void *boundary_sync_thread(void *arg) {
 
     int in_tablet = (rx >= g_tablet_x && rx < (g_tablet_x + g_tablet_w) &&
                      ry >= g_tablet_y && ry < (g_tablet_y + g_tablet_h));
+
+    /* Tell the daemon each time the pointer crosses onto or off the tablet
+       (and once when the output becomes known). It starts the idle-dim timer
+       when the pointer leaves. */
+    if (in_tablet != g_reported_in_tablet) {
+      g_reported_in_tablet = in_tablet;
+      printf("POINTER_IN_TABLET %d\n", in_tablet);
+      fflush(stdout);
+    }
 
     if (g_pointer_in_tablet && !in_tablet) {
       /* Mouse exited tablet -> laptop screen: force Mutter to schedule

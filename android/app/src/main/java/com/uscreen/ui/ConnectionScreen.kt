@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import com.uscreen.BuildConfig
+import com.uscreen.HostConfig
 import com.uscreen.HostNotice
 import com.uscreen.MainActivity
 import com.uscreen.Prefs
@@ -118,6 +120,92 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
                         textAlign = TextAlign.Center
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The single static screen shown while Touchpad mode is on. The host has stopped capturing and
+ * encoding for this tablet, so nothing else will ever arrive to draw here.
+ *
+ * Outside the touch area ([shape]) the screen is pure black and touches there do nothing; the area
+ * itself is a slightly lighter panel with a faint border. With [showRightClickZone] a faint line
+ * across its bottom 15% and a divider mark the right-click zone (the right half of that strip).
+ */
+@Composable
+fun TouchpadActiveScreen(
+    showRightClickZone: Boolean = true,
+    shape: String = com.uscreen.TouchpadShape.FULL,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        contentAlignment = Alignment.Center
+    ) {
+        TouchpadArea(shape, showRightClickZone)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(32.dp)
+        ) {
+            Text(
+                "Touchpad Mode Active",
+                fontSize = 20.sp,
+                color = OnSurface,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Move your finger to move the pointer. Tap to click, two fingers to scroll or pinch.\n" +
+                    "No video is streamed to this screen. Settings are behind the gear icon.",
+                fontSize = 14.sp,
+                color = Muted,
+                textAlign = TextAlign.Center
+            )
+        }
+    }
+}
+
+/** Draws the touch area for [shape] and, optionally, its right-click zone. */
+@Composable
+private fun TouchpadArea(shape: String, showRightClickZone: Boolean) {
+    val line = Color(0x33FFFFFF)
+    Box(modifier = Modifier.fillMaxSize()) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val b = com.uscreen.TouchpadShape.bounds(shape, size.width, size.height)
+            val restricted = shape != com.uscreen.TouchpadShape.FULL
+            val topLeft = androidx.compose.ui.geometry.Offset(b.left, b.top)
+            val area = androidx.compose.ui.geometry.Size(b.width, b.height)
+            if (restricted) {
+                drawRect(Color(0xFF151515), topLeft, area)
+                drawRect(line, topLeft, area, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
+            }
+            if (showRightClickZone) {
+                val y = b.bottom - b.height * com.uscreen.TouchpadGestures.ZONE_FRACTION
+                val mid = (b.left + b.right) / 2f
+                drawLine(line, androidx.compose.ui.geometry.Offset(b.left, y), androidx.compose.ui.geometry.Offset(b.right, y), strokeWidth = 2f)
+                drawLine(line, androidx.compose.ui.geometry.Offset(mid, y), androidx.compose.ui.geometry.Offset(mid, b.bottom), strokeWidth = 2f)
+            }
+        }
+        if (showRightClickZone) {
+            // Anchored to the touch area, not the screen: the label sits in its bottom-right corner.
+            androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val wPx = constraints.maxWidth.toFloat()
+                val hPx = constraints.maxHeight.toFloat()
+                val b = com.uscreen.TouchpadShape.bounds(shape, wPx, hPx)
+                val density = androidx.compose.ui.platform.LocalDensity.current
+                Text(
+                    "Right click",
+                    fontSize = 11.sp,
+                    color = Color(0x40FFFFFF),
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(
+                            end = with(density) { (wPx - b.right).toDp() } + 24.dp,
+                            bottom = with(density) { (hPx - b.bottom).toDp() } + 12.dp,
+                        )
+                )
             }
         }
     }
@@ -253,34 +341,41 @@ fun UScreenMain(
     onSurfaceDestroyed: () -> Unit = {},
     videoReceiver: VideoReceiver? = null,
     touchCapture: TouchCapture? = null,
-    onOrientationChange: (Int) -> Unit = {},
     onStreamingChange: (Boolean) -> Unit = {},
     prefs: Prefs? = null,
     isDeviceLocked: Boolean = false,
     hostVersion: String? = null,
     hostNotice: HostNotice? = null,
     unpairedByHost: Boolean = false,
+    /** The per-device settings the host pushed (touchpad, immersive, battery saver). */
+    hostConfig: HostConfig = HostConfig(),
+    /** The host has been unreachable for the whole 120 s reconnect window. */
+    hostOffline: Boolean = false,
+    /** Battery saver stopped the retry loops; only [onRetry] reconnects. */
+    autoRetryDisabled: Boolean = false,
+    onRetry: () -> Unit = {},
+    /** A synced setting was changed on this tablet (the value is a Boolean, Int or String, as the key requires). */
+    onSetting: (key: String, value: Any) -> Unit = { _, _ -> },
+    /** The screen is faded down by idle dimming; a touch should only wake it. */
+    idleDimmed: Boolean = false,
+    onWake: () -> Unit = {},
 ) {
     var isConnected by remember { mutableStateOf(false) }
     LaunchedEffect(isConnected) { onStreamingChange(isConnected) }
     var fps by remember { mutableStateOf(0f) }
     var mbps by remember { mutableStateOf(0f) }
     var showSettings by remember { mutableStateOf(false) }
-    var showStats by remember { mutableStateOf(prefs?.showStats ?: false) }
-    var touchOn by remember { mutableStateOf(prefs?.touchEnabled ?: true) }
-    var touchpadOn by remember { mutableStateOf(prefs?.touchpadMode ?: false) }
-    var blankInPenMode by remember { mutableStateOf(prefs?.blankPenOnly ?: true) }
-    var orientationChoice by remember { mutableStateOf(prefs?.orientation ?: Prefs.ORIENTATION_AUTO) }
-    var immersiveOn by remember { mutableStateOf(prefs?.immersiveModeEnabled ?: false) }
-    var keepConnectedInBackground by remember { mutableStateOf(prefs?.keepConnectedInBackground ?: false) }
-    var touchOnLockScreen by remember { mutableStateOf(prefs?.touchOnLockScreen ?: false) }
+    val showStats = hostConfig.showStats
+    val blankInPenMode = hostConfig.blankPenOnly
+    val touchOnLockScreen = hostConfig.touchOnLockScreen
+    val touchpadOn = hostConfig.inputMode == HostConfig.MODE_TOUCHPAD
+    var showPairingGuide by remember { mutableStateOf(false) }
+    val immersiveOn = hostConfig.immersiveMode
     val lockTouchSupported = remember { lockScreenTouchSupported() }
     /* Locked, and the user has not allowed touch there: cover the picture and send no input at all. */
     val lockBlocked = isDeviceLocked && !(touchOnLockScreen && lockTouchSupported)
     LaunchedEffect(lockBlocked, touchCapture) { touchCapture?.setInputBlocked(lockBlocked) }
-    var keepDisplayAliveWhenLocked by remember { mutableStateOf(prefs?.keepDisplayAliveWhenLocked ?: true) }
     var preferredTransport by remember { mutableStateOf(prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO) }
-    var themeMode by remember { mutableStateOf(prefs?.themeMode ?: Prefs.THEME_SYSTEM) }
 
     /*
      * The "waiting for host" screen shows whenever no stream is live. The grace period keeps a quick
@@ -299,7 +394,7 @@ fun UScreenMain(
     val context = LocalContext.current
     val activity = context as? MainActivity
 
-    BackHandler(enabled = immersiveOn && (isConnected || penOnly) && !showSettings) {
+    BackHandler(enabled = immersiveOn && (isConnected || penOnly || touchpadOn) && !showSettings) {
         showSettings = true
     }
 
@@ -366,7 +461,19 @@ fun UScreenMain(
         }
 
         AnimatedVisibility(
-            visible = !isConnected && !penOnly && onboardingGraceOver,
+            visible = touchpadOn && !penOnly,
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier.fillMaxSize()
+        ) {
+            TouchpadActiveScreen(
+                showRightClickZone = hostConfig.rightClickMethod == com.uscreen.HostConfig.RIGHT_CLICK_ZONE,
+                shape = hostConfig.touchpadShape,
+            )
+        }
+
+        AnimatedVisibility(
+            visible = !isConnected && !penOnly && !touchpadOn && onboardingGraceOver,
             enter = fadeIn(),
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)
@@ -376,11 +483,15 @@ fun UScreenMain(
                 touchCapture = touchCapture,
                 prefs = prefs,
                 isConnected = isConnected,
+                hostOffline = hostOffline,
+                autoRetryDisabled = autoRetryDisabled,
+                onRetry = onRetry,
                 onOpenSettings = { showSettings = true },
             )
         }
 
-        if (isConnected && showStats) {
+        // The fps / Mbps counter belongs to the video stream, so it exists in Display mode only.
+        if (isConnected && showStats && hostConfig.inputMode == com.uscreen.HostConfig.MODE_DISPLAY) {
             Surface(
                 color = Color(0x99000000),
                 shape = RoundedCornerShape(8.dp),
@@ -476,7 +587,7 @@ fun UScreenMain(
         HostNoticeOverlay(hostNotice)
         if (unpairedByHost) UnpairedBanner()
 
-        val showSettingsHandle = !immersiveOn || !isConnected
+        val showSettingsHandle = !immersiveOn || !(isConnected || touchpadOn)
 
         if (showSettingsHandle) {
             Box(
@@ -546,66 +657,15 @@ fun UScreenMain(
         if (showSettings) {
             SettingsSheet(
                 prefs = prefs,
-                penOnly = penOnly,
-                onPenOnlyChange = { wantPenOnly ->
-                    touchCapture?.sendMode(wantPenOnly)
-                    showSettings = false
-                },
-                showStats = showStats,
-                onShowStatsChange = {
-                    showStats = it
-                    prefs?.showStats = it
-                },
-                blankPenOnly = blankInPenMode,
-                onBlankPenOnlyChange = {
-                    blankInPenMode = it
-                    prefs?.blankPenOnly = it
-                },
-                touchEnabled = touchOn,
-                onTouchEnabledChange = {
-                    touchOn = it
-                    prefs?.touchEnabled = it
-                    touchCapture?.setTouchEnabled(it)
-                },
-                touchpadMode = touchpadOn,
-                onTouchpadModeChange = {
-                    touchpadOn = it
-                    prefs?.touchpadMode = it
-                    touchCapture?.setTouchpadMode(it)
-                },
-                orientation = orientationChoice,
-                onOrientationChange = {
-                    orientationChoice = it
-                    onOrientationChange(it)
-                },
+                hostConfig = hostConfig,
+                onSetting = onSetting,
                 onApply = { bitrateKbps, newFps ->
                     prefs?.bitrateKbps = bitrateKbps
                     prefs?.fps = newFps
                     touchCapture?.sendConfig(bitrateKbps, newFps)
                 },
-                immersiveModeEnabled = immersiveOn,
-                onImmersiveModeEnabledChange = {
-                    immersiveOn = it
-                    prefs?.immersiveModeEnabled = it
-                    activity?.applyImmersiveMode(it)
-                },
-                keepConnectedInBackground = keepConnectedInBackground,
-                onKeepConnectedInBackgroundChange = {
-                    keepConnectedInBackground = it
-                    prefs?.keepConnectedInBackground = it
-                },
-                touchOnLockScreen = touchOnLockScreen,
+                touchCapture = touchCapture,
                 touchOnLockScreenSupported = lockTouchSupported,
-                onTouchOnLockScreenChange = {
-                    touchOnLockScreen = it
-                    prefs?.touchOnLockScreen = it
-                },
-                keepDisplayAliveWhenLocked = keepDisplayAliveWhenLocked,
-                onKeepDisplayAliveWhenLockedChange = {
-                    keepDisplayAliveWhenLocked = it
-                    prefs?.keepDisplayAliveWhenLocked = it
-                    activity?.applyLockScreenFlags()
-                },
                 preferredTransport = preferredTransport,
                 onPreferredTransportChange = {
                     preferredTransport = it
@@ -617,16 +677,29 @@ fun UScreenMain(
                     }
                     touchCapture?.sendPreferredTransport(transStr)
                 },
-                themeMode = themeMode,
-                onThemeModeChange = {
-                    themeMode = it
-                    prefs?.themeMode = it
-                    activity?.applyThemeMode(it)
-                },
-                onExitApp = {
-                    activity?.finish()
-                },
+                onOpenPairingGuide = { showPairingGuide = true },
+                onExitApp = { activity?.finish() },
                 onDismiss = { showSettings = false }
+            )
+        }
+        if (showPairingGuide) PairingGuideScreen(onDismiss = { showPairingGuide = false })
+
+        // Wake on touch: while the screen is dimmed for idleness, the first touch anywhere only brings the
+        // brightness back. It is consumed here so it never reaches the computer as a stray click.
+        if (idleDimmed) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(500f)
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                if (event.type == PointerEventType.Press) onWake()
+                                event.changes.forEach { it.consume() }
+                            }
+                        }
+                    }
             )
         }
     }

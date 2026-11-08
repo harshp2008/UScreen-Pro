@@ -8,7 +8,14 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import android.view.View
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -27,8 +34,6 @@ import androidx.compose.runtime.getValue
  * hover dispatch, screen refresh rate negotiation, and system immersive UI flags.
  */
 class MainActivity : AppCompatActivity() {
-    /** Mirrors the host's mode so the UI can say what is going on. */
-    private var penOnlyMode by mutableStateOf(false)
     private var hostVersion by mutableStateOf<String?>(null)
     private var hostNotice by mutableStateOf<HostNotice?>(null)
     /** Set when the host forgot this device; survives restarts until the host talks to us again. */
@@ -40,6 +45,22 @@ class MainActivity : AppCompatActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var isDeviceLocked by mutableStateOf(false)
     private var lockReceiver: BroadcastReceiver? = null
+
+    /** The per-device settings the host pushed (or the saved copy until it does). */
+    private var hostConfig by mutableStateOf(HostConfig())
+    /** The host has been unreachable for the whole [ReconnectPolicy.OFFLINE_AFTER_MS] window. */
+    private var hostOffline by mutableStateOf(false)
+    /** Battery saver gave up on the host: no retry loop runs until the user taps Retry. */
+    private var autoRetryDisabled by mutableStateOf(false)
+    private val reconnectPolicy = ReconnectPolicy()
+    private lateinit var dimmer: ScreenDimmer
+    /** The host's idle dimming has the screen faded down right now (drives the wake-on-touch overlay). */
+    private var dimmedByHost by mutableStateOf(false)
+    /** Between onResume and onPause: the only time the app's own brightness override may be in force. */
+    private var inForeground = false
+
+    /** S Pen Remote for the Samsung stylus profile; null until first needed. */
+    private var spen: SamsungSPen? = null
 
     /**
      * Let the activity stay visible and wake the screen over the keyguard when the user opted into
@@ -94,6 +115,30 @@ class MainActivity : AppCompatActivity() {
         if (locked && !secure) {
             km.requestDismissKeyguard(this, null)
         }
+        applyBrightnessPolicy()
+    }
+
+    /**
+     * What the window's brightness override should be right now. While the device is locked, or the app
+     * is not in the foreground, no override at all: a screen dimmed to 5% would otherwise leave the PIN pad
+     * invisible. Back on screen and unlocked, the dim the host asked for (or battery saver's 10%) returns
+     * until the user touches the screen.
+     */
+    private fun applyBrightnessPolicy() {
+        if (!::dimmer.isInitialized) return
+        when {
+            isDeviceLocked || !inForeground -> dimmer.restoreSystem()
+            autoRetryDisabled -> dimmer.setNow(FadeCurve.BATTERY_SAVER_LEVEL)
+            dimmedByHost -> dimmer.setNow(FadeCurve.DIM_LEVEL)
+        }
+    }
+
+    /** The user touched the dimmed screen: fade back up with the host's undim curve and tell the host. */
+    private fun wakeFromIdle() {
+        if (!dimmedByHost) return
+        dimmedByHost = false
+        dimmer.undim(hostConfig.undimDurationMs, hostConfig.undimCurve)
+        touchCapture?.sendWake()
     }
 
     private fun registerLockReceiver() {
@@ -160,10 +205,30 @@ class MainActivity : AppCompatActivity() {
         registerLockReceiver()
         checkKeyguardState()
 
+        dimmer = ScreenDimmer({ window }, this)
+        hostConfig = HostConfig.fromPrefs(prefs)
         videoReceiver = VideoReceiver()
         touchCapture = TouchCapture().also {
-            it.setTouchEnabled(prefs.touchEnabled)
-            it.setTouchpadMode(prefs.touchpadMode)
+            it.setTouchEnabled(hostConfig.touchInput || hostConfig.inputMode == HostConfig.MODE_TOUCHPAD)
+            it.setTouchpadMode(hostConfig.inputMode == HostConfig.MODE_TOUCHPAD)
+            it.setStylusMode(hostConfig.inputMode == HostConfig.MODE_STYLUS)
+            it.setRightClickZone(hostConfig.rightClickMethod == HostConfig.RIGHT_CLICK_ZONE)
+            it.setTouchpadShape(hostConfig.touchpadShape)
+            it.setPanelDensity(resources.displayMetrics.xdpi / 25.4f)
+            it.hostConfig = hostConfig
+            // Touchpad clicks tick lightly when the setting is on (it is on by default).
+            it.onHaptic = {
+                if (hostConfig.touchpadHaptics && hostConfig.inputMode == HostConfig.MODE_TOUCHPAD) Haptics.click(this)
+            }
+        }
+        touchCapture?.onHostConfig = { cfg -> runOnUiThread { applyHostConfig(cfg) } }
+        touchCapture?.onDimCommand = { dim, durationMs, curve ->
+            runOnUiThread {
+                dimmedByHost = dim
+                // Locked or backgrounded: remember the state, but leave the system brightness alone.
+                if (isDeviceLocked || !inForeground) applyBrightnessPolicy()
+                else if (dim) dimmer.dim(durationMs, curve) else dimmer.undim(durationMs, curve)
+            }
         }
         applyIntentExtras(intent, restart = false)
 
@@ -199,17 +264,11 @@ class MainActivity : AppCompatActivity() {
                     // restarts anything if the host switched codec while
                     // connected.
                     Log.i("UScreen", "Host is sending $codec — rebuilding the decoder")
-                    val wasRunning = !penOnlyMode
+                    val wasRunning = hostConfig.streamsVideo
                     if (wasRunning) vr.stop()
                     vr.mimeType = mime
                     if (wasRunning) vr.start()
                 }
-            }
-        }
-        touchCapture?.onModeKnown = { penOnly ->
-            runOnUiThread {
-                penOnlyMode = penOnly
-                if (penOnly) videoReceiver?.stop() else videoReceiver?.start()
             }
         }
         touchCapture?.onHostNotice = { notice ->
@@ -264,7 +323,7 @@ class MainActivity : AppCompatActivity() {
         setContent {
             UScreenTheme(themeMode = themeMode) {
                 UScreenMain(
-                    penOnly = penOnlyMode,
+                    penOnly = hostConfig.inputMode == HostConfig.MODE_STYLUS,
                     showThanks = showThanks,
                     onDismissThanks = { showThanks = false },
                     videoReceiver = videoReceiver,
@@ -274,6 +333,13 @@ class MainActivity : AppCompatActivity() {
                     hostVersion = hostVersion,
                     hostNotice = hostNotice,
                     unpairedByHost = unpairedByHost,
+                    hostConfig = hostConfig,
+                    hostOffline = hostOffline,
+                    autoRetryDisabled = autoRetryDisabled,
+                    onRetry = { retryHostLink() },
+                    idleDimmed = dimmedByHost,
+                    onWake = { wakeFromIdle() },
+                    onSetting = { key, value -> onUserSetting(key, value) },
                     onSurfaceReady = { surfaceView ->
                         videoReceiver?.setSurface(surfaceView)
                         touchCapture?.setSurfaceView(surfaceView)
@@ -283,13 +349,11 @@ class MainActivity : AppCompatActivity() {
                         streaming = live
                         applyOrientation()
                     },
-                    onOrientationChange = { choice ->
-                        prefs.orientation = choice
-                        applyOrientation()
-                    }
                 )
             }
         }
+
+        startLinkWatchdog()
 
         // Start foreground service to prevent system kill
         val serviceIntent = Intent(this, StreamingService::class.java)
@@ -299,6 +363,154 @@ class MainActivity : AppCompatActivity() {
         window.decorView.post {
             applyImmersiveMode()
         }
+    }
+
+    /**
+     * Mirror the host's per-device settings into [Prefs], the live input handling and the UI. Runs on the
+     * UI thread; the host sends it on connect and whenever a setting changes there (or here).
+     */
+    private fun applyHostConfig(cfg: HostConfig) {
+        val prev = hostConfig
+        hostConfig = cfg
+        touchCapture?.hostConfig = cfg
+        prefs.inputMode = cfg.inputMode
+        prefs.immersiveModeEnabled = cfg.immersiveMode
+        prefs.showStats = cfg.showStats
+        prefs.touchEnabled = cfg.touchInput
+        prefs.touchOnLockScreen = cfg.touchOnLockScreen
+        prefs.keepDisplayAliveWhenLocked = cfg.keepDisplayAliveWhenLocked
+        prefs.keepConnectedInBackground = cfg.keepConnectedInBackground
+        prefs.blankPenOnly = cfg.blankPenOnly
+        prefs.orientation = Prefs.orientationFromName(cfg.orientation)
+        prefs.themeMode = Prefs.themeFromName(cfg.themeMode)
+        prefs.batterySaverOnDisconnect = cfg.batterySaverOnDisconnect
+        prefs.batterySaverLock = cfg.batterySaverLock
+        prefs.wifiConfigured = cfg.wifiConfigured
+        prefs.stylusProfile = cfg.stylusProfile
+        prefs.touchpadHaptics = cfg.touchpadHaptics
+        prefs.rightClickMethod = cfg.rightClickMethod
+        prefs.touchpadShape = cfg.touchpadShape
+        // Touchpad mode is made of finger input, so it overrides the "Touch input" switch.
+        touchCapture?.setTouchEnabled(cfg.touchInput || cfg.inputMode == HostConfig.MODE_TOUCHPAD)
+        touchCapture?.setTouchpadMode(cfg.inputMode == HostConfig.MODE_TOUCHPAD)
+        touchCapture?.setStylusMode(cfg.inputMode == HostConfig.MODE_STYLUS)
+        touchCapture?.setRightClickZone(cfg.rightClickMethod == HostConfig.RIGHT_CLICK_ZONE)
+        touchCapture?.setTouchpadShape(cfg.touchpadShape)
+        updateSPen()
+        if (prev.immersiveMode != cfg.immersiveMode) applyImmersiveMode(cfg.immersiveMode)
+        if (prev.keepDisplayAliveWhenLocked != cfg.keepDisplayAliveWhenLocked) applyLockScreenFlags()
+        if (prev.orientation != cfg.orientation) applyOrientation()
+        if (prev.themeMode != cfg.themeMode) applyThemeMode(prefs.themeMode)
+        // Only Display mode has a video stream: the host stops capturing for the other two, so the
+        // decoder has nothing to wait for. start() and stop() are idempotent.
+        if (!autoRetryDisabled) {
+            if (cfg.streamsVideo) videoReceiver?.start() else videoReceiver?.stop()
+        }
+        Log.i("UScreen", "Host config applied: $cfg")
+    }
+
+    /**
+     * Listen to the S Pen Remote only while the Samsung profile is active, the app is in front and
+     * the device is a Samsung one; air motion is battery-hungry, so it is off the rest of the time.
+     */
+    private fun updateSPen() {
+        // Never in Touchpad mode: there the pen is not in use and the profile must not touch input at all.
+        val want = inForeground && hostConfig.stylusProfile == "samsung_spen" &&
+            hostConfig.inputMode != HostConfig.MODE_TOUCHPAD && SamsungSPen.isSupportedDevice()
+        if (want) {
+            val pen = spen ?: SamsungSPen { event, pressed, dx, dy ->
+                touchCapture?.sendStylusEvent(event, pressed = pressed, dx = dx, dy = dy)
+            }.also { spen = it }
+            pen.start(this)
+        } else {
+            spen?.stop(this)
+        }
+    }
+
+    /**
+     * A synced setting was changed on this tablet: apply it now and tell the host to store it as this
+     * device's override. [value] is a Boolean, an Int or a String, as the key requires.
+     */
+    private fun onUserSetting(key: String, value: Any) {
+        val next = hostConfig.withSetting(key, value) ?: return
+        applyHostConfig(next)
+        touchCapture?.sendSetting(key, value)
+        // "Require Device Admin Lock" needs the permission; ask for it right away.
+        if (key == "battery_saver_lock" && value == true && !ScreenLock.canLock(this)) {
+            try { startActivity(ScreenLock.requestIntent(this)) } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Watches the control socket while the activity is visible. Every 2 s of failure is just another
+     * retry (the socket and video loops do the retrying); only a link that stayed down for the whole
+     * 120 s window flips [hostOffline] and, with battery saver on, shuts the app down for the night.
+     */
+    private fun startLinkWatchdog() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                reconnectPolicy.linkUp()
+                while (isActive) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (touchCapture?.isControlConnected() == true) {
+                        reconnectPolicy.linkUp()
+                        if (hostOffline && !autoRetryDisabled) hostOffline = false
+                    } else if (!autoRetryDisabled) {
+                        reconnectPolicy.linkDown(now)
+                        // A screen faded down for idleness is no use while the host is gone.
+                        if (dimmedByHost) {
+                            dimmedByHost = false
+                            dimmer.undim(500, "ease_in")
+                        }
+                        if (reconnectPolicy.expired(now) && !hostOffline) {
+                            Log.i("UScreen", "Host unreachable for ${ReconnectPolicy.OFFLINE_AFTER_MS / 1000} s")
+                            hostOffline = true
+                            if (hostConfig.batterySaverOnDisconnect) enterBatterySaver()
+                        }
+                    }
+                    delay(1000)
+                }
+            }
+        }
+    }
+
+    /**
+     * Battery saver after the reconnect window: stop every retry loop, drop to 10% brightness and let go of
+     * the wake lock and keep-screen-on flag. Locking is separate and optional ("Require Device Admin
+     * Lock"): only with it on, and the Device Admin permission granted, is `lockNow()` called.
+     */
+    private fun enterBatterySaver() {
+        Log.i("UScreen", "Battery saver: stopping retries and dimming (lock: ${hostConfig.batterySaverLock})")
+        autoRetryDisabled = true
+        touchCapture?.autoReconnect = false
+        touchCapture?.disconnect()
+        videoReceiver?.autoRetry = false
+        dimmedByHost = false
+        applyBrightnessPolicy()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        releaseWakeLock()
+        if (hostConfig.batterySaverLock) {
+            setShowWhenLocked(false)
+            setTurnScreenOn(false)
+            if (!ScreenLock.lockNow(this)) {
+                Log.w("UScreen", "Device Admin not granted — not locking")
+            }
+        }
+    }
+
+    /** The Retry button, or the host coming back: re-arm every loop and reconnect now. */
+    private fun retryHostLink() {
+        Log.i("UScreen", "Retrying the host link")
+        autoRetryDisabled = false
+        hostOffline = false
+        reconnectPolicy.linkUp()
+        dimmedByHost = false
+        dimmer.restoreSystem()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        applyLockScreenFlags()
+        touchCapture?.autoReconnect = true
+        touchCapture?.connect()
+        videoReceiver?.retryConnection()
     }
 
     /**
@@ -396,8 +608,18 @@ class MainActivity : AppCompatActivity() {
         tiltListener = null
     }
 
+    override fun onPause() {
+        super.onPause()
+        // Never leave a brightness override behind when the window is not the one in front.
+        inForeground = false
+        if (::dimmer.isInitialized) dimmer.restoreSystem()
+        updateSPen()
+    }
+
     override fun onResume() {
         super.onResume()
+        inForeground = true
+        updateSPen()
         checkKeyguardState()
         applyImmersiveMode()
         touchCapture?.sendPing()
@@ -503,7 +725,7 @@ class MainActivity : AppCompatActivity() {
             Log.i("UScreen", "Session parameters updated — reconnecting")
             touchCapture?.disconnect()
             touchCapture?.connect()
-            if (!penOnlyMode) {
+            if (hostConfig.streamsVideo) {
                 videoReceiver?.stop()
                 videoReceiver?.start()
             }
@@ -535,6 +757,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         super.onStop()
+        inForeground = false
+        if (::dimmer.isInitialized) dimmer.restoreSystem()
         if (!prefs.keepConnectedInBackground) {
             Log.i("UScreen", "App backgrounded and keepConnectedInBackground is false — disconnecting")
             videoReceiver?.stop()
@@ -544,6 +768,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        dimmer.restoreSystem()
+        spen?.stop(this)
         stopTiltListener()
         unregisterLockReceiver()
         releaseWakeLock()

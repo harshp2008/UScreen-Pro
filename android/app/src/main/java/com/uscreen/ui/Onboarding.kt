@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uscreen.Prefs
+import com.uscreen.ReconnectPolicy
 import com.uscreen.TouchCapture
 import com.uscreen.VideoReceiver
 import kotlinx.coroutines.delay
@@ -209,6 +210,11 @@ fun WaitingScreen(
     @Suppress("UNUSED_PARAMETER") touchCapture: TouchCapture?,
     prefs: Prefs?,
     isConnected: Boolean,
+    /** True once the host has been unreachable for the whole reconnect window (2 minutes). */
+    hostOffline: Boolean = false,
+    /** Battery saver gave up: nothing retries by itself until [onRetry]. */
+    autoRetryDisabled: Boolean = false,
+    onRetry: () -> Unit = {},
     onOpenSettings: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -221,10 +227,6 @@ fun WaitingScreen(
     var wifiConnected by remember { mutableStateOf(checkWifiConnected(context)) }
     var dynamicDiagnostic by remember { mutableStateOf<String?>(null) }
     var secondsWaiting by remember { mutableIntStateOf(0) }
-    var hostShutdown by remember { mutableStateOf(videoReceiver?.hostShutdown == true) }
-    // Result of the 1 Hz host probe below. Three failures in a row mean "Host Offline"; one success
-    // means the host is up and we are only waiting for it to start the stream.
-    var probeFailures by remember { mutableIntStateOf(0) }
     val preferredTransport = prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO
 
     LaunchedEffect(videoReceiver) {
@@ -235,36 +237,23 @@ fun WaitingScreen(
         }
     }
 
-    LaunchedEffect(videoReceiver) {
-        videoReceiver?.onHostShutdown = {
-            (context as? ComponentActivity)?.runOnUiThread { hostShutdown = true }
-        }
-    }
-
     /*
-     * Host reachability, at most once a second and only while the activity is STARTED (the loop is
-     * cancelled on onStop and restarted on onStart, so a backgrounded app never polls). This is what
-     * tells "Host Offline" (nobody answers) from "waiting for the host" (a listener answers, the
-     * stream just has not started), and it brings the app back by itself when the daemon returns.
+     * Host reachability, once every retry interval (2 s) and only while the activity is STARTED (the
+     * loop is cancelled on onStop and restarted on onStart, so a backgrounded app never polls). It
+     * brings the app back by itself when the daemon returns after "Host Offline" was shown. When battery
+     * saver has given up (autoRetryDisabled) it stays silent: only the Retry button reconnects.
      */
-    LaunchedEffect(videoReceiver) {
+    LaunchedEffect(videoReceiver, hostOffline, autoRetryDisabled) {
         val receiver = videoReceiver ?: return@LaunchedEffect
+        if (!hostOffline || autoRetryDisabled) return@LaunchedEffect
         val lifecycle = (context as? ComponentActivity)?.lifecycle ?: return@LaunchedEffect
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (isActive) {
-                val up = probeHostSocket(receiver.host, receiver.port)
-                if (up) {
-                    if (probeFailures >= 3 || hostShutdown) {
-                        // The host came back: leave Host Offline and restart the video socket.
-                        hostShutdown = false
-                        secondsWaiting = 0
-                        receiver.retryConnection()
-                    }
-                    probeFailures = 0
-                } else {
-                    probeFailures += 1
+                if (probeHostSocket(receiver.host, receiver.port)) {
+                    secondsWaiting = 0
+                    onRetry()
                 }
-                delay(1000)
+                delay(ReconnectPolicy.RETRY_INTERVAL_MS)
             }
         }
     }
@@ -282,14 +271,13 @@ fun WaitingScreen(
     }
 
     /*
-     * Which "nobody is streaming" state to show. A shutdown notice from the daemon wins outright. Otherwise,
-     * after 5 s with USB debugging off the device itself is the problem; after the 10 s reconnect window
-     * with a transport present and nothing answering, the daemon is not running.
+     * Which "nobody is streaming" state to show. "Host Offline" is shown only once the activity's link watchdog
+     * has seen the host unreachable for the full 120 s reconnect window; until then the app keeps retrying
+     * every 2 s behind the ordinary waiting screen. After 5 s with USB debugging off the device itself is the
+     * problem.
      */
-    val transportPresent = usbPlugged || wifiConnected
     val noStreamState = when {
-        hostShutdown -> NoStream.HOST_OFFLINE
-        probeFailures >= 3 && transportPresent -> NoStream.HOST_OFFLINE
+        hostOffline -> NoStream.HOST_OFFLINE
         secondsWaiting > 5 && !usbAdbOn -> NoStream.DEBUGGING_DISABLED
         else -> NoStream.WAITING
     }
@@ -330,16 +318,17 @@ fun WaitingScreen(
                 Text("Host Offline", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color(0xFFEF5350))
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "The UScreen Pro daemon is not running on your PC. Please open UScreen Pro on your PC.",
+                    text = if (autoRetryDisabled)
+                        "The UScreen Pro daemon has been unreachable for 2 minutes. Battery saver stopped retrying; tap Retry once it is running."
+                    else
+                        "The UScreen Pro daemon is not running on your PC. Please open UScreen Pro on your PC.",
                     fontSize = 14.sp, lineHeight = 20.sp, color = Muted, textAlign = TextAlign.Center,
                     modifier = Modifier.padding(horizontal = 32.dp)
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Button(onClick = {
                     secondsWaiting = 0
-                    probeFailures = 0
-                    hostShutdown = false
-                    videoReceiver?.retryConnection()
+                    onRetry()
                 }) { Text("Retry Connection") }
             } else if (noStreamState == NoStream.DEBUGGING_DISABLED) {
                 Icon(

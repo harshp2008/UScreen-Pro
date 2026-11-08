@@ -77,14 +77,15 @@ class VideoReceiver {
     var onDisconnected: (() -> Unit)? = null
     var onDiagnosticUpdate: ((String) -> Unit)? = null
 
-    /** True once the daemon announced it is stopping; the reconnect loop idles until [retryConnection]. */
-    @Volatile var hostShutdown = false
-        private set
-    var onHostShutdown: (() -> Unit)? = null
+    /**
+     * False while battery saver has given up on the host: the reconnect loop then idles until
+     * [retryConnection]. Otherwise it retries every [ReconnectPolicy.RETRY_INTERVAL_MS], forever.
+     */
+    @Volatile var autoRetry = true
 
-    /** User-requested retry from the Host Offline screen: forget the shutdown and reconnect now. */
+    /** User-requested retry (or the host coming back): re-arm the loop and reconnect now. */
     fun retryConnection() {
-        hostShutdown = false
+        autoRetry = true
         try { socket?.close() } catch (_: Exception) {}
     }
 
@@ -520,8 +521,8 @@ class VideoReceiver {
                 }
                 if (!isRunning) return
 
-                // The daemon said it is gone: stop hammering the port until the user retries.
-                if (hostShutdown) {
+                // Battery saver gave up on the host: stay quiet until the user retries.
+                if (!autoRetry) {
                     delay(250)
                     continue
                 }
@@ -630,10 +631,12 @@ class VideoReceiver {
                             )
                         }
                         PACKET_TYPE_HOST_SHUTDOWN -> {
-                            Log.i(TAG, "Host announced shutdown")
-                            hostShutdown = true
+                            // Not an instant "Host Offline": the host may be restarting. The link
+                            // watchdog in the activity decides after two minutes of failures.
+                            Log.i(TAG, "Host announced shutdown — retrying every ${ReconnectPolicy.RETRY_INTERVAL_MS} ms")
                             onDisconnected?.invoke()
-                            onHostShutdown?.invoke()
+                            onDiagnosticUpdate?.invoke("The host is shutting down. Reconnecting…")
+                            delay(ReconnectPolicy.RETRY_INTERVAL_MS)
                             break@receiveLoop
                         }
                         else -> {
@@ -643,32 +646,32 @@ class VideoReceiver {
                     }
                 }
             } catch (e: java.io.EOFException) {
-                if (isRunning && !hostShutdown) {
+                if (isRunning) {
                     Log.i(TAG, "Stream ended (server closed)")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke("Stream closed by host daemon.")
-                    delay(1000)
+                    delay(ReconnectPolicy.RETRY_INTERVAL_MS)
                 }
             } catch (e: java.net.SocketTimeoutException) {
                 if (isRunning) {
                     Log.w(TAG, "Stream read timeout, reconnecting")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke("USB connected, but no data received. Is the cable loose? Try a different port.")
-                    delay(500)
+                    delay(ReconnectPolicy.RETRY_INTERVAL_MS)
                 }
             } catch (e: java.net.ConnectException) {
                 if (isRunning) {
                     Log.w(TAG, "Connection refused: ${e.message}")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke("Connection refused. Is UScreen running on your PC?")
-                    delay(1000)
+                    delay(ReconnectPolicy.RETRY_INTERVAL_MS)
                 }
             } catch (e: Exception) {
                 if (isRunning) {
                     Log.e(TAG, "Stream error: ${e.message}")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke(e.message ?: "Connection error")
-                    delay(1000)
+                    delay(ReconnectPolicy.RETRY_INTERVAL_MS)
                 }
             } finally {
                 try {

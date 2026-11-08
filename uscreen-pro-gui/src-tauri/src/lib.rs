@@ -2,7 +2,7 @@
 //!
 //! The GUI never touches video or input; it only manages things around the daemon — adb
 //! devices ([`adb`]), wireless pairing ([`pairing`]), the daemon's lifecycle and control
-//! socket ([`daemon`]), `config.toml` ([`config`]) and unpairing ([`forget`]). Every
+//! socket ([`daemon`]), `config.toml` ([`config`]), stylus profiles ([`stylus`]) and unpairing ([`forget`]). Every
 //! `#[tauri::command]` registered in [`run`] is callable from the frontend via `invoke()`.
 
 mod adb;
@@ -10,6 +10,7 @@ mod config;
 mod daemon;
 mod forget;
 mod pairing;
+mod stylus;
 
 /// Build and run the Tauri application: register the IPC commands that the React frontend invokes.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -21,7 +22,12 @@ pub fn run() {
             config::get_config,
             config::save_config,
             config::save_device_profile,
+            config::save_curve_presets,
             forget::forget_device,
+            stylus::list_stylus_profiles,
+            stylus::save_stylus_profile,
+            stylus::delete_stylus_profile,
+            stylus::test_stylus_action,
             daemon::get_daemon_status,
             daemon::pause_device,
             daemon::resume_device,

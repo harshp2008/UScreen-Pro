@@ -271,7 +271,7 @@ async fn unit_active() -> bool {
         .is_some_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "active")
 }
 
-fn daemon_binary() -> Option<PathBuf> {
+pub(crate) fn daemon_binary() -> Option<PathBuf> {
     [
         config::home_dir().join(".local/bin/uscreen"),
         PathBuf::from("/usr/local/bin/uscreen"),

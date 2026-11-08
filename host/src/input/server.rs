@@ -9,10 +9,6 @@ pub struct InputServer {
     pub(super) config: InputConfig,
     pub(super) running: Arc<AtomicBool>,
     pub(super) settings_tx: Option<watch::Sender<EncoderSettings>>,
-    /// Which mode the daemon is in, and how the tablet changes it. Owned as a
-    /// channel rather than a field because the mode is switchable at runtime
-    /// and several parts of the daemon have to follow it.
-    pub(super) mode_tx: watch::Sender<bool>,
     pub(super) latency: crate::latency::LatencyTracker,
     /// Woken when a client fails to authenticate, so the daemon can push the
     /// token to the app again over adb (a manually launched app never got
@@ -30,7 +26,6 @@ impl InputServer {
     pub fn new(
         config: InputConfig,
         settings_tx: Option<watch::Sender<EncoderSettings>>,
-        mode_tx: watch::Sender<bool>,
         latency: crate::latency::LatencyTracker,
         relaunch: Arc<tokio::sync::Notify>,
         card_rx: watch::Receiver<Option<u32>>,
@@ -40,7 +35,6 @@ impl InputServer {
             config,
             running: Arc::new(AtomicBool::new(false)),
             settings_tx,
-            mode_tx,
             latency,
             relaunch,
             card_rx,
@@ -61,6 +55,7 @@ impl InputServer {
             .context(format!("Failed to bind input server to {}", addr))?;
 
         info!("Input server on ws://{}", addr);
+        crate::options::spawn_idle_task(self.config.instance);
 
         // Created once for the lifetime of the daemon, not per connection.
         // Recreating them on every reconnect gave the devices a fresh identity
@@ -109,36 +104,17 @@ impl InputServer {
                 touch,
                 pen,
                 pointer,
-                mouse: None,
                 mouse_name: ident_bg.touchpad.clone(),
                 mouse_product: ident_bg.product_touchpad,
-                mouse_buttons: 0,
-                scroll_rest: (0, 0),
-                rel_rest: (0.0, 0.0),
-                last_pen_pos: (0, 0),
-                active_slots: 0,
-                pen_proximity: false,
-                pen_button: false,
-                pointer_area: None,
+                keyboard_name: ident_bg.keyboard.clone(),
+                keyboard_product: ident_bg.product_keyboard,
+                gestures_name: ident_bg.gestures.clone(),
+                gestures_product: ident_bg.product_gestures,
+                ..InjectDevices::headless()
             }
         })
         .await
-        .unwrap_or(InjectDevices {
-            touch: None,
-            pen: None,
-            pointer: None,
-            mouse: None,
-            mouse_name: TOUCHPAD_DEVICE_NAME.into(),
-            mouse_product: PRODUCT_TOUCHPAD,
-            mouse_buttons: 0,
-            scroll_rest: (0, 0),
-            rel_rest: (0.0, 0.0),
-            last_pen_pos: (0, 0),
-            active_slots: 0,
-            pen_proximity: false,
-            pen_button: false,
-            pointer_area: None,
-        });
+        .unwrap_or_else(|_| InjectDevices::headless());
         let uinput = Arc::new(std::sync::Mutex::new(devices));
 
         // Follow the mode for as long as the daemon runs. A switch has to move
@@ -146,7 +122,7 @@ impl InputServer {
         // held at the moment of the switch — a finger or pen tip that was down
         // would otherwise stay down on a screen that is no longer listening.
         {
-            let mut mode_rx = self.mode_tx.subscribe();
+            let mut mode_rx = crate::options::pen_only_rx(self.config.instance);
             let mut card_rx = self.card_rx.clone();
             let devices = uinput.clone();
             let ident_map = ident.clone();
@@ -158,6 +134,9 @@ impl InputServer {
             // like every later one, so it runs in the background rather than
             // holding up the accept loop below.
             tokio::spawn(async move {
+                if let Ok(mut guard) = devices.lock() {
+                    guard.set_stylus_mode(initial);
+                }
                 map_and_note_area(initial, &ident_map, card0, &devices).await;
                 loop {
                     tokio::select! {
@@ -179,6 +158,7 @@ impl InputServer {
                     let card = *card_rx.borrow();
                     if let Ok(mut guard) = devices.lock() {
                         guard.release_all();
+                        guard.set_stylus_mode(pen_only);
                     }
                     // Leaving display mode tears the virtual output down and
                     // entering it brings the output back. map_devices_to_output
@@ -194,6 +174,28 @@ impl InputServer {
                         card.map(|c| format!(" (card{})", c)).unwrap_or_default()
                     );
                     map_and_note_area(pen_only, &ident_map, card, &devices).await;
+                }
+            });
+        }
+
+        // Make the devices a mode needs as soon as it is entered (and at start), off the async runtime
+        // because creating a device sleeps while udev settles.
+        {
+            let mut opts_rx = crate::options::options_rx(self.config.instance);
+            let devices = uinput.clone();
+            tokio::spawn(async move {
+                loop {
+                    let mode = opts_rx.borrow_and_update().input_mode;
+                    let d = devices.clone();
+                    let _ = tokio::task::spawn_blocking(move || {
+                        if let Ok(mut guard) = d.lock() {
+                            guard.ensure_devices_for(mode);
+                        }
+                    })
+                    .await;
+                    if opts_rx.changed().await.is_err() {
+                        break;
+                    }
                 }
             });
         }
@@ -222,7 +224,6 @@ impl InputServer {
             info!("Input client: {}", peer);
             let cfg = config.clone();
             let settings = self.settings_tx.clone();
-            let mode_tx = self.mode_tx.clone();
             let latency = self.latency.clone();
             let devices = uinput.clone();
             let relaunch = self.relaunch.clone();
@@ -232,7 +233,6 @@ impl InputServer {
                     socket,
                     cfg,
                     settings,
-                    mode_tx,
                     latency,
                     devices,
                     relaunch,
@@ -254,7 +254,6 @@ pub(super) async fn handle_connection(
     raw_stream: tokio::net::TcpStream,
     config: InputConfig,
     settings_tx: Option<watch::Sender<EncoderSettings>>,
-    mode_tx: watch::Sender<bool>,
     latency: crate::latency::LatencyTracker,
     uinput: Arc<std::sync::Mutex<InjectDevices>>,
     relaunch: Arc<tokio::sync::Notify>,
@@ -273,7 +272,7 @@ pub(super) async fn handle_connection(
         .context("WebSocket handshake failed")?;
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-    let mut mode_rx = mode_tx.subscribe();
+    let mut mode_rx = crate::options::pen_only_rx(config.instance);
     // The stream settings as they are now, and a way to hear when they change.
     let mut settings_rx = settings_tx.as_ref().map(|t| t.subscribe());
     let current_codec = |tx: &Option<watch::Sender<EncoderSettings>>, fallback: &str| -> String {
@@ -292,6 +291,11 @@ pub(super) async fn handle_connection(
         })
     };
     let mut last_sent = current_settings(&settings_tx);
+    // Per-device options (touchpad mode, immersive mode, battery saver, idle dimming). Sent right
+    // after the greeting and again whenever they change, whoever changed them.
+    let mut options_rx = crate::options::options_rx(config.instance);
+    // The stylus profile list, sent after the options and again whenever a profile changes.
+    let mut profiles_rx = crate::stylus_profile::subscribe();
 
     // Authenticate before anything else happens: no greeting, no events.
     if let Some(expected) = config.token.as_deref() {
@@ -348,9 +352,26 @@ pub(super) async fn handle_connection(
     if let Some(text) = sticky {
         ws_sender.send(Message::Text(text)).await?;
     }
+    let first_options = options_rx.borrow_and_update().config_update();
+    ws_sender
+        .send(Message::Text(first_options.to_string()))
+        .await?;
+
+    let first_profiles = profiles_rx.borrow_and_update().clone();
+    ws_sender.send(Message::Text(first_profiles)).await?;
 
     loop {
         let msg = tokio::select! {
+            changed = profiles_rx.changed() => {
+                if changed.is_err() {
+                    break;
+                }
+                let update = profiles_rx.borrow_and_update().clone();
+                if ws_sender.send(Message::Text(update)).await.is_err() {
+                    break;
+                }
+                continue;
+            }
             notice = notice_rx.recv() => {
                 match notice {
                     Ok(text) => {
@@ -360,6 +381,16 @@ pub(super) async fn handle_connection(
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
+                }
+                continue;
+            }
+            changed = options_rx.changed() => {
+                if changed.is_err() {
+                    break;
+                }
+                let update = options_rx.borrow_and_update().config_update();
+                if ws_sender.send(Message::Text(update.to_string())).await.is_err() {
+                    break;
                 }
                 continue;
             }
@@ -440,10 +471,10 @@ pub(super) async fn handle_connection(
             Ok(Message::Text(text)) => match serde_json::from_str::<InputEvent>(&text) {
                 Ok(event) => {
                     handle_event(
+                        config.instance,
                         event,
                         &uinput,
                         &settings_tx,
-                        &mode_tx,
                         &latency,
                         &ping_notify,
                     );

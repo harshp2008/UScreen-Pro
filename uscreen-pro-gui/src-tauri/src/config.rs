@@ -4,6 +4,17 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+/// A fade curve saved by the user: a CSS-style cubic Bezier through (0,0) and (1,1).
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(default)]
+pub struct CurvePreset {
+    pub name: String,
+    pub x1: f64,
+    pub y1: f64,
+    pub x2: f64,
+    pub y2: f64,
+}
+
 /// Per-device section (`[tablets.<serial>]`) of config.toml; mirrors the host's `TabletProfile`.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default)]
@@ -35,6 +46,52 @@ pub struct TabletProfile {
     pub keep_alive: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub locked_apps: Option<Vec<String>>,
+    /// Input mode of this device (`display`, `touchpad`, `stylus`); unset inherits the global one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input_mode: Option<String>,
+    /// Per-device overrides of the global power, input and tablet-app settings of the same name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub immersive_mode: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub show_stats: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touch_input: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touch_on_lock_screen: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keep_display_alive_when_locked: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keep_connected_in_background: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blank_pen_only: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub orientation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub theme_mode: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub battery_saver_on_disconnect: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub battery_saver_lock: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idle_dim_enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idle_dim_timeout_secs: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dim_curve: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub undim_curve: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dim_duration_ms: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub undim_duration_ms: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_profile: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_haptics: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub right_click_method: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_shape: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -83,6 +140,37 @@ pub struct AppConfig {
     pub locked_apps: Vec<String>,
     pub allow_legacy_fallback: bool,
     pub auto_enable_wifi_adb: bool,
+    /// Global default input mode: `display`, `touchpad` or `stylus`. Empty in files from before the
+    /// enum; `load()` fills it from the legacy `pen_only` / `touchpad_mode` flags.
+    pub input_mode: String,
+    /// Global defaults of the power, input and tablet-app settings; a device may override each one.
+    pub immersive_mode: bool,
+    pub show_stats: bool,
+    pub touch_input: bool,
+    pub touch_on_lock_screen: bool,
+    pub keep_display_alive_when_locked: bool,
+    pub keep_connected_in_background: bool,
+    pub blank_pen_only: bool,
+    pub orientation: String,
+    pub theme_mode: String,
+    pub battery_saver_on_disconnect: bool,
+    pub battery_saver_lock: bool,
+    pub idle_dim_enabled: bool,
+    pub idle_dim_timeout_secs: u32,
+    pub dim_curve: String,
+    pub undim_curve: String,
+    pub dim_duration_ms: u32,
+    pub undim_duration_ms: u32,
+    /// Active stylus profile id (`standard`, `samsung_spen` or a custom profile's file stem).
+    pub stylus_profile: String,
+    /// Light vibration on touchpad clicks.
+    pub touchpad_haptics: bool,
+    /// `bottom_right_zone` or `two_finger_tap`.
+    pub right_click_method: String,
+    /// `full_screen`, `standard_rectangle` or `wide_rectangle`.
+    pub touchpad_shape: String,
+    /// Fade curves saved in the curve editor (usable as `preset:<name>`).
+    pub curve_presets: Vec<CurvePreset>,
     pub version: String,
     #[serde(default, alias = "devices")]
     pub tablets: HashMap<String, TabletProfile>,
@@ -120,6 +208,29 @@ impl Default for AppConfig {
             locked_apps: Vec::new(),
             allow_legacy_fallback: false,
             auto_enable_wifi_adb: true,
+            input_mode: "display".into(),
+            immersive_mode: false,
+            show_stats: false,
+            touch_input: true,
+            touch_on_lock_screen: false,
+            keep_display_alive_when_locked: true,
+            keep_connected_in_background: false,
+            blank_pen_only: true,
+            orientation: "auto".into(),
+            theme_mode: "system".into(),
+            battery_saver_on_disconnect: false,
+            battery_saver_lock: false,
+            idle_dim_enabled: false,
+            idle_dim_timeout_secs: 60,
+            dim_curve: "ease_out".into(),
+            undim_curve: "ease_in".into(),
+            dim_duration_ms: 3000,
+            undim_duration_ms: 500,
+            stylus_profile: "standard".into(),
+            touchpad_haptics: true,
+            right_click_method: "bottom_right_zone".into(),
+            touchpad_shape: "full_screen".into(),
+            curve_presets: Vec::new(),
             version: env!("GIT_VERSION_STRING").to_string(),
             tablets: HashMap::new(),
             extra: toml::value::Table::new(),
@@ -141,9 +252,39 @@ pub fn config_path() -> PathBuf {
 
 /// Read the config, falling back to defaults when missing or unparsable.
 pub async fn load() -> AppConfig {
-    match tokio::fs::read_to_string(config_path()).await {
+    let mut cfg: AppConfig = match tokio::fs::read_to_string(config_path()).await {
         Ok(content) => toml::from_str(&content).unwrap_or_default(),
         Err(_) => AppConfig::default(),
+    };
+    migrate_input_mode(&mut cfg);
+    cfg
+}
+
+/// Fill `input_mode` from the two booleans it replaced (`pen_only`, and `touchpad_mode` kept in the
+/// unknown-keys table), the same one-time migration the daemon does.
+fn migrate_input_mode(cfg: &mut AppConfig) {
+    let legacy_touchpad = |extra: &mut toml::value::Table| {
+        extra
+            .remove("touchpad_mode")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    };
+    let global_touchpad = legacy_touchpad(&mut cfg.extra);
+    if !matches!(cfg.input_mode.as_str(), "display" | "touchpad" | "stylus") {
+        cfg.input_mode = if global_touchpad {
+            "touchpad"
+        } else if cfg.pen_only {
+            "stylus"
+        } else {
+            "display"
+        }
+        .into();
+    }
+    cfg.pen_only = cfg.input_mode == "stylus";
+    for p in cfg.tablets.values_mut() {
+        if legacy_touchpad(&mut p.extra) && p.input_mode.is_none() {
+            p.input_mode = Some("touchpad".into());
+        }
     }
 }
 
@@ -241,4 +382,12 @@ pub async fn save_device_profile(
         crate::daemon::restart_pipeline(&app, Some(&serial)).await?;
     }
     Ok(())
+}
+
+/// Tauri command: store the user's saved fade curves right away (they are shared by every device page, which saves only its own profile).
+#[tauri::command]
+pub async fn save_curve_presets(presets: Vec<CurvePreset>) -> Result<(), String> {
+    let mut cfg = load().await;
+    cfg.curve_presets = presets;
+    store(&cfg).await
 }

@@ -5,7 +5,7 @@
  */
 import { emit } from "@tauri-apps/api/event";
 import { mockIPC } from "@tauri-apps/api/mocks";
-import type { AppConfig, DaemonStatus } from "./types";
+import type { AppConfig, DaemonStatus, StylusProfile } from "./types";
 
 let running = false;
 
@@ -37,6 +37,29 @@ const config: AppConfig = {
   locked_apps: ["com.android.chrome"],
   allow_legacy_fallback: false,
   auto_enable_wifi_adb: true,
+  input_mode: "display",
+  show_stats: false,
+  touch_input: true,
+  touch_on_lock_screen: false,
+  keep_display_alive_when_locked: true,
+  keep_connected_in_background: false,
+  blank_pen_only: true,
+  orientation: "auto",
+  theme_mode: "system",
+  battery_saver_lock: false,
+  curve_presets: [],
+  immersive_mode: false,
+  battery_saver_on_disconnect: false,
+  idle_dim_enabled: false,
+  idle_dim_timeout_secs: 60,
+  dim_curve: "ease_out",
+  undim_curve: "ease_in",
+  dim_duration_ms: 3000,
+  undim_duration_ms: 500,
+  stylus_profile: "standard",
+  touchpad_haptics: true,
+  right_click_method: "bottom_right_zone",
+  touchpad_shape: "full_screen",
   version: "dev",
   tablets: {},
 };
@@ -78,6 +101,28 @@ const status = (): DaemonStatus => ({
   control_socket: "/run/user/1000/uscreen.sock",
   devices: scenario === "multi" ? [dev(PHONE, false), dev(TABLET, false)] : scenario === "empty" ? [dev(PHONE, false)] : [dev(TABLET, true), ...(scenario === "two" ? [dev(PHONE, false)] : [])],
 });
+
+/* In-memory stylus profiles, mirroring `uscreen stylus-profiles`. */
+const STYLUS_TRIGGERS = [
+  ["button_primary", "Press S Pen / stylus side button"],
+  ["button_secondary", "Press second stylus button"],
+  ["air_button", "Tap S Pen air button (Samsung)"],
+  ["air_swipe_left", "Air swipe left (Samsung)"],
+  ["air_swipe_right", "Air swipe right (Samsung)"],
+  ["air_swipe_up", "Air swipe up (Samsung)"],
+  ["air_swipe_down", "Air swipe down (Samsung)"],
+  ["roll_cw", "Roll pen clockwise"],
+  ["roll_ccw", "Roll pen counter-clockwise"],
+].map(([key, label]) => ({ key, label }));
+const stylusProfiles: StylusProfile[] = [
+  { id: "standard", name: "Standard (any stylus)", builtin: true, mappings: {} },
+  {
+    id: "samsung_spen",
+    name: "Samsung S Pen Remote",
+    builtin: true,
+    mappings: { air_button: "right", air_swipe_right: "right", air_swipe_down: "right", air_swipe_left: "left", air_swipe_up: "left" },
+  },
+];
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -138,6 +183,27 @@ export function installDevMock() {
           if (targetIp.endsWith(".1")) throw "Could not connect via Tailscale. Please ensure: 1. Tailscale is running on both devices.\n\nDetails: failed to connect to " + targetIp + ":5555";
           return `${targetIp}:5555`;
         }
+        case "list_stylus_profiles":
+          return { profiles: stylusProfiles, triggers: STYLUS_TRIGGERS };
+        case "save_stylus_profile": {
+          const { profile } = args as { profile: StylusProfile };
+          const next = { id: profile.id, name: profile.name, builtin: false, mappings: profile.mappings };
+          const at = stylusProfiles.findIndex((p) => p.id === next.id);
+          if (at >= 0) stylusProfiles[at] = next;
+          else stylusProfiles.push(next);
+          return next.id;
+        }
+        case "delete_stylus_profile": {
+          const { id } = args as { id: string };
+          const at = stylusProfiles.findIndex((p) => p.id === id && !p.builtin);
+          if (at >= 0) stylusProfiles.splice(at, 1);
+          return null;
+        }
+        case "test_stylus_action":
+          return `ran ${(args as { action: string }).action}`;
+        case "save_curve_presets":
+          config.curve_presets = (args as { presets: AppConfig["curve_presets"] }).presets;
+          return null;
         case "save_device_profile": {
           const { serial, profile } = args as { serial: string; profile: AppConfig["tablets"][string] };
           config.tablets[serial] = profile;

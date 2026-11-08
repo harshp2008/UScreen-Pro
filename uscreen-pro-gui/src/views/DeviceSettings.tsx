@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow, type Override } from "../components/ui/layout";
 import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL, TRANSPORTS, labelOf, qualityLabel } from "../lib/options";
-import type { AppConfig, ConnectedDevice, TabletProfile } from "../lib/types";
+import { PowerSettings, POWER_TIP, type PowerValues } from "../components/PowerSettings";
+import type { AppConfig, ConnectedDevice, CurvePreset, TabletProfile } from "../lib/types";
 
 interface Props {
   serial: string;
@@ -15,6 +16,8 @@ interface Props {
   config: AppConfig;
   hostVersion?: string;
   onChange: (patch: Partial<TabletProfile>) => void;
+  /** Persist the saved fade curves immediately (they belong to the global config). */
+  onPresetsChange: (presets: CurvePreset[]) => void;
   onSave: () => void;
   onDelete: () => void;
   onTogglePause: () => void;
@@ -33,6 +36,7 @@ export function DeviceSettings({
   config: g,
   hostVersion,
   onChange,
+  onPresetsChange,
   onSave,
   onDelete,
   onTogglePause,
@@ -49,6 +53,32 @@ export function DeviceSettings({
       inherited: `Global: ${inherited}`,
     };
   }
+
+  /** Effective power values: the device's override where set, the global value otherwise. */
+  const power: PowerValues = {
+    input_mode: p.input_mode ?? g.input_mode,
+    touch_input: p.touch_input ?? g.touch_input,
+    blank_pen_only: p.blank_pen_only ?? g.blank_pen_only,
+    immersive_mode: p.immersive_mode ?? g.immersive_mode,
+    show_stats: p.show_stats ?? g.show_stats,
+    orientation: p.orientation ?? g.orientation,
+    theme_mode: p.theme_mode ?? g.theme_mode,
+    keep_connected_in_background: p.keep_connected_in_background ?? g.keep_connected_in_background,
+    keep_display_alive_when_locked: p.keep_display_alive_when_locked ?? g.keep_display_alive_when_locked,
+    touch_on_lock_screen: p.touch_on_lock_screen ?? g.touch_on_lock_screen,
+    battery_saver_on_disconnect: p.battery_saver_on_disconnect ?? g.battery_saver_on_disconnect,
+    battery_saver_lock: p.battery_saver_lock ?? g.battery_saver_lock,
+    idle_dim_enabled: p.idle_dim_enabled ?? g.idle_dim_enabled,
+    idle_dim_timeout_secs: p.idle_dim_timeout_secs ?? g.idle_dim_timeout_secs,
+    dim_curve: p.dim_curve ?? g.dim_curve,
+    undim_curve: p.undim_curve ?? g.undim_curve,
+    dim_duration_ms: p.dim_duration_ms ?? g.dim_duration_ms,
+    undim_duration_ms: p.undim_duration_ms ?? g.undim_duration_ms,
+    stylus_profile: p.stylus_profile ?? g.stylus_profile,
+    touchpad_haptics: p.touchpad_haptics ?? g.touchpad_haptics,
+    right_click_method: p.right_click_method ?? g.right_click_method,
+    touchpad_shape: p.touchpad_shape ?? g.touchpad_shape,
+  };
 
   const online = device?.state === "device";
   /* Only an explicit false (wireless skipped in the wizard) locks the Wi-Fi controls; older profiles stay editable. */
@@ -234,6 +264,15 @@ export function DeviceSettings({
           </div>
         </SettingRow>
       </Section>
+
+      <PowerSettings
+        values={power}
+        modeTip={POWER_TIP}
+        presets={g.curve_presets}
+        onPresetsChange={onPresetsChange}
+        onChange={(patch) => onChange(patch)}
+        override={(key, inherited) => ov(key, g[key], inherited)}
+      />
 
       <div className="flex justify-end pt-2">
         <Button size="sm" variant="ghost" className="text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => setConfirmForget(true)}>

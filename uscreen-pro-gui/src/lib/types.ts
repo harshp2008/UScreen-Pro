@@ -58,6 +58,18 @@ export interface DaemonStatus {
   devices: ConnectedDevice[];
 }
 
+/** `display` = extended screen, `touchpad` = laptop touchpad (no video), `stylus` = graphics tablet (no video). */
+export type InputMode = "display" | "touchpad" | "stylus";
+
+/** A saved fade curve: a CSS-style cubic Bezier through (0,0) and (1,1). */
+export interface CurvePreset {
+  name: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
 /** Per-device settings; mirrors `[tablets.<id>]` in config.toml. Unset fields inherit the global value. */
 export interface TabletProfile {
   label: string;
@@ -74,6 +86,30 @@ export interface TabletProfile {
   wifi_address?: string;
   keep_alive?: boolean;
   locked_apps?: string[];
+  /** Input mode of this device; unset inherits the global one. */
+  input_mode?: InputMode;
+  /** Per-device overrides of the global power, input and tablet-app settings of the same name. */
+  immersive_mode?: boolean;
+  show_stats?: boolean;
+  touch_input?: boolean;
+  touch_on_lock_screen?: boolean;
+  keep_display_alive_when_locked?: boolean;
+  keep_connected_in_background?: boolean;
+  blank_pen_only?: boolean;
+  orientation?: string;
+  theme_mode?: string;
+  battery_saver_on_disconnect?: boolean;
+  battery_saver_lock?: boolean;
+  idle_dim_enabled?: boolean;
+  idle_dim_timeout_secs?: number;
+  dim_curve?: string;
+  undim_curve?: string;
+  dim_duration_ms?: number;
+  undim_duration_ms?: number;
+  stylus_profile?: string;
+  touchpad_haptics?: boolean;
+  right_click_method?: string;
+  touchpad_shape?: string;
   app_version?: string;
   preferred_transport?: string;
   /** false when the user skipped wireless setup in the wizard; absent on older profiles means configured. */
@@ -109,8 +145,58 @@ export interface AppConfig {
   locked_apps: string[];
   allow_legacy_fallback: boolean;
   auto_enable_wifi_adb: boolean;
+  /** Global default input mode. Exactly one of the three is active per device. */
+  input_mode: InputMode;
+  /** Global defaults of the power, input and tablet-app settings; a device may override each one. */
+  immersive_mode: boolean;
+  show_stats: boolean;
+  touch_input: boolean;
+  touch_on_lock_screen: boolean;
+  keep_display_alive_when_locked: boolean;
+  keep_connected_in_background: boolean;
+  blank_pen_only: boolean;
+  orientation: string;
+  theme_mode: string;
+  battery_saver_on_disconnect: boolean;
+  battery_saver_lock: boolean;
+  idle_dim_enabled: boolean;
+  idle_dim_timeout_secs: number;
+  dim_curve: string;
+  undim_curve: string;
+  dim_duration_ms: number;
+  undim_duration_ms: number;
+  /** Active stylus profile id: `standard`, `samsung_spen` or a custom profile. */
+  stylus_profile: string;
+  /** Light vibration on touchpad clicks. */
+  touchpad_haptics: boolean;
+  /** `bottom_right_zone` or `two_finger_tap`. */
+  right_click_method: string;
+  /** `full_screen`, `standard_rectangle` or `wide_rectangle`. */
+  touchpad_shape: string;
+  /** Fade curves saved in the curve editor; referenced as `preset:<name>`. */
+  curve_presets: CurvePreset[];
   version: string;
   tablets: Record<string, TabletProfile>;
+}
+
+/** One stylus profile as `uscreen stylus-profiles` lists it: `mappings` is event key to action text (`ctrl+c`, `mouse_middle`). */
+export interface StylusProfile {
+  id: string;
+  name: string;
+  builtin: boolean;
+  mappings: Record<string, string>;
+}
+
+/** A stylus event a profile can map, e.g. `button_primary` / "Press S Pen / stylus side button". */
+export interface StylusTrigger {
+  key: string;
+  label: string;
+}
+
+/** What the daemon returns for the profile list. */
+export interface StylusCatalog {
+  profiles: StylusProfile[];
+  triggers: StylusTrigger[];
 }
 
 /** Which page is showing: a named page, or a device's own settings page. */

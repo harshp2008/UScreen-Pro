@@ -48,7 +48,7 @@ export interface Override {
   inherited: string;
 }
 
-function OverrideToggle({ override, label }: { override: Override; label: string }) {
+export function OverrideToggle({ override, label }: { override: Override; label: string }) {
   return (
     <div className="flex items-center gap-2" title="Override the global value for this device">
       <Switch aria-label={`Override ${label}`} checked={override.enabled} onCheckedChange={override.onChange} />
@@ -56,7 +56,7 @@ function OverrideToggle({ override, label }: { override: Override; label: string
   );
 }
 
-function Label({ label, tip }: { label: string; tip?: string }) {
+export function Label({ label, tip }: { label: string; tip?: string }) {
   return (
     <div className="flex min-w-0 items-center gap-1">
       <span className="truncate text-foreground">{label}</span>
@@ -89,6 +89,40 @@ export function SettingRow({
         )}
         {override && <OverrideToggle override={override} label={label} />}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Free-form row: label (+ tooltip) and override switch on top, the control body underneath. For controls
+ * too tall for a single line (the curve editor). While a device inherits the global value the body is hidden.
+ */
+export function BlockRow({
+  label,
+  tip,
+  override,
+  summary,
+  children,
+}: {
+  label: string;
+  tip?: string;
+  override?: Override;
+  /** Shown on the right while the body is hidden or as a compact value when it is open. */
+  summary?: string;
+  children: ReactNode;
+}) {
+  const active = !override || override.enabled;
+  return (
+    <div className="space-y-2 px-3 py-2.5">
+      <div className="flex min-h-6 items-center justify-between gap-4">
+        <Label label={label} tip={tip} />
+        <div className="flex shrink-0 items-center gap-3">
+          {!active && <span className="text-[11px] text-muted-foreground">{override?.inherited}</span>}
+          {active && summary && <span className="text-xs font-medium text-foreground">{summary}</span>}
+          {override && <OverrideToggle override={override} label={label} />}
+        </div>
+      </div>
+      {active && children}
     </div>
   );
 }

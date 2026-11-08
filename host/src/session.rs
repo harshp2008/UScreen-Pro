@@ -90,8 +90,6 @@ pub struct ExtraSessionTemplate {
     pub input_port: u16,
     /// Shared session security token, if authentication is enforced.
     pub token: Option<String>,
-    /// Global pen-only mode broadcast channel.
-    pub mode_tx: watch::Sender<bool>,
     /// Daemon shutdown broadcast receiver.
     pub shutdown_rx: watch::Receiver<bool>,
     /// Foreground ping notification synchronization primitive.
@@ -256,7 +254,6 @@ pub fn spawn_extra_session(
             pointer_handoff: FileConfig::load().pointer_handoff,
         },
         Some(settings_tx),
-        t.mode_tx.clone(),
         latency,
         relaunch.clone(),
         card_rx.clone(),
@@ -266,19 +263,20 @@ pub fn spawn_extra_session(
     let (tablet_tx, mut tablet_rx) = watch::channel(false);
     let (gate_tx, gate_rx) = watch::channel(false);
     let (stop_tx, stop_rx) = watch::channel(false);
-    let mut mode_rx = t.mode_tx.subscribe();
+    let mut touchpad_rx = crate::options::options_rx(instance);
     let mut tasks = Vec::new();
     tasks.push(tokio::spawn(async move {
         let mut last = false;
         loop {
-            let active = *tablet_rx.borrow() && !*mode_rx.borrow();
+            let streams = touchpad_rx.borrow().input_mode.streams_video();
+            let active = *tablet_rx.borrow() && streams;
             if active != last {
                 last = active;
                 let _ = gate_tx.send(active);
             }
             tokio::select! {
                 r = tablet_rx.changed() => if r.is_err() { break },
-                r = mode_rx.changed() => if r.is_err() { break },
+                r = touchpad_rx.changed() => if r.is_err() { break },
             }
         }
     }));
@@ -754,6 +752,7 @@ pub async fn adb_monitor(
                 announce_transport(&dev.serial);
                 let _ = serial_tx.send(Some(dev.serial.clone()));
                 apply_tablet_profile(&dev.serial, &settings_tx).await;
+                crate::options::bind(0, &[hw_id.as_str(), dev.serial.as_str()]);
                 if !is_fake_serial(&dev.serial) {
                     on_tablet_connected(
                         &dev.serial,
@@ -798,6 +797,7 @@ pub async fn adb_monitor(
                     continue;
                 };
                 apply_tablet_profile(&dev.serial, &sess.settings_tx).await;
+                crate::options::bind(instance, &[hw_id.as_str(), dev.serial.as_str()]);
                 {
                     let mut rx = sess.settings_tx.subscribe();
                     let serial_for_save = dev.serial.clone();

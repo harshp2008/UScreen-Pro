@@ -106,6 +106,8 @@ export function AddDeviceWizard({
   /* Step 4 has two paths. Both keep their own state, so switching tabs never loses a result or typed address. */
   const [wirelessTab, setWirelessTab] = useState<WirelessTab>("auto");
   const [macOpen, setMacOpen] = useState(false);
+  /* The always-available "Connection Failed?" help box of the Automatic tab. */
+  const [failedHelpOpen, setFailedHelpOpen] = useState(false);
   const [tsHostIp, setTsHostIp] = useState("");
   const [tsTargetIp, setTsTargetIp] = useState("");
   const [ts, setTs] = useState<{ state: InstallState; message: string; detail?: string }>({ state: "idle", message: "" });
@@ -862,6 +864,15 @@ export function AddDeviceWizard({
                         <span className="flex w-full items-center gap-2 text-sm font-medium">
                           <Icon className="size-4 shrink-0" />
                           <span className="min-w-0 flex-1 truncate">{title}</span>
+                          {id === "tailscale" && (
+                            <Badge
+                              variant="outline"
+                              data-testid="tailscale-experimental"
+                              className="shrink-0 border-warning bg-warning/15 px-1.5 py-0 text-[10px] font-bold uppercase tracking-wide text-warning"
+                            >
+                              Experimental
+                            </Badge>
+                          )}
                           {ok && <Check className="size-4 shrink-0 text-success" />}
                         </span>
                         <span className="text-[11px] opacity-80">Option {id === "auto" ? "A" : "B"} &middot; {sub}</span>
@@ -951,6 +962,35 @@ export function AddDeviceWizard({
                       </div>
                     )}
 
+                    {/* Collapsed by default; the routerBlock alert above is the same advice, shown only after a failure. */}
+                    <div className="rounded-lg border border-warning/50 bg-warning/10" data-testid="connection-failed-box">
+                      <button
+                        type="button"
+                        aria-expanded={failedHelpOpen}
+                        aria-controls="connection-failed-body"
+                        onClick={() => setFailedHelpOpen((o) => !o)}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <AlertTriangle className="size-4 shrink-0 text-warning" />
+                        <span className="flex-1">Connection Failed?</span>
+                        <ChevronDown className={cn("size-4 shrink-0 transition-transform", failedHelpOpen && "rotate-180")} />
+                      </button>
+                      {failedHelpOpen && (
+                        <div id="connection-failed-body" className="space-y-2 px-3 pb-3">
+                          <p className="text-xs leading-relaxed text-muted-foreground">
+                            If the PC cannot find your device, your tablet might be blocking it via MAC Randomization.
+                          </p>
+                          <Instructions
+                            items={[
+                              <>Open <b className="text-foreground">Settings</b> &rarr; <b className="text-foreground">Wi-Fi</b> and tap your network (the gear icon).</>,
+                              <>Change <b className="text-foreground">Privacy</b> (or MAC address type) from &ldquo;Randomized MAC&rdquo; to &ldquo;Device MAC&rdquo;.</>,
+                              <>Reconnect to the network, then click <b className="text-foreground">Retry Setup</b>.</>,
+                            ]}
+                          />
+                        </div>
+                      )}
+                    </div>
+
                     {wireless.state !== "ok" && !routerBlock && (
                       <Button
                         size="sm"
@@ -966,6 +1006,12 @@ export function AddDeviceWizard({
 
                 {wirelessTab === "tailscale" && (
                   <div role="tabpanel" id="wireless-panel-tailscale" aria-labelledby="wireless-tab-tailscale" className="space-y-3">
+                    <div className="flex items-center gap-2 rounded-lg border border-warning/60 bg-warning/15 px-3 py-2 text-xs text-warning">
+                      <Badge variant="outline" className="shrink-0 border-warning px-1.5 py-0 text-[10px] font-bold uppercase tracking-wide text-warning">
+                        Experimental
+                      </Badge>
+                      <span>Tailscale integration is in beta.</span>
+                    </div>
                     <p className="text-xs leading-relaxed text-muted-foreground">
                       If your router blocks local traffic, use Tailscale to create a secure, direct tunnel. Requires a free
                       Tailscale account.

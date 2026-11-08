@@ -37,3 +37,22 @@ use events::*;
 use mapping::*;
 use protocol::*;
 use uinput::*;
+
+/// Run one stylus action on throw-away virtual devices (`uscreen stylus-test`), so the GUI can
+/// try a mapping without a tablet connected. The devices are given a moment to be picked up
+/// before the action and to deliver it before they disappear again.
+pub fn run_action_once(action: &crate::stylus_profile::HostAction) -> Result<()> {
+    let mut devices = InjectDevices::headless();
+    match action {
+        crate::stylus_profile::HostAction::KeyPress { .. } => {
+            devices.keyboard().context("no virtual keyboard")?;
+        }
+        _ => {
+            devices.mouse().context("no virtual mouse")?;
+        }
+    }
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    devices.run_action(action);
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    Ok(())
+}
