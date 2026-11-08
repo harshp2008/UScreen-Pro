@@ -125,9 +125,13 @@ pub(crate) fn norm_label(m: &str) -> String {
 
 /// Hardware serial (`ro.serialno`) of a device, which stays constant across transports unlike the adb serial.
 pub(crate) async fn ro_serial(serial: &str) -> Option<String> {
-    let out = run(Some(serial), &["shell", "getprop", "ro.serialno"], Duration::from_millis(3000))
-        .await
-        .ok()?;
+    let out = run(
+        Some(serial),
+        &["shell", "getprop", "ro.serialno"],
+        Duration::from_millis(3000),
+    )
+    .await
+    .ok()?;
     let s = stdout_of(&out);
     (!s.is_empty() && s != "unknown").then_some(s)
 }
@@ -247,9 +251,9 @@ pub async fn connected_devices(cfg: &AppConfig) -> Vec<ConnectedDevice> {
             continue;
         }
         let label = norm_model(&profile.label);
-        let present = devices
-            .iter()
-            .any(|d| d.serial == *saved_serial || (!label.is_empty() && norm_model(&d.model) == label));
+        let present = devices.iter().any(|d| {
+            d.serial == *saved_serial || (!label.is_empty() && norm_model(&d.model) == label)
+        });
         if !present {
             devices.push(ConnectedDevice {
                 serial: saved_serial.clone(),
@@ -315,7 +319,13 @@ pub struct ProgressEvent {
 /// Tell the frontend what is happening right now (`install_progress` or `pair_progress`).
 pub fn progress(app: Option<&AppHandle>, event: &str, serial: Option<&str>, message: &str) {
     if let Some(app) = app {
-        let _ = app.emit(event, ProgressEvent { serial: serial.map(str::to_string), message: message.to_string() });
+        let _ = app.emit(
+            event,
+            ProgressEvent {
+                serial: serial.map(str::to_string),
+                message: message.to_string(),
+            },
+        );
     }
 }
 
@@ -332,7 +342,11 @@ pub(crate) fn require_serial(serial: &str) -> Result<(), String> {
 /// Install the bundled APK on exactly `serial`. With `replace_existing` an already installed copy is
 /// removed first (the wizard does this so an APK signed with another key, e.g. a release of the
 /// original project, cannot block the install); the queue/update path keeps `-r` so app data survives.
-pub async fn install_apk(app: Option<&AppHandle>, serial: &str, replace_existing: bool) -> Result<String, String> {
+pub async fn install_apk(
+    app: Option<&AppHandle>,
+    serial: &str,
+    replace_existing: bool,
+) -> Result<String, String> {
     require_serial(serial)?;
     let apk = find_apk_path()
         .ok_or("Could not find app-debug.apk. Run ./build-all.sh first.".to_string())?;
@@ -340,14 +354,23 @@ pub async fn install_apk(app: Option<&AppHandle>, serial: &str, replace_existing
     let ev = "install_progress";
 
     if replace_existing {
-        let installed = run(Some(serial), &["shell", "pm", "path", "com.uscreen"], Duration::from_secs(8))
-            .await
-            .map(|o| stdout_of(&o).contains("package:"))
-            .unwrap_or(false);
+        let installed = run(
+            Some(serial),
+            &["shell", "pm", "path", "com.uscreen"],
+            Duration::from_secs(8),
+        )
+        .await
+        .map(|o| stdout_of(&o).contains("package:"))
+        .unwrap_or(false);
         if installed {
             progress(app, ev, Some(serial), "Found old APK");
             progress(app, ev, Some(serial), "Removing old APK");
-            let out = run(Some(serial), &["uninstall", "com.uscreen"], Duration::from_secs(30)).await?;
+            let out = run(
+                Some(serial),
+                &["uninstall", "com.uscreen"],
+                Duration::from_secs(30),
+            )
+            .await?;
             let text = combined_of(&out);
             if !text.contains("Success") {
                 return Err(format!("Could not remove the old APK: {text}"));
@@ -355,7 +378,12 @@ pub async fn install_apk(app: Option<&AppHandle>, serial: &str, replace_existing
         }
     }
     progress(app, ev, Some(serial), "Installing new APK");
-    let out = run(Some(serial), &["install", "-r", "-d", &apk], Duration::from_secs(120)).await?;
+    let out = run(
+        Some(serial),
+        &["install", "-r", "-d", &apk],
+        Duration::from_secs(120),
+    )
+    .await?;
     let text = combined_of(&out);
     if text.contains("Success") {
         progress(app, ev, Some(serial), "APK installed");
@@ -363,7 +391,12 @@ pub async fn install_apk(app: Option<&AppHandle>, serial: &str, replace_existing
         // a locked screen or a launcher that blocks background starts must not fail a good install.
         progress(app, ev, Some(serial), "Launching the app");
         if let Err(e) = launch_app(serial).await {
-            progress(app, ev, Some(serial), &format!("App installed but could not be opened automatically ({e})"));
+            progress(
+                app,
+                ev,
+                Some(serial),
+                &format!("App installed but could not be opened automatically ({e})"),
+            );
         }
         Ok("APK installed".into())
     } else {
@@ -415,9 +448,12 @@ async fn start_intent(serial: Option<&str>, action: &str) -> Result<(), String> 
 #[tauri::command]
 pub async fn open_developer_options(serial: String) -> Result<String, String> {
     require_serial(&serial)?;
-    start_intent(Some(&serial), "android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
-        .await
-        .map(|_| "Opened Developer Options on the device".to_string())
+    start_intent(
+        Some(&serial),
+        "android.settings.APPLICATION_DEVELOPMENT_SETTINGS",
+    )
+    .await
+    .map(|_| "Opened Developer Options on the device".to_string())
 }
 
 /// Tauri command: open Wireless Debugging on the tablet, falling back to Developer Options on builds that reject the intent.
@@ -426,12 +462,21 @@ pub async fn open_wireless_debugging_settings(serial: String) -> Result<String, 
     require_serial(&serial)?;
     // The Wireless Debugging page has no public action on stock Android, so some builds reject
     // this intent; Developer Options is the fallback.
-    if start_intent(Some(&serial), "android.settings.WIRELESS_DEBUGGING_SETTINGS").await.is_ok() {
+    if start_intent(
+        Some(&serial),
+        "android.settings.WIRELESS_DEBUGGING_SETTINGS",
+    )
+    .await
+    .is_ok()
+    {
         return Ok("Opened Wireless Debugging".into());
     }
-    start_intent(Some(&serial), "android.settings.APPLICATION_DEVELOPMENT_SETTINGS")
-        .await
-        .map(|_| "Opened Developer Options; choose Wireless debugging".to_string())
+    start_intent(
+        Some(&serial),
+        "android.settings.APPLICATION_DEVELOPMENT_SETTINGS",
+    )
+    .await
+    .map(|_| "Opened Developer Options; choose Wireless debugging".to_string())
 }
 
 /// Quote one argument for the device's shell. `adb shell a b c` joins its arguments with spaces and
@@ -465,10 +510,14 @@ pub async fn identify_device(serial: String, name: Option<String>) -> Result<Str
         .trim()
         .to_string();
     if name.is_empty() {
-        name = run(Some(&serial), &["shell", "getprop", "ro.product.model"], Duration::from_secs(4))
-            .await
-            .map(|o| stdout_of(&o))
-            .unwrap_or_default();
+        name = run(
+            Some(&serial),
+            &["shell", "getprop", "ro.product.model"],
+            Duration::from_secs(4),
+        )
+        .await
+        .map(|o| stdout_of(&o))
+        .unwrap_or_default();
     }
     if name.is_empty() {
         name = serial.clone();
@@ -479,7 +528,13 @@ pub async fn identify_device(serial: String, name: Option<String>) -> Result<Str
     //    shell may grant).
     let _ = run(
         Some(&serial),
-        &["shell", "pm", "grant", "com.uscreen", "android.permission.POST_NOTIFICATIONS"],
+        &[
+            "shell",
+            "pm",
+            "grant",
+            "com.uscreen",
+            "android.permission.POST_NOTIFICATIONS",
+        ],
         Duration::from_secs(5),
     )
     .await;
@@ -488,8 +543,14 @@ pub async fn identify_device(serial: String, name: Option<String>) -> Result<Str
     if let Ok(out) = run(
         Some(&serial),
         &[
-            "shell", "am", "broadcast", "-n", "com.uscreen/.IdentifyReceiver",
-            "--es", "name", &sh_quote(&name),
+            "shell",
+            "am",
+            "broadcast",
+            "-n",
+            "com.uscreen/.IdentifyReceiver",
+            "--es",
+            "name",
+            &sh_quote(&name),
         ],
         Duration::from_secs(8),
     )
@@ -504,27 +565,48 @@ pub async fn identify_device(serial: String, name: Option<String>) -> Result<Str
         let out = run(
             Some(&serial),
             &[
-                "shell", "cmd", "notification", "post", "-S", "bigtext", "-t", &sh_quote(&title),
-                "uscreen-identify", &sh_quote("This is your target device!"),
+                "shell",
+                "cmd",
+                "notification",
+                "post",
+                "-S",
+                "bigtext",
+                "-t",
+                &sh_quote(&title),
+                "uscreen-identify",
+                &sh_quote("This is your target device!"),
             ],
             Duration::from_secs(8),
         )
         .await?;
         let t = combined_of(&out);
-        notified = out.status.success() && !t.to_lowercase().contains("error") && !t.contains("Unknown command");
+        notified = out.status.success()
+            && !t.to_lowercase().contains("error")
+            && !t.contains("Unknown command");
         text = t;
     }
 
     let buzzed = run(
         Some(&serial),
-        &["shell", "cmd", "vibrator_manager", "synced", "-f", "oneshot", "500", "255"],
+        &[
+            "shell",
+            "cmd",
+            "vibrator_manager",
+            "synced",
+            "-f",
+            "oneshot",
+            "500",
+            "255",
+        ],
         Duration::from_secs(5),
     )
     .await
     .map(|o| o.status.success() && combined_of(&o).is_empty())
     .unwrap_or(false);
     match (notified, buzzed) {
-        (true, true) => Ok(format!("\"{title}\" notification sent and the device vibrated")),
+        (true, true) => Ok(format!(
+            "\"{title}\" notification sent and the device vibrated"
+        )),
         (true, false) => Ok(format!("\"{title}\" notification sent to the device")),
         (false, true) => Ok("The device vibrated".into()),
         (false, false) => Err(format!("The device did not react: {text}")),
@@ -550,12 +632,21 @@ pub struct WirelessDeviceInfo {
 /// Identify a device reached over `ip:port` by its hardware serial and model.
 #[tauri::command]
 pub async fn wireless_device_info(endpoint: String) -> Result<WirelessDeviceInfo, String> {
-    let serial = ro_serial(&endpoint).await.unwrap_or_else(|| endpoint.clone());
-    let model = run(Some(&endpoint), &["shell", "getprop", "ro.product.model"], Duration::from_secs(3))
+    let serial = ro_serial(&endpoint)
         .await
-        .map(|o| stdout_of(&o))
-        .unwrap_or_default();
-    Ok(WirelessDeviceInfo { serial, model: if model.is_empty() { endpoint } else { model } })
+        .unwrap_or_else(|| endpoint.clone());
+    let model = run(
+        Some(&endpoint),
+        &["shell", "getprop", "ro.product.model"],
+        Duration::from_secs(3),
+    )
+    .await
+    .map(|o| stdout_of(&o))
+    .unwrap_or_default();
+    Ok(WirelessDeviceInfo {
+        serial,
+        model: if model.is_empty() { endpoint } else { model },
+    })
 }
 
 #[cfg(test)]

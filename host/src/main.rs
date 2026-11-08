@@ -4,41 +4,30 @@
 //! and pressure-sensitive drawing tablets for Linux desktop environments (GNOME, KDE Plasma,
 //! Hyprland, Cosmic, and X11).
 
-mod adb;
 mod capture;
-mod config;
 mod cli;
 mod commands;
+mod config;
 mod config_handler;
-mod cosmic;
 mod daemon;
+mod display;
 mod doctor;
-mod edid;
 #[cfg(feature = "inproc-encoder")]
 mod encoder;
 mod encoders;
-mod gnome;
 mod guard;
-mod hyprland;
 mod input;
-mod installer;
-mod kwin;
 mod latency;
-mod notices;
+mod net;
 mod osk;
-mod pairing;
 mod runtime;
 mod session;
-mod stream;
 pub mod timing;
 mod tray;
 mod update;
-mod vdisplay;
-mod x11;
 
-pub use adb::is_network_serial;
-pub use config_handler::sync_app_lock;
-pub use session::DaemonControlMsg;
+// Used by `doctor` through `crate::is_network_serial`.
+pub use net::adb::is_network_serial;
 
 use anyhow::Result;
 use clap::Parser;
@@ -100,13 +89,17 @@ async fn main() -> Result<()> {
             client_control_cmd(&format!("RESUME {}", serial)).await?
         }
         Some(Commands::ListDisplays) => list_displays().await?,
-        Some(Commands::Wifi { off }) => adb::setup_wifi(*off).await?,
-        Some(Commands::Doctor { latency: true, secs, sparse }) => {
-            doctor::run_latency(*secs, *sparse).await?
-        }
+        Some(Commands::Wifi { off }) => net::adb::setup_wifi(*off).await?,
+        Some(Commands::Doctor {
+            latency: true,
+            secs,
+            sparse,
+        }) => doctor::run_latency(*secs, *sparse).await?,
         Some(Commands::Doctor { .. }) => doctor::run().await?,
         Some(Commands::ResetGuard) => match guard::reset() {
-            Ok(true) => println!("Safety record cleared. Restart the daemon to re-enable the virtual display."),
+            Ok(true) => println!(
+                "Safety record cleared. Restart the daemon to re-enable the virtual display."
+            ),
             Ok(false) => println!("Nothing to clear: no safety record exists."),
             Err(e) => anyhow::bail!("could not clear {:?}: {}", guard::state_path(), e),
         },

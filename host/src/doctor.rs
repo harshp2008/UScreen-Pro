@@ -9,7 +9,7 @@
 
 use crate::capture::fifo_path;
 use crate::config::{self, FileConfig, MAX_BITRATE_KBPS, MAX_FPS};
-use crate::vdisplay;
+use crate::display::vdisplay;
 use anyhow::Result;
 use std::path::Path;
 
@@ -150,9 +150,12 @@ async fn check_tools(r: &mut Report, cfg: &FileConfig) {
             r.line(Level::Fail, tool, "not installed");
             r.hint(&format!("install {} with your package manager", tool));
         } else {
-            if crate::hyprland::active() {
+            if crate::display::hyprland::active() {
                 r.line(Level::Ok, tool, "not needed on Hyprland (hyprctl is used)");
-            } else if crate::gnome::active() || crate::x11::active() || crate::cosmic::active() {
+            } else if crate::display::gnome::active()
+                || crate::display::x11::active()
+                || crate::display::cosmic::active()
+            {
                 r.line(Level::Ok, tool, "not needed on this desktop");
             } else {
                 r.line(Level::Warn, tool, "not installed (KDE only)");
@@ -485,8 +488,8 @@ async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
     }
 
     let names: Vec<&str> = connectors.iter().map(|c| c.name.as_str()).collect();
-    if crate::hyprland::active() {
-        let Some(monitors) = crate::hyprland::monitors().await else {
+    if crate::display::hyprland::active() {
+        let Some(monitors) = crate::display::hyprland::monitors().await else {
             r.line(Level::Warn, "Hyprland", "hyprctl did not answer");
             return;
         };
@@ -580,7 +583,7 @@ fn kwin_version(text: &str) -> Option<(u32, u32, u32)> {
 /// should quietly decide on the user's behalf.
 async fn check_osk(r: &mut Report) {
     // Hyprland has no KWin to ask; hyprctl does the mapping there.
-    if crate::hyprland::active() {
+    if crate::display::hyprland::active() {
         r.line(
             Level::Ok,
             "Hyprland",
@@ -588,7 +591,7 @@ async fn check_osk(r: &mut Report) {
         );
         return;
     }
-    if crate::gnome::active() {
+    if crate::display::gnome::active() {
         r.line(
             Level::Ok,
             "GNOME",
@@ -596,7 +599,7 @@ async fn check_osk(r: &mut Report) {
         );
         return;
     }
-    if crate::x11::active() {
+    if crate::display::x11::active() {
         r.line(
             Level::Ok,
             "X11",
@@ -628,7 +631,7 @@ async fn check_osk(r: &mut Report) {
     }
     // Whether we can reach KWin at all decides whether touch and pen land on
     // the tablet's screen, so it is reported first and in its own right.
-    match crate::kwin::backend().await {
+    match crate::display::kwin::backend().await {
         Some(b) => r.line(
             Level::Ok,
             "KWin D-Bus",
@@ -672,8 +675,12 @@ async fn check_osk(r: &mut Report) {
 
     // The live value, not the one in kwinrc: KWin does not re-read that file,
     // so the two disagree routinely and only this one reflects what happens.
-    let Some(raw) =
-        crate::kwin::get_property("/VirtualKeyboard", "org.kde.kwin.VirtualKeyboard", "mode").await
+    let Some(raw) = crate::display::kwin::get_property(
+        "/VirtualKeyboard",
+        "org.kde.kwin.VirtualKeyboard",
+        "mode",
+    )
+    .await
     else {
         return;
     };
@@ -888,7 +895,7 @@ fn check_config(r: &mut Report, cfg: &FileConfig) {
         .and_then(|t| toml::from_str(&t).ok());
     r.line(Level::Ok, "config file", &format!("{}", path.display()));
     if cfg.max_tablets > 1 {
-        let cards = crate::vdisplay::evdi_cards().len() as u32;
+        let cards = crate::display::vdisplay::evdi_cards().len() as u32;
         if cards >= cfg.max_tablets {
             r.line(
                 Level::Ok,
@@ -1070,10 +1077,15 @@ pub async fn run_latency(secs: u64, sparse: bool) -> anyhow::Result<()> {
     tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
     let reply = {
         use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-        let mut s = tokio::net::UnixStream::connect(&sock)
-            .await
-            .map_err(|e| anyhow::anyhow!("daemon control socket {:?}: {} (is the daemon running?)", sock, e))?;
-        s.write_all(format!("LATENCY {}\n", secs).as_bytes()).await?;
+        let mut s = tokio::net::UnixStream::connect(&sock).await.map_err(|e| {
+            anyhow::anyhow!(
+                "daemon control socket {:?}: {} (is the daemon running?)",
+                sock,
+                e
+            )
+        })?;
+        s.write_all(format!("LATENCY {}\n", secs).as_bytes())
+            .await?;
         let mut line = String::new();
         tokio::io::BufReader::new(s).read_line(&mut line).await?;
         line
@@ -1159,7 +1171,11 @@ fn sweep_mouse(secs: u64, sparse: bool) -> anyhow::Result<()> {
         if n % if sparse { 22 } else { 220 } == 0 {
             dir = -dir;
         }
-        std::thread::sleep(std::time::Duration::from_millis(if sparse { 100 } else { 8 }));
+        std::thread::sleep(std::time::Duration::from_millis(if sparse {
+            100
+        } else {
+            8
+        }));
     }
     unsafe {
         libc::ioctl(fd, UI_DEV_DESTROY);

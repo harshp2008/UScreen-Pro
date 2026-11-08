@@ -50,7 +50,7 @@ impl CaptureManager {
         let edid_fps = self.config.fps.min(90);
         let edid_path = match &self.config.edid_path {
             Some(p) => p.clone(),
-            None => crate::edid::ensure_edid_sized(
+            None => crate::display::edid::ensure_edid_sized(
                 self.config.width,
                 self.config.height,
                 edid_fps,

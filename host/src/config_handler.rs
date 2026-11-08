@@ -138,7 +138,10 @@ pub async fn run_control_server(
                     let serial = serial.trim().to_string();
                     let (tx, rx) = oneshot::channel();
                     let _ = ctrl_tx
-                        .send(DaemonControlMsg::FreezeDevice { serial: serial.clone(), resp: tx })
+                        .send(DaemonControlMsg::FreezeDevice {
+                            serial: serial.clone(),
+                            resp: tx,
+                        })
                         .await;
                     let reply = match rx.await {
                         Ok(Ok(())) => format!("OK FROZEN {}\n", serial),
@@ -150,7 +153,10 @@ pub async fn run_control_server(
                     let serial = serial.trim().to_string();
                     let (tx, rx) = oneshot::channel();
                     let _ = ctrl_tx
-                        .send(DaemonControlMsg::ThawDevice { serial: serial.clone(), resp: tx })
+                        .send(DaemonControlMsg::ThawDevice {
+                            serial: serial.clone(),
+                            resp: tx,
+                        })
                         .await;
                     let reply = match rx.await {
                         Ok(Ok(())) => format!("OK THAWED {}\n", serial),
@@ -160,7 +166,9 @@ pub async fn run_control_server(
                     let _ = writer.write_all(reply.as_bytes()).await;
                 } else if cmd == "FROZEN" {
                     let (tx, rx) = oneshot::channel();
-                    let _ = ctrl_tx.send(DaemonControlMsg::ListFrozen { resp: tx }).await;
+                    let _ = ctrl_tx
+                        .send(DaemonControlMsg::ListFrozen { resp: tx })
+                        .await;
                     let list = rx.await.unwrap_or_default().join(",");
                     let _ = writer.write_all(format!("OK {}\n", list).as_bytes()).await;
                 } else if cmd == "RESTART"
@@ -169,8 +177,13 @@ pub async fn run_control_server(
                     || cmd.starts_with("RESTART_WAIT ")
                 {
                     let wait = cmd.starts_with("RESTART_WAIT");
-                    let rest = cmd.strip_prefix("RESTART_WAIT").or_else(|| cmd.strip_prefix("RESTART")).unwrap_or("");
-                    let serial = Some(rest.trim()).filter(|s| !s.is_empty() && *s != "ALL").map(str::to_string);
+                    let rest = cmd
+                        .strip_prefix("RESTART_WAIT")
+                        .or_else(|| cmd.strip_prefix("RESTART"))
+                        .unwrap_or("");
+                    let serial = Some(rest.trim())
+                        .filter(|s| !s.is_empty() && *s != "ALL")
+                        .map(str::to_string);
                     let (tx, rx) = oneshot::channel();
                     let _ = ctrl_tx
                         .send(DaemonControlMsg::RestartSession { serial, resp: tx })
@@ -184,13 +197,16 @@ pub async fn run_control_server(
                                 .cloned()
                                 .map(|slot| {
                                     tokio::spawn(async move {
-                                        let live = crate::notices::wait_live(
+                                        let live = crate::net::notices::wait_live(
                                             slot.instance,
                                             slot.generation_before,
                                             std::time::Duration::from_secs(25),
                                         )
                                         .await;
-                                        crate::notices::release(slot.instance, crate::notices::settings_applied());
+                                        crate::net::notices::release(
+                                            slot.instance,
+                                            crate::net::notices::settings_applied(),
+                                        );
                                         (slot, live)
                                     })
                                 })
@@ -218,7 +234,10 @@ pub async fn run_control_server(
                 } else if let Some(serial) = cmd.strip_prefix("INSTALL ") {
                     let (tx, rx) = oneshot::channel();
                     let _ = ctrl_tx
-                        .send(DaemonControlMsg::InstallApk { serial: serial.trim().to_string(), resp: tx })
+                        .send(DaemonControlMsg::InstallApk {
+                            serial: serial.trim().to_string(),
+                            resp: tx,
+                        })
                         .await;
                     let reply = match rx.await {
                         Ok(Ok(msg)) => format!("OK {}\n", msg),
@@ -228,12 +247,17 @@ pub async fn run_control_server(
                     let _ = writer.write_all(reply.as_bytes()).await;
                 } else if cmd == "INSTALLS" {
                     let _ = writer
-                        .write_all(format!("OK {}\n", crate::installer::snapshot_json()).as_bytes())
+                        .write_all(
+                            format!("OK {}\n", crate::net::installer::snapshot_json()).as_bytes(),
+                        )
                         .await;
                 } else if let Some(serial) = cmd.strip_prefix("FORGET ") {
                     let (tx, rx) = oneshot::channel();
                     let _ = ctrl_tx
-                        .send(DaemonControlMsg::ForgetDevice { serial: serial.trim().to_string(), resp: tx })
+                        .send(DaemonControlMsg::ForgetDevice {
+                            serial: serial.trim().to_string(),
+                            resp: tx,
+                        })
                         .await;
                     let reply = match rx.await {
                         Ok(Ok(msg)) => format!("OK {}\n", msg),

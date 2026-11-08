@@ -129,7 +129,9 @@ impl Default for AppConfig {
 
 /// The user's home directory (`$HOME`), or an empty path if unset.
 pub fn home_dir() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
+    std::env::var_os("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_default()
 }
 
 /// Same file the host daemon reads: `~/.config/uscreen/config.toml`.
@@ -153,8 +155,8 @@ pub async fn store(config: &AppConfig) -> Result<(), String> {
             .await
             .map_err(|e| format!("Failed to create config directory: {e}"))?;
     }
-    let toml_str = toml::to_string_pretty(config)
-        .map_err(|e| format!("Failed to serialize config: {e}"))?;
+    let toml_str =
+        toml::to_string_pretty(config).map_err(|e| format!("Failed to serialize config: {e}"))?;
     tokio::fs::write(&path, toml_str)
         .await
         .map_err(|e| format!("Failed to write config: {e}"))
@@ -168,13 +170,45 @@ pub async fn get_config() -> Result<AppConfig, String> {
 
 /// Settings that change the arguments of ffmpeg or evdi_helper.
 fn stream_args_differ(a: &AppConfig, b: &AppConfig) -> bool {
-    (&a.encoder, a.fps, a.bitrate, a.quality, a.stream_scale, a.ten_bit, a.width, a.height, a.hevc_low_latency_tuning, a.software_cursor)
-        != (&b.encoder, b.fps, b.bitrate, b.quality, b.stream_scale, b.ten_bit, b.width, b.height, b.hevc_low_latency_tuning, b.software_cursor)
+    (
+        &a.encoder,
+        a.fps,
+        a.bitrate,
+        a.quality,
+        a.stream_scale,
+        a.ten_bit,
+        a.width,
+        a.height,
+        a.hevc_low_latency_tuning,
+        a.software_cursor,
+    ) != (
+        &b.encoder,
+        b.fps,
+        b.bitrate,
+        b.quality,
+        b.stream_scale,
+        b.ten_bit,
+        b.width,
+        b.height,
+        b.hevc_low_latency_tuning,
+        b.software_cursor,
+    )
 }
 
 fn profile_args_differ(a: Option<&TabletProfile>, b: &TabletProfile) -> bool {
     let key = |p: &TabletProfile| {
-        (p.encoder.clone(), p.fps, p.bitrate, p.quality, p.stream_scale, p.ten_bit, p.width, p.height, p.width_mm, p.height_mm)
+        (
+            p.encoder.clone(),
+            p.fps,
+            p.bitrate,
+            p.quality,
+            p.stream_scale,
+            p.ten_bit,
+            p.width,
+            p.height,
+            p.width_mm,
+            p.height_mm,
+        )
     };
     a.map(key) != Some(key(b))
 }
@@ -194,7 +228,11 @@ pub async fn save_config(app: tauri::AppHandle, config: AppConfig) -> Result<(),
 
 /// Tauri command: persist one device's profile and restart only that device's pipeline if its stream arguments changed.
 #[tauri::command]
-pub async fn save_device_profile(app: tauri::AppHandle, serial: String, profile: TabletProfile) -> Result<(), String> {
+pub async fn save_device_profile(
+    app: tauri::AppHandle,
+    serial: String,
+    profile: TabletProfile,
+) -> Result<(), String> {
     let mut cfg = load().await;
     let changed = profile_args_differ(cfg.tablets.get(&serial), &profile);
     cfg.tablets.insert(serial.clone(), profile);

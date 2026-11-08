@@ -76,7 +76,7 @@ impl CaptureManager {
     /// The position is derived at runtime from the existing display geometry so
     /// it works regardless of the laptop's screen resolution or scaling factor.
     pub(super) async fn enable_evdi_display(card: Option<u32>, position: crate::config::Position) {
-        let evdi_names: Vec<String> = crate::vdisplay::evdi_connectors()
+        let evdi_names: Vec<String> = crate::display::vdisplay::evdi_connectors()
             .into_iter()
             .filter(|c| card.is_none_or(|want| c.card == want))
             .map(|c| c.name)
@@ -85,20 +85,20 @@ impl CaptureManager {
             warn!("No EVDI connector found in sysfs — cannot enable the virtual display");
             return;
         }
-        if crate::hyprland::active() {
-            crate::hyprland::enable_output(&evdi_names, position).await;
+        if crate::display::hyprland::active() {
+            crate::display::hyprland::enable_output(&evdi_names, position).await;
             return;
         }
-        if crate::cosmic::active() {
-            crate::cosmic::enable_output(&evdi_names).await;
+        if crate::display::cosmic::active() {
+            crate::display::cosmic::enable_output(&evdi_names).await;
             return;
         }
         // GNOME places and switches on a new monitor by itself.
-        if crate::gnome::active() {
+        if crate::display::gnome::active() {
             return;
         }
-        if crate::x11::active() {
-            crate::x11::enable_output(&evdi_names, position).await;
+        if crate::display::x11::active() {
+            crate::display::x11::enable_output(&evdi_names, position).await;
             return;
         }
 
@@ -279,7 +279,7 @@ impl CaptureManager {
     /// screens. Without this the desktop keeps a monitor nobody can see after
     /// the tablet is unplugged, and windows left there are effectively lost.
     pub async fn disable_evdi_display(card: Option<u32>) {
-        let evdi_names: Vec<String> = crate::vdisplay::evdi_connectors()
+        let evdi_names: Vec<String> = crate::display::vdisplay::evdi_connectors()
             .into_iter()
             .filter(|c| card.is_none_or(|want| c.card == want))
             .map(|c| c.name)
@@ -287,19 +287,19 @@ impl CaptureManager {
         if evdi_names.is_empty() {
             return;
         }
-        if crate::hyprland::active() {
-            crate::hyprland::disable_output(&evdi_names).await;
+        if crate::display::hyprland::active() {
+            crate::display::hyprland::disable_output(&evdi_names).await;
             return;
         }
-        if crate::cosmic::active() {
-            crate::cosmic::disable_output(&evdi_names).await;
+        if crate::display::cosmic::active() {
+            crate::display::cosmic::disable_output(&evdi_names).await;
             return;
         }
-        if crate::gnome::active() {
+        if crate::display::gnome::active() {
             return;
         }
-        if crate::x11::active() {
-            crate::x11::disable_output(&evdi_names).await;
+        if crate::display::x11::active() {
+            crate::display::x11::disable_output(&evdi_names).await;
             return;
         }
         let Ok(o) = tokio::process::Command::new("kscreen-doctor")

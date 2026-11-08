@@ -127,11 +127,17 @@ pub fn frame_emitted(instance: u32, generation: u64) {
 
 /// Wait until the encoder of `instance` is newer than `generation_before` and has produced a
 /// frame. Returns how long that took, or `None` on timeout.
-pub async fn wait_live(instance: u32, generation_before: u64, timeout: Duration) -> Option<Duration> {
+pub async fn wait_live(
+    instance: u32,
+    generation_before: u64,
+    timeout: Duration,
+) -> Option<Duration> {
     let start = Instant::now();
     let i = idx(instance);
     loop {
-        if GENERATION[i].load(Ordering::SeqCst) > generation_before && FRAMES[i].load(Ordering::SeqCst) > 0 {
+        if GENERATION[i].load(Ordering::SeqCst) > generation_before
+            && FRAMES[i].load(Ordering::SeqCst) > 0
+        {
             return Some(start.elapsed());
         }
         if start.elapsed() >= timeout {
@@ -158,16 +164,29 @@ mod tests {
     #[tokio::test]
     async fn restart_is_live_only_after_a_new_encoder_delivers_a_frame() {
         let before = generation(41);
-        assert!(wait_live(41, before, Duration::from_millis(120)).await.is_none());
+        assert!(wait_live(41, before, Duration::from_millis(120))
+            .await
+            .is_none());
         let gen = encoder_started(41);
-        assert!(wait_live(41, before, Duration::from_millis(120)).await.is_none(), "spawned but silent");
+        assert!(
+            wait_live(41, before, Duration::from_millis(120))
+                .await
+                .is_none(),
+            "spawned but silent"
+        );
         frame_emitted(41, gen);
-        assert!(wait_live(41, before, Duration::from_millis(500)).await.is_some());
+        assert!(wait_live(41, before, Duration::from_millis(500))
+            .await
+            .is_some());
         // A frame from the previous encoder must not count for the new one.
         let newer = encoder_started(41);
         frame_emitted(41, gen);
-        assert!(wait_live(41, gen, Duration::from_millis(120)).await.is_none());
+        assert!(wait_live(41, gen, Duration::from_millis(120))
+            .await
+            .is_none());
         frame_emitted(41, newer);
-        assert!(wait_live(41, gen, Duration::from_millis(500)).await.is_some());
+        assert!(wait_live(41, gen, Duration::from_millis(500))
+            .await
+            .is_some());
     }
 }

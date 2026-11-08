@@ -220,7 +220,12 @@ impl StreamServer {
                 },
                 None => {
                     // Daemon is stopping: tell the app, then let the socket close.
-                    let _ = Self::write_packet(&mut socket, PACKET_TYPE_HOST_SHUTDOWN, HOST_SHUTDOWN_JSON).await;
+                    let _ = Self::write_packet(
+                        &mut socket,
+                        PACKET_TYPE_HOST_SHUTDOWN,
+                        HOST_SHUTDOWN_JSON,
+                    )
+                    .await;
                     let _ = socket.flush().await;
                     break;
                 }

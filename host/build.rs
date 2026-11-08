@@ -58,4 +58,3 @@ fn main() {
     println!("cargo:rerun-if-changed=.git/refs");
     println!("cargo:rerun-if-env-changed=GIT_VERSION_STRING");
 }
-

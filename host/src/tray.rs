@@ -49,7 +49,11 @@ struct UScreenTray {
 
 impl UScreenTray {
     fn current_pixmap(&self) -> ksni::Icon {
-        pixmap(if self.pen_only { PIXMAP_TABLET } else { PIXMAP_SCREEN })
+        pixmap(if self.pen_only {
+            PIXMAP_TABLET
+        } else {
+            PIXMAP_SCREEN
+        })
     }
 
     fn state_line(&self) -> String {
@@ -188,7 +192,9 @@ fn open_settings() {
         .unwrap_or(false);
     if running {
         // Ask the window manager to raise the existing window; harmless if wmctrl is absent.
-        let _ = std::process::Command::new("wmctrl").args(["-x", "-a", GUI_BIN]).status();
+        let _ = std::process::Command::new("wmctrl")
+            .args(["-x", "-a", GUI_BIN])
+            .status();
         info!("{} is already running; raised its window", GUI_BIN);
         return;
     }
@@ -213,7 +219,13 @@ fn open_settings() {
     );
     let mut sr = std::process::Command::new("systemd-run");
     sr.args(["--user", "--collect", "--quiet", "--unit", &unit]);
-    for var in ["DISPLAY", "WAYLAND_DISPLAY", "XDG_CURRENT_DESKTOP", "XDG_SESSION_TYPE", "DBUS_SESSION_BUS_ADDRESS"] {
+    for var in [
+        "DISPLAY",
+        "WAYLAND_DISPLAY",
+        "XDG_CURRENT_DESKTOP",
+        "XDG_SESSION_TYPE",
+        "DBUS_SESSION_BUS_ADDRESS",
+    ] {
         if std::env::var_os(var).is_some() {
             sr.arg(format!("--setenv={var}"));
         }
@@ -224,7 +236,10 @@ fn open_settings() {
             info!("Opened settings from the tray (detached unit {})", unit);
             return;
         }
-        other => warn!("systemd-run could not detach {} ({:?}); starting it directly", GUI_BIN, other),
+        other => warn!(
+            "systemd-run could not detach {} ({:?}); starting it directly",
+            GUI_BIN, other
+        ),
     }
     match std::process::Command::new(&program).spawn() {
         Ok(_) => info!("Opened settings from the tray"),
@@ -267,7 +282,10 @@ pub async fn run(
             Err(e) => {
                 if !warned {
                     warned = true;
-                    info!("No StatusNotifierWatcher yet ({}); retrying until one appears", e);
+                    info!(
+                        "No StatusNotifierWatcher yet ({}); retrying until one appears",
+                        e
+                    );
                 }
                 tokio::select! {
                     _ = tokio::time::sleep(delay) => {}

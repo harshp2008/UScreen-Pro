@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 use tracing::{info, warn};
 
 use crate::config;
-use crate::pairing;
+use crate::net::pairing;
 
 /// Physical or wireless transport mechanism through which an ADB target is reached.
 ///

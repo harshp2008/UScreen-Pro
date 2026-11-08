@@ -72,7 +72,11 @@ fn set_state(key: &str, state: State, detail: impl Into<String>) {
     let mut map = jobs().lock().unwrap_or_else(|e| e.into_inner());
     map.insert(
         key.to_string(),
-        Job { state, detail: detail.into(), since: Instant::now() },
+        Job {
+            state,
+            detail: detail.into(),
+            since: Instant::now(),
+        },
     );
 }
 
@@ -114,12 +118,19 @@ where
         return false;
     }
     set_state(&key, State::Queued, "waiting for a free install slot");
-    info!("Install queue: {} queued ({} running)", key, RUNNING.load(Ordering::SeqCst));
+    info!(
+        "Install queue: {} queued ({} running)",
+        key,
+        RUNNING.load(Ordering::SeqCst)
+    );
     tokio::spawn(async move {
         let _permit = sem.acquire().await.expect("install semaphore closed");
         let running = RUNNING.fetch_add(1, Ordering::SeqCst) + 1;
         set_state(&key, State::Installing, "installing");
-        info!("Install queue: {} started ({}/{} slots busy)", key, running, MAX_CONCURRENT);
+        info!(
+            "Install queue: {} started ({}/{} slots busy)",
+            key, running, MAX_CONCURRENT
+        );
         let result = work().await;
         RUNNING.fetch_sub(1, Ordering::SeqCst);
         match result {
@@ -215,7 +226,10 @@ async fn adb_install(serial: &str, apk: &std::path::Path) -> Result<(), String> 
         if !downgrade && text.contains("INSTALL_FAILED_VERSION_DOWNGRADE") {
             continue;
         }
-        return Err(format!("adb install: {}", text.trim().lines().last().unwrap_or("no output")));
+        return Err(format!(
+            "adb install: {}",
+            text.trim().lines().last().unwrap_or("no output")
+        ));
     }
     Err("adb install failed".into())
 }
@@ -233,21 +247,37 @@ pub struct Request {
 /// Queue an install. Returns `false` when this device already has one queued or running.
 pub fn enqueue(req: Request) -> bool {
     let Some(apk) = find_apk() else {
-        set_state(&req.hw, State::Failed, "app-debug.apk not found; run ./build-all.sh");
+        set_state(
+            &req.hw,
+            State::Failed,
+            "app-debug.apk not found; run ./build-all.sh",
+        );
         return true;
     };
-    let Request { hw, serial, instance } = req;
+    let Request {
+        hw,
+        serial,
+        instance,
+    } = req;
     spawn_limited(hw.clone(), semaphore(), move || async move {
-        let device_version = installed_version(&serial).await.unwrap_or_else(|| "not installed".into());
+        let device_version = installed_version(&serial)
+            .await
+            .unwrap_or_else(|| "not installed".into());
         let host = host_version();
         if let Some(i) = instance {
-            crate::notices::set(i, crate::notices::updating(host, &device_version));
+            crate::net::notices::set(i, crate::net::notices::updating(host, &device_version));
             tokio::time::sleep(OVERLAY_LEAD).await;
         }
-        info!("Installing {} on {} (device has {}, host is {})", apk.display(), serial, device_version, host);
+        info!(
+            "Installing {} on {} (device has {}, host is {})",
+            apk.display(),
+            serial,
+            device_version,
+            host
+        );
         let result = adb_install(&serial, &apk).await;
         if let Some(i) = instance {
-            crate::notices::release(i, crate::notices::update_done());
+            crate::net::notices::release(i, crate::net::notices::update_done());
         }
         result?;
         let now = installed_version(&serial).await.unwrap_or_default();
@@ -273,18 +303,27 @@ pub async fn check_on_connect(req: Request) -> Option<(String, String)> {
     let device = installed_version(&req.serial).await;
     let shown = device.clone().unwrap_or_else(|| "not installed".into());
     if device.as_deref() == Some(host.as_str()) {
-        info!("APK check {}: device {} matches host {}", req.hw, shown, host);
+        info!(
+            "APK check {}: device {} matches host {}",
+            req.hw, shown, host
+        );
         return Some((shown, host));
     }
     {
         let mut map = last_auto().lock().unwrap_or_else(|e| e.into_inner());
-        if map.get(&req.hw).is_some_and(|t| t.elapsed() < AUTO_COOLDOWN) {
+        if map
+            .get(&req.hw)
+            .is_some_and(|t| t.elapsed() < AUTO_COOLDOWN)
+        {
             warn!("APK check {}: device {} != host {}, but an automatic update ran recently; not retrying", req.hw, shown, host);
             return Some((shown, host));
         }
         map.insert(req.hw.clone(), Instant::now());
     }
-    info!("APK check {}: device {} != host {} -> queueing adb install -r", req.hw, shown, host);
+    info!(
+        "APK check {}: device {} != host {} -> queueing adb install -r",
+        req.hw, shown, host
+    );
     enqueue(req);
     Some((shown, host))
 }
@@ -299,7 +338,10 @@ mod tests {
     fn reads_version_name_from_dumpsys() {
         let text = "Packages:\n  Package [com.uscreen] (abc):\n    versionCode=22 minSdk=29\n    versionName=82b9705-dirty\n    splits=[base]\n";
         assert_eq!(parse_version_name(text).as_deref(), Some("82b9705-dirty"));
-        assert_eq!(parse_version_name("Unable to find package: com.uscreen"), None);
+        assert_eq!(
+            parse_version_name("Unable to find package: com.uscreen"),
+            None
+        );
     }
 
     /// Three devices need an update: two run together, the third waits until one finishes.
@@ -320,7 +362,9 @@ mod tests {
             }));
         }
         // A duplicate request for a device that is already queued is refused.
-        assert!(!spawn_limited("test-a".into(), sem, || async { Ok(String::new()) }));
+        assert!(!spawn_limited("test-a".into(), sem, || async {
+            Ok(String::new())
+        }));
 
         tokio::time::sleep(Duration::from_millis(150)).await;
         let snap: serde_json::Value = serde_json::from_str(&snapshot_json()).unwrap();
@@ -335,12 +379,21 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(400)).await;
         let snap: serde_json::Value = serde_json::from_str(&snapshot_json()).unwrap();
         println!("t=550ms {snap}");
-        assert_eq!(snap["test-c"]["state"], "installing", "third starts once a slot frees");
+        assert_eq!(
+            snap["test-c"]["state"], "installing",
+            "third starts once a slot frees"
+        );
 
         tokio::time::sleep(Duration::from_millis(500)).await;
         let snap: serde_json::Value = serde_json::from_str(&snapshot_json()).unwrap();
         println!("t=1050ms {snap}");
-        assert!(["test-a", "test-b", "test-c"].iter().all(|k| snap[k]["state"] == "done"));
-        assert_eq!(peak.load(Ordering::SeqCst), 2, "never more than two at once");
+        assert!(["test-a", "test-b", "test-c"]
+            .iter()
+            .all(|k| snap[k]["state"] == "done"));
+        assert_eq!(
+            peak.load(Ordering::SeqCst),
+            2,
+            "never more than two at once"
+        );
     }
 }

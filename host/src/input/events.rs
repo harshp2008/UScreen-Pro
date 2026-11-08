@@ -207,8 +207,8 @@ pub(super) fn handle_event(
                     (width_mm, height_mm)
                 } else {
                     (
-                        crate::edid::DEFAULT_WIDTH_MM,
-                        crate::edid::DEFAULT_HEIGHT_MM,
+                        crate::display::edid::DEFAULT_WIDTH_MM,
+                        crate::display::edid::DEFAULT_HEIGHT_MM,
                     )
                 };
             if new.width != width

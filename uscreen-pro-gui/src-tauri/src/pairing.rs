@@ -23,8 +23,7 @@ const QR_TIMEOUT: Duration = Duration::from_secs(30);
 pub const PAIR_PROGRESS: &str = "pair_progress";
 /// Event the frontend listens for when discovery gave up.
 pub const MDNS_TIMEOUT_EVENT: &str = "mdns_timeout";
-const MDNS_TIMEOUT_MESSAGE: &str =
-    "mDNS discovery timed out. Your Wi-Fi router may be blocking device discovery. Please use Manual Pairing.";
+const MDNS_TIMEOUT_MESSAGE: &str = "mDNS discovery timed out. Your Wi-Fi router may be blocking device discovery. Please use Manual Pairing.";
 
 /// Data the UI needs to render the wireless-pairing QR code.
 #[derive(Serialize, Clone, Debug)]
@@ -111,7 +110,11 @@ async fn adb_pair(endpoint: &str, code: &str) -> Result<String, String> {
     if text.contains("Successfully paired") {
         Ok(stdout_of(&out))
     } else {
-        Err(if text.is_empty() { "adb pair returned no output".into() } else { text })
+        Err(if text.is_empty() {
+            "adb pair returned no output".into()
+        } else {
+            text
+        })
     }
 }
 
@@ -121,14 +124,22 @@ async fn adb_connect(endpoint: &str) -> Result<String, String> {
     if text.contains("connected to") || text.contains("already connected") {
         Ok(endpoint.to_string())
     } else {
-        Err(if text.is_empty() { format!("Could not connect to {endpoint}") } else { text })
+        Err(if text.is_empty() {
+            format!("Could not connect to {endpoint}")
+        } else {
+            text
+        })
     }
 }
 
 fn emit(app: &AppHandle, kind: &'static str, message: impl Into<String>, connect: Option<String>) {
     let _ = app.emit(
         "pairing_event",
-        PairingEvent { kind, message: message.into(), connect_endpoint: connect },
+        PairingEvent {
+            kind,
+            message: message.into(),
+            connect_endpoint: connect,
+        },
     );
 }
 
@@ -161,7 +172,12 @@ pub async fn initiate_qr_pairing(
 
         adb::progress(Some(&app), PAIR_PROGRESS, None, "Starting ADB server");
         let _ = adb::run(None, &["start-server"], Duration::from_secs(10)).await;
-        emit(&app, "searching", "Waiting for the tablet to scan the QR code", None);
+        emit(
+            &app,
+            "searching",
+            "Waiting for the tablet to scan the QR code",
+            None,
+        );
         while alive() && start.elapsed() < QR_TIMEOUT {
             // `adb mdns services` can itself hang for its full 5 s timeout, so cap each poll
             // at whatever is left of the 30 s budget.
@@ -177,16 +193,31 @@ pub async fn initiate_qr_pairing(
             {
                 last_attempt = Some(svc.addr.clone());
                 adb::progress(Some(&app), PAIR_PROGRESS, None, "Pairing...");
-                emit(&app, "pairing", format!("Tablet found at {}, pairing", svc.addr), None);
+                emit(
+                    &app,
+                    "pairing",
+                    format!("Tablet found at {}, pairing", svc.addr),
+                    None,
+                );
                 match adb_pair(&svc.addr, &code).await {
                     Ok(_) => {
                         adb::progress(Some(&app), PAIR_PROGRESS, None, "Connecting...");
-                        let connect = match discover_connect_endpoint(svc.ip(), Duration::from_secs(10)).await {
+                        let connect = match discover_connect_endpoint(
+                            svc.ip(),
+                            Duration::from_secs(10),
+                        )
+                        .await
+                        {
                             Some(ep) => adb_connect(&ep).await.ok(),
                             None => None,
                         };
                         if alive() {
-                            emit(&app, "success", format!("Paired with {}", svc.addr), connect);
+                            emit(
+                                &app,
+                                "success",
+                                format!("Paired with {}", svc.addr),
+                                connect,
+                            );
                         }
                         counter.fetch_add(1, Ordering::SeqCst);
                         return;
@@ -203,7 +234,11 @@ pub async fn initiate_qr_pairing(
         }
     });
 
-    Ok(QrPairingSession { service_name, pairing_code, qr_payload })
+    Ok(QrPairingSession {
+        service_name,
+        pairing_code,
+        qr_payload,
+    })
 }
 
 /// Tauri command: invalidate the running QR attempt by bumping its generation counter.
@@ -228,10 +263,15 @@ pub async fn manual_adb_pair(
     adb::progress(Some(&app), PAIR_PROGRESS, None, "Pairing...");
     let message = adb_pair(&pair_endpoint, code.trim()).await?;
 
-    let target = match connect_endpoint.map(|c| c.trim().to_string()).filter(|c| !c.is_empty()) {
+    let target = match connect_endpoint
+        .map(|c| c.trim().to_string())
+        .filter(|c| !c.is_empty())
+    {
         Some(ep) => Some(ep),
         None => {
-            let ip = pair_endpoint.rsplit_once(':').map_or(pair_endpoint.as_str(), |(ip, _)| ip);
+            let ip = pair_endpoint
+                .rsplit_once(':')
+                .map_or(pair_endpoint.as_str(), |(ip, _)| ip);
             discover_connect_endpoint(ip, Duration::from_secs(6)).await
         }
     };
@@ -242,7 +282,10 @@ pub async fn manual_adb_pair(
         }
         None => None,
     };
-    Ok(ManualPairResult { message, connect_endpoint })
+    Ok(ManualPairResult {
+        message,
+        connect_endpoint,
+    })
 }
 
 /// Tauri command: `adb connect` to a typed `ip:port`.
@@ -253,9 +296,13 @@ pub async fn manual_adb_connect(endpoint: String) -> Result<String, String> {
 
 /// IPv4 address of the device's Wi-Fi interface, read over its USB shell.
 async fn device_wlan_ip(serial: &str) -> Option<String> {
-    let out = adb::run(Some(serial), &["shell", "ip", "-f", "inet", "addr", "show", "wlan0"], Duration::from_secs(5))
-        .await
-        .ok()?;
+    let out = adb::run(
+        Some(serial),
+        &["shell", "ip", "-f", "inet", "addr", "show", "wlan0"],
+        Duration::from_secs(5),
+    )
+    .await
+    .ok()?;
     String::from_utf8_lossy(&out.stdout).lines().find_map(|l| {
         let l = l.trim();
         let cidr = l.strip_prefix("inet ")?.split_whitespace().next()?;
@@ -269,9 +316,13 @@ static WIRELESS_SETUP: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(()
 
 /// Android API level of the device (`ro.build.version.sdk`), read over its own USB shell.
 async fn device_sdk(serial: &str) -> Option<u32> {
-    let out = adb::run(Some(serial), &["shell", "getprop", "ro.build.version.sdk"], Duration::from_secs(5))
-        .await
-        .ok()?;
+    let out = adb::run(
+        Some(serial),
+        &["shell", "getprop", "ro.build.version.sdk"],
+        Duration::from_secs(5),
+    )
+    .await
+    .ok()?;
     stdout_of(&out).trim().parse().ok()
 }
 
@@ -281,7 +332,9 @@ async fn device_sdk(serial: &str) -> Option<u32> {
 async fn host_reachable(ip: &str) -> bool {
     use tokio::net::TcpStream;
     for port in [5555u16, 5037, 80] {
-        match tokio::time::timeout(Duration::from_millis(1500), TcpStream::connect((ip, port))).await {
+        match tokio::time::timeout(Duration::from_millis(1500), TcpStream::connect((ip, port)))
+            .await
+        {
             Ok(Ok(_)) => return true, // connected
             // A reset means the host itself answered. Any other error (EHOSTUNREACH after a failed
             // ARP, ENETUNREACH) or a timeout means it did not.
@@ -298,10 +351,12 @@ pub const ROUTER_BLOCKED_PREFIX: &str = "ROUTER_BLOCKED|";
 const TAILSCALE_ADB_PORT: u16 = 5555;
 
 fn parse_ipv4(label: &str, value: &str) -> Result<std::net::Ipv4Addr, String> {
-    value
-        .trim()
-        .parse()
-        .map_err(|_| format!("{label} \"{}\" is not a valid IPv4 address (Tailscale addresses look like 100.x.y.z).", value.trim()))
+    value.trim().parse().map_err(|_| {
+        format!(
+            "{label} \"{}\" is not a valid IPv4 address (Tailscale addresses look like 100.x.y.z).",
+            value.trim()
+        )
+    })
 }
 
 /// IPv4 address Tailscale assigned to this computer (`tailscale ip -4`), for auto-filling the wizard.
@@ -309,7 +364,10 @@ fn parse_ipv4(label: &str, value: &str) -> Result<std::net::Ipv4Addr, String> {
 pub async fn detect_tailscale_ip() -> Result<String, String> {
     let out = tokio::time::timeout(
         Duration::from_secs(4),
-        tokio::process::Command::new("tailscale").args(["ip", "-4"]).kill_on_drop(true).output(),
+        tokio::process::Command::new("tailscale")
+            .args(["ip", "-4"])
+            .kill_on_drop(true)
+            .output(),
     )
     .await
     .map_err(|_| "tailscale ip -4 timed out".to_string())?
@@ -319,7 +377,10 @@ pub async fn detect_tailscale_ip() -> Result<String, String> {
         .map(str::trim)
         .find(|l| l.parse::<std::net::Ipv4Addr>().is_ok())
         .map(str::to_string)
-        .ok_or_else(|| "Tailscale is installed but has no IPv4 address. Is it logged in and running?".to_string())
+        .ok_or_else(|| {
+            "Tailscale is installed but has no IPv4 address. Is it logged in and running?"
+                .to_string()
+        })
 }
 
 /// Tailscale path: connect to `target_ip:5555` through the tunnel and remember both addresses.
@@ -329,7 +390,11 @@ pub async fn detect_tailscale_ip() -> Result<String, String> {
 /// which is what makes that port exist on the device. On success the `ip:port` is returned and both
 /// addresses are saved to config.toml as `tailscale_host_ip` / `tailscale_target_ip`.
 #[tauri::command]
-pub async fn pair_via_tailscale(host_ip: String, target_ip: String, serial: Option<String>) -> Result<String, String> {
+pub async fn pair_via_tailscale(
+    host_ip: String,
+    target_ip: String,
+    serial: Option<String>,
+) -> Result<String, String> {
     let host = parse_ipv4("The Tailscale IP of this PC", &host_ip)?;
     let target = parse_ipv4("The Tailscale IP of the target device", &target_ip)?;
     let _one_at_a_time = WIRELESS_SETUP.lock().await;
@@ -338,7 +403,12 @@ pub async fn pair_via_tailscale(host_ip: String, target_ip: String, serial: Opti
     if let Some(serial) = serial.as_deref().filter(|s| !s.is_empty()) {
         adb::require_serial(serial)?;
         // Best effort: the user may also have enabled TCP mode some other way.
-        let _ = adb::run(Some(serial), &["tcpip", &TAILSCALE_ADB_PORT.to_string()], Duration::from_secs(10)).await;
+        let _ = adb::run(
+            Some(serial),
+            &["tcpip", &TAILSCALE_ADB_PORT.to_string()],
+            Duration::from_secs(10),
+        )
+        .await;
         tokio::time::sleep(Duration::from_millis(1200)).await;
     }
 
@@ -366,8 +436,14 @@ pub async fn pair_via_tailscale(host_ip: String, target_ip: String, serial: Opti
     }
 
     let mut cfg = config::load().await;
-    cfg.extra.insert("tailscale_host_ip".into(), toml::Value::String(host.to_string()));
-    cfg.extra.insert("tailscale_target_ip".into(), toml::Value::String(target.to_string()));
+    cfg.extra.insert(
+        "tailscale_host_ip".into(),
+        toml::Value::String(host.to_string()),
+    );
+    cfg.extra.insert(
+        "tailscale_target_ip".into(),
+        toml::Value::String(target.to_string()),
+    );
     config::store(&cfg).await?;
     Ok(endpoint)
 }
@@ -385,9 +461,9 @@ pub async fn bootstrap_wireless_over_usb(app: AppHandle, serial: String) -> Resu
     adb::progress(app, PAIR_PROGRESS, Some(&serial), "Starting ADB server");
     let _ = adb::run(None, &["start-server"], Duration::from_secs(10)).await;
     adb::progress(app, PAIR_PROGRESS, Some(&serial), "Pairing...");
-    let ip = device_wlan_ip(&serial)
-        .await
-        .ok_or("The device has no Wi-Fi address. Connect it to the same Wi-Fi network as this computer.")?;
+    let ip = device_wlan_ip(&serial).await.ok_or(
+        "The device has no Wi-Fi address. Connect it to the same Wi-Fi network as this computer.",
+    )?;
 
     // Fail fast, and say why, when the network path is dead: otherwise this spins for ~90 s and ends
     // in a vague "adb connect timed out".
@@ -404,7 +480,19 @@ pub async fn bootstrap_wireless_over_usb(app: AppHandle, serial: String) -> Resu
     // such feature, so they go straight to `adb tcpip`.
     let sdk = device_sdk(&serial).await;
     if sdk.is_none_or(|v| v >= 30) {
-        let _ = adb::run(Some(&serial), &["shell", "settings", "put", "global", "adb_wifi_enabled", "1"], Duration::from_secs(5)).await;
+        let _ = adb::run(
+            Some(&serial),
+            &[
+                "shell",
+                "settings",
+                "put",
+                "global",
+                "adb_wifi_enabled",
+                "1",
+            ],
+            Duration::from_secs(5),
+        )
+        .await;
         if let Some(endpoint) = discover_connect_endpoint(&ip, Duration::from_secs(8)).await {
             adb::progress(app, PAIR_PROGRESS, Some(&serial), "Connecting...");
             if let Ok(ep) = adb_connect(&endpoint).await {

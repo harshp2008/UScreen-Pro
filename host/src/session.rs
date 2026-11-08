@@ -10,16 +10,16 @@ use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc, oneshot, watch, Notify};
 use tracing::{error, info, warn};
 
-use crate::adb::{
+use crate::capture::{self, CaptureConfig, CaptureManager, EncoderSettings};
+use crate::config::{FileConfig, Position};
+use crate::display::vdisplay;
+use crate::input::{InputConfig, InputServer};
+use crate::net::adb::{
     announce_transport, app_running, auto_provision_wifi, is_fake_serial, launch_app,
     on_tablet_connected, scan_adb_devices, setup_adb_forwarding, spawn_adb_tracker,
     teardown_adb_forwarding, DiscoveredDevice, Transport,
 };
-use crate::capture::{self, CaptureConfig, CaptureManager, EncoderSettings};
-use crate::config::{FileConfig, Position};
-use crate::input::{InputConfig, InputServer};
-use crate::stream::{StreamConfig, StreamServer};
-use crate::vdisplay;
+use crate::net::stream::{StreamConfig, StreamServer};
 
 /// Asynchronous control command dispatched across IPC or local threads to manipulate session state.
 pub enum DaemonControlMsg {
@@ -62,9 +62,7 @@ pub enum DaemonControlMsg {
         resp: oneshot::Sender<Result<String, String>>,
     },
     /// Serials currently frozen by [`DaemonControlMsg::FreezeDevice`].
-    ListFrozen {
-        resp: oneshot::Sender<Vec<String>>,
-    },
+    ListFrozen { resp: oneshot::Sender<Vec<String>> },
 }
 
 /// One pipeline that [`DaemonControlMsg::RestartSession`] respawned.
@@ -461,7 +459,11 @@ fn slot_of(
     extras: &HashMap<String, ExtraSession>,
 ) -> Option<(u32, String, String)> {
     if slot_0_hw == Some(serial) || (!slot_0_active.is_empty() && slot_0_active == serial) {
-        return Some((0, slot_0_hw.unwrap_or(serial).to_string(), slot_0_active.to_string()));
+        return Some((
+            0,
+            slot_0_hw.unwrap_or(serial).to_string(),
+            slot_0_active.to_string(),
+        ));
     }
     extras
         .values()
@@ -663,7 +665,7 @@ pub async fn adb_monitor(
                 }
                 let _ = tablet_tx.send(false);
                 let _ = serial_tx.send(None);
-                crate::notices::forget(0);
+                crate::net::notices::forget(0);
                 frozen_serials.retain(|f| *f != *s0_hw && *f != slot_0_active_serial);
                 slot_0_hw = None;
                 slot_0_active_serial.clear();
@@ -728,7 +730,7 @@ pub async fn adb_monitor(
                     teardown_adb_forwarding(&sess.active_serial, sess.video_port, sess.input_port)
                         .await;
                 }
-                crate::notices::forget(sess.instance);
+                crate::net::notices::forget(sess.instance);
                 frozen_serials.retain(|f| *f != hw_id && *f != sess.active_serial);
                 sess.stop_background();
             }
@@ -849,14 +851,15 @@ pub async fn adb_monitor(
                 continue;
             }
             update_checked.insert(hw_id.clone(), dev.serial.clone());
-            let instance = slot_of(hw_id, slot_0_hw.as_deref(), &slot_0_active_serial, &extras).map(|s| s.0);
-            let req = crate::installer::Request {
+            let instance =
+                slot_of(hw_id, slot_0_hw.as_deref(), &slot_0_active_serial, &extras).map(|s| s.0);
+            let req = crate::net::installer::Request {
                 hw: hw_id.clone(),
                 serial: dev.serial.clone(),
                 instance,
             };
             tokio::spawn(async move {
-                crate::installer::check_on_connect(req).await;
+                crate::net::installer::check_on_connect(req).await;
             });
         }
 
@@ -928,7 +931,7 @@ pub async fn adb_monitor(
                                 info!("Freezing pipeline of {} (SIGSTOP ffmpeg + evdi_helper)", serial);
                                 signal_pipeline("STOP", &fifo).await;
                                 if let Some((inst, _, _)) = slot_of(&serial, slot_0_hw.as_deref(), &slot_0_active_serial, &extras) {
-                                    crate::notices::set(inst, crate::notices::paused());
+                                    crate::net::notices::set(inst, crate::net::notices::paused());
                                 }
                                 frozen_serials.insert(serial);
                                 let _ = resp.send(Ok(()));
@@ -944,7 +947,7 @@ pub async fn adb_monitor(
                                 info!("Thawing pipeline of {} (SIGCONT ffmpeg + evdi_helper)", serial);
                                 signal_pipeline("CONT", &fifo).await;
                                 if let Some((inst, _, _)) = slot_of(&serial, slot_0_hw.as_deref(), &slot_0_active_serial, &extras) {
-                                    crate::notices::release(inst, crate::notices::resumed());
+                                    crate::net::notices::release(inst, crate::net::notices::resumed());
                                 }
                                 frozen_serials.remove(&serial);
                                 let _ = resp.send(Ok(()));
@@ -970,8 +973,8 @@ pub async fn adb_monitor(
                                 signal_pipeline("CONT", &fifo).await;
                             }
                             frozen_serials.retain(|f| f != &slot_0_active_serial && *f != hw && Some(f.as_str()) != serial.as_deref());
-                            let generation_before = crate::notices::generation(0);
-                            crate::notices::set(0, crate::notices::settings_updating());
+                            let generation_before = crate::net::notices::generation(0);
+                            crate::net::notices::set(0, crate::net::notices::settings_updating());
                             apply_profile_keys(&[serial.as_deref().unwrap_or(&slot_0_active_serial), &slot_0_active_serial, &hw], &settings_tx, true).await;
                             if !is_fake_serial(&slot_0_active_serial) {
                                 let _ = setup_adb_forwarding(&slot_0_active_serial, video_port, input_port).await;
@@ -991,8 +994,8 @@ pub async fn adb_monitor(
                             signal_pipeline("CONT", &fifo).await;
                             frozen_serials.retain(|f| *f != active && *f != hw && Some(f.as_str()) != serial.as_deref());
                             if let Some(sess) = extras.get(&hw) {
-                                let generation_before = crate::notices::generation(instance);
-                                crate::notices::set(instance, crate::notices::settings_updating());
+                                let generation_before = crate::net::notices::generation(instance);
+                                crate::net::notices::set(instance, crate::net::notices::settings_updating());
                                 apply_profile_keys(&[serial.as_deref().unwrap_or(&active), &active, &hw], &sess.settings_tx, true).await;
                                 if !is_fake_serial(&active) {
                                     let _ = setup_adb_forwarding(&active, sess.video_port, sess.input_port).await;
@@ -1014,7 +1017,7 @@ pub async fn adb_monitor(
                         };
                         let _ = resp.send(match target {
                             Some((hw, adb_serial)) => {
-                                let queued = crate::installer::enqueue(crate::installer::Request {
+                                let queued = crate::net::installer::enqueue(crate::net::installer::Request {
                                     hw: hw.clone(),
                                     serial: adb_serial,
                                     instance: slot.map(|s| s.0),
@@ -1034,7 +1037,7 @@ pub async fn adb_monitor(
                             extras.values().find(|s| s.hw_id == serial || s.active_serial == serial).map(|s| s.instance)
                         };
                         if let Some(inst) = notify_instance {
-                            crate::notices::release(inst, crate::notices::unpaired());
+                            crate::net::notices::release(inst, crate::net::notices::unpaired());
                             tokio::time::sleep(std::time::Duration::from_millis(600)).await;
                         }
                         if slot_0_hw.as_deref() == Some(serial.as_str()) || (!slot_0_active_serial.is_empty() && slot_0_active_serial == serial) {
@@ -1043,7 +1046,7 @@ pub async fn adb_monitor(
                             }
                             let _ = tablet_tx.send(false);
                             let _ = serial_tx.send(None);
-                            crate::notices::forget(0);
+                            crate::net::notices::forget(0);
                             stopped.push("slot 1".to_string());
                             slot_0_hw = None;
                             slot_0_active_serial.clear();
@@ -1056,7 +1059,7 @@ pub async fn adb_monitor(
                                 if !is_fake_serial(&sess.active_serial) {
                                     teardown_adb_forwarding(&sess.active_serial, sess.video_port, sess.input_port).await;
                                 }
-                                crate::notices::forget(sess.instance);
+                                crate::net::notices::forget(sess.instance);
                                 stopped.push(format!("slot {}", sess.instance + 1));
                                 sess.stop_background();
                             }

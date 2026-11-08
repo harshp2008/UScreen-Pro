@@ -47,7 +47,10 @@ pub fn recent_json(secs: u64) -> String {
     let now = Instant::now();
     let (mut total, mut e2e, mut host) = (Vec::new(), Vec::new(), Vec::new());
     if let Ok(g) = recent().lock() {
-        for r in g.iter().filter(|r| now.duration_since(r.at).as_secs() < secs) {
+        for r in g
+            .iter()
+            .filter(|r| now.duration_since(r.at).as_secs() < secs)
+        {
             total.push(r.total_us);
             e2e.extend(r.e2e_us);
             host.extend(r.host_us);
@@ -189,7 +192,10 @@ impl LatencyTracker {
         }
         if let Ok(mut r) = recent().lock() {
             // Cheap bounded history: drop what is older than a minute.
-            while r.front().is_some_and(|f| rec.at.duration_since(f.at).as_secs() > 60) {
+            while r
+                .front()
+                .is_some_and(|f| rec.at.duration_since(f.at).as_secs() > 60)
+            {
                 r.pop_front();
             }
             if r.len() < 30_000 {

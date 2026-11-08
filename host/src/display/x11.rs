@@ -68,7 +68,7 @@ struct Target {
 }
 
 fn targets_for(names: &[String]) -> Vec<Target> {
-    crate::vdisplay::evdi_connectors()
+    crate::display::vdisplay::evdi_connectors()
         .into_iter()
         .filter(|c| names.contains(&c.name))
         .map(|c| Target {
@@ -333,7 +333,7 @@ DVI-I-1-1 connected (normal left inverted right x axis y axis) 314mm x 195mm\n\
 
     #[test]
     fn reads_outputs_and_their_edid_from_xrandr_prop() {
-        let ours = crate::edid::make_edid(2960, 1848, 90);
+        let ours = crate::display::edid::make_edid(2960, 1848, 90);
         let real = vec![0x11u8; 128];
         let o = parse_outputs(&prop_output(&ours, &real));
         assert_eq!(o.len(), 4);
@@ -347,7 +347,7 @@ DVI-I-1-1 connected (normal left inverted right x axis y axis) 314mm x 195mm\n\
 
     #[test]
     fn finds_our_output_by_edid_not_by_name() {
-        let ours = crate::edid::make_edid(2960, 1848, 90);
+        let ours = crate::display::edid::make_edid(2960, 1848, 90);
         let o = parse_outputs(&prop_output(&ours, &[0x11u8; 128]));
         // The kernel calls it DVI-I-1; so does a real monitor on the main GPU.
         let targets = vec![Target {

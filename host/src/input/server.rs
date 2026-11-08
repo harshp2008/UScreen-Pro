@@ -319,7 +319,7 @@ pub(super) async fn handle_connection(
 
     // Host-to-app notices (paused, settings updating, APK updating). A state that is still in
     // force when the app connects is replayed first.
-    let (sticky, mut notice_rx) = crate::notices::subscribe(config.instance);
+    let (sticky, mut notice_rx) = crate::net::notices::subscribe(config.instance);
     if let Some(text) = sticky {
         ws_sender.send(Message::Text(text)).await?;
     }

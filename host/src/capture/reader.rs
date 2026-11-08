@@ -16,7 +16,7 @@ impl CaptureManager {
         instance: u32,
     ) -> Result<()> {
         // A restart is reported as finished only once this generation has delivered a frame.
-        let generation = crate::notices::encoder_started(instance);
+        let generation = crate::net::notices::encoder_started(instance);
         let mut buf = vec![0u8; 512 * 1024];
         let mut total: u64 = 0;
         let mut frames: u64 = 0;
@@ -61,7 +61,7 @@ impl CaptureManager {
             let now_us = crate::timing::now_monotonic_us();
             for data in access_units {
                 frames += 1;
-                crate::notices::frame_emitted(instance, generation);
+                crate::net::notices::frame_emitted(instance, generation);
                 if tx.receiver_count() > 0 {
                     let detailed = timing_reader
                         .as_ref()

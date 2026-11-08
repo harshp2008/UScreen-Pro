@@ -88,12 +88,15 @@ fn forget_pairing_record(hw_serial: &str, report: &mut ForgetReport) {
             let result = std::fs::write(&tmp, &kept).and_then(|_| std::fs::rename(&tmp, &path));
             match result {
                 Ok(()) => report.pairing_records_removed = n,
-                Err(e) => report.notes.push(format!("could not rewrite {}: {e}", path.display())),
+                Err(e) => report
+                    .notes
+                    .push(format!("could not rewrite {}: {e}", path.display())),
             }
         }
-        None => report
-            .notes
-            .push(format!("{} has an unexpected layout; left untouched", path.display())),
+        None => report.notes.push(format!(
+            "{} has an unexpected layout; left untouched",
+            path.display()
+        )),
     }
 }
 
@@ -116,10 +119,17 @@ pub async fn forget_device(serial: String) -> Result<ForgetReport, String> {
     // this hardware serial.
     let mut addresses: BTreeSet<String> = BTreeSet::new();
     let profile = cfg.tablets.get(&serial).cloned();
-    if let Some(addr) = profile.as_ref().and_then(|p| p.wifi_address.clone()).filter(|a| !a.is_empty()) {
+    if let Some(addr) = profile
+        .as_ref()
+        .and_then(|p| p.wifi_address.clone())
+        .filter(|a| !a.is_empty())
+    {
         addresses.insert(addr);
     }
-    let label = profile.as_ref().map(|p| norm_label(&p.label)).unwrap_or_default();
+    let label = profile
+        .as_ref()
+        .map(|p| norm_label(&p.label))
+        .unwrap_or_default();
     let mut remove_keys: Vec<String> = Vec::new();
     if profile.is_some() {
         remove_keys.push(serial.clone());
@@ -136,7 +146,8 @@ pub async fn forget_device(serial: String) -> Result<ForgetReport, String> {
             continue;
         }
         let known = addresses.contains(&entry.serial);
-        let same_device = entry.state == "device" && adb::ro_serial(&entry.serial).await.as_deref() == Some(serial.as_str());
+        let same_device = entry.state == "device"
+            && adb::ro_serial(&entry.serial).await.as_deref() == Some(serial.as_str());
         if known || same_device {
             addresses.insert(entry.serial);
         }
@@ -148,7 +159,9 @@ pub async fn forget_device(serial: String) -> Result<ForgetReport, String> {
     }
     if addresses.contains(&cfg.wifi_address) {
         cfg.wifi_address.clear();
-        report.notes.push("cleared the global wifi_address that pointed at this device".into());
+        report
+            .notes
+            .push("cleared the global wifi_address that pointed at this device".into());
     }
     report.removed_profiles = remove_keys;
     config::store(&cfg).await?;
@@ -164,7 +177,10 @@ pub async fn forget_device(serial: String) -> Result<ForgetReport, String> {
         adb_disconnect(addr, &mut report).await;
     }
     let still_listed = adb::list_entries().await;
-    for e in still_listed.iter().filter(|e| e.is_wifi && e.serial.contains("._adb") && e.serial.contains(&serial)) {
+    for e in still_listed
+        .iter()
+        .filter(|e| e.is_wifi && e.serial.contains("._adb") && e.serial.contains(&serial))
+    {
         adb_disconnect(&e.serial.clone(), &mut report).await;
     }
 
@@ -174,9 +190,14 @@ pub async fn forget_device(serial: String) -> Result<ForgetReport, String> {
         "~/.android/adbkey is the host's own key shared by every device, so it is kept; the device itself lists this computer under Wireless debugging and can revoke it there"
             .into(),
     );
-    let usb = adb::list_entries().await.into_iter().any(|e| !e.is_wifi && e.serial == serial && e.state == "device");
+    let usb = adb::list_entries()
+        .await
+        .into_iter()
+        .any(|e| !e.is_wifi && e.serial == serial && e.state == "device");
     if usb {
-        report.notes.push("still plugged in over USB, so it is listed under New Devices".into());
+        report
+            .notes
+            .push("still plugged in over USB, so it is listed under New Devices".into());
     }
     Ok(report)
 }

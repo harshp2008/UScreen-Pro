@@ -14,8 +14,10 @@ use crate::config_handler::{
     find_helper, get_pid_path, other_daemons, remove_pid_file_if_ours, run_control_server,
     sync_app_lock,
 };
+use crate::display::{edid, vdisplay};
+use crate::net::stream;
 use crate::session::{adb_monitor, DaemonControlMsg, ExtraSessionTemplate};
-use crate::{capture, config, edid, encoders, input, osk, runtime, stream, tray, update, vdisplay};
+use crate::{capture, config, encoders, input, osk, runtime, tray, update};
 
 /// Execute the primary uscreen daemon event loop.
 ///
@@ -408,7 +410,7 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
             instance: 0,
             card: None,
             max_performance_mode,
-                keep_alive: file_cfg.keep_alive,
+            keep_alive: file_cfg.keep_alive,
         },
         video_port,
         input_port,

@@ -4,9 +4,9 @@ use crate::adb::{self, ConnectedDevice};
 use crate::config;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
-use tauri::{AppHandle, Emitter};
 use tokio::process::Command;
 
 /// Snapshot polled by the UI: is the daemon alive, is its control socket answering, which version, and which devices it knows.
@@ -92,7 +92,13 @@ pub async fn restart_pipeline(app: &AppHandle, serial: Option<&str>) -> Result<S
     let target = serial.map(str::to_string);
     let _ = app.emit(
         "pipeline_restarting",
-        PipelineEvent { serial: target.clone(), ok: true, live_ms: None, message: "restarting".into(), done: false },
+        PipelineEvent {
+            serial: target.clone(),
+            ok: true,
+            live_ms: None,
+            message: "restarting".into(),
+            done: false,
+        },
     );
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
@@ -132,7 +138,11 @@ pub async fn restart_pipeline(app: &AppHandle, serial: Option<&str>) -> Result<S
                         serial: target,
                         ok: true,
                         live_ms: None,
-                        message: if slots == 0 { "no active session to restart".into() } else { format!("{slots} pipeline(s) restarted") },
+                        message: if slots == 0 {
+                            "no active session to restart".into()
+                        } else {
+                            format!("{slots} pipeline(s) restarted")
+                        },
                         done: true,
                     },
                 );
@@ -140,7 +150,13 @@ pub async fn restart_pipeline(app: &AppHandle, serial: Option<&str>) -> Result<S
             Err(e) => {
                 let _ = app.emit(
                     "pipeline_restarted",
-                    PipelineEvent { serial: target, ok: false, live_ms: None, message: e, done: true },
+                    PipelineEvent {
+                        serial: target,
+                        ok: false,
+                        live_ms: None,
+                        message: e,
+                        done: true,
+                    },
                 );
             }
         }
@@ -201,18 +217,21 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
     let mut devices = adb::connected_devices(&cfg).await;
     if control_connected
         && let Ok(reply) = send_control_cmd("INSTALLS").await
-        && let Some(jobs) = reply
-            .strip_prefix("OK ")
-            .and_then(|j| serde_json::from_str::<std::collections::HashMap<String, adb::InstallStatus>>(j).ok())
+        && let Some(jobs) = reply.strip_prefix("OK ").and_then(|j| {
+            serde_json::from_str::<std::collections::HashMap<String, adb::InstallStatus>>(j).ok()
+        })
     {
         for d in &mut devices {
             d.install = jobs.get(&d.serial).cloned();
         }
     }
-    if control_connected
-        && let Ok(reply) = send_control_cmd("FROZEN").await
-    {
-        let frozen: Vec<&str> = reply.trim_start_matches("OK").trim().split(',').filter(|s| !s.is_empty()).collect();
+    if control_connected && let Ok(reply) = send_control_cmd("FROZEN").await {
+        let frozen: Vec<&str> = reply
+            .trim_start_matches("OK")
+            .trim()
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .collect();
         for d in &mut devices {
             d.paused = frozen.contains(&d.serial.as_str());
         }
@@ -232,11 +251,18 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
 const UNIT: &str = "uscreen.service";
 
 async fn systemctl(args: &[&str]) -> Option<std::process::Output> {
-    Command::new("systemctl").arg("--user").args(args).output().await.ok()
+    Command::new("systemctl")
+        .arg("--user")
+        .args(args)
+        .output()
+        .await
+        .ok()
 }
 
 async fn unit_installed() -> bool {
-    systemctl(&["cat", UNIT]).await.is_some_and(|o| o.status.success())
+    systemctl(&["cat", UNIT])
+        .await
+        .is_some_and(|o| o.status.success())
 }
 
 async fn unit_active() -> bool {
@@ -276,7 +302,11 @@ async fn wait_for(want: bool, secs: u64) -> bool {
 
 fn failure(out: &std::process::Output, fallback: &str) -> String {
     let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
-    if err.is_empty() { fallback.to_string() } else { err }
+    if err.is_empty() {
+        fallback.to_string()
+    } else {
+        err
+    }
 }
 
 /// Start through the systemd user unit when one is installed (so it is supervised the same
@@ -287,12 +317,15 @@ pub async fn launch_daemon() -> Result<String, String> {
         return Ok("Daemon is already running".into());
     }
     if unit_installed().await {
-        let out = systemctl(&["start", UNIT]).await.ok_or("systemctl not available")?;
+        let out = systemctl(&["start", UNIT])
+            .await
+            .ok_or("systemctl not available")?;
         if !out.status.success() {
             return Err(failure(&out, "systemctl start failed"));
         }
     } else {
-        let binary = daemon_binary().ok_or("uscreen daemon binary not found. Run ./build-all.sh first.")?;
+        let binary =
+            daemon_binary().ok_or("uscreen daemon binary not found. Run ./build-all.sh first.")?;
         Command::new(binary)
             .arg("start")
             .stdin(std::process::Stdio::null())
@@ -316,7 +349,9 @@ pub async fn stop_daemon() -> Result<String, String> {
         return Ok("Daemon is not running".into());
     }
     if unit_active().await {
-        let out = systemctl(&["stop", UNIT]).await.ok_or("systemctl not available")?;
+        let out = systemctl(&["stop", UNIT])
+            .await
+            .ok_or("systemctl not available")?;
         if !out.status.success() {
             return Err(failure(&out, "systemctl stop failed"));
         }
