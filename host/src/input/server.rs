@@ -140,6 +140,8 @@ impl InputServer {
             let ident_map = ident.clone();
             let initial = *mode_rx.borrow_and_update();
             let card0 = *card_rx.borrow_and_update();
+            // RandR changes (Xorg re-numbering or moving the virtual output) re-run the mapping.
+            let mut output_changes = crate::display::x11::output_changes();
             // The first mapping waits for the virtual display to be enabled
             // like every later one, so it runs in the background rather than
             // holding up the accept loop below.
@@ -149,6 +151,17 @@ impl InputServer {
                     tokio::select! {
                         r = mode_rx.changed() => { if r.is_err() { break; } }
                         r = card_rx.changed() => { if r.is_err() { break; } }
+                        r = async {
+                            match output_changes.as_mut() {
+                                Some(rx) => rx.changed().await,
+                                None => std::future::pending().await,
+                            }
+                        } => {
+                            if r.is_err() {
+                                output_changes = None;
+                                continue;
+                            }
+                        }
                     }
                     let pen_only = *mode_rx.borrow();
                     let card = *card_rx.borrow();
@@ -255,7 +268,7 @@ pub(super) async fn handle_connection(
         tx.as_ref()
             .map(|t| {
                 crate::capture::Codec::from_encoder(&t.borrow().encoder)
-                    .muxer()
+                    .name()
                     .to_string()
             })
             .unwrap_or_else(|| fallback.to_string())

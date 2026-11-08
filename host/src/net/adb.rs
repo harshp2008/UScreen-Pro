@@ -243,25 +243,52 @@ pub async fn adb_devices() -> Vec<String> {
     ready
 }
 
+/// The device-side ports the Android app falls back to when it is launched without port extras.
+const APP_VIDEO_PORT: u16 = 8890;
+const APP_INPUT_PORT: u16 = 8891;
+
+/// `(device port, host port)` pairs to reverse for one tablet.
+///
+/// The app is launched with the host's ports as extras, so each tablet's own ports are mapped
+/// to themselves. The app's fixed defaults (8890/8891) are mapped to this tablet's host ports as
+/// well: `adb reverse` is per device, so two tablets can both own device port 8890 while their
+/// host listeners differ, and an app started by hand (without extras) still reaches its own
+/// host session. Ported from upstream UScreen 1.2.14 ("fixed device ports").
+fn reverse_pairs(video_port: u16, input_port: u16) -> Vec<(u16, u16)> {
+    let mut pairs = vec![
+        (video_port, video_port),
+        (input_port, input_port),
+        (APP_VIDEO_PORT, video_port),
+        (APP_INPUT_PORT, input_port),
+    ];
+    let mut seen = Vec::new();
+    pairs.retain(|p| {
+        let new = !seen.contains(p);
+        seen.push(*p);
+        new
+    });
+    pairs
+}
+
 /// Establish reverse port forwarding tunnels via ADB to route client TCP connections back to host ports.
 ///
-/// Retries up to 3 times with exponential backoff to handle transient ADB daemon restarts.
-/// For slot 0 (video port 8890), fallback legacy ports (8890/8891) are mapped to maintain backwards
-/// compatibility with legacy APK builds.
+/// Retries up to 3 times with a short backoff to handle transient ADB daemon restarts. See
+/// [`reverse_pairs`] for what is mapped.
 pub async fn setup_adb_forwarding(serial: &str, video_port: u16, input_port: u16) -> Result<()> {
     info!(
         "[ADB-FORWARD] Setting up reverse port forwarding for {} (video={}, input={})",
         serial, video_port, input_port
     );
-    for port in [video_port, input_port] {
-        let arg = format!("tcp:{}", port);
+    for (device_port, host_port) in reverse_pairs(video_port, input_port) {
+        let remote = format!("tcp:{}", device_port);
+        let local = format!("tcp:{}", host_port);
         let mut last_err = String::new();
         let mut success = false;
         for attempt in 1..=3 {
             let r = tokio::time::timeout(
                 Duration::from_secs(2),
                 Command::new("adb")
-                    .args(["-s", serial, "reverse", &arg, &arg])
+                    .args(["-s", serial, "reverse", &remote, &local])
                     .output(),
             )
             .await;
@@ -272,37 +299,26 @@ pub async fn setup_adb_forwarding(serial: &str, video_port: u16, input_port: u16
                 }
                 Ok(Ok(output)) => {
                     last_err = String::from_utf8_lossy(&output.stderr).trim().to_string();
-                    if attempt < 3 {
-                        tokio::time::sleep(Duration::from_millis(200)).await;
-                    }
                 }
                 Ok(Err(e)) => {
                     last_err = e.to_string();
-                    if attempt < 3 {
-                        tokio::time::sleep(Duration::from_millis(200)).await;
-                    }
                 }
                 Err(_) => {
-                    last_err = format!("adb reverse {} timed out", arg);
-                    if attempt < 3 {
-                        tokio::time::sleep(Duration::from_millis(200)).await;
-                    }
+                    last_err = format!("adb reverse {} {} timed out", remote, local);
                 }
+            }
+            if attempt < 3 {
+                tokio::time::sleep(Duration::from_millis(200)).await;
             }
         }
         if !success {
-            anyhow::bail!("adb reverse {} failed after 3 attempts: {}", arg, last_err);
+            anyhow::bail!(
+                "adb reverse {} {} failed after 3 attempts: {}",
+                remote,
+                local,
+                last_err
+            );
         }
-    }
-    if video_port == 8890 {
-        let _ = Command::new("adb")
-            .args(["-s", serial, "reverse", "tcp:8890", "tcp:8890"])
-            .output()
-            .await;
-        let _ = Command::new("adb")
-            .args(["-s", serial, "reverse", "tcp:8891", "tcp:8891"])
-            .output()
-            .await;
     }
     info!(
         "[ADB-FORWARD] Successfully established reverse port forwarding for {}",
@@ -317,11 +333,10 @@ pub async fn teardown_adb_forwarding(serial: &str, video_port: u16, input_port: 
         "[ADB-FORWARD] Tearing down reverse port forwarding for {} (video={}, input={})",
         serial, video_port, input_port
     );
-    let mut ports_to_remove = vec![video_port, input_port];
-    if video_port == 8890 {
-        ports_to_remove.push(8890);
-        ports_to_remove.push(8891);
-    }
+    let mut ports_to_remove: Vec<u16> = reverse_pairs(video_port, input_port)
+        .into_iter()
+        .map(|(device_port, _)| device_port)
+        .collect();
     ports_to_remove.sort_unstable();
     ports_to_remove.dedup();
     for port in ports_to_remove {
@@ -545,6 +560,19 @@ pub async fn launch_app(serial: &str, token: Option<&str>, video_port: u16, inpu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reverse_keeps_the_apps_fixed_device_ports_for_every_host_session() {
+        // Slot 0 uses the defaults: nothing is mapped twice.
+        assert_eq!(reverse_pairs(8890, 8891), vec![(8890, 8890), (8891, 8891)]);
+        // Later slots keep their own ports and also expose the app's defaults.
+        for (video, input) in [(8892, 8893), (8894, 8895), (9000, 9001)] {
+            let pairs = reverse_pairs(video, input);
+            assert!(pairs.contains(&(video, video)) && pairs.contains(&(input, input)));
+            assert!(pairs.contains(&(8890, video)) && pairs.contains(&(8891, input)));
+            assert_eq!(pairs.len(), 4);
+        }
+    }
 
     #[test]
     fn tells_network_serials_from_usb_ones() {

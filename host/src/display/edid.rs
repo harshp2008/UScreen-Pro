@@ -104,8 +104,10 @@ pub fn make_edid_sized(
         | (((v_front >> 4) & 0x03) << 2)
         | ((v_sync >> 4) & 0x03)) as u8;
     edid[i + 12] = (h_image & 0xFF) as u8;
-    edid[i + 13] = ((((h_image >> 8) & 0x0F) << 4) | ((v_image >> 8) & 0x0F)) as u8;
-    edid[i + 14] = (v_image & 0xFF) as u8;
+    // Byte 13 is V_Image_Size[7:0]; byte 14 packs the upper nibbles of both
+    // sizes. They were swapped, so every compositor read a wrong physical size.
+    edid[i + 13] = (v_image & 0xFF) as u8;
+    edid[i + 14] = ((((h_image >> 8) & 0x0F) << 4) | ((v_image >> 8) & 0x0F)) as u8;
     edid[i + 17] = 0x1E; // non-interlaced, digital separate sync, +h +v
 
     // === Monitor name descriptor (bytes 90-107) ===
@@ -149,7 +151,7 @@ pub fn make_edid(width: u32, height: u32, refresh: u32) -> Vec<u8> {
 /// Bumped whenever the generator changes. It is part of the cache filename so
 /// that fixing a bug here actually reaches existing installs — without it, a
 /// stale file from a previous version would be reused forever.
-const EDID_GENERATION: u32 = 2;
+const EDID_GENERATION: u32 = 3;
 
 /// Write (or reuse) a generated EDID for this mode and return its path.
 pub fn ensure_edid_sized(
@@ -197,6 +199,16 @@ pub fn ensure_edid_sized(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detailed_timing_preserves_physical_size() {
+        for (width_px, height_px) in [(1536, 960), (2560, 1600), (2960, 1848)] {
+            let edid = make_edid(width_px, height_px, 60);
+            let width = edid[66] as u32 | ((edid[68] as u32 >> 4) << 8);
+            let height = edid[67] as u32 | ((edid[68] as u32 & 15) << 8);
+            assert_eq!((width, height), (DEFAULT_WIDTH_MM, DEFAULT_HEIGHT_MM));
+        }
+    }
 
     #[test]
     fn edid_checksum_is_valid() {

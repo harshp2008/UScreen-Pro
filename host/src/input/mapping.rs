@@ -245,6 +245,22 @@ pub(super) async fn map_devices_on_x11(
         warn!("X11 has no output to map onto — touch and pen will address the whole desktop");
         return None;
     };
+    // Muffin can overwrite a direct XInput transform with its own guess, so on Cinnamon the
+    // explicit per-device EDID mapping is written as well (cleared again in pen-only mode).
+    if std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .to_uppercase()
+        .contains("CINNAMON")
+        && !crate::display::gnome::map_cinnamon_devices(
+            UINPUT_VENDOR,
+            ident.product_touch,
+            ident.product_pen,
+            (!pen_only).then_some(output.as_str()),
+        )
+        .await
+    {
+        warn!("Cinnamon did not accept its native input mapping; using XInput mapping");
+    }
     let mut names = vec![ident.touch.as_str(), ident.pen.as_str()];
     if ident.device_count > 2 {
         names.push(ident.pointer.as_str());

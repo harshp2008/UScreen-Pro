@@ -197,7 +197,7 @@ pub fn spawn_extra_session(
         }
     }
     let codec = capture::Codec::from_encoder(&cfg.encoder)
-        .muxer()
+        .name()
         .to_string();
 
     cfg.card = cards.get(instance as usize).copied();

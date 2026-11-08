@@ -13,7 +13,7 @@ impl CaptureManager {
     }
 
     #[cfg(not(feature = "inproc-encoder"))]
-    pub(super) fn spawn_encoder_child(&self, encoder: &str) -> Result<Child> {
+    pub(super) async fn spawn_encoder_child(&self, encoder: &str) -> Result<Child> {
         let res: Result<()> = match encoder {
             "h264_nvenc" | "hevc_nvenc" | "h264_vaapi" | "hevc_vaapi" | "libx264" => Ok(()),
             _ => anyhow::bail!(
@@ -168,9 +168,13 @@ impl CaptureManager {
                 gop.to_string(),
                 "-idr_interval".into(),
                 "1".into(),
-                "-async_depth".into(),
-                "1".into(),
             ]);
+            // The default of 2 keeps each frame inside the encoder until the next one
+            // arrives. Older ffmpeg (before 5.0) has no such queue and rejects the option,
+            // so ask before passing it.
+            if crate::encoders::has_option(encoder, "async_depth").await {
+                encoder_args.extend_from_slice(&["-async_depth".into(), "1".into()]);
+            }
             if encoder == "hevc_vaapi" {
                 // Main profile uses direct 8-bit NV12 hardware encoding on Intel Arc
                 encoder_args.extend_from_slice(&["-profile:v".into(), "main".into()]);
@@ -212,7 +216,17 @@ impl CaptureManager {
             );
         }
 
-        encoder_args.extend_from_slice(&["-f".into(), codec.muxer().into(), "pipe:1".into()]);
+        // AVI rather than raw Annex B: Annex B only shows where a frame ends when a
+        // later frame starts, which held every frame back for two more frames (up to
+        // 400 ms on a quiet screen). An AVI chunk states its size, so a frame leaves
+        // the moment it is complete. See `avi.rs`.
+        encoder_args.extend_from_slice(&[
+            "-flush_packets".into(),
+            "1".into(),
+            "-f".into(),
+            "avi".into(),
+            "pipe:1".into(),
+        ]);
 
         let mut cmd = Command::new("ffmpeg");
         cmd.args(&encoder_args)
@@ -262,7 +276,7 @@ impl CaptureManager {
             );
         }
 
-        let child = match self.spawn_encoder_child(&encoder) {
+        let child = match self.spawn_encoder_child(&encoder).await {
             Ok(child) => child,
             Err(e) => {
                 if encoder == "hevc_vaapi" {
@@ -272,6 +286,7 @@ impl CaptureManager {
                     );
                     self.config.encoder = "h264_vaapi".to_string();
                     self.spawn_encoder_child("h264_vaapi")
+                        .await
                         .context("Failed to spawn fallback h264_vaapi encoder")?
                 } else {
                     return Err(e);

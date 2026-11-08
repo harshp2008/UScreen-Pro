@@ -114,3 +114,27 @@ pub(crate) async fn list_displays() -> Result<()> {
     }
     Ok(())
 }
+
+/// `uscreen check-encoder <encoder>`: encode one test frame and report why not if it fails.
+///
+/// Does not touch the config file or any running daemon, so a GUI can ask "would this encoder
+/// work?" before it applies the setting. `vaapi_device` pins the render node for VAAPI encoders
+/// (an empty string means "choose automatically").
+pub(crate) async fn check_encoder(encoder: &str, vaapi_device: Option<&str>) -> Result<()> {
+    // The old gstreamer-style alias.
+    let encoder = if encoder == "vaapih264enc" {
+        "h264_vaapi"
+    } else {
+        encoder
+    };
+    if encoder.contains("vaapi") {
+        if let Some(device) = vaapi_device {
+            crate::encoders::ensure_vaapi_device(device).await;
+        }
+    }
+    crate::encoders::probe(encoder)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    println!("{encoder}: ok");
+    Ok(())
+}

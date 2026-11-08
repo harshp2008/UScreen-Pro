@@ -92,6 +92,13 @@ pub(crate) enum Commands {
     PauseDevice { serial: String },
     /// Resume a device's display and capture session after surgical update
     ResumeDevice { serial: String },
+    /// Check that an encoder can encode a test frame, without starting the daemon
+    CheckEncoder {
+        encoder: String,
+        /// Render node to check; an explicit empty value selects a device automatically
+        #[arg(long)]
+        vaapi_device: Option<String>,
+    },
     /// Diagnose the whole setup and report what is wrong
     Doctor {
         /// Instead: sweep a synthetic mouse across both screens for a few

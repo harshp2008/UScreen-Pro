@@ -95,6 +95,10 @@ async fn main() -> Result<()> {
             secs,
             sparse,
         }) => doctor::run_latency(*secs, *sparse).await?,
+        Some(Commands::CheckEncoder {
+            encoder,
+            vaapi_device,
+        }) => commands::check_encoder(encoder, vaapi_device.as_deref()).await?,
         Some(Commands::Doctor { .. }) => doctor::run().await?,
         Some(Commands::ResetGuard) => match guard::reset() {
             Ok(true) => println!(

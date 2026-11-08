@@ -1257,8 +1257,12 @@ static int try_open_fifo(void) {
   int flags = fcntl(fd, F_GETFL);
   fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
   /* Enlarge the pipe so a full-frame write doesn't take hundreds of
-     64KB round-trips with the encoder. */
-  fcntl(fd, F_SETPIPE_SZ, 1 << 20);
+     64KB round-trips with the encoder. A large request can be refused (the
+     per-user pipe budget) while a smaller increase is allowed, so step down
+     rather than give up. */
+  for (int size = 1 << 20; size >= 1 << 16; size >>= 1)
+    if (fcntl(fd, F_SETPIPE_SZ, size) >= 0)
+      break;
   fprintf(stderr, "[evdi-helper] Capture FIFO opened\n");
   return fd;
 }

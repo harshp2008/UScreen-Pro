@@ -3,6 +3,34 @@
 Full notes for each version are on the
 [releases page](https://github.com/majmichu1/UScreen/releases).
 
+## Unreleased
+
+Ported from upstream UScreen 1.2.14 (backend only; see
+`experiments_and_findings/60_cleansing_and_upstream_sync.md`):
+
+- Less delay on the tablet, most of all when little on the screen is moving.
+  ffmpeg now writes AVI, whose chunks state their size, so each frame leaves as
+  soon as it is encoded instead of waiting for later frames to show where it
+  ends.
+- The virtual display's EDID now stores the physical size in the right bytes
+  (they were swapped), so compositors see the tablet's real size.
+- VAAPI is only given `-async_depth 1` when this ffmpeg lists the option.
+- The video port asks for a keyframe only after the client has presented the
+  session token.
+- `adb reverse` also maps the app's fixed device ports (8890/8891) to each
+  tablet's own host ports, so an app started by hand reaches its session.
+- Cinnamon: pen and touch are mapped to the tablet's output through Cinnamon's
+  own device settings as well, and an X11 session re-applies the mapping after
+  RandR changes. Identical-EDID tablets on X11 no longer match each other's
+  outputs.
+- The EVDI helper steps down the capture pipe size when 1 MiB is refused.
+- Android: a decoder that fails fatally is rebuilt at the next fallback tier
+  instead of leaving the picture frozen; settings the host already accepted are
+  not replayed on reconnect.
+- `uscreen check-encoder <name>` reports whether an encoder can encode a frame.
+- `uscreen doctor` mentions NVIDIA next to VAAPI and no longer says KWin 6.8.2
+  always crashes (patched builds exist).
+
 ## 1.2.12 — 2026-10-31
 
 - On GNOME, Cinnamon, COSMIC, Hyprland and plain X11 sessions the daemon no

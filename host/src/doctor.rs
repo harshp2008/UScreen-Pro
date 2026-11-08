@@ -196,6 +196,13 @@ async fn check_tools(r: &mut Report, cfg: &FileConfig) {
             );
             if cfg.encoder.contains("vaapi") {
                 r.line(Level::Ok, "VAAPI device", &crate::encoders::vaapi_device());
+                if crate::encoders::nvidia_gpu_present() {
+                    r.hint(
+                        "an NVIDIA GPU is also in this machine. With VAAPI on the other GPU, steady \
+                         motion at full size can make frames queue up in front of the encoder. If it \
+                         feels laggy, try encoder = \"h264_nvenc\", or stream_scale = 2",
+                    );
+                }
             }
         }
     }
@@ -660,12 +667,12 @@ async fn check_osk(r: &mut Report) {
                 r.line(
                     Level::Warn,
                     "KWin version",
-                    "6.8.2 — crashes with virtual displays (KDE bug 527984)",
+                    "6.8.2 — unpatched builds crash with virtual displays (KDE bug 527984)",
                 );
                 r.hint(
-                    "if the desktop crashes when the tablet connects: the fix is on the Plasma 6.8 \
-                     branch (29 Oct 2026) but not in every build yet — update KWin when your \
-                     distribution has it, or go back to 6.8.1",
+                    "if the desktop crashes when the tablet connects: update KWin. Patched 6.8.2 \
+                     packages exist (Arch's 6.8.2-2 has the fix); if yours is one, ignore this. \
+                     Otherwise go back to 6.8.1",
                 );
             }
             Some((a, b, c)) => r.line(Level::Ok, "KWin version", &format!("{}.{}.{}", a, b, c)),

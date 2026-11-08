@@ -413,6 +413,7 @@ pub fn other_daemons() -> Vec<u32> {
                     | b"status"
                     | b"list-displays"
                     | b"doctor"
+                    | b"check-encoder"
                     | b"wifi"
                     | b"--help"
                     | b"-h"

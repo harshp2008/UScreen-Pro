@@ -2,6 +2,7 @@
 //! publishes finished access units (plus the codec config) to the stream server. CLI-encoder
 //! path only; with the in-process encoder libavcodec hands back whole access units already.
 
+use super::avi::AviDemuxer;
 use super::packetizer::H264AnnexBPacketizer;
 use super::*;
 
@@ -21,6 +22,7 @@ impl CaptureManager {
         let mut total: u64 = 0;
         let mut frames: u64 = 0;
         let mut last_log = Instant::now();
+        let mut avi = AviDemuxer::default();
         let mut packetizer = H264AnnexBPacketizer::new(codec);
         let mut config_extracted = codec_config.lock().ok().and_then(|g| g.clone()).is_some();
         let timing_reader = crate::timing::TimingReader::open(&timing_shm);
@@ -32,18 +34,18 @@ impl CaptureManager {
                 .context("Read error from encoder")?;
 
             if n == 0 {
-                for data in packetizer.finish() {
-                    if tx.receiver_count() > 0 {
-                        let _ = tx.send(data);
-                    }
-                }
+                // Every frame already left as soon as its AVI chunk completed, so there is
+                // no partial access unit left to flush.
                 return Ok(());
             }
 
             total += n as u64;
 
-            let chunk = &buf[..n];
-            let access_units = packetizer.push(chunk);
+            let access_units: Vec<VideoPacket> = avi
+                .push(&buf[..n])?
+                .iter()
+                .flat_map(|frame| packetizer.push_frame(frame))
+                .collect();
 
             if !config_extracted {
                 if let Some(config) = packetizer.codec_config() {

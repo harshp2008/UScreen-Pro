@@ -74,8 +74,12 @@ class TouchCapture {
      */
     @Volatile var token: String? = null
 
-    /** Settings to (re)send to the host whenever the control channel connects */
-    @Volatile private var pendingConfig: JSONObject? = null
+    /**
+     * Only settings the host has not yet accepted; guarded by this instance's monitor. A change
+     * the WebSocket already took is not replayed on reconnect, so a stale tablet value can never
+     * overwrite newer settings made on the computer (config.toml or the GUI).
+     */
+    private var pendingConfig: JSONObject? = null
     @Volatile private var pendingMode: JSONObject? = null
 
     /** Tablet's native landscape resolution, reported to the host on connect
@@ -140,7 +144,7 @@ class TouchCapture {
                 Log.i(TAG, "Reported native resolution: ${nativeWidth}x${nativeHeight} " +
                         "(${nativeWidthMm}x${nativeHeightMm} mm), version: ${BuildConfig.VERSION_NAME}")
             }
-            pendingConfig?.let { webSocket.send(it.toString()) }
+            sendPendingConfig(webSocket)
             pendingMode?.let {
                 webSocket.send(it.toString())
                 pendingMode = null
@@ -645,9 +649,10 @@ class TouchCapture {
 
     /**
      * Push encoder settings to the host. The host live-restarts ffmpeg with
-     * the new parameters and persists them in its config file. Settings are
-     * also remembered here and re-sent on every reconnect.
+     * the new parameters and persists them in its config file. An offline or rejected change
+     * waits for a connection; one the socket accepted is not replayed.
      */
+    @Synchronized
     fun sendConfig(bitrateKbps: Int, fps: Int) {
         val msg = JSONObject().apply {
             put("type", "config")
@@ -656,7 +661,16 @@ class TouchCapture {
         }
         pendingConfig = msg
         if (isConnected) {
-            webSocket?.send(msg.toString())
+            webSocket?.let { sendPendingConfig(it) }
+        }
+    }
+
+    /** Send the waiting config, if any, and forget it once the socket has taken it. */
+    @Synchronized
+    private fun sendPendingConfig(socket: WebSocket) {
+        val msg = pendingConfig ?: return
+        if (socket.send(msg.toString())) {
+            pendingConfig = null
             Log.i(TAG, "Sent config: $msg")
         }
     }

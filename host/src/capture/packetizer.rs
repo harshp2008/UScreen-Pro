@@ -68,6 +68,14 @@ impl H264AnnexBPacketizer {
         self.process_complete_nals(false)
     }
 
+    /// Take one whole encoded frame and release it without waiting for the
+    /// next one.
+    pub(super) fn push_frame(&mut self, frame: &[u8]) -> Vec<VideoPacket> {
+        let mut out = self.push(frame);
+        out.extend(self.finish());
+        out
+    }
+
     pub(super) fn finish(&mut self) -> Vec<VideoPacket> {
         let mut out = self.process_complete_nals(true);
         if let Some(access_unit) = self.take_pending_access_unit() {
@@ -402,6 +410,26 @@ mod tests {
         out.extend(p.finish());
         assert_eq!(out.len(), 2, "two pictures, not three slices");
     }
+    #[test]
+    fn packetizer_releases_each_frame_without_waiting_for_the_next() {
+        let mut packetizer = H264AnnexBPacketizer::new(Codec::H264);
+        let idr = [
+            nal(NAL_TYPE_SPS, &[1]),
+            nal(NAL_TYPE_PPS, &[2]),
+            nal(NAL_TYPE_IDR, &[0x80]),
+        ]
+        .concat();
+
+        let first = packetizer.push_frame(&idr);
+        assert_eq!(first.len(), 1);
+        assert!(first[0].is_idr);
+
+        let second = packetizer.push_frame(&nal(NAL_TYPE_NON_IDR, &[0x80]));
+        assert_eq!(second.len(), 1);
+        assert!(!second[0].is_idr);
+        assert_eq!(second[0].seq, first[0].seq + 1);
+    }
+
     #[test]
     fn packetizer_handles_start_code_split_across_reads() {
         let mut packetizer = H264AnnexBPacketizer::new(Codec::H264);

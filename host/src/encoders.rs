@@ -40,12 +40,12 @@ fn order_nodes(mut found: Vec<(u32, String)>) -> Vec<String> {
         .collect()
 }
 
-fn render_nodes() -> Vec<String> {
+/// `(number, driver)` of every render node on the machine.
+fn render_drivers() -> Vec<(u32, String)> {
     let Ok(dir) = std::fs::read_dir("/sys/class/drm") else {
         return Vec::new();
     };
-    let found = dir
-        .flatten()
+    dir.flatten()
         .filter_map(|e| {
             let name = e.file_name().to_string_lossy().into_owned();
             let num = name.strip_prefix("renderD")?.parse::<u32>().ok()?;
@@ -55,8 +55,22 @@ fn render_nodes() -> Vec<String> {
                 .unwrap_or_default();
             Some((num, driver))
         })
-        .collect();
-    order_nodes(found)
+        .collect()
+}
+
+fn render_nodes() -> Vec<String> {
+    order_nodes(render_drivers())
+}
+
+fn has_nvidia(found: &[(u32, String)]) -> bool {
+    found.iter().any(|(_, driver)| driver == "nvidia")
+}
+
+/// Whether an NVIDIA GPU with its proprietary driver is in the machine. With
+/// VAAPI that usually means encoding happens on a different GPU from the one
+/// drawing the desktop.
+pub fn nvidia_gpu_present() -> bool {
+    has_nvidia(&render_drivers())
 }
 
 /// Settle which render node VAAPI uses, once per run: `configured` when it is
@@ -170,6 +184,29 @@ pub async fn works(encoder: &str) -> bool {
     probe(encoder).await.is_ok()
 }
 
+/// Whether this ffmpeg's `encoder` accepts `-option`. Options come and go
+/// between ffmpeg versions, and an unknown one stops the encoder from starting.
+pub async fn has_option(encoder: &str, option: &str) -> bool {
+    let help = tokio::process::Command::new("ffmpeg")
+        .args(["-hide_banner", "-h", &format!("encoder={}", encoder)])
+        .stderr(std::process::Stdio::null())
+        .output()
+        .await;
+    match help {
+        Ok(out) => help_lists_option(&String::from_utf8_lossy(&out.stdout), option),
+        Err(e) => {
+            warn!("Could not ask ffmpeg about {}: {}", encoder, e);
+            false
+        }
+    }
+}
+
+fn help_lists_option(help: &str, option: &str) -> bool {
+    let flag = format!("-{}", option);
+    help.lines()
+        .any(|line| line.split_whitespace().next() == Some(flag.as_str()))
+}
+
 /// `configured` if it works, otherwise the first candidate that does — with
 /// a log line saying why the configuration was overridden. `None` only when
 /// nothing encodes at all, in which case the caller should say so and stop.
@@ -230,6 +267,23 @@ pub async fn resolve(configured: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_an_option_only_where_ffmpeg_lists_it() {
+        let help = "h264_vaapi AVOptions:\n  -async_depth  <int>  E..V... Maximum processing parallelism\n  -low_power  <boolean>  uses async_depth internally\n";
+        assert!(help_lists_option(help, "async_depth"));
+        assert!(help_lists_option(help, "low_power"));
+        assert!(!help_lists_option(help, "async"));
+        assert!(!help_lists_option("h264_vaapi AVOptions:\n", "async_depth"));
+    }
+
+    #[test]
+    fn spots_an_nvidia_render_node() {
+        let intel_and_nvidia = vec![(128, "i915".to_string()), (129, "nvidia".to_string())];
+        assert!(has_nvidia(&intel_and_nvidia));
+        assert!(!has_nvidia(&[(128, "amdgpu".to_string())]));
+        assert!(!has_nvidia(&[]));
+    }
 
     #[test]
     fn skips_nvidia_and_keeps_node_order() {

@@ -26,6 +26,8 @@ use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, watch};
 use tracing::{error, info, warn};
 
+#[cfg(not(feature = "inproc-encoder"))]
+mod avi;
 mod display;
 mod helper;
 #[cfg(not(feature = "inproc-encoder"))]
@@ -77,9 +79,8 @@ impl Codec {
         }
     }
 
-    /// Name for ffmpeg's `-f`, which wants the bitstream format, not the
-    /// encoder.
-    pub fn muxer(self) -> &'static str {
+    /// The name the tablet receives in its greeting.
+    pub fn name(self) -> &'static str {
         match self {
             Codec::H264 => "h264",
             Codec::Hevc => "hevc",
