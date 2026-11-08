@@ -87,6 +87,11 @@ pub(super) const PEN_DEVICE_NAME: &str = "UScreen Pen";
 pub(super) const POINTER_DEVICE_NAME: &str = "UScreen Pointer";
 pub(super) const TOUCHPAD_DEVICE_NAME: &str = "UScreen Touchpad";
 pub(super) const KEYBOARD_DEVICE_NAME: &str = "UScreen Keyboard";
+
+/// How long Ctrl is down before the first wheel event of a pinch, and how long a pinch may go quiet
+/// before the host lets go of Ctrl on its own.
+const PINCH_CTRL_LEAD_MS: u64 = 12;
+const PINCH_CTRL_HOLD_MS: u64 = 700;
 /// Device names and product ids for the N-th tablet. The first keeps the
 /// original names and ids so existing KWin input mappings stay valid; every
 /// further one gets a numbered name and its own product range, since KWin
@@ -700,6 +705,8 @@ pub(super) struct InjectDevices {
     pub(super) keyboard_product: u16,
     /// Stylus mode: the relative mouse must not exist.
     pub(super) stylus_mode: bool,
+    /// When Ctrl was last held for a pinch (None: it is up).
+    pub(super) pinch_ctrl_since: Option<std::time::Instant>,
     /// Mouse buttons held down (bit 0 left, 1 right, 2 middle), so a dropped connection releases
     /// them.
     pub(super) mouse_buttons: u8,
@@ -722,6 +729,9 @@ pub(super) struct InjectDevices {
     /// (DOWN received, no matching UP yet). Bit N → slot N, up to slot 15.
     pub(super) active_slots: u16,
     pub(super) pen_proximity: bool,
+    /// Mouse button code each pen button pressed (side, second), so its release lets go of the same
+    /// one even if the setting changed meanwhile, and a dropped connection can release it.
+    pub(super) pen_mouse_held: [Option<u16>; 2],
     /// S Pen side button currently held (BTN_STYLUS). Tracked so a held
     /// button is released cleanly if the connection drops.
     pub(super) pen_button: bool,
@@ -741,6 +751,7 @@ impl InjectDevices {
             keyboard_name: KEYBOARD_DEVICE_NAME.into(),
             keyboard_product: PRODUCT_KEYBOARD,
             stylus_mode: false,
+            pinch_ctrl_since: None,
             mouse_buttons: 0,
             scroll_rest: (0, 0),
             rel_rest: (0.0, 0.0),
@@ -749,6 +760,7 @@ impl InjectDevices {
             active_slots: 0,
             pen_proximity: false,
             pen_button: false,
+            pen_mouse_held: [None; 2],
         }
     }
 
@@ -801,6 +813,13 @@ impl InjectDevices {
             }
         }
         self.mouse_buttons = 0;
+        self.pinch_end();
+        for held in self.pen_mouse_held.iter_mut() {
+            if let (Some(code), Some(dev)) = (held.take(), self.pointer.as_mut()) {
+                let _ = dev.emit(EV_KEY, code, 0);
+                let _ = dev.syn();
+            }
+        }
         self.rel_rest = (0.0, 0.0);
         self.scroll_rest = (0, 0);
     }
@@ -850,6 +869,18 @@ impl InjectDevices {
         }
     }
 
+    /// Press or release a mouse button on the absolute pointer, at the pen's position (the pen's
+    /// buttons act as mouse buttons: a press moves the pointer under the pen first).
+    pub(super) fn pointer_button(&mut self, code: u16, down: bool) {
+        if down {
+            self.park_pointer();
+        }
+        if let Some(ref mut dev) = self.pointer {
+            let _ = dev.emit(EV_KEY, code, down as i32);
+            let _ = dev.syn();
+        }
+    }
+
     /// Put the absolute pointer where the pen last was, so it can click there.
     pub(super) fn park_pointer(&mut self) {
         let (px, py) = self.last_pen_pos;
@@ -880,23 +911,51 @@ impl InjectDevices {
         }
     }
 
-    /// Scroll with a modifier held (Ctrl for zoom): the modifier goes down, the
-    /// wheel turns, the modifier comes up, so a lost connection can never leave it stuck.
-    pub(super) fn scroll_with_modifier(&mut self, modifier: u16, dy: i32) {
-        if dy == 0 {
+    /// One step of a pinch: Ctrl is held for the whole gesture and the wheel turns by `units`
+    /// (hi-res units; positive zooms in). Ctrl goes down at the first step and stays down until
+    /// [`Self::pinch_end`] (or [`Self::release_stale_pinch`] if that never comes).
+    ///
+    /// Pressing and releasing Ctrl around every single wheel event does not work: Ctrl comes from
+    /// the keyboard device and the wheel from the mouse, the compositor does not order events
+    /// between devices, and most wheel events arrived before the modifier so the browser scrolled
+    /// instead of zooming.
+    pub(super) fn pinch(&mut self, units: i32) {
+        if units == 0 {
             return;
         }
-        let Some(kb) = self.keyboard() else { return };
-        let _ = kb.emit(EV_KEY, modifier, 1);
-        let _ = kb.syn();
+        if self.pinch_ctrl_since.is_none() {
+            let Some(kb) = self.keyboard() else { return };
+            let _ = kb.emit(EV_KEY, KEY_LEFTCTRL, 1);
+            let _ = kb.syn();
+            // Let the modifier reach the compositor before the first wheel event.
+            std::thread::sleep(std::time::Duration::from_millis(PINCH_CTRL_LEAD_MS));
+        }
+        self.pinch_ctrl_since = Some(std::time::Instant::now());
         let mut rest = self.scroll_rest;
         if let Some(dev) = self.mouse() {
-            let _ = dev.scroll_by(0, dy, &mut rest);
+            let _ = dev.scroll_by(0, units, &mut rest);
         }
         self.scroll_rest = rest;
-        if let Some(kb) = self.keyboard.as_mut() {
-            let _ = kb.emit(EV_KEY, modifier, 0);
-            let _ = kb.syn();
+    }
+
+    /// The pinch is over: let go of Ctrl.
+    pub(super) fn pinch_end(&mut self) {
+        if self.pinch_ctrl_since.take().is_some() {
+            if let Some(kb) = self.keyboard.as_mut() {
+                let _ = kb.emit(EV_KEY, KEY_LEFTCTRL, 0);
+                let _ = kb.syn();
+            }
+        }
+    }
+
+    /// Safety net: if the tablet never said the pinch ended (it crashed, the link dropped), Ctrl
+    /// must not stay pressed. Called a few times a second.
+    pub(super) fn release_stale_pinch(&mut self) {
+        if self
+            .pinch_ctrl_since
+            .is_some_and(|t| t.elapsed() > std::time::Duration::from_millis(PINCH_CTRL_HOLD_MS))
+        {
+            self.pinch_end();
         }
     }
 

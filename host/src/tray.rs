@@ -43,7 +43,8 @@ struct UScreenTray {
     tablet_present: bool,
     /// Newer release, when the daily check found one.
     update: Option<String>,
-    mode_tx: watch::Sender<bool>,
+    /// Asks the daemon to make Stylus mode (true) or Display mode (false) the global default.
+    mode_request_tx: tokio::sync::mpsc::UnboundedSender<bool>,
     shutdown_tx: watch::Sender<bool>,
 }
 
@@ -139,11 +140,11 @@ impl Tray for UScreenTray {
                 // out would take away the one chance to set it in advance.
                 activate: Box::new(|t: &mut Self| {
                     let want = !t.pen_only;
-                    // The mode channel is the source of truth. Do not flip the
-                    // local copy here: the update task below sets it from the
-                    // channel, so the menu can only ever show a mode the
-                    // daemon actually entered.
-                    let _ = t.mode_tx.send(want);
+                    // Only ask: the daemon writes the global default, the config
+                    // watcher applies it, and the update task below sets the
+                    // checkmark from slot 0's real mode, so the menu can only
+                    // ever show a mode the daemon actually entered.
+                    let _ = t.mode_request_tx.send(want);
                 }),
                 ..Default::default()
             }
@@ -253,6 +254,7 @@ fn open_settings() {
 /// with no tray is a perfectly ordinary thing to run on.
 pub async fn run(
     mode_tx: watch::Sender<bool>,
+    mode_request_tx: tokio::sync::mpsc::UnboundedSender<bool>,
     mut tablet_rx: watch::Receiver<bool>,
     shutdown_tx: watch::Sender<bool>,
     mut update_rx: watch::Receiver<crate::update::Available>,
@@ -271,7 +273,7 @@ pub async fn run(
             pen_only: *mode_rx.borrow_and_update(),
             tablet_present: *tablet_rx.borrow_and_update(),
             update: update_rx.borrow_and_update().clone(),
-            mode_tx: mode_tx.clone(),
+            mode_request_tx: mode_request_tx.clone(),
             shutdown_tx: shutdown_tx.clone(),
         };
         match tray.spawn().await {

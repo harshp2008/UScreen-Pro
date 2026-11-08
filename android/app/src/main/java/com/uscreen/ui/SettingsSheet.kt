@@ -300,6 +300,25 @@ fun SettingsSheet(
                             enabled = mode != HostConfig.MODE_TOUCHPAD
                         )
                         if (mode == HostConfig.MODE_STYLUS) {
+                            val penActions = listOf(
+                                HostConfig.PEN_MIDDLE to "Middle click",
+                                HostConfig.PEN_RIGHT to "Right click",
+                                HostConfig.PEN_LEFT to "Left click",
+                                HostConfig.PEN_STYLUS to "Stylus button",
+                                HostConfig.PEN_NONE to "Nothing",
+                            )
+                            ChipChoice("Pen button 1 (side button)", penActions, hostConfig.stylusButtonPrimary) {
+                                onSetting("stylus_button_primary", it)
+                            }
+                            ChipChoice("Pen button 2", penActions, hostConfig.stylusButtonSecondary) {
+                                onSetting("stylus_button_secondary", it)
+                            }
+                            Text(
+                                "A mouse button is held for as long as the pen button is, so you can drag with it. " +
+                                    "Only the pen and its eraser work in this mode; fingers are ignored.",
+                                fontSize = 11.sp,
+                                color = Muted
+                            )
                             SwitchRow(
                                 "Black screen in stylus mode",
                                 "Nothing is streamed, so the screen goes black a few seconds after it starts.",

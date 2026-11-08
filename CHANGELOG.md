@@ -5,6 +5,20 @@ Full notes for each version are on the
 
 ## Unreleased
 
+Input engine rewrite (see `experiments_and_findings/72_input_engine_rewrite.md`):
+
+- Touchpad: fingers tracked per pointer with Android's `GestureDetector` and
+  `ScaleGestureDetector`; sub-pixel movement carried over; taps, tap-and-drag,
+  two-finger scroll, pinch, and 3/4/5 finger taps with tolerances in millimetres.
+- Touchpad Shape (Full Screen, Standard 4:3, Wide 16:9): touches outside are ignored;
+  the right-click zone is the bottom-right of the shape.
+- Pinch now holds Ctrl for the whole gesture. It used to press and release Ctrl per step,
+  and most wheel events reached the browser without it, so pinch scrolled instead of zooming.
+- Stylus mode ignores fingers; the pen's two buttons are settings (middle / right / left
+  click, the tablet stylus button, or nothing; held while pressed) and the pointer follows
+  the hovering pen.
+- Changing one tablet's mode no longer rewrites the global default input mode.
+
 Onboarding warnings and a tidier stats overlay:
 
 - The fps / bandwidth overlay and its switch exist in Extended Display mode only.

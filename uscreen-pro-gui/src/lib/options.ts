@@ -115,3 +115,12 @@ export const TOUCHPAD_SHAPES: Option[] = [
   { value: "standard_rectangle", label: "Standard Rectangle" },
   { value: "wide_rectangle", label: "Wide Rectangle" },
 ];
+
+/** What a pen button can do. A mouse button is held for as long as the pen button is, so it can drag. */
+export const PEN_BUTTON_ACTIONS: Option[] = [
+  { value: "middle_click", label: "Middle click" },
+  { value: "right_click", label: "Right click" },
+  { value: "left_click", label: "Left click" },
+  { value: "stylus_button", label: "Stylus button" },
+  { value: "none", label: "Nothing" },
+];

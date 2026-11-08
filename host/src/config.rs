@@ -243,6 +243,12 @@ pub struct TabletProfile {
     /// Which part of the tablet acts as the touchpad: `full_screen`, `standard_rectangle` or `wide_rectangle`. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_shape: Option<String>,
+    /// What the pen's side button does: `middle_click`, `right_click`, `left_click`, `stylus_button` (passed on as the tablet stylus button) or `none`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_button_primary: Option<String>,
+    /// Same for the pen's second button.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_button_secondary: Option<String>,
     /// Firmware/APK version reported by the connected Android client.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,
@@ -438,12 +444,35 @@ pub struct FileConfig {
     pub right_click_method: String,
     /// Which part of the tablet acts as the touchpad: `full_screen`, `standard_rectangle` or `wide_rectangle`.
     pub touchpad_shape: String,
+    /// What the pen's side button does: `middle_click`, `right_click`, `left_click`, `stylus_button` or `none`.
+    pub stylus_button_primary: String,
+    /// What the pen's second button does (same values).
+    pub stylus_button_secondary: String,
     /// Fade curves saved by the user in the GUI's curve editor, usable as `preset:<name>`.
     pub curve_presets: Vec<CurvePreset>,
     /// Protocol/daemon version.
     #[serde(default = "default_version")]
     pub version: String,
 }
+
+/// What a pen button does: one of [`PEN_BUTTON_ACTIONS`], else `fallback`.
+pub fn clean_pen_button(v: &str, fallback: &str) -> String {
+    let v = v.trim().to_ascii_lowercase();
+    if PEN_BUTTON_ACTIONS.contains(&v.as_str()) {
+        v
+    } else {
+        fallback.to_string()
+    }
+}
+
+/// The actions a pen button can be given.
+pub const PEN_BUTTON_ACTIONS: [&str; 5] = [
+    "middle_click",
+    "right_click",
+    "left_click",
+    "stylus_button",
+    "none",
+];
 
 /// `full_screen` (default), `standard_rectangle` or `wide_rectangle`; anything else falls back to the default.
 pub fn clean_shape(v: &str) -> String {
@@ -524,6 +553,8 @@ impl Default for FileConfig {
             touchpad_haptics: true,
             right_click_method: "bottom_right_zone".into(),
             touchpad_shape: "full_screen".into(),
+            stylus_button_primary: "middle_click".into(),
+            stylus_button_secondary: "right_click".into(),
             curve_presets: Vec::new(),
         }
     }
@@ -641,12 +672,21 @@ impl FileConfig {
         };
         self.right_click_method = clean_right_click(&self.right_click_method);
         self.touchpad_shape = clean_shape(&self.touchpad_shape);
+        self.stylus_button_primary = clean_pen_button(&self.stylus_button_primary, "middle_click");
+        self.stylus_button_secondary =
+            clean_pen_button(&self.stylus_button_secondary, "right_click");
         for p in self.tablets.values_mut() {
             if let Some(m) = p.right_click_method.take() {
                 p.right_click_method = Some(clean_right_click(&m));
             }
             if let Some(m) = p.touchpad_shape.take() {
                 p.touchpad_shape = Some(clean_shape(&m));
+            }
+            if let Some(m) = p.stylus_button_primary.take() {
+                p.stylus_button_primary = Some(clean_pen_button(&m, "middle_click"));
+            }
+            if let Some(m) = p.stylus_button_secondary.take() {
+                p.stylus_button_secondary = Some(clean_pen_button(&m, "right_click"));
             }
         }
         // One-time migration from the two booleans this enum replaced.
@@ -675,6 +715,21 @@ impl FileConfig {
             );
             self.position = "right".into();
         }
+    }
+
+    /// Make Stylus (`true`) or Display (`false`) the global default input mode. Returns whether that
+    /// changed anything. A global Touchpad default is left alone when the request is for Display:
+    /// the tray's switch is a Stylus toggle, it must not undo a Touchpad default chosen separately.
+    pub fn set_global_stylus(&mut self, on: bool) -> bool {
+        let current = self.input_mode.unwrap_or_default();
+        let next = match (on, current) {
+            (true, InputMode::Stylus) => return false,
+            (true, _) => InputMode::Stylus,
+            (false, InputMode::Stylus) => InputMode::Display,
+            (false, _) => return false,
+        };
+        self.input_mode = Some(next);
+        true
     }
 
     /// Whether a device has a saved profile, under its hardware serial or the adb serial it is
@@ -724,6 +779,52 @@ impl FileConfig {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_tray_toggle_changes_only_the_stylus_default() {
+        let mut c = FileConfig::default();
+        assert!(c.set_global_stylus(true));
+        assert_eq!(c.input_mode, Some(InputMode::Stylus));
+        assert!(
+            !c.set_global_stylus(true),
+            "already Stylus: nothing to write"
+        );
+        assert!(c.set_global_stylus(false));
+        assert_eq!(c.input_mode, Some(InputMode::Display));
+        // A Touchpad default chosen separately survives the switch being turned off.
+        c.input_mode = Some(InputMode::Touchpad);
+        assert!(!c.set_global_stylus(false));
+        assert_eq!(c.input_mode, Some(InputMode::Touchpad));
+    }
+
+    #[test]
+    fn the_schema_has_no_keys_left_from_the_removed_stylus_profiles() {
+        let text = toml::to_string(&FileConfig::default()).unwrap();
+        assert!(
+            !text.contains("stylus_profile"),
+            "no profile key is written any more"
+        );
+        // A config file from the removed attempt still loads; its key is simply ignored.
+        let old: FileConfig =
+            toml::from_str("input_mode = \"display\"\nstylus_profile = \"samsung_spen\"\n")
+                .unwrap();
+        assert_eq!(old.input_mode, Some(InputMode::Display));
+    }
+
+    #[test]
+    fn pen_button_settings_are_validated() {
+        assert_eq!(
+            clean_pen_button(" Right_Click ", "middle_click"),
+            "right_click"
+        );
+        assert_eq!(clean_pen_button("bogus", "middle_click"), "middle_click");
+        let mut c = FileConfig {
+            stylus_button_primary: "nonsense".into(),
+            ..FileConfig::default()
+        };
+        c.sanitize();
+        assert_eq!(c.stylus_button_primary, "middle_click");
+        assert_eq!(c.stylus_button_secondary, "right_click");
+    }
     use super::*;
 
     #[test]

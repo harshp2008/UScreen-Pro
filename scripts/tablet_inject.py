@@ -17,6 +17,10 @@ after each (so a shell script can drive it through a FIFO):
   rotate DEGREES                  two fingers turning around the centre
   pen-hover X Y COUNT             pen hovering over (X, Y), wiggling slightly
   pen-move X0 Y0 X1 Y1 STEPS      pen hovering from one point to another
+  pen-button X Y MS               pen hovering with its barrel button held for MS milliseconds
+  drag X0 Y0 X1 Y1 STEPS [MS]     one finger travelling in equal steps
+  scroll2 DY STEPS                two fingers moving together, DY pixels down
+  tap-drag X Y DX                 tap, touch again at once, drag DX pixels
   sleep SECONDS
   quit
 """
@@ -132,15 +136,15 @@ class Tablet:
         b.append(len(fingers))
         self.touch.report(bytes(b))
 
-    def pen_frame(self, rx, ry, in_range=True, tip=False, pressure=0):
-        flags = (1 if tip else 0) | (8 if in_range else 0)
+    def pen_frame(self, rx, ry, in_range=True, tip=False, pressure=0, barrel=False):
+        flags = (1 if tip else 0) | (2 if barrel else 0) | (8 if in_range else 0)
         self.pen.report(bytes([2, flags]) + struct.pack("<HHH", rx, ry, pressure))
 
     # --- commands ----------------------------------------------------------------------------
     def view_fingers(self, pts, tip=1):
         return [(i, *self.screen.raw(x, y), tip) for i, (x, y) in enumerate(pts)]
 
-    def tap(self, pts, jitter=0.0, hold_ms=120, stagger_ms=15):
+    def tap(self, pts, jitter=0.0, hold_ms=120, stagger_ms=15, settle=True):
         n = len(pts)
         for k in range(1, n + 1):  # fingers land one after another
             self.touch_frame(self.view_fingers(pts[:k]))
@@ -156,7 +160,8 @@ class Tablet:
             self.touch_frame(fs)
             time.sleep(stagger_ms / 1000)
         self.touch_frame([])
-        time.sleep(0.25)
+        if settle:
+            time.sleep(0.25)
 
     def two_fingers(self, pose, steps=24, step_ms=16):
         cx, cy = VIEW_W / 2, VIEW_H / 2
@@ -184,6 +189,56 @@ class Tablet:
             self.pen_frame(*self.screen.raw(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t))
             time.sleep(interval_ms / 1000)
         self.pen_frame(*self.screen.raw(x1, y1), in_range=False)
+        time.sleep(0.25)
+
+    def drag(self, x0, y0, x1, y1, steps, interval_ms=16, hold_first=True):
+        """One finger travelling from (x0, y0) to (x1, y1) in `steps` equal steps."""
+        self.touch_frame(self.view_fingers([(x0, y0)]))
+        time.sleep(0.05)
+        for i in range(1, steps + 1):
+            t = i / steps
+            self.touch_frame(self.view_fingers([(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t)]))
+            time.sleep(interval_ms / 1000)
+        time.sleep(0.05)
+        self.touch_frame([(0, *self.screen.raw(x1, y1), 0)])
+        self.touch_frame([])
+        time.sleep(0.25)
+
+    def scroll2(self, dy, steps):
+        """Two fingers moving down (dy > 0) or up together."""
+        cx, cy = VIEW_W / 2, VIEW_H / 2
+        pts = lambda t: [(cx - 100, cy + dy * t), (cx + 100, cy + dy * t)]
+        self.touch_frame(self.view_fingers(pts(0)))
+        time.sleep(0.06)
+        for i in range(1, steps + 1):
+            self.touch_frame(self.view_fingers(pts(i / steps)))
+            time.sleep(0.016)
+        time.sleep(0.05)
+        end = pts(1)
+        self.touch_frame([(0, *self.screen.raw(*end[0]), 1), (1, *self.screen.raw(*end[1]), 0)])
+        self.touch_frame([(0, *self.screen.raw(*end[0]), 0)])
+        self.touch_frame([])
+        time.sleep(0.25)
+
+    def tap_drag(self, x, y, dx, steps=20):
+        """Tap, then touch again at once and drag: a touchpad's tap-and-drag."""
+        # The second touch must land within Android's double-tap window (300 ms) of the first lift.
+        self.tap([(x, y)], hold_ms=80, stagger_ms=0, settle=False)
+        time.sleep(0.09)
+        self.drag(x, y, x + dx, y, steps)
+
+    def pen_button(self, x, y, ms):
+        """Hover the pen over (x, y) holding its barrel button for `ms` milliseconds."""
+        rx, ry = self.screen.raw(x, y)
+        t0 = time.time()
+        self.pen_frame(rx, ry)
+        time.sleep(0.05)
+        while (time.time() - t0) * 1000 < ms:
+            self.pen_frame(rx, ry, barrel=True)
+            time.sleep(0.02)
+        self.pen_frame(rx, ry)
+        time.sleep(0.05)
+        self.pen_frame(rx, ry, in_range=False)
         time.sleep(0.25)
 
     def run(self, line):
@@ -219,6 +274,14 @@ class Tablet:
                 time.sleep(0.008)
             self.pen_frame(*self.screen.raw(f[0], f[1]), in_range=False)
             time.sleep(0.25)
+        elif c == "drag":
+            self.drag(f[0], f[1], f[2], f[3], int(f[4]), int(f[5]) if len(f) > 5 else 16)
+        elif c == "scroll2":
+            self.scroll2(f[0], int(f[1]))
+        elif c == "tap-drag":
+            self.tap_drag(f[0], f[1], f[2])
+        elif c == "pen-button":
+            self.pen_button(f[0], f[1], f[2])
         elif c == "pen-move":
             self.pen_path(f[0], f[1], f[2], f[3], int(f[4]))
         else:

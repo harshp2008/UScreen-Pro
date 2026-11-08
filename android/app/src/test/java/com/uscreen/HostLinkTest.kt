@@ -133,4 +133,19 @@ class HostLinkTest {
         assertTrue(std.contains(1280f, 800f))
         assertFalse(std.contains(10f, 800f))
     }
+
+    @Test
+    fun penButtonsAreSettingsWithTheDocumentedDefaults() {
+        val base = HostConfig()
+        assertEquals(HostConfig.PEN_MIDDLE, base.stylusButtonPrimary)
+        assertEquals(HostConfig.PEN_RIGHT, base.stylusButtonSecondary)
+        assertEquals("left_click", base.withSetting("stylus_button_primary", "left_click")?.stylusButtonPrimary)
+        assertEquals(null, base.withSetting("stylus_button_primary", "double_click"))
+        val c = HostConfig.fromJson(
+            org.json.JSONObject("""{"stylus_button_secondary":"stylus_button","stylus_button_primary":"bogus"}"""),
+            base
+        )
+        assertEquals(HostConfig.PEN_STYLUS, c.stylusButtonSecondary)
+        assertEquals(HostConfig.PEN_MIDDLE, c.stylusButtonPrimary)
+    }
 }

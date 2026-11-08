@@ -46,6 +46,8 @@ data class HostConfig(
     val touchpadHaptics: Boolean = true,
     val rightClickMethod: String = RIGHT_CLICK_ZONE,
     val touchpadShape: String = TouchpadShape.FULL,
+    val stylusButtonPrimary: String = PEN_MIDDLE,
+    val stylusButtonSecondary: String = PEN_RIGHT,
 ) {
     /** True while the host streams video to this tablet (only Display mode does). */
     val streamsVideo: Boolean get() = inputMode == MODE_DISPLAY
@@ -67,6 +69,8 @@ data class HostConfig(
         "idle_dim_enabled" -> (value as? Boolean)?.let { copy(idleDimEnabled = it) }
         "idle_dim_timeout_secs" -> (value as? Int)?.let { copy(idleDimTimeoutSecs = it) }
         "touchpad_shape" -> (value as? String)?.takeIf { it in TouchpadShape.SHAPES }?.let { copy(touchpadShape = it) }
+        "stylus_button_primary" -> (value as? String)?.takeIf { it in PEN_BUTTON_ACTIONS }?.let { copy(stylusButtonPrimary = it) }
+        "stylus_button_secondary" -> (value as? String)?.takeIf { it in PEN_BUTTON_ACTIONS }?.let { copy(stylusButtonSecondary = it) }
         "touchpad_haptics" -> (value as? Boolean)?.let { copy(touchpadHaptics = it) }
         "right_click_method" -> (value as? String)?.takeIf { it in RIGHT_CLICK_METHODS }?.let { copy(rightClickMethod = it) }
         else -> null
@@ -77,6 +81,14 @@ data class HostConfig(
         const val MODE_TOUCHPAD = "touchpad"
         const val MODE_STYLUS = "stylus"
         val MODES = listOf(MODE_DISPLAY, MODE_TOUCHPAD, MODE_STYLUS)
+
+        /** What a pen button can do; the wire values the host accepts. */
+        const val PEN_MIDDLE = "middle_click"
+        const val PEN_RIGHT = "right_click"
+        const val PEN_LEFT = "left_click"
+        const val PEN_STYLUS = "stylus_button"
+        const val PEN_NONE = "none"
+        val PEN_BUTTON_ACTIONS = listOf(PEN_MIDDLE, PEN_RIGHT, PEN_LEFT, PEN_STYLUS, PEN_NONE)
 
         /** A tap in the bottom-right strip right-clicks (default). */
         const val RIGHT_CLICK_ZONE = "bottom_right_zone"
@@ -111,6 +123,10 @@ data class HostConfig(
                 .takeIf { it in RIGHT_CLICK_METHODS } ?: base.rightClickMethod,
             touchpadShape = o.optString("touchpad_shape", base.touchpadShape)
                 .takeIf { it in TouchpadShape.SHAPES } ?: base.touchpadShape,
+            stylusButtonPrimary = o.optString("stylus_button_primary", base.stylusButtonPrimary)
+                .takeIf { it in PEN_BUTTON_ACTIONS } ?: base.stylusButtonPrimary,
+            stylusButtonSecondary = o.optString("stylus_button_secondary", base.stylusButtonSecondary)
+                .takeIf { it in PEN_BUTTON_ACTIONS } ?: base.stylusButtonSecondary,
         )
 
         /** The saved copy of the synced settings, so a restart shows the last known values before the host answers. */
@@ -131,6 +147,8 @@ data class HostConfig(
             touchpadHaptics = prefs.touchpadHaptics,
             rightClickMethod = prefs.rightClickMethod,
             touchpadShape = prefs.touchpadShape,
+            stylusButtonPrimary = prefs.stylusButtonPrimary,
+            stylusButtonSecondary = prefs.stylusButtonSecondary,
         )
     }
 }

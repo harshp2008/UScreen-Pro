@@ -77,6 +77,8 @@ export function DeviceSettings({
     touchpad_haptics: p.touchpad_haptics ?? g.touchpad_haptics,
     right_click_method: p.right_click_method ?? g.right_click_method,
     touchpad_shape: p.touchpad_shape ?? g.touchpad_shape,
+    stylus_button_primary: p.stylus_button_primary ?? g.stylus_button_primary,
+    stylus_button_secondary: p.stylus_button_secondary ?? g.stylus_button_secondary,
   };
 
   const online = device?.state === "device";

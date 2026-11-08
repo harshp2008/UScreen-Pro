@@ -59,6 +59,8 @@ const config: AppConfig = {
   touchpad_haptics: true,
   right_click_method: "bottom_right_zone",
   touchpad_shape: "full_screen",
+  stylus_button_primary: "middle_click",
+  stylus_button_secondary: "right_click",
   version: "dev",
   tablets: {},
 };

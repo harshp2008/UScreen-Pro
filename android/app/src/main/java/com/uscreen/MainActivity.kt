@@ -210,6 +210,8 @@ class MainActivity : AppCompatActivity() {
             it.setTouchEnabled(hostConfig.touchInput || hostConfig.inputMode == HostConfig.MODE_TOUCHPAD)
             it.setTouchpadMode(hostConfig.inputMode == HostConfig.MODE_TOUCHPAD)
             it.setStylusMode(hostConfig.inputMode == HostConfig.MODE_STYLUS)
+            it.setRightClickZone(hostConfig.rightClickMethod == HostConfig.RIGHT_CLICK_ZONE)
+            it.setPanelDensity(resources.displayMetrics.xdpi / 25.4f)
             it.setTouchpadShape(hostConfig.touchpadShape)
             it.hostConfig = hostConfig
             // Touchpad clicks tick lightly when the setting is on (it is on by default).
@@ -385,10 +387,13 @@ class MainActivity : AppCompatActivity() {
         prefs.touchpadHaptics = cfg.touchpadHaptics
         prefs.rightClickMethod = cfg.rightClickMethod
         prefs.touchpadShape = cfg.touchpadShape
+        prefs.stylusButtonPrimary = cfg.stylusButtonPrimary
+        prefs.stylusButtonSecondary = cfg.stylusButtonSecondary
         // Touchpad mode is made of finger input, so it overrides the "Touch input" switch.
         touchCapture?.setTouchEnabled(cfg.touchInput || cfg.inputMode == HostConfig.MODE_TOUCHPAD)
         touchCapture?.setTouchpadMode(cfg.inputMode == HostConfig.MODE_TOUCHPAD)
         touchCapture?.setStylusMode(cfg.inputMode == HostConfig.MODE_STYLUS)
+        touchCapture?.setRightClickZone(cfg.rightClickMethod == HostConfig.RIGHT_CLICK_ZONE)
         touchCapture?.setTouchpadShape(cfg.touchpadShape)
         if (prev.immersiveMode != cfg.immersiveMode) applyImmersiveMode(cfg.immersiveMode)
         if (prev.keepDisplayAliveWhenLocked != cfg.keepDisplayAliveWhenLocked) applyLockScreenFlags()

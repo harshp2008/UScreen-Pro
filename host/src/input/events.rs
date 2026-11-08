@@ -26,8 +26,8 @@ pub(super) fn note_pen_action(action: u8) {
     if let Ok(mut c) = PEN_ACTIONS.lock() {
         if c.iter().any(|&n| n > 0) {
             info!(
-                "Pen events: down={} up={} move={} hover={} hover_exit={} btn_down={} btn_up={}",
-                c[0], c[1], c[2], c[3], c[4], c[5], c[6]
+                "Pen events: down={} up={} move={} hover={} hover_exit={} btn_down={} btn_up={} btn2={}",
+                c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7]
             );
             *c = [0; 8];
         }
@@ -41,6 +41,58 @@ const SCROLL_UNITS_PER_PX: f64 = 3.0;
 /// Wheel units per tablet pixel of pinch travel (Ctrl + wheel zooms): a 100 px pinch is about five
 /// notches.
 const PINCH_UNITS_PER_PX: f64 = 6.0;
+
+/// What a pen button does, from its `stylus_button_*` setting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PenButtonAction {
+    /// Hold a mouse button (BTN_LEFT / RIGHT / MIDDLE) for as long as the pen button is down.
+    Mouse(u16),
+    /// Pass it on as the tablet's own stylus button (BTN_STYLUS).
+    Stylus,
+    None,
+}
+
+impl PenButtonAction {
+    fn from_setting(setting: &str) -> Self {
+        match setting {
+            "left_click" => Self::Mouse(BTN_LEFT),
+            "right_click" => Self::Mouse(BTN_RIGHT),
+            "middle_click" => Self::Mouse(BTN_MIDDLE),
+            "stylus_button" => Self::Stylus,
+            _ => Self::None,
+        }
+    }
+}
+
+/// A pen button changed (pen actions 5 / 6 = side button down / up, 7 / 8 = second button). A mouse
+/// action is held for as long as the pen button is, so it can drag; a release lets go of whatever
+/// the press took, even if the setting changed in between.
+fn pen_button(buttons: &(String, String), action: u8, guard: &mut InjectDevices) {
+    let second = action >= 7;
+    let down = action == 5 || action == 7;
+    let slot = second as usize;
+    if !down {
+        if let Some(code) = guard.pen_mouse_held[slot].take() {
+            guard.pointer_button(code, false);
+            return;
+        }
+    }
+    match PenButtonAction::from_setting(if second { &buttons.1 } else { &buttons.0 }) {
+        PenButtonAction::Mouse(code) if down => {
+            guard.pen_mouse_held[slot] = Some(code);
+            guard.pointer_button(code, true);
+        }
+        PenButtonAction::Stylus => {
+            if let Some(ref mut dev) = guard.pen {
+                let wire = if down { 5 } else { 6 };
+                if dev.inject_pen(0, 0, 0, 0, 0, wire, false).is_ok() {
+                    guard.pen_button = down;
+                }
+            }
+        }
+        _ => {}
+    }
+}
 
 pub(super) fn handle_event(
     instance: u32,
@@ -106,6 +158,19 @@ pub(super) fn handle_event(
             }
         }
         InputEvent::Pen {
+            action: action @ 5..=8,
+            ..
+        } => {
+            note_pen_action(action);
+            if let Ok(mut guard) = uinput.lock() {
+                pen_button(
+                    &crate::options::current_pen_buttons(instance),
+                    action,
+                    &mut guard,
+                );
+            }
+        }
+        InputEvent::Pen {
             x,
             y,
             pressure,
@@ -160,14 +225,15 @@ pub(super) fn handle_event(
                     // Leaving proximity hides the tablet cursor, so hand the
                     // position to the plain pointer and let an ordinary cursor
                     // stay where the pen last was.
-                    if action == 4 {
+                    if action == 4 || (action == 3 && guard.stylus_mode) {
+                        // The tablet cursor vanishes when the tool leaves proximity, and in Stylus
+                        // mode the plain pointer also follows the hovering pen, so an ordinary
+                        // mouse cursor is always under it (S-Pen-Mouse does the same).
                         guard.park_pointer();
                     }
                     match action {
                         0 | 3 => guard.pen_proximity = true,
                         1 | 4 => guard.pen_proximity = false,
-                        5 => guard.pen_button = true,
-                        6 => guard.pen_button = false,
                         _ => {}
                     }
                 }
@@ -338,8 +404,8 @@ pub(super) fn handle_event(
             if let Ok(mut guard) = uinput.lock() {
                 match kind.as_str() {
                     // Ctrl + wheel zooms in browsers and most viewers; fingers apart zoom in.
-                    "pinch" => guard
-                        .scroll_with_modifier(KEY_LEFTCTRL, (amount * PINCH_UNITS_PER_PX) as i32),
+                    "pinch" => guard.pinch((amount * PINCH_UNITS_PER_PX) as i32),
+                    "pinch_end" => guard.pinch_end(),
                     "workspace_prev" => guard.tap_key_combo(&[KEY_LEFTMETA, KEY_PAGEUP]),
                     "workspace_next" => guard.tap_key_combo(&[KEY_LEFTMETA, KEY_PAGEDOWN]),
                     other => warn!("Unknown gesture {:?}", other),
@@ -604,6 +670,142 @@ mod tests {
         for p in [mpath, kpath] {
             let _ = std::fs::remove_file(p);
         }
+    }
+
+    fn pen_buttons(primary: &str, secondary: &str) -> (String, String) {
+        (primary.to_string(), secondary.to_string())
+    }
+
+    #[test]
+    fn the_pen_side_button_is_a_held_middle_click_by_default_and_the_second_a_right_click() {
+        let (pointer, path) = device_over_file("penbtn");
+        let mut d = InjectDevices::headless();
+        d.pointer = Some(pointer);
+        d.last_pen_pos = (500, 700);
+        let cfg = pen_buttons("middle_click", "right_click");
+        pen_button(&cfg, 5, &mut d); // side button down
+        pen_button(&cfg, 7, &mut d); // second button down while the first is held
+        pen_button(&cfg, 6, &mut d);
+        pen_button(&cfg, 8, &mut d);
+        let f = frames(&path);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(
+            f,
+            vec![
+                vec![(EV_ABS, ABS_X, 500), (EV_ABS, ABS_Y, 700)], // pointer parked under the pen
+                vec![(EV_KEY, BTN_MIDDLE, 1)],
+                vec![(EV_ABS, ABS_X, 500), (EV_ABS, ABS_Y, 700)],
+                vec![(EV_KEY, BTN_RIGHT, 1)],
+                vec![(EV_KEY, BTN_MIDDLE, 0)],
+                vec![(EV_KEY, BTN_RIGHT, 0)],
+            ]
+        );
+        assert_eq!(d.pen_mouse_held, [None, None]);
+    }
+
+    #[test]
+    fn a_pen_button_release_lets_go_of_what_the_press_took_even_if_the_setting_changed() {
+        let (pointer, path) = device_over_file("penbtn-change");
+        let mut d = InjectDevices::headless();
+        d.pointer = Some(pointer);
+        pen_button(&pen_buttons("right_click", "none"), 5, &mut d);
+        pen_button(&pen_buttons("left_click", "none"), 6, &mut d);
+        let f = frames(&path);
+        let _ = std::fs::remove_file(&path);
+        assert!(
+            f.contains(&vec![(EV_KEY, BTN_RIGHT, 0)]),
+            "released as the right button"
+        );
+        assert!(!f.iter().flatten().any(|e| e.1 == BTN_LEFT));
+    }
+
+    #[test]
+    fn a_pen_button_can_be_passed_on_as_the_stylus_button_or_do_nothing() {
+        let (pen, ppath) = device_over_file("penbtn-stylus");
+        let (pointer, qpath) = device_over_file("penbtn-none");
+        let mut d = InjectDevices::headless();
+        d.pen = Some(pen);
+        d.pointer = Some(pointer);
+        pen_button(&pen_buttons("stylus_button", "none"), 5, &mut d);
+        pen_button(&pen_buttons("stylus_button", "none"), 6, &mut d);
+        pen_button(&pen_buttons("stylus_button", "none"), 7, &mut d);
+        pen_button(&pen_buttons("stylus_button", "none"), 8, &mut d);
+        let (pen_frames, pointer_frames) = (frames(&ppath), frames(&qpath));
+        let _ = (std::fs::remove_file(&ppath), std::fs::remove_file(&qpath));
+        assert_eq!(
+            pen_frames,
+            vec![vec![(EV_KEY, BTN_STYLUS, 1)], vec![(EV_KEY, BTN_STYLUS, 0)]]
+        );
+        assert!(pointer_frames.is_empty(), "'none' sends nothing");
+    }
+
+    #[test]
+    fn a_dropped_connection_releases_a_held_pen_mouse_button() {
+        let (pointer, path) = device_over_file("penbtn-drop");
+        let mut d = InjectDevices::headless();
+        d.pointer = Some(pointer);
+        pen_button(&pen_buttons("middle_click", "none"), 5, &mut d);
+        d.release_all();
+        let f = frames(&path);
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(f.last().unwrap(), &vec![(EV_KEY, BTN_MIDDLE, 0)]);
+    }
+
+    #[test]
+    fn a_pinch_holds_ctrl_for_the_whole_gesture_and_lets_go_at_the_end() {
+        let (kb, kpath) = device_over_file("pinch-kb");
+        let (mouse, mpath) = device_over_file("pinch-mouse");
+        let mut d = InjectDevices::headless();
+        d.keyboard = Some(kb);
+        d.mouse = Some(mouse);
+        d.pinch(240); // Ctrl goes down, then the wheel turns
+        d.pinch(120);
+        d.pinch(-60);
+        let during = frames(&kpath);
+        d.pinch_end();
+        let after = frames(&kpath);
+        let wheel = frames(&mpath);
+        let _ = (std::fs::remove_file(&kpath), std::fs::remove_file(&mpath));
+        assert_eq!(
+            during,
+            vec![vec![(EV_KEY, KEY_LEFTCTRL, 1)]],
+            "one press for three wheel steps, no release in between"
+        );
+        assert_eq!(after.last().unwrap(), &vec![(EV_KEY, KEY_LEFTCTRL, 0)]);
+        assert_eq!(wheel.len(), 3, "every step turned the wheel");
+        assert!(d.pinch_ctrl_since.is_none());
+    }
+
+    #[test]
+    fn a_pinch_that_never_ends_lets_go_of_ctrl_on_its_own() {
+        let (kb, kpath) = device_over_file("pinch-stale-kb");
+        let (mouse, mpath) = device_over_file("pinch-stale-mouse");
+        let mut d = InjectDevices::headless();
+        d.keyboard = Some(kb);
+        d.mouse = Some(mouse);
+        d.pinch(100);
+        d.release_stale_pinch();
+        assert!(d.pinch_ctrl_since.is_some(), "still within the hold time");
+        d.pinch_ctrl_since = Some(std::time::Instant::now() - std::time::Duration::from_secs(2));
+        d.release_stale_pinch();
+        let f = frames(&kpath);
+        let _ = (std::fs::remove_file(&kpath), std::fs::remove_file(&mpath));
+        assert_eq!(f.last().unwrap(), &vec![(EV_KEY, KEY_LEFTCTRL, 0)]);
+        assert!(d.pinch_ctrl_since.is_none());
+    }
+
+    #[test]
+    fn a_dropped_connection_releases_ctrl_held_for_a_pinch() {
+        let (kb, kpath) = device_over_file("pinch-drop-kb");
+        let (mouse, mpath) = device_over_file("pinch-drop-mouse");
+        let mut d = InjectDevices::headless();
+        d.keyboard = Some(kb);
+        d.mouse = Some(mouse);
+        d.pinch(100);
+        d.release_all();
+        let f = frames(&kpath);
+        let _ = (std::fs::remove_file(&kpath), std::fs::remove_file(&mpath));
+        assert_eq!(f.last().unwrap(), &vec![(EV_KEY, KEY_LEFTCTRL, 0)]);
     }
 
     #[test]
