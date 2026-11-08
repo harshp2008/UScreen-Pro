@@ -113,6 +113,23 @@ pub(crate) enum Commands {
         #[arg(long)]
         sparse: bool,
     },
+    /// Print the udev rules for a physical drawing tablet: pen access without root and, with
+    /// `--hide`, the rule that hides it from the desktop (`LIBINPUT_IGNORE_DEVICE`). Nothing is
+    /// installed; the output says where each file goes.
+    TabletRules {
+        /// Vendor id in hex (e.g. 28bd); the first pen tablet found when omitted
+        #[arg(long)]
+        vid: Option<String>,
+        /// Product id in hex (e.g. 0931)
+        #[arg(long)]
+        pid: Option<String>,
+        /// Also print the hide rule
+        #[arg(long)]
+        hide: bool,
+    },
+    /// Flip the pen between pressure-tablet and mouse routing for the focused app (the same as
+    /// Ctrl+Alt+P with the GNOME extension); bind this to a key on desktops without the extension
+    ToggleTablet,
     /// Clear the compositor-safety record so the virtual display may be created
     /// again after a safe-mode start (restart the daemon afterwards)
     ResetGuard,

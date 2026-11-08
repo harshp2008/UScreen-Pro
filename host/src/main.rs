@@ -101,6 +101,35 @@ async fn main() -> Result<()> {
             vaapi_device,
         }) => commands::check_encoder(encoder, vaapi_device.as_deref()).await?,
         Some(Commands::Doctor { .. }) => doctor::run().await?,
+        Some(Commands::TabletRules { vid, pid, hide }) => {
+            let ids = match (vid.as_deref(), pid.as_deref()) {
+                (Some(v), Some(p)) => u16::from_str_radix(v.trim_start_matches("0x"), 16)
+                    .ok()
+                    .zip(u16::from_str_radix(p.trim_start_matches("0x"), 16).ok()),
+                (None, None) => input::detect_tablet(),
+                _ => None,
+            };
+            let Some((v, p)) = ids else {
+                anyhow::bail!("no tablet found; pass both --vid and --pid (see `lsusb`)");
+            };
+            let (access, hide_rule) = input::tablet_rules(v, p);
+            println!("{access}");
+            if *hide {
+                println!("{hide_rule}");
+            }
+        }
+        Some(Commands::ToggleTablet) => {
+            let path = input::toggle_file().ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            std::fs::write(&path, stamp.to_string())?;
+            println!("Toggled: the running daemon flips the pen route for the focused app.");
+        }
         Some(Commands::ResetGuard) => match guard::reset() {
             Ok(true) => println!(
                 "Safety record cleared. Restart the daemon to re-enable the virtual display."

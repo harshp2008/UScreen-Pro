@@ -273,6 +273,7 @@ class TouchCapture {
         sv.setOnTouchListener { view, event ->
             if (inputBlocked) {
                 liftTouches()
+                liftPen()
                 return@setOnTouchListener true
             }
             // Deliver touches as the panel reports them. Batched to the screen refresh, Android
@@ -551,6 +552,9 @@ class TouchCapture {
             }
 
             MotionEvent.ACTION_CANCEL -> {
+                var penCancelled = false
+                for (i in 0 until pointerCount) if (isPenLike(event, i)) penCancelled = true
+                if (penCancelled || penDown) liftPen()
                 if (stylusMode) return true
                 if (touchpadMode) {
                     outsideIds.clear()
@@ -559,7 +563,7 @@ class TouchCapture {
                     return true
                 }
                 for (i in 0 until pointerCount) {
-                    if (isPalm(event, i)) continue
+                    if (isPalm(event, i) || isPenLike(event, i)) continue
                     val (nx, ny) = mapCoordinates(event.getX(i), event.getY(i), vw, vh)
                     sendTouch(nx, ny, 0.0, 1, slotOf(event, i))
                 }
@@ -693,8 +697,32 @@ class TouchCapture {
         }
     }
 
+    /** The pen's tip is down as far as the host has been told, and where it was last seen. */
+    private var penDown = false
+    private var lastPenX = 0.0
+    private var lastPenY = 0.0
+
+    /**
+     * Owe the host the pen's UP if it was sent a DOWN: a cancelled contact (Android drops a stroke
+     * on a palm, a system gesture or a focus change without an ACTION_UP) or input being blocked
+     * mid-stroke would otherwise leave the left button held on the computer, and the next mouse
+     * the user picks up drags with it.
+     */
+    private fun liftPen() {
+        if (!penDown) return
+        emitPen(lastPenX, lastPenY, 0.0, 0.0, 0.0, false, 1)
+    }
+
     private fun emitPen(x: Double, y: Double, pressure: Double,
                         tiltX: Double, tiltY: Double, eraser: Boolean, action: Int) {
+        when (action) {
+            0 -> penDown = true
+            1 -> penDown = false
+        }
+        if (action in 0..3) {
+            lastPenX = x
+            lastPenY = y
+        }
         val msg = JSONObject().apply {
             put("type", "pen")
             put("x", x)
@@ -1230,7 +1258,10 @@ and consults it when choosing between the device's adb entries.
      */
     fun setInputBlocked(blocked: Boolean) {
         inputBlocked = blocked
-        if (blocked) liftTouches()
+        if (blocked) {
+            liftTouches()
+            liftPen()
+        }
     }
 
     /**

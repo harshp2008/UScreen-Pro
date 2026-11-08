@@ -117,6 +117,15 @@ impl InputServer {
         .unwrap_or_else(|_| InjectDevices::headless());
         let uinput = Arc::new(std::sync::Mutex::new(devices));
 
+        // Ghost tracking: follow the focused app (for the click routing), hide the idle cursor, and
+        // read a plugged-in drawing tablet when that is switched on. The tablet belongs to the
+        // first slot only, so two Android tablets never fight over one physical pen.
+        start_focus_watcher();
+        spawn_idle_task(uinput.clone(), self.config.instance);
+        if self.config.instance == 0 {
+            physical::spawn(uinput.clone(), 0, self.running.clone());
+        }
+
         // Follow the mode for as long as the daemon runs. A switch has to move
         // the pen and touch devices onto the other output, and drop anything
         // held at the moment of the switch — a finger or pen tip that was down

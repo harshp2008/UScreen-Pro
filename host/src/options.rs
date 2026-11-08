@@ -57,11 +57,15 @@ pub struct DeviceOptions {
     pub right_click_method: String,
     /// `full_screen`, `standard_rectangle` or `wide_rectangle`.
     pub touchpad_shape: String,
-    /// `mouse` or `tablet`.
+    /// `mouse`, `tablet` or `auto` (ghost tracking).
     pub stylus_style: String,
     /// `right`, `middle` or `none`.
     pub stylus_button_primary: String,
     pub stylus_button_secondary: String,
+    /// Ghost tracking: seconds out of range before the cursor is hidden (0 = never). Global.
+    pub stylus_idle_hide_timeout: u32,
+    /// Ghost tracking: apps that get the pressure pen. Global.
+    pub stylus_art_apps: Vec<String>,
     /// Informational: a Wi-Fi address is configured for this device, so the app hides its
     /// "Setup Wireless Pairing" button.
     pub wifi_configured: bool,
@@ -138,6 +142,8 @@ impl DeviceOptions {
             stylus_style: g.stylus_style.clone(),
             stylus_button_primary: g.stylus_button_primary.clone(),
             stylus_button_secondary: g.stylus_button_secondary.clone(),
+            stylus_idle_hide_timeout: g.stylus_idle_hide_timeout,
+            stylus_art_apps: g.stylus_art_apps.clone(),
             wifi_configured: wifi(&p.wifi_address) || !cfg.wifi_address.trim().is_empty(),
         }
     }
@@ -257,7 +263,7 @@ fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Result<bool, ()>
             _ => return Err(()),
         },
         "stylus_style" => match s?.as_str() {
-            m @ ("mouse" | "tablet") => set(&mut p.stylus_style, m.to_string()),
+            m @ ("mouse" | "tablet" | "auto") => set(&mut p.stylus_style, m.to_string()),
             _ => return Err(()),
         },
         "stylus_button_primary" => match s?.as_str() {

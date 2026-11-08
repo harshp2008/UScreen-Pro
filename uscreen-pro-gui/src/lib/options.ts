@@ -111,8 +111,19 @@ export const RIGHT_CLICK_METHODS: Option[] = [
 
 /** What the pen does in Stylus mode. */
 export const STYLUS_STYLES: Option[] = [
+  { value: "auto", label: "Auto" },
   { value: "mouse", label: "Mouse" },
   { value: "tablet", label: "Graphics tablet" },
+];
+
+/** How long the pen must be out of range before the desktop cursor hides (ghost tracking). */
+export const IDLE_HIDE: Option[] = [
+  { value: "0", label: "Never" },
+  { value: "5", label: "5 seconds" },
+  { value: "15", label: "15 seconds" },
+  { value: "30", label: "30 seconds" },
+  { value: "60", label: "1 minute" },
+  { value: "300", label: "5 minutes" },
 ];
 
 /** What a pen side button does when the pen acts as a mouse. */

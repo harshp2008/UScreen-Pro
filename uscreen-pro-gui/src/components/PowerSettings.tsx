@@ -110,7 +110,7 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
           <>
             <SettingRow
               label="Pen acts as"
-              tip="Mouse: the pen is a pointer. The tip is the left button and stays down while you drag, so you can select text and move windows; hovering moves a visible cursor. Graphics tablet: a pressure and tilt pen for drawing programs."
+              tip="Auto: a visible cursor follows the pen everywhere and text selection works; drawing programs (Krita, GIMP, ...) get pressure and tilt, other apps get a mouse click. Ctrl+Alt+P flips the choice for the focused app. Mouse: the pen is a pointer. The tip is the left button and stays down while you drag, so you can select text and move windows; hovering moves a visible cursor. Graphics tablet: a pressure and tilt pen for drawing programs."
               override={ov("stylus_style", labelOf(STYLUS_STYLES, v.stylus_style))}
             >
               <Segmented
@@ -120,7 +120,7 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
                 onValueChange={(stylus_style) => onChange({ stylus_style })}
               />
             </SettingRow>
-            {v.stylus_style === "mouse" && (
+            {(v.stylus_style === "mouse" || v.stylus_style === "auto") && (
               <>
                 <SettingRow
                   label="Pen button"

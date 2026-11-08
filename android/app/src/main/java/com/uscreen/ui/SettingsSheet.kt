@@ -304,12 +304,13 @@ fun SettingsSheet(
                             ChipChoice(
                                 "Pen acts as",
                                 listOf(
+                                    HostConfig.STYLUS_AUTO to "Auto",
                                     HostConfig.STYLUS_MOUSE to "Mouse",
                                     HostConfig.STYLUS_TABLET to "Graphics tablet",
                                 ),
                                 hostConfig.stylusStyle,
                             ) { onSetting("stylus_style", it) }
-                            if (hostConfig.stylusStyle == HostConfig.STYLUS_MOUSE) {
+                            if (hostConfig.stylusStyle == HostConfig.STYLUS_MOUSE || hostConfig.stylusStyle == HostConfig.STYLUS_AUTO) {
                                 val penButtons = listOf(
                                     HostConfig.PEN_BUTTON_RIGHT to "Right click",
                                     HostConfig.PEN_BUTTON_MIDDLE to "Middle click",

@@ -25,15 +25,20 @@ use tokio_tungstenite::{accept_async_with_config, tungstenite::protocol::WebSock
 use tracing::{error, info, warn};
 
 mod events;
+mod ghost;
 mod mapping;
+mod physical;
 mod protocol;
 mod server;
 mod uinput;
 
+pub use ghost::toggle_file;
+pub use physical::{detect_tablet, tablet_rules};
 pub use protocol::InputConfig;
 pub use server::InputServer;
 
 use events::*;
+use ghost::*;
 use mapping::*;
 use protocol::*;
 use uinput::*;

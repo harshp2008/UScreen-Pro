@@ -468,6 +468,20 @@ pub struct FileConfig {
     pub stylus_button_primary: String,
     /// Second pen side button in `mouse` style: `right`, `middle` or `none`.
     pub stylus_button_secondary: String,
+    /// Ghost tracking: seconds with the pen out of range after which the desktop cursor is hidden.
+    /// `0` (default) never hides it, so the pen's cursor behaves like a mouse cursor.
+    pub stylus_idle_hide_timeout: u32,
+    /// Apps (app id, desktop file or window class, case-insensitive substring) whose pen strokes go
+    /// to the pressure-sensitive `UScreen Pen`; everywhere else the tip is a mouse click.
+    pub stylus_art_apps: Vec<String>,
+    /// Read a plugged-in drawing tablet (XP-Pen, Wacom, ...) and drive the virtual pen and pointer
+    /// from it with the same ghost tracking as the Android pen. Off by default.
+    pub physical_tablet_support: bool,
+    /// `vendor:product` (hex, e.g. `28bd:0931`) of the tablet to use; empty picks the first pen found.
+    pub physical_tablet_device: String,
+    /// Take the physical tablet exclusively (EVIOCGRAB) so the desktop does not also see it. The
+    /// udev `LIBINPUT_IGNORE_DEVICE` rule is the persistent alternative.
+    pub physical_tablet_grab: bool,
     /// Fade curves saved by the user in the GUI's curve editor, usable as `preset:<name>`.
     pub curve_presets: Vec<CurvePreset>,
     /// Protocol/daemon version.
@@ -483,12 +497,25 @@ pub fn clean_shape(v: &str) -> String {
     }
 }
 
-/// `mouse` (default) or `tablet`.
+/// `mouse`, `tablet` or `auto` (ghost tracking: both devices follow the pen, the click goes to the
+/// one the focused app wants); anything else is `mouse`.
 pub fn clean_stylus_style(v: &str) -> String {
     match v.trim().to_ascii_lowercase().as_str() {
         "tablet" => "tablet".into(),
+        "auto" => "auto".into(),
         _ => "mouse".into(),
     }
+}
+
+/// Drawing programs that want the pressure-sensitive pen by default.
+pub fn default_art_apps() -> Vec<String> {
+    [
+        "krita", "gimp", "inkscape", "blender", "xournalpp", "rnote", "mypaint", "aseprite",
+        "pinta", "darktable", "freecad", "onlyoffice",
+    ]
+    .iter()
+    .map(|s| s.to_string())
+    .collect()
 }
 
 /// `right`, `middle` or `none`; anything else falls back to [default].
@@ -572,9 +599,14 @@ impl Default for FileConfig {
             touchpad_sensitivity: 100,
             right_click_method: "bottom_right_zone".into(),
             touchpad_shape: "full_screen".into(),
-            stylus_style: "mouse".into(),
+            stylus_style: "auto".into(),
             stylus_button_primary: "right".into(),
             stylus_button_secondary: "middle".into(),
+            stylus_idle_hide_timeout: 0,
+            stylus_art_apps: default_art_apps(),
+            physical_tablet_support: false,
+            physical_tablet_device: String::new(),
+            physical_tablet_grab: true,
             curve_presets: Vec::new(),
         }
     }
@@ -696,6 +728,14 @@ impl FileConfig {
         self.stylus_style = clean_stylus_style(&self.stylus_style);
         self.stylus_button_primary = clean_pen_button(&self.stylus_button_primary, "right");
         self.stylus_button_secondary = clean_pen_button(&self.stylus_button_secondary, "middle");
+        self.stylus_idle_hide_timeout = self.stylus_idle_hide_timeout.min(3600);
+        self.stylus_art_apps = self
+            .stylus_art_apps
+            .iter()
+            .map(|a| a.trim().to_ascii_lowercase())
+            .filter(|a| !a.is_empty())
+            .collect();
+        self.physical_tablet_device = self.physical_tablet_device.trim().to_ascii_lowercase();
         for p in self.tablets.values_mut() {
             if let Some(m) = p.stylus_style.take() {
                 p.stylus_style = Some(clean_stylus_style(&m));
@@ -823,6 +863,7 @@ mod tests {
         assert_eq!(clean_pen_button("bogus", "middle"), "middle");
         assert_eq!(clean_stylus_style("TABLET"), "tablet");
         assert_eq!(clean_stylus_style("x"), "mouse");
+        assert_eq!(clean_stylus_style(" Auto "), "auto");
         let mut c = FileConfig {
             stylus_button_primary: "nonsense".into(),
             ..FileConfig::default()

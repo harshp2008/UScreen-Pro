@@ -18,10 +18,12 @@ export default class UScreenAppLockExtension extends Extension {
 
         this._setupConfigMonitor();
         this._connectWindowSignals();
+        this._setupPenRouting();
         console.log('[uscreen-app-lock] Extension enabled');
     }
 
     disable() {
+        this._teardownPenRouting();
         if (this._windowCreatedId) {
             global.display.disconnect(this._windowCreatedId);
             this._windowCreatedId = null;
@@ -39,6 +41,85 @@ export default class UScreenAppLockExtension extends Extension {
             this._fileMonitor = null;
         }
         console.log('[uscreen-app-lock] Extension disabled');
+    }
+
+    // --- Pen routing (ghost tracking) -------------------------------------------------------
+    // The host cannot ask a Wayland compositor which app has focus, so this reports it: the focused
+    // window's ids go to ~/.local/share/uscreen/focus.json, and Ctrl+Alt+P asks the host to flip the
+    // pen between "graphics tablet" and "mouse" for that app (via ~/.local/share/uscreen/toggle_request).
+    _setupPenRouting() {
+        this._lastFocusJson = '';
+        try {
+            this._focusId = global.display.connect('notify::focus-window', () => this._writeFocus());
+            this._writeFocus();
+        } catch (e) {
+            console.error(`[uscreen-app-lock] focus reporting unavailable: ${e}`);
+        }
+        try {
+            this._keySettings = this.getSettings();
+            Main.wm.addKeybinding(
+                'toggle-tablet',
+                this._keySettings,
+                Meta.KeyBindingFlags.IGNORE_AUTOREPEAT,
+                Shell.ActionMode.NORMAL | Shell.ActionMode.OVERVIEW,
+                () => this._toggleTablet()
+            );
+            this._keyBound = true;
+        } catch (e) {
+            console.error(`[uscreen-app-lock] Ctrl+Alt+P unavailable (use 'uscreen toggle-tablet'): ${e}`);
+        }
+    }
+
+    _teardownPenRouting() {
+        if (this._focusId) {
+            global.display.disconnect(this._focusId);
+            this._focusId = null;
+        }
+        if (this._keyBound) {
+            try { Main.wm.removeKeybinding('toggle-tablet'); } catch (e) {}
+            this._keyBound = false;
+        }
+        this._keySettings = null;
+    }
+
+    _dataFile(name) {
+        let dir = GLib.build_filenamev([GLib.get_home_dir(), '.local', 'share', 'uscreen']);
+        GLib.mkdir_with_parents(dir, 0o755);
+        return Gio.File.new_for_path(GLib.build_filenamev([dir, name]));
+    }
+
+    _writeFocus() {
+        let win = global.display.focus_window;
+        let data = {app_id: '', wm_class: '', gtk_id: ''};
+        if (win && win.get_window_type() === Meta.WindowType.NORMAL) {
+            let app = Shell.WindowTracker.get_default().get_window_app(win);
+            data = {
+                app_id: app ? app.get_id() : '',
+                wm_class: win.get_wm_class() || '',
+                gtk_id: win.get_gtk_application_id() || '',
+            };
+        } else if (win) {
+            return; // a menu or popup: the app underneath keeps focus for routing
+        }
+        let json = JSON.stringify(data);
+        if (json === this._lastFocusJson) return;
+        this._lastFocusJson = json;
+        try {
+            this._dataFile('focus.json').replace_contents(
+                new TextEncoder().encode(json), null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+        } catch (e) {
+            console.error(`[uscreen-app-lock] cannot write focus.json: ${e}`);
+        }
+    }
+
+    _toggleTablet() {
+        try {
+            this._dataFile('toggle_request').replace_contents(
+                new TextEncoder().encode(`${GLib.get_real_time()}`), null, false,
+                Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+        } catch (e) {
+            console.error(`[uscreen-app-lock] cannot write toggle_request: ${e}`);
+        }
     }
 
     _setupConfigMonitor() {

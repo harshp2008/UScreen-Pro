@@ -30,3 +30,4 @@ zbus = { version = "4", features = ["tokio"] }
 x11rb = { version = "0.13.2", features = ["randr"] }
 toml = "0.8"
 ksni = "0.3"
+evdev = "0.13"

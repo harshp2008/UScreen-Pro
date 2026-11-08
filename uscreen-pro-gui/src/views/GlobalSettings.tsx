@@ -2,7 +2,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow } from "../components/ui/layout";
-import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL } from "../lib/options";
+import { ENCODERS, FPS, IDLE_HIDE, POSITIONS, STREAM_DETAIL } from "../lib/options";
 import { PowerSettings } from "../components/PowerSettings";
 import type { AppConfig, CurvePreset } from "../lib/types";
 
@@ -145,6 +145,27 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           checked={c.max_performance_mode}
           onChange={(max_performance_mode) => onChange({ max_performance_mode })}
         />
+      </Section>
+
+      <Section title="Pen and drawing tablets">
+        <SwitchRow
+          label="Physical tablet support"
+          tip="Use a plugged-in drawing tablet (XP-Pen, Wacom, Huion, ...) with pressure, tilt and a visible cursor. UScreen takes the tablet exclusively while this is on. Off by default; not needed on X11."
+          checked={c.physical_tablet_support}
+          onChange={(physical_tablet_support) => onChange({ physical_tablet_support })}
+        />
+        <SettingRow
+          label="Hide idle pen cursor"
+          tip="Hide the cursor when the pen has been completely out of range for this long. Never keeps it visible like a mouse cursor. Works on GNOME (Wayland)."
+        >
+          <Select
+            label="Hide idle pen cursor"
+            value={String(c.stylus_idle_hide_timeout)}
+            options={IDLE_HIDE}
+            className="w-36"
+            onValueChange={(v) => onChange({ stylus_idle_hide_timeout: Number(v) })}
+          />
+        </SettingRow>
       </Section>
 
       <PowerSettings

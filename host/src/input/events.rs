@@ -42,6 +42,80 @@ const SCROLL_UNITS_PER_PX: f64 = 3.0;
 /// notches.
 const PINCH_UNITS_PER_PX: f64 = 6.0;
 
+/// Route one pen sample (from the Android pen or a physical tablet) according to the device's
+/// options: `auto` is ghost tracking, `mouse` (Stylus mode) is the pen as a mouse, anything else is
+/// the plain pressure pen.
+pub(super) fn apply_pen(
+    guard: &mut InjectDevices,
+    opts: &crate::options::DeviceOptions,
+    s: &PenSample,
+) {
+    let (abs_x, abs_y, action, eraser) = (s.x, s.y, s.action, s.eraser);
+    // Ghost tracking: both devices follow the pen. Not on X11, where the tablet already drives the
+    // one core pointer, and not without the absolute pointer.
+    if opts.stylus_style == "auto" && guard.has_pointer() && !session_is_x11() {
+        let to_pen = route_to_pen(&opts.stylus_art_apps);
+        guard.ghost_pen(s, to_pen, &opts.stylus_button_primary, &opts.stylus_button_secondary);
+        return;
+    }
+    // Stylus mode as a mouse: the pen is the pointer, its tip the left button.
+    if opts.input_mode == crate::config::InputMode::Stylus
+        && opts.stylus_style == "mouse"
+        && guard.has_pointer()
+    {
+        if !eraser || action >= 4 {
+            guard.pen_as_mouse(
+                abs_x,
+                abs_y,
+                action,
+                &opts.stylus_button_primary,
+                &opts.stylus_button_secondary,
+            );
+        }
+        if matches!(action, 0..=3) {
+            guard.last_pen_pos = (abs_x, abs_y);
+        }
+        return;
+    }
+    let ok = if let Some(ref mut dev) = guard.pen {
+        match dev.inject_pen(abs_x, abs_y, s.pressure, s.tilt_x, s.tilt_y, action, eraser) {
+            Ok(_) => true,
+            Err(e) => {
+                warn!("Failed to inject pen: {}", e);
+                false
+            }
+        }
+    } else {
+        match action {
+            0 => info!(
+                "Pen DOWN at ({}, {}), eraser={}, tilt=({},{})",
+                abs_x, abs_y, eraser, s.tilt_x, s.tilt_y
+            ),
+            1 => info!("Pen UP   at ({}, {})", abs_x, abs_y),
+            _ => {}
+        }
+        false
+    };
+    if ok {
+        // Lift included: its position is the last the pen was seen at.
+        if matches!(action, 0..=3) {
+            guard.last_pen_pos = (abs_x, abs_y);
+        }
+        // Leaving proximity hides the tablet cursor, so hand the position to the plain pointer and
+        // let an ordinary cursor stay where the pen last was.
+        if action == 4 {
+            guard.park_pointer();
+        }
+        match action {
+            0 | 3 => guard.pen_proximity = true,
+            1 | 4 => guard.pen_proximity = false,
+            5 => guard.pen_button = true,
+            6 => guard.pen_button = false,
+            _ => {}
+        }
+    }
+}
+
 pub(super) fn handle_event(
     instance: u32,
     event: InputEvent,
@@ -132,72 +206,17 @@ pub(super) fn handle_event(
             let tilt_y_deg = (tilt_y.round() as i32).clamp(-90, 90);
 
             let opts = crate::options::current_options(instance);
+            let sample = PenSample {
+                x: abs_x,
+                y: abs_y,
+                pressure: abs_pressure,
+                tilt_x: tilt_x_deg,
+                tilt_y: tilt_y_deg,
+                eraser,
+                action,
+            };
             if let Ok(mut guard) = uinput.lock() {
-                // Stylus mode as a mouse: the pen is the pointer, its tip the left button.
-                if opts.input_mode == crate::config::InputMode::Stylus
-                    && opts.stylus_style == "mouse"
-                    && guard.has_pointer()
-                {
-                    if !eraser || action >= 4 {
-                        guard.pen_as_mouse(
-                            abs_x,
-                            abs_y,
-                            action,
-                            &opts.stylus_button_primary,
-                            &opts.stylus_button_secondary,
-                        );
-                    }
-                    if matches!(action, 0..=3) {
-                        guard.last_pen_pos = (abs_x, abs_y);
-                    }
-                    return;
-                }
-                let ok = if let Some(ref mut dev) = guard.pen {
-                    match dev.inject_pen(
-                        abs_x,
-                        abs_y,
-                        abs_pressure,
-                        tilt_x_deg,
-                        tilt_y_deg,
-                        action,
-                        eraser,
-                    ) {
-                        Ok(_) => true,
-                        Err(e) => {
-                            warn!("Failed to inject pen: {}", e);
-                            false
-                        }
-                    }
-                } else {
-                    match action {
-                        0 => info!(
-                            "Pen DOWN at ({}, {}), eraser={}, tilt=({:.1},{:.1})",
-                            abs_x, abs_y, eraser, tilt_x, tilt_y
-                        ),
-                        1 => info!("Pen UP   at ({}, {})", abs_x, abs_y),
-                        _ => {}
-                    }
-                    false
-                };
-                if ok {
-                    // Lift included: its position is the last the pen was seen at.
-                    if matches!(action, 0..=3) {
-                        guard.last_pen_pos = (abs_x, abs_y);
-                    }
-                    // Leaving proximity hides the tablet cursor, so hand the
-                    // position to the plain pointer and let an ordinary cursor
-                    // stay where the pen last was.
-                    if action == 4 {
-                        guard.park_pointer();
-                    }
-                    match action {
-                        0 | 3 => guard.pen_proximity = true,
-                        1 | 4 => guard.pen_proximity = false,
-                        5 => guard.pen_button = true,
-                        6 => guard.pen_button = false,
-                        _ => {}
-                    }
-                }
+                apply_pen(&mut guard, &opts, &sample);
             }
         }
         InputEvent::Resolution {

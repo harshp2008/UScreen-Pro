@@ -178,11 +178,19 @@ export interface AppConfig {
   right_click_method: string;
   /** `full_screen`, `standard_rectangle` or `wide_rectangle`. */
   touchpad_shape: string;
-  /** `mouse` or `tablet`. */
+  /** `auto` (ghost tracking), `mouse` or `tablet`. */
   stylus_style: string;
   /** `right`, `middle` or `none`. */
   stylus_button_primary: string;
   stylus_button_secondary: string;
+  /** Seconds with the pen out of range before the cursor hides; 0 = never. */
+  stylus_idle_hide_timeout: number;
+  /** Apps (id, desktop file or window class) that get the pressure pen under `auto`. */
+  stylus_art_apps: string[];
+  /** Read a plugged-in drawing tablet through the daemon. */
+  physical_tablet_support: boolean;
+  physical_tablet_device: string;
+  physical_tablet_grab: boolean;
   /** Fade curves saved in the curve editor; referenced as `preset:<name>`. */
   curve_presets: CurvePreset[];
   version: string;

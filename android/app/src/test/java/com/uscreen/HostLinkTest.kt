@@ -105,9 +105,10 @@ class HostLinkTest {
     @Test
     fun stylusSettingsAreValidated() {
         val base = HostConfig()
-        assertEquals(HostConfig.STYLUS_MOUSE, base.stylusStyle)
+        assertEquals(HostConfig.STYLUS_AUTO, base.stylusStyle)
         assertEquals(HostConfig.PEN_BUTTON_RIGHT, base.stylusButtonPrimary)
         assertEquals(HostConfig.PEN_BUTTON_MIDDLE, base.stylusButtonSecondary)
+        assertEquals("auto", base.withSetting("stylus_style", "auto")?.stylusStyle)
         assertEquals("tablet", base.withSetting("stylus_style", "tablet")?.stylusStyle)
         assertEquals(null, base.withSetting("stylus_style", "wacom"))
         assertEquals("none", base.withSetting("stylus_button_primary", "none")?.stylusButtonPrimary)

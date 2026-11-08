@@ -934,6 +934,14 @@ pub(super) struct InjectDevices {
     /// Buttons the pen holds on the absolute pointer in `mouse` style (bit 0 left, 1 right,
     /// 2 middle), so a dropped connection lets go of them.
     pub(super) pen_mouse_buttons: u8,
+    /// Ghost tracking: where the current stroke's tip goes (fixed at pen-down).
+    pub(super) tip: Tip,
+    /// Ghost tracking: since when the pen has been out of range, for the idle hide.
+    pub(super) ghost_out_since: Option<std::time::Instant>,
+    /// Ghost tracking: the cursor has been hidden for this out-of-range spell.
+    pub(super) ghost_hidden: bool,
+    /// Ghost tracking: the last position written to the pointer (to nudge a repeat, see `ghost_place_pointer`).
+    pub(super) ghost_last_written: (i32, i32),
     /// Ctrl is held on the keyboard for a pinch in progress, and when the last pinch step came.
     pub(super) pinch_since: Option<std::time::Instant>,
 }
@@ -965,6 +973,10 @@ impl InjectDevices {
             pen_proximity: false,
             pen_button: false,
             pen_mouse_buttons: 0,
+            tip: Tip::None,
+            ghost_out_since: None,
+            ghost_hidden: false,
+            ghost_last_written: (-1, -1),
             pinch_since: None,
         }
     }
@@ -1022,6 +1034,7 @@ impl InjectDevices {
         self.rel_rest = (0.0, 0.0);
         self.scroll_rest = (0, 0);
         self.release_pen_mouse();
+        self.tip = Tip::None;
         self.end_pinch();
     }
 
@@ -1132,7 +1145,7 @@ impl InjectDevices {
 
     /// Pen coordinates (0..=COORD_MAX over the pen's output) as pointer coordinates over the whole
     /// desktop.
-    fn desktop_xy(&self, px: i32, py: i32) -> (i32, i32) {
+    pub(super) fn desktop_xy(&self, px: i32, py: i32) -> (i32, i32) {
         let (px, py) = match self.pointer_area {
             Some((ox, oy, ow, oh)) => {
                 let u = px as f64 / COORD_MAX as f64;

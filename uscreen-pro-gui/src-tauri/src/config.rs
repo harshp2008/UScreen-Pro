@@ -185,6 +185,16 @@ pub struct AppConfig {
     pub stylus_button_primary: String,
     /// Second pen side button in `mouse` style.
     pub stylus_button_secondary: String,
+    /// Ghost tracking: seconds with the pen out of range before the cursor hides (0 = never).
+    pub stylus_idle_hide_timeout: u32,
+    /// Apps that get the pressure-sensitive pen under `auto`; the daemon owns the default list.
+    pub stylus_art_apps: Vec<String>,
+    /// Read a plugged-in drawing tablet (XP-Pen, Wacom, ...) through the daemon.
+    pub physical_tablet_support: bool,
+    /// `vendor:product` hex of the tablet to use; empty = first pen found.
+    pub physical_tablet_device: String,
+    /// Grab the physical tablet exclusively so the desktop does not also see it.
+    pub physical_tablet_grab: bool,
     /// Fade curves saved in the curve editor (usable as `preset:<name>`).
     pub curve_presets: Vec<CurvePreset>,
     pub version: String,
@@ -247,9 +257,20 @@ impl Default for AppConfig {
             touchpad_sensitivity: 100,
             right_click_method: "bottom_right_zone".into(),
             touchpad_shape: "full_screen".into(),
-            stylus_style: "mouse".into(),
+            stylus_style: "auto".into(),
             stylus_button_primary: "right".into(),
             stylus_button_secondary: "middle".into(),
+            stylus_idle_hide_timeout: 0,
+            stylus_art_apps: [
+                "krita", "gimp", "inkscape", "blender", "xournalpp", "rnote", "mypaint", "aseprite",
+                "pinta", "darktable", "freecad", "onlyoffice",
+            ]
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+            physical_tablet_support: false,
+            physical_tablet_device: String::new(),
+            physical_tablet_grab: true,
             curve_presets: Vec::new(),
             version: env!("GIT_VERSION_STRING").to_string(),
             tablets: HashMap::new(),

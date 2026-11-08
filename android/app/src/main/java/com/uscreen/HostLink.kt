@@ -50,7 +50,7 @@ data class HostConfig(
     val touchpadSensitivity: Int = 100,
     val rightClickMethod: String = RIGHT_CLICK_ZONE,
     val touchpadShape: String = TouchpadShape.FULL,
-    val stylusStyle: String = STYLUS_MOUSE,
+    val stylusStyle: String = STYLUS_AUTO,
     val stylusButtonPrimary: String = PEN_BUTTON_RIGHT,
     val stylusButtonSecondary: String = PEN_BUTTON_MIDDLE,
 ) {
@@ -97,10 +97,14 @@ data class HostConfig(
         const val RIGHT_CLICK_TWO_FINGER = "two_finger_tap"
         val RIGHT_CLICK_METHODS = listOf(RIGHT_CLICK_ZONE, RIGHT_CLICK_TWO_FINGER)
 
-        /** Stylus mode: the pen is a mouse pointer (default), or a pressure and tilt graphics tablet. */
+        /**
+         * What the pen is: `auto` (default; the computer keeps a visible cursor under the pen and gives
+         * drawing programs pressure and tilt), a mouse pointer, or a pressure and tilt graphics tablet.
+         */
+        const val STYLUS_AUTO = "auto"
         const val STYLUS_MOUSE = "mouse"
         const val STYLUS_TABLET = "tablet"
-        val STYLUS_STYLES = listOf(STYLUS_MOUSE, STYLUS_TABLET)
+        val STYLUS_STYLES = listOf(STYLUS_AUTO, STYLUS_MOUSE, STYLUS_TABLET)
 
         /** What a pen side button does in mouse style. */
         const val PEN_BUTTON_RIGHT = "right"

@@ -220,7 +220,7 @@ class Prefs(context: Context) {
         set(v) = sp.edit().putString("touchpad_shape", v).apply()
 
     var stylusStyle: String
-        get() = sp.getString("stylus_style", HostConfig.STYLUS_MOUSE) ?: HostConfig.STYLUS_MOUSE
+        get() = sp.getString("stylus_style", HostConfig.STYLUS_AUTO) ?: HostConfig.STYLUS_AUTO
         set(v) = sp.edit().putString("stylus_style", v).apply()
 
     var stylusButtonPrimary: String
