@@ -43,7 +43,7 @@ const SCROLL_UNITS_PER_PX: f64 = 3.0;
 const PINCH_UNITS_PER_PX: f64 = 6.0;
 
 /// Route one pen sample (from the Android pen or a physical tablet) according to the device's
-/// options: `auto` is ghost tracking, `mouse` (Stylus mode) is the pen as a mouse, anything else is
+/// options: `auto` is the unified pen (tablet data always, mouse clicks for non-art apps), `mouse` (Stylus mode) is the pen as a mouse, anything else is
 /// the plain pressure pen.
 pub(super) fn apply_pen(
     guard: &mut InjectDevices,
@@ -55,7 +55,7 @@ pub(super) fn apply_pen(
     // one core pointer, and not without the absolute pointer.
     if opts.stylus_style == "auto" && guard.has_pointer() && !session_is_x11() {
         let to_pen = route_to_pen(&opts.stylus_art_apps);
-        guard.ghost_pen(s, to_pen, &opts.stylus_button_primary, &opts.stylus_button_secondary);
+        guard.auto_pen(s, to_pen, &opts.stylus_button_primary, &opts.stylus_button_secondary);
         return;
     }
     // Stylus mode as a mouse: the pen is the pointer, its tip the left button.

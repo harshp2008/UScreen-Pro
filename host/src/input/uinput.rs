@@ -940,6 +940,10 @@ pub(super) struct InjectDevices {
     pub(super) ghost_out_since: Option<std::time::Instant>,
     /// Ghost tracking: the cursor has been hidden for this out-of-range spell.
     pub(super) ghost_hidden: bool,
+    /// Auto mode: when the tablet tool's range exit was announced; it is only carried out after a
+    /// short grace (see `auto_flush_exit`), because Android sends a hover exit right before every
+    /// touch-down and the tool must not leave and re-enter range around the click.
+    pub(super) auto_exit_at: Option<std::time::Instant>,
     /// Ghost tracking: the last position written to the pointer (to nudge a repeat, see `ghost_place_pointer`).
     pub(super) ghost_last_written: (i32, i32),
     /// Ctrl is held on the keyboard for a pinch in progress, and when the last pinch step came.
@@ -976,6 +980,7 @@ impl InjectDevices {
             tip: Tip::None,
             ghost_out_since: None,
             ghost_hidden: false,
+            auto_exit_at: None,
             ghost_last_written: (-1, -1),
             pinch_since: None,
         }
@@ -1035,6 +1040,7 @@ impl InjectDevices {
         self.scroll_rest = (0, 0);
         self.release_pen_mouse();
         self.tip = Tip::None;
+        self.auto_exit_at = None;
         self.end_pinch();
     }
 
