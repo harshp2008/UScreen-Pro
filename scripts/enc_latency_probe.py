@@ -19,6 +19,7 @@ p=subprocess.Popen(cmd,stdout=subprocess.PIPE,stdin=subprocess.DEVNULL)
 fd=os.open(fifo,os.O_WRONLY)
 arr=[]; tw=[]
 def reader():
+    """Reads the encoder's stdout, finds each NAL start code in the stream and records the time it arrived, to pair with the time each frame was written to the FIFO."""
     tail=b""
     while True:
         d=os.read(p.stdout.fileno(),1<<16)

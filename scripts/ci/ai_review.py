@@ -36,12 +36,14 @@ REDACTIONS = [
 
 
 def redact(text: str) -> str:
+    """Removes personal data from [text] before it leaves the machine: home paths, IP addresses, e-mail addresses, tokens and adb serials."""
     for pattern, repl in REDACTIONS:
         text = pattern.sub(repl, text)
     return text
 
 
 def ask(key: str, distro: str, logs: str) -> str:
+    """Asks the AI service to review [logs] (already redacted) of one distribution and returns its answer; the last line is expected to be `VERDICT: OK` or `VERDICT: FAIL`."""
     system = (
         "You review the output of a Linux installer and its tests for UScreen, a tool that turns an "
         "Android tablet into a second display or a graphics tablet. Report only real problems: "
@@ -69,6 +71,7 @@ def ask(key: str, distro: str, logs: str) -> str:
 
 
 def main() -> int:
+    """Reads the log files, redacts them with [redact] and asks for a review. Returns a process exit code; with --strict a FAIL verdict is a failure."""
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("logs", nargs="+")
     ap.add_argument("--distro", default="unknown")

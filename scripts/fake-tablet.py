@@ -12,10 +12,12 @@ a second slot with a single physical tablet.
 import argparse, base64, json, os, socket, struct, sys, time, threading
 
 def runtime_dir():
+    """The daemon's runtime directory: `$XDG_RUNTIME_DIR/uscreen`, or `/run/user/<uid>/uscreen`."""
     base = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
     return os.path.join(base, "uscreen")
 
 def ws_connect(port):
+    """Opens a WebSocket client connection to the daemon's input port on loopback (RFC 6455 handshake) and returns the socket; raises RuntimeError if the upgrade fails."""
     s = socket.create_connection(("127.0.0.1", port), timeout=5)
     key = base64.b64encode(os.urandom(16)).decode()
     s.send((f"GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nUpgrade: websocket\r\n"
@@ -32,6 +34,7 @@ def ws_connect(port):
     return s
 
 def ws_send(s, obj):
+    """Sends [obj] as one masked JSON text frame (client frames must be masked)."""
     payload = json.dumps(obj).encode()
     mask = os.urandom(4)
     masked = bytes(b ^ mask[i % 4] for i, b in enumerate(payload))
@@ -42,6 +45,7 @@ def ws_send(s, obj):
     s.send(hdr + mask + masked)
 
 def ws_recv_text(s):
+    """Reads one WebSocket frame and returns its text, or None if the connection closed or the frame is not text."""
     h = s.recv(2)
     if len(h) < 2:
         return None
@@ -59,6 +63,7 @@ def ws_recv_text(s):
     return data.decode(errors="replace") if op == 1 else None
 
 def read_exact(s, n):
+    """Reads exactly [n] bytes from the socket; raises EOFError if it closes first."""
     buf = b""
     while len(buf) < n:
         part = s.recv(n - len(buf))
@@ -68,6 +73,7 @@ def read_exact(s, n):
     return buf
 
 def main():
+    """Runs the fake tablet for one slot: authenticates, reports a resolution, receives video for the requested seconds and acknowledges every frame. Returns 0 on success (a codec config and at least one frame arrived) and 1 otherwise; with --no-token success means being dropped."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--slot", type=int, default=1)
     ap.add_argument("--seconds", type=int, default=20)

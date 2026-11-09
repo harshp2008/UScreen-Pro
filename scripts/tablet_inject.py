@@ -52,6 +52,7 @@ VIEW_W, VIEW_H = 2560, 1600  # what the app sees (display rotation 90)
 
 
 def touch_descriptor(contacts=5):
+    """HID report descriptor of a multi-touch screen with [contacts] contacts (report id 1): tip switch, contact id, X, Y, width, height and pressure per contact, and a contact count."""
     d = bytearray([0x05, 0x0D, 0x09, 0x04, 0xA1, 0x01, 0x85, 0x01])
     for _ in range(contacts):
         d += bytes([
@@ -73,6 +74,7 @@ def touch_descriptor(contacts=5):
 
 
 def pen_descriptor():
+    """HID report descriptor of a pen (report id 2): tip, barrel, eraser and in-range bits, X, Y and pressure."""
     return bytes([
         0x05, 0x0D, 0x09, 0x02, 0xA1, 0x01, 0x85, 0x02, 0x09, 0x20, 0xA1, 0x00,
         0x09, 0x42, 0x09, 0x44, 0x09, 0x45, 0x09, 0x32,  # tip, barrel, eraser, in range
@@ -90,12 +92,14 @@ class Uhid:
     """One virtual HID device on the tablet, fed through a long-lived `cat > /dev/uhid`."""
 
     def __init__(self, serial, name, descriptor, product):
+        """Starts `cat > /dev/uhid` on the tablet through adb and creates the virtual HID device from [descriptor]."""
         self.p = subprocess.Popen(["adb", "-s", serial, "shell", "cat > /dev/uhid"], stdin=subprocess.PIPE)
         req = (name.encode().ljust(128, b"\0") + b"\0" * 64 + b"\0" * 64
                + struct.pack("<HHIIII", len(descriptor), BUS_USB, 0x4553, product, 1, 0) + descriptor)
         self._write(struct.pack("<I", UHID_CREATE2) + req)
 
     def _write(self, data):
+        """Writes one uhid event to the device and waits 12 ms so that events are not merged."""
         self.p.stdin.write(data)
         self.p.stdin.flush()
         # One uhid event per write(): `cat` forwards whatever one read() returned as one write, so
@@ -104,9 +108,11 @@ class Uhid:
         time.sleep(0.012)
 
     def report(self, data):
+        """Sends one input report."""
         self._write(struct.pack("<IH", UHID_INPUT2, len(data)) + data)
 
     def close(self):
+        """Destroys the virtual device and ends the adb process."""
         try:
             self._write(struct.pack("<I", UHID_DESTROY))
             self.p.stdin.close()
@@ -119,9 +125,11 @@ class Screen:
     """Landscape view coordinates to raw panel coordinates (portrait), by display rotation."""
 
     def __init__(self, rotation=90):
+        """[rotation] is the display rotation in degrees: 0, 90 or 270."""
         self.rotation = rotation
 
     def raw(self, x, y):
+        """Converts a landscape view position to raw panel coordinates, clamped to the view, for the display rotation."""
         x = min(max(x, 0), VIEW_W - 1)
         y = min(max(y, 0), VIEW_H - 1)
         if self.rotation == 90:
@@ -132,7 +140,9 @@ class Screen:
 
 
 class Tablet:
+    """A pair of virtual devices on one tablet, a touchscreen and a pen, and the gestures to drive them. Each command is one line on stdin, answered by `ok` on stdout."""
     def __init__(self, serial, rotation):
+        """Creates both devices and waits 2.5 s for Android to notice them and map them to the display."""
         self.serial, self.screen = serial, Screen(rotation)
         self.touch = Uhid(serial, "uscreen-test-touchscreen", touch_descriptor(), 0x7101)
         self.pen = Uhid(serial, "uscreen-test-pen", pen_descriptor(), 0x7102)
@@ -152,6 +162,7 @@ class Tablet:
         self.touch.report(bytes(b))
 
     def pen_frame(self, rx, ry, in_range=True, tip=False, pressure=0, barrel=False):
+        """Sends one pen report with raw coordinates; in range, tip down and barrel button are flags."""
         flags = (1 if tip else 0) | (2 if barrel else 0) | (8 if in_range else 0)
         self.pen.report(bytes([2, flags]) + struct.pack("<HHH", rx, ry, pressure))
 
@@ -160,6 +171,7 @@ class Tablet:
         return [(i, *self.screen.raw(x, y), tip) for i, (x, y) in enumerate(pts)]
 
     def tap(self, pts, jitter=0.0, hold_ms=120, stagger_ms=15, settle=True):
+        """Puts fingers down one after another ([stagger_ms] apart), holds [hold_ms], optionally drifts them by [jitter], and lifts."""
         n = len(pts)
         for k in range(1, n + 1):  # fingers land one after another
             self.touch_frame(self.view_fingers(pts[:k]))
@@ -179,9 +191,11 @@ class Tablet:
             time.sleep(0.25)
 
     def two_fingers(self, pose, steps=24, step_ms=16):
+        """Two fingers around the screen centre whose distance and angle follow [pose]`(t)` for t from 0 to 1, in [steps] steps of [step_ms] ms: pinches and rotations."""
         cx, cy = VIEW_W / 2, VIEW_H / 2
 
         def place(t):
+            """The two finger positions at time [t]."""
             d, a = pose(t)
             return [(cx - d / 2 * math.cos(a), cy - d / 2 * math.sin(a)),
                     (cx + d / 2 * math.cos(a), cy + d / 2 * math.sin(a))]
@@ -199,6 +213,7 @@ class Tablet:
         time.sleep(0.25)
 
     def pen_path(self, x0, y0, x1, y1, steps, interval_ms=8):
+        """The pen hovers along a straight line from the first point to the second in [steps] steps, then leaves range."""
         for i in range(steps + 1):
             t = i / max(steps, 1)
             self.pen_frame(*self.screen.raw(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t))
@@ -340,6 +355,7 @@ class Tablet:
         time.sleep(0.25)
 
     def run(self, line):
+        """Runs one command line (`tap`, `tap-at`, `rawtap`, `pinch`, `rotate`, `drag`, `slowdrag`, `swipe`, `scroll2`, `tap-drag`, `pen-hover`, `pen-tap`, `pen-rest`, `pen-drag`, `pen-button`, `pen-move`, `sleep`); returns False on `quit`."""
         a = shlex.split(line)
         if not a:
             return True
@@ -405,11 +421,13 @@ class Tablet:
         return True
 
     def close(self):
+        """Destroys both devices."""
         self.touch.close()
         self.pen.close()
 
 
 def main():
+    """Creates the tablet for the serial given as the first argument (optional rotation second) and runs the commands read from stdin."""
     if len(sys.argv) < 2:
         sys.exit(__doc__)
     rotation = int(sys.argv[2]) if len(sys.argv) > 2 else 90

@@ -1,7 +1,7 @@
 /*
  * UScreen GNOME Shell extension (runs inside gnome-shell, GNOME 45+ module format).
  *
- * Three jobs for the UScreen daemon, which cannot ask a Wayland compositor for any of this:
+ * Four jobs for the UScreen daemon, which cannot ask a Wayland compositor for any of this:
  *   1. App lock: keep chosen apps on the virtual display (config in app_lock.json).
  *   2. Pen routing: report the focused app (focus.json) and the Ctrl+Alt+P route hotkey
  *      (toggle_request), so the pen can be a graphics tablet in Krita and a mouse in Chrome.
@@ -22,6 +22,9 @@ import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 
 export default class UScreenAppLockExtension extends Extension {
+    /**
+     * Called by GNOME Shell when the extension is switched on: starts the app-lock config watcher and window hooks, then the pen routing, context probe and pen menu. Everything started here is stopped in `disable()`.
+     */
     enable() {
         this._windowCreatedId = null;
         this._windowSignals = new Map();
@@ -40,6 +43,9 @@ export default class UScreenAppLockExtension extends Extension {
         console.log('[uscreen-app-lock] Extension enabled');
     }
 
+    /**
+     * Called when the extension is switched off or the session ends: stops every hook, monitor and timer started in `enable()`, so nothing keeps running inside gnome-shell.
+     */
     disable() {
         this._teardownPenMenu();
         this._teardownContextProbe();
@@ -90,6 +96,7 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /** Disconnects the focus signal and removes the Ctrl+Alt+P keybinding. */
     _teardownPenRouting() {
         if (this._focusId) {
             global.display.disconnect(this._focusId);
@@ -102,12 +109,18 @@ export default class UScreenAppLockExtension extends Extension {
         this._keySettings = null;
     }
 
+    /**
+     * The file `name` in `~/.local/share/uscreen/`, creating the directory if needed. This directory is the whole interface to the host daemon.
+     */
     _dataFile(name) {
         let dir = GLib.build_filenamev([GLib.get_home_dir(), '.local', 'share', 'uscreen']);
         GLib.mkdir_with_parents(dir, 0o755);
         return Gio.File.new_for_path(GLib.build_filenamev([dir, name]));
     }
 
+    /**
+     * Writes the focused window's app id, window class and GTK id to `focus.json`. Skips menus and popups, so the app underneath keeps focus for routing, and skips writing when nothing changed.
+     */
     _writeFocus() {
         let win = global.display.focus_window;
         let data = {app_id: '', wm_class: '', gtk_id: ''};
@@ -132,6 +145,9 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /**
+     * Asks the host to flip the pen route for the focused app, by writing the current time (microseconds) to `toggle_request`.
+     */
     _toggleTablet() {
         try {
             this._dataFile('toggle_request').replace_contents(
@@ -162,6 +178,7 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /** Stops the `context_request` watcher and any pending probe timeout. */
     _teardownContextProbe() {
         if (this._ctxMonitor) {
             try { this._ctxMonitor.disconnect(this._ctxMonitorId); } catch (e) {}
@@ -174,6 +191,9 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /**
+     * Finds what is under screen position ([x], [y]) in pixels: zone `overview`, `window` (with its frame, whether it draws its own decorations, app id and window class), `shell` (panel, dock, popups) or `desktop` (the wallpaper layer). Returns `desktop` if the lookup fails.
+     */
     _zoneAt(x, y) {
         // zone: 'overview' | 'shell' (panel, dock, popups) | 'window' | 'desktop'; plus the window.
         let out = {zone: 'desktop', frame: null, csd: false, app_id: '', wm_class: ''};
@@ -208,6 +228,9 @@ export default class UScreenAppLockExtension extends Extension {
         return out;
     }
 
+    /**
+     * Answers a context request: writes `context.json` with the pointer position, the zone, and the lengths (never the text) of the primary selection and the clipboard. A clipboard owner that does not answer within 150 ms is written as length 0, so the host never waits on it.
+     */
     _probeContext() {
         if (this._ctxBusy) return;
         this._ctxBusy = true;
@@ -274,6 +297,7 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /** Removes any menu on screen and stops the menu request and close watchers. */
     _teardownPenMenu() {
         this._removeMenu();
         if (this._closeMonitor) {
@@ -288,6 +312,9 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /**
+     * Reads `menu_request.json` and shows the menu it describes. Ignored when unreadable, empty, or the same request id as the menu already shown.
+     */
     _onMenuRequest() {
         let req;
         try {
@@ -307,6 +334,9 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /**
+     * Builds the menu (text or icon buttons) as Shell top chrome above the pointer, or below it when there is no room above, kept inside the work area. A tap outside it, or the request's timeout (8 s by default), dismisses it. Writes the request id to `menu_shown` once it is on screen.
+     */
     _showMenu(req) {
         const LABELS = {'cut': 'Cut', 'copy': 'Copy', 'paste': 'Paste', 'select-all': 'Select all', 'undo': 'Undo'};
         const ICONS = {
@@ -357,12 +387,16 @@ export default class UScreenAppLockExtension extends Extension {
         this._writeFile('menu_shown', `${req.id}`);
     }
 
+    /**
+     * Ends the menu with [id] by removing it and writing `{id, action}` to `menu_result`; `none` means dismissed. Does nothing if [id] is not the menu on screen.
+     */
     _finishMenu(id, action) {
         if (!this._menuBox || this._menuId !== id) return;
         this._removeMenu();
         this._writeFile('menu_result', JSON.stringify({id, action}) + '\n');
     }
 
+    /** Takes the menu off the screen and cancels its timeout and tap-outside handler. */
     _removeMenu() {
         if (this._menuTimeout) { GLib.source_remove(this._menuTimeout); this._menuTimeout = null; }
         if (this._menuCapture) { global.stage.disconnect(this._menuCapture); this._menuCapture = null; }
@@ -373,6 +407,7 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /** Writes [text] to the file [name] in the data directory, logging a failure. */
     _writeFile(name, text) {
         try {
             this._dataFile(name).replace_contents(
@@ -382,6 +417,7 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /** Loads `app_lock.json` and reloads it whenever it changes. */
     _setupConfigMonitor() {
         let home = GLib.get_home_dir();
         let path = `${home}/.local/share/uscreen/app_lock.json`;
@@ -402,6 +438,9 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /**
+     * Reads the app-lock config from [file] and re-checks every window; keeps the old config if the file is missing or invalid.
+     */
     _loadConfig(file) {
         try {
             if (!file.query_exists(null)) return;
@@ -417,6 +456,9 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /**
+     * The monitor manager of this GNOME Shell version, from whichever API it offers, or null. Version differences in finding it are handled here.
+     */
     _getMonitorManager() {
         try {
             if (global.backend && typeof global.backend.get_monitor_manager === 'function') {
@@ -436,6 +478,9 @@ export default class UScreenAppLockExtension extends Extension {
         return null;
     }
 
+    /**
+     * Index of the monitor the lock applies to: an explicit `monitor_index`, else the monitor of the configured connector (tried through three APIs of different GNOME versions), else, with exactly two monitors, the non-primary one. -1 when unknown.
+     */
     _getMonitorIndex() {
         if (!this._config) return -1;
 
@@ -497,6 +542,7 @@ export default class UScreenAppLockExtension extends Extension {
         return -1;
     }
 
+    /** Watches new windows and checks every existing one. */
     _connectWindowSignals() {
         this._windowCreatedId = global.display.connect('window-created', (display, window) => {
             this._attachWindow(window);
@@ -506,6 +552,7 @@ export default class UScreenAppLockExtension extends Extension {
         this._scanExistingWindows();
     }
 
+    /** Attaches to and checks the windows of every workspace. */
     _scanExistingWindows() {
         let wsCount = global.workspace_manager.get_n_workspaces();
         for (let w = 0; w < wsCount; w++) {
@@ -518,6 +565,7 @@ export default class UScreenAppLockExtension extends Extension {
         }
     }
 
+    /** Re-checks [window] whenever it changes monitor; forgets it when it is destroyed. */
     _attachWindow(window) {
         if (!window || this._windowSignals.has(window)) return;
         let id = window.connect('notify::monitor', () => {
@@ -529,6 +577,9 @@ export default class UScreenAppLockExtension extends Extension {
         });
     }
 
+    /**
+     * If the lock is on and [window] is on the locked monitor but its app is not in `locked_apps` (matched case-insensitively against app id, window class and GTK id), moves it to the primary monitor.
+     */
     _enforceWindow(window) {
         if (!this._config.enabled || !this._config.locked_apps || this._config.locked_apps.length === 0) {
             return;
