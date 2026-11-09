@@ -27,11 +27,13 @@ OUT="$PWD/experiments_and_findings/56_evidence/live_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$OUT"
 STATE_HOME=$(mktemp -d /tmp/w11c-sandbox.XXXXXX)   # keep the real guard.json untouched
 
+# Stops the test service and kills any helper or encoder left over.
 kill_all() {
   systemctl --user kill -s KILL "$UNIT.service" 2>/dev/null
   systemctl --user stop "$UNIT.service" 2>/dev/null
   pkill -9 -f evdi_helper 2>/dev/null; pkill -9 -f "ffmpeg.*uscreen" 2>/dev/null
 }
+# On exit: stops everything, removes the private state directory (never a mount point) and prints where the evidence is.
 cleanup() {
   kill_all
   findmnt "$STATE_HOME" >/dev/null 2>&1 || rm -rf -- "$STATE_HOME"
@@ -39,6 +41,7 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+# Prints how many milliseconds a GNOME Mutter display-config call takes, or -1 when it does not answer within 3 s: the compositor-stall probe.
 probe() { # prints latency in ms, or -1 on timeout
   local t0 t1
   t0=$(date +%s%N)

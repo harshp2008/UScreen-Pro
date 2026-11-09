@@ -4,6 +4,7 @@
 # Each function has a plain fallback so a terminal without whiptail still gets a usable installer:
 # the same questions, asked with `read`.
 
+# Echoes the dialog program to use, whiptail first, then dialog; nothing if neither is installed.
 tui_tool() {
     if command -v whiptail >/dev/null 2>&1; then echo whiptail
     elif command -v dialog >/dev/null 2>&1; then echo dialog

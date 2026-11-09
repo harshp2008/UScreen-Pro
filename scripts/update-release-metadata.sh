@@ -21,6 +21,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# Prints the usage line and exits with status 2.
 usage() { echo "usage: $0 [--check] <version> <YYYY-MM-DD>" >&2; exit 2; }
 CHECK=0
 if [ "${1:-}" = "--check" ]; then CHECK=1; shift; fi

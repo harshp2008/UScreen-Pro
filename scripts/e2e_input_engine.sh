@@ -14,6 +14,7 @@ set -u
 SB=$(mktemp -d /tmp/w11c-sandbox.XXXXXX)
 CFG="$HOME/.config/uscreen/config.toml"
 cp -p "$CFG" "$SB/config.toml.bak"
+# Ends the run: stops the injector and background jobs, restores the saved config.toml (retrying, since the daemon may overwrite it with a stale copy) and removes the sandbox unless it is a mount point.
 cleanup() {
   echo quit >&7 2>/dev/null; exec 7>&-; sleep 1
   jobs -p | xargs -r kill 2>/dev/null
@@ -26,8 +27,10 @@ cleanup() {
 trap cleanup EXIT
 SERIAL=${SERIAL:-R52X708AEHK}
 HERE="$(cd "$(dirname "$0")" && pwd)"
+# Prints the global input_mode line of the config.
 global_mode() { grep -m1 '^input_mode' "$CFG"; }
 
+# setdev KEY VALUE: sets a per-device override in the tablet's [tablets.SERIAL] section of the config.
 setdev() {  # setdev KEY VALUE: a device override in [tablets.SERIAL]
 python3 - "$CFG" "$SERIAL" "$1" "$2" <<'PY'
 import re,sys
@@ -45,6 +48,7 @@ mkfifo "$SB/cmd"
 python3 "$HERE/tablet_inject.py" "$SERIAL" 90 < "$SB/cmd" > "$SB/ack" 2> "$SB/err" &
 exec 7> "$SB/cmd"
 acks=0
+# Sends one command line to the injector and waits (up to 90 s) for its ack.
 inj() { echo "$*" >&7; acks=$((acks+1)); for _ in $(seq 1 900); do [ "$(grep -c '^ok' "$SB/ack")" -ge $acks ] && return; sleep 0.1; done; echo "injector did not answer: $*"; }
 for _ in $(seq 1 100); do grep -q '^ready' "$SB/ack" && break; sleep 0.1; done
 
@@ -56,6 +60,7 @@ import evdev
 from evdev import ecodes as e, InputDevice
 want = {"UScreen Touch", "UScreen Pen", "UScreen Keyboard", "UScreen Touchpad", "UScreen Pointer"}
 devs = {}
+# (embedded Python) Opens any of UScreen's virtual input devices that have appeared since the last scan.
 def rescan():
     for path in evdev.list_devices():
         if path in devs: continue
@@ -80,9 +85,11 @@ while time.time() - t0 < float(sys.argv[1]):
     except OSError:
         devs.clear()
 PY
+# Writes a label line to the event log so the captured events can be split per step.
 mark() { echo "##### $1" >> "$SB/ev.txt"; }
 python3 "$SB/cap.py" 300 >> "$SB/ev.txt" 2>&1 &
 sleep 1
+# run LABEL COMMAND...: marks LABEL in the log, runs the command, then waits 0.8 s for the events to settle.
 run() { local label="$1"; shift; mark "$label"; "$@"; sleep 0.8; }
 
 echo "== setup: Touchpad mode, Standard Rectangle (2133x1600 centred). global: $(global_mode) =="
@@ -119,11 +126,14 @@ if [ "${BROWSER:-0}" = 1 ]; then
 echo "== pinch inside Chrome (Wayland kiosk probe page; a native pinch reaches Chromium as ctrl+wheel) =="
 cat > "$SB/srv.py" <<'PY'
 import http.server, sys
+# (embedded Python) Serves the probe page and appends every /log request to the events file.
 class H(http.server.BaseHTTPRequestHandler):
+    # (embedded Python) Answers /log with 204 after recording it, anything else with the probe page.
     def do_GET(self):
         if self.path.startswith("/log"):
             open(sys.argv[2], "a").write(self.path + "\n"); self.send_response(204); self.end_headers(); return
         self.send_response(200); self.send_header("Content-Type", "text/html"); self.end_headers(); self.wfile.write(open(sys.argv[3], "rb").read())
+    # (embedded Python) Silences the request log.
     def log_message(self, *a): pass
 http.server.HTTPServer(("127.0.0.1", int(sys.argv[1])), H).serve_forever()
 PY
@@ -172,6 +182,7 @@ for l in open(sys.argv[1]).read().splitlines():
     p=l.split("|")
     if sec and len(p)==4: data[sec].append((float(p[0]),p[1].replace("UScreen ",""),p[2],p[3]))
 
+# (embedded Python) Turns a list of device events into a compact readable sequence, merging repeats.
 def summary(ev):
     toks=[]
     for ts,dev,n,v in ev:
@@ -191,17 +202,21 @@ print("== what the virtual devices emitted ==")
 for s,ev in data.items(): print(f"[{s}]\n    {summary(ev)}")
 if len(sys.argv)>2 and sys.argv[2]: sys.exit(0)
 
+# (embedded Python) The key and button events of one device, optionally of one name.
 def keys(ev,dev,name=None):
     return [(ts,n,v) for ts,d,n,v in ev if d==dev and n.startswith(("BTN_","KEY_")) and (name is None or n==name)]
+# (embedded Python) The events recorded under the step whose label starts with [prefix].
 def sec(prefix):
     for k in data:
         if k.startswith(prefix): return data[k]
     return []
 results=[]
+# (embedded Python) Prints PASS or FAIL for one check and records the result.
 def check(name, ok, detail=""):
     results.append(ok); print(("PASS " if ok else "FAIL ")+name+(f"  ({detail})" if detail else ""))
 
 print("\n== checks ==")
+# (embedded Python) The values (down or up) of button [btn] on the touchpad in [ev].
 def clicks(ev,btn): return [v for ts,n,v in keys(ev,"Touchpad") if n==btn]
 check("tap outside the shape does nothing", not keys(sec("tap outside-left"),"Touchpad"))
 check("tap inside = one left click", clicks(sec("tap inside"),"BTN_LEFT")==["down","up"], str(clicks(sec("tap inside"),"BTN_LEFT")))
