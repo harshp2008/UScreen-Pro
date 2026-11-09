@@ -33,7 +33,10 @@ pub(super) fn decide(
     art_apps: &[String],
 ) -> bool {
     match app.and_then(|a| a.key().map(|k| (a, k))) {
-        Some((a, key)) => overrides.get(&key).copied().unwrap_or_else(|| a.is_art(art_apps)),
+        Some((a, key)) => overrides
+            .get(&key)
+            .copied()
+            .unwrap_or_else(|| a.is_art(art_apps)),
         None => unknown_override.unwrap_or(false),
     }
 }

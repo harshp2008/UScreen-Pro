@@ -16,8 +16,17 @@ impl X11Desktop {
         use x11rb::protocol::xproto::ConnectionExt;
         let (conn, screen) = x11rb::connect(None).ok()?;
         let root = conn.setup().roots.get(screen)?.root;
-        let active_atom = conn.intern_atom(false, b"_NET_ACTIVE_WINDOW").ok()?.reply().ok()?.atom;
-        Some(Self { conn, root, active_atom })
+        let active_atom = conn
+            .intern_atom(false, b"_NET_ACTIVE_WINDOW")
+            .ok()?
+            .reply()
+            .ok()?
+            .atom;
+        Some(Self {
+            conn,
+            root,
+            active_atom,
+        })
     }
 
     fn active(&mut self) -> Option<AppIdentity> {
@@ -40,10 +49,17 @@ impl X11Desktop {
             .reply()
             .ok()?;
         // "instance\0class\0": both are useful names.
-        let mut parts = reply.value.split(|b| *b == 0).map(|p| String::from_utf8_lossy(p).to_string());
+        let mut parts = reply
+            .value
+            .split(|b| *b == 0)
+            .map(|p| String::from_utf8_lossy(p).to_string());
         let instance = parts.next().unwrap_or_default();
         let class = parts.next().unwrap_or_default();
-        Some(AppIdentity { app_id: instance, wm_class: class, gtk_id: String::new() })
+        Some(AppIdentity {
+            app_id: instance,
+            wm_class: class,
+            gtk_id: String::new(),
+        })
     }
 }
 

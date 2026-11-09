@@ -10,7 +10,11 @@ fn device_state_follows_what_the_device_holds() {
     auto(&mut d, 3, 10, true);
     assert_eq!(d.dev_state(Which::Pen), DevState::Hovering);
     auto(&mut d, 0, 10, true);
-    assert_eq!(d.dev_state(Which::Pen), DevState::Down(0b1000), "tip contact");
+    assert_eq!(
+        d.dev_state(Which::Pen),
+        DevState::Down(0b1000),
+        "tip contact"
+    );
     auto(&mut d, 1, 10, true);
     assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
     auto(&mut d, 0, 20, false);
@@ -47,7 +51,12 @@ fn a_second_left_down_on_the_pointer_device_is_written_as_it_comes() {
     }
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
-    let raw: Vec<i32> = ptr.iter().flatten().filter(|e| e.1 == BTN_LEFT).map(|e| e.2).collect();
+    let raw: Vec<i32> = ptr
+        .iter()
+        .flatten()
+        .filter(|e| e.1 == BTN_LEFT)
+        .map(|e| e.2)
+        .collect();
     assert_eq!(raw, vec![1, 1]);
 }
 

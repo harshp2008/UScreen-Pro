@@ -1,9 +1,9 @@
 //! Tests of the Android auto style: per-stroke routing, repeated/lost DOWNs, click slop, and the
 //! parking of a resting pen.
 
+use super::super::auto::{AUTO_EXIT_GRACE, AUTO_STALE_STROKE};
 use super::super::*;
 use super::support::*;
-use super::super::auto::{AUTO_EXIT_GRACE, AUTO_STALE_STROKE};
 use std::time::Duration;
 
 #[test]
@@ -20,15 +20,41 @@ fn auto_mouse_route_stroke_is_pointer_only_position_first_then_one_press_held_to
     auto(&mut d, 1, 14000, false);
     let (pen, ptr) = (frames(&pp), frames(&qp));
     done(&[&pp, &qp]);
-    assert!(pen.iter().flatten().next().is_none(), "the tablet device gets nothing at all on the mouse route");
-    assert_eq!(left_events(&ptr), vec![1, 0], "one press, no extra press or release during the drag, one release");
-    let press = ptr.iter().position(|f| f.contains(&(EV_KEY, BTN_LEFT, 1))).unwrap();
-    let at_down = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 10000))).unwrap();
-    assert!(at_down < press, "ABS_X/Y reach the pointer before BTN_LEFT goes down");
-    let release = ptr.iter().position(|f| f.contains(&(EV_KEY, BTN_LEFT, 0))).unwrap();
+    assert!(
+        pen.iter().flatten().next().is_none(),
+        "the tablet device gets nothing at all on the mouse route"
+    );
+    assert_eq!(
+        left_events(&ptr),
+        vec![1, 0],
+        "one press, no extra press or release during the drag, one release"
+    );
+    let press = ptr
+        .iter()
+        .position(|f| f.contains(&(EV_KEY, BTN_LEFT, 1)))
+        .unwrap();
+    let at_down = ptr
+        .iter()
+        .position(|f| f.contains(&(EV_ABS, ABS_X, 10000)))
+        .unwrap();
+    assert!(
+        at_down < press,
+        "ABS_X/Y reach the pointer before BTN_LEFT goes down"
+    );
+    let release = ptr
+        .iter()
+        .position(|f| f.contains(&(EV_KEY, BTN_LEFT, 0)))
+        .unwrap();
     for i in 1..=4 {
-        let m = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 10000 + i * 1000))).unwrap();
-        assert!(press < m && m < release, "move {} is between the press and the release", i);
+        let m = ptr
+            .iter()
+            .position(|f| f.contains(&(EV_ABS, ABS_X, 10000 + i * 1000)))
+            .unwrap();
+        assert!(
+            press < m && m < release,
+            "move {} is between the press and the release",
+            i
+        );
     }
     assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
 }
@@ -45,10 +71,22 @@ fn auto_art_route_stroke_is_the_tablet_with_real_pressure_and_no_click() {
     done(&[&pp, &qp]);
     assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 1)));
     assert!(has(&pen, (EV_KEY, BTN_TOUCH, 1)) && has(&pen, (EV_KEY, BTN_TOUCH, 0)));
-    let pressures: Vec<i32> = pen.iter().flatten().filter(|e| e.1 == ABS_PRESSURE && e.2 > 0).map(|e| e.2).collect();
-    assert!(!pressures.is_empty() && pressures.iter().all(|p| *p == 2000), "real pressure, never squeezed: {:?}", pressures);
+    let pressures: Vec<i32> = pen
+        .iter()
+        .flatten()
+        .filter(|e| e.1 == ABS_PRESSURE && e.2 > 0)
+        .map(|e| e.2)
+        .collect();
+    assert!(
+        !pressures.is_empty() && pressures.iter().all(|p| *p == 2000),
+        "real pressure, never squeezed: {:?}",
+        pressures
+    );
     assert!(has(&pen, (EV_ABS, ABS_TILT_X, 3)));
-    assert!(!has(&ptr, (EV_KEY, BTN_LEFT, 1)), "no left click in an art app");
+    assert!(
+        !has(&ptr, (EV_KEY, BTN_LEFT, 1)),
+        "no left click in an art app"
+    );
     assert!(has(&ptr, (EV_ABS, ABS_X, 120)), "the cursor still follows");
     assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
 }
@@ -85,27 +123,47 @@ fn auto_a_focus_change_in_mid_stroke_neither_cuts_nor_moves_the_stroke() {
     auto(&mut d, 2, 40, true);
     d.auto_check_route(true);
     d.auto_flush_exit();
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1), "still held");
+    assert_eq!(
+        d.dev_state(Which::Pointer),
+        DevState::Down(0b1),
+        "still held"
+    );
     auto(&mut d, 1, 40, true);
     let (pen, ptr) = (frames(&pp), frames(&qp));
     done(&[&pp, &qp]);
     assert_eq!(left_events(&ptr), vec![1, 0]);
-    assert!(pen.iter().flatten().next().is_none(), "the stroke stayed on the pointer");
+    assert!(
+        pen.iter().flatten().next().is_none(),
+        "the stroke stayed on the pointer"
+    );
 
     // And the other way: a Krita stroke stays a tablet stroke when the focus leaves.
     let (mut d, pp, qp) = rig();
     auto(&mut d, 0, 10, true);
     auto(&mut d, 2, 20, false);
     d.auto_check_route(false);
-    assert_eq!(d.dev_state(Which::Pen), DevState::Down(0b1000), "the contact is still down");
+    assert_eq!(
+        d.dev_state(Which::Pen),
+        DevState::Down(0b1000),
+        "the contact is still down"
+    );
     auto(&mut d, 2, 30, false);
     auto(&mut d, 1, 30, false);
     let (pen, ptr) = (frames(&pp), frames(&qp));
     done(&[&pp, &qp]);
     assert!(!has(&ptr, (EV_KEY, BTN_LEFT, 1)));
-    let lift = pen.iter().position(|f| f.contains(&(EV_KEY, BTN_TOUCH, 0))).unwrap();
-    let last_move = pen.iter().rposition(|f| f.contains(&(EV_ABS, ABS_X, 30))).unwrap();
-    assert!(last_move <= lift, "every move before the lift reached the tablet");
+    let lift = pen
+        .iter()
+        .position(|f| f.contains(&(EV_KEY, BTN_TOUCH, 0)))
+        .unwrap();
+    let last_move = pen
+        .iter()
+        .rposition(|f| f.contains(&(EV_ABS, ABS_X, 30)))
+        .unwrap();
+    assert!(
+        last_move <= lift,
+        "every move before the lift reached the tablet"
+    );
     assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
 }
 
@@ -120,8 +178,15 @@ fn auto_a_repeated_down_in_mid_drag_is_a_move_not_a_release_and_press() {
     auto(&mut d, 1, 4000, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
-    assert_eq!(left_events(&ptr), vec![1, 0], "the hold is never interrupted");
-    assert!(has(&ptr, (EV_ABS, ABS_X, 3000)), "the repeated DOWN's position still moves the cursor");
+    assert_eq!(
+        left_events(&ptr),
+        vec![1, 0],
+        "the hold is never interrupted"
+    );
+    assert!(
+        has(&ptr, (EV_ABS, ABS_X, 3000)),
+        "the repeated DOWN's position still moves the cursor"
+    );
 }
 
 #[test]
@@ -239,11 +304,15 @@ fn auto_barrel_button_follows_the_route() {
     auto(&mut d, 5, 0, true);
     let pen = frames(&pp);
     done(&[&pp, &qp]);
-    assert!(has(&pen, (EV_KEY, BTN_STYLUS, 1)), "art route: the tablet's barrel button");
+    assert!(
+        has(&pen, (EV_KEY, BTN_STYLUS, 1)),
+        "art route: the tablet's barrel button"
+    );
 }
 
 #[test]
-fn slop_a_wobble_inside_the_zone_never_reaches_the_pointer_and_the_lift_releases_at_the_press_point() {
+fn slop_a_wobble_inside_the_zone_never_reaches_the_pointer_and_the_lift_releases_at_the_press_point(
+) {
     let (mut d, pp, qp) = rig();
     auto(&mut d, 3, 5000, false);
     auto(&mut d, 0, 5000, false);
@@ -254,7 +323,11 @@ fn slop_a_wobble_inside_the_zone_never_reaches_the_pointer_and_the_lift_releases
     auto(&mut d, 1, 5100, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
-    assert_eq!(xs(&ptr).len(), before, "no pointer motion while inside the slop, not even at the lift");
+    assert_eq!(
+        xs(&ptr).len(),
+        before,
+        "no pointer motion while inside the slop, not even at the lift"
+    );
     assert_eq!(left_events(&ptr), vec![1, 0], "a clean click");
 }
 
@@ -310,7 +383,10 @@ fn auto_a_resting_pen_is_parked_and_stops_touching_the_cursor() {
     let after = frames(&qp).len();
     done(&[&pp, &qp]);
     assert!(writes_when_parked >= 1, "it was followed before parking");
-    assert_eq!(after, writes_when_parked, "nothing more is written to the pointer while parked");
+    assert_eq!(
+        after, writes_when_parked,
+        "nothing more is written to the pointer while parked"
+    );
 }
 
 #[test]
@@ -320,7 +396,10 @@ fn auto_a_parked_pen_on_the_art_route_leaves_range_and_wakes_on_clear_movement()
     assert!(d.pen_proximity);
     std::thread::sleep(d.still_cfg.park_after + Duration::from_millis(40));
     auto(&mut d, 3, 5002, true);
-    assert!(!d.pen_proximity, "parked: the tablet tool is out of range and cannot own the cursor");
+    assert!(
+        !d.pen_proximity,
+        "parked: the tablet tool is out of range and cannot own the cursor"
+    );
     auto(&mut d, 3, 5003, true);
     assert!(!d.pen_proximity);
     auto(&mut d, 3, 5000 + 4000, true); // ~ 16 mm away

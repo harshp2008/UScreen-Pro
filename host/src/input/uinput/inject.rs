@@ -118,7 +118,11 @@ impl UInputDevice {
                 // stroke that began with the eraser end and is lifted by a sample that does not
                 // say so (a cancel) would otherwise leave BTN_TOOL_RUBBER down for good.
                 self.emit(EV_KEY, tool, 0)?;
-                let other = if eraser { BTN_TOOL_PEN } else { BTN_TOOL_RUBBER };
+                let other = if eraser {
+                    BTN_TOOL_PEN
+                } else {
+                    BTN_TOOL_RUBBER
+                };
                 if key_bit(other).is_some_and(|b| self.held & b != 0) {
                     self.emit(EV_KEY, other, 0)?;
                 }

@@ -12,7 +12,9 @@ pub(super) struct GnomeDesktop {
 
 impl GnomeDesktop {
     pub(super) fn new() -> Self {
-        Self { focus: FocusFile::default() }
+        Self {
+            focus: FocusFile::default(),
+        }
     }
 }
 

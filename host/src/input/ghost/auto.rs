@@ -20,7 +20,6 @@ pub(super) const AUTO_STALE_STROKE: Duration = Duration::from_millis(500);
 /// DOWN: it must not press again.
 pub(super) const AUTO_LIFT_QUIET: Duration = Duration::from_millis(100);
 
-
 impl InjectDevices {
     /// **Auto mode** (Android pen, `stylus_style = "auto"`): the pen is a mouse or a graphics tablet,
     /// per stroke, depending on the focused app (`to_pen`).
@@ -39,7 +38,13 @@ impl InjectDevices {
     ///   state ([`Self::force_release_all`]).
     /// * A DOWN while the stroke is open is the drag continuing; a MOVE with no stroke open (its
     ///   DOWN was lost) starts the stroke, so the drag is not lost.
-    pub(in crate::input) fn auto_pen(&mut self, s: &PenSample, to_pen: bool, primary: &str, secondary: &str) {
+    pub(in crate::input) fn auto_pen(
+        &mut self,
+        s: &PenSample,
+        to_pen: bool,
+        primary: &str,
+        secondary: &str,
+    ) {
         if s.action != 4 {
             self.ghost_out_since = None;
             self.ghost_hidden = false;
@@ -54,18 +59,25 @@ impl InjectDevices {
         }
         let open = self.auto_down_at.is_some();
         if s.action != 3 {
-            record(s, to_pen, match s.action {
-                0 => "down",
-                1 => "up",
-                2 => "move",
-                4 => "exit",
-                _ => "button",
-            });
+            record(
+                s,
+                to_pen,
+                match s.action {
+                    0 => "down",
+                    1 => "up",
+                    2 => "move",
+                    4 => "exit",
+                    _ => "button",
+                },
+            );
         }
         match s.action {
             0 => {
                 if open {
-                    if self.auto_last_at.is_some_and(|t| t.elapsed() < AUTO_STALE_STROKE) {
+                    if self
+                        .auto_last_at
+                        .is_some_and(|t| t.elapsed() < AUTO_STALE_STROKE)
+                    {
                         // The same press again: the drag goes on, nothing is released or pressed.
                         self.auto_stroke_pointer(s);
                         self.auto_continue(s);
@@ -85,8 +97,14 @@ impl InjectDevices {
                     self.auto_continue(s);
                 } else {
                     self.ghost_place_pointer(s.x, s.y);
-                    if !s.eraser && self.auto_up_at.is_none_or(|t| t.elapsed() >= AUTO_LIFT_QUIET) {
-                        warn!("Pen MOVE with no stroke open (its DOWN was lost): starting the stroke");
+                    if !s.eraser
+                        && self
+                            .auto_up_at
+                            .is_none_or(|t| t.elapsed() >= AUTO_LIFT_QUIET)
+                    {
+                        warn!(
+                            "Pen MOVE with no stroke open (its DOWN was lost): starting the stroke"
+                        );
                         self.auto_begin(s, to_pen);
                     } else {
                         self.auto_hover(s, to_pen);
@@ -101,7 +119,13 @@ impl InjectDevices {
                     self.last_pen_pos = (s.x, s.y);
                     return;
                 }
-                let verdict = self.hover_filter.sample(s.x, s.y, Instant::now(), self.tablet_mm, &self.still_cfg);
+                let verdict = self.hover_filter.sample(
+                    s.x,
+                    s.y,
+                    Instant::now(),
+                    self.tablet_mm,
+                    &self.still_cfg,
+                );
                 match verdict {
                     // A pen resting near the glass writes nothing: the mouse keeps the cursor.
                     HoverVerdict::Skip => record(s, to_pen, "skip"),
@@ -191,7 +215,8 @@ impl InjectDevices {
     /// again for this stroke).
     fn auto_stroke_pointer(&mut self, s: &PenSample) {
         if let Some(anchor) = self.slop_anchor {
-            let inside = super::stillness::dist_mm(anchor, (s.x, s.y), self.tablet_mm) <= self.still_cfg.click_slop_mm;
+            let inside = super::stillness::dist_mm(anchor, (s.x, s.y), self.tablet_mm)
+                <= self.still_cfg.click_slop_mm;
             if inside {
                 return;
             }
@@ -244,7 +269,15 @@ impl InjectDevices {
     pub(in crate::input) fn auto_check_route(&mut self, to_pen: bool) {
         if self.auto_down_at.is_none() && !to_pen && self.pen_proximity {
             let (x, y) = self.last_pen_pos;
-            let s = PenSample { x, y, pressure: 0, tilt_x: 0, tilt_y: 0, eraser: false, action: 4 };
+            let s = PenSample {
+                x,
+                y,
+                pressure: 0,
+                tilt_x: 0,
+                tilt_y: 0,
+                eraser: false,
+                action: 4,
+            };
             self.ghost_tool_away(&s);
         }
     }

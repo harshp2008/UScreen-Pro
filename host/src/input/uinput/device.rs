@@ -378,7 +378,12 @@ impl UInputDevice {
     /// Scroll by `dx`/`dy` in high-resolution units (120 per wheel notch, the kernel's
     /// convention). The legacy whole-notch axes are fed from the remainder so applications that
     /// ignore the hi-res ones still scroll.
-    pub(in crate::input) fn scroll_by(&mut self, dx: i32, dy: i32, rest: &mut (i32, i32)) -> Result<()> {
+    pub(in crate::input) fn scroll_by(
+        &mut self,
+        dx: i32,
+        dy: i32,
+        rest: &mut (i32, i32),
+    ) -> Result<()> {
         if dx == 0 && dy == 0 {
             return Ok(());
         }
@@ -528,7 +533,6 @@ impl UInputDevice {
         self.file.flush()?;
         Ok(())
     }
-
 }
 impl Drop for UInputDevice {
     fn drop(&mut self) {

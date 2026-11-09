@@ -33,7 +33,14 @@ struct Ring {
 
 fn ring() -> &'static Mutex<Ring> {
     static R: OnceLock<Mutex<Ring>> = OnceLock::new();
-    R.get_or_init(|| Mutex::new(Ring { start: Instant::now(), recs: VecDeque::new(), moves: 0, skips: 0 }))
+    R.get_or_init(|| {
+        Mutex::new(Ring {
+            start: Instant::now(),
+            recs: VecDeque::new(),
+            moves: 0,
+            skips: 0,
+        })
+    })
 }
 
 /// Record one sample with what the router did with it (`note`).
@@ -72,7 +79,9 @@ pub(super) fn record(s: &PenSample, route_pen: bool, note: &'static str) {
 
 /// The recorded samples as text, oldest first, with a header.
 pub(super) fn render() -> String {
-    let Ok(r) = ring().lock() else { return String::new() };
+    let Ok(r) = ring().lock() else {
+        return String::new();
+    };
     let mut out = format!(
         "# uscreen pen recorder: {} samples (hover followed in full, skipped 1/25, moves 1/10); ms since daemon start, now {}\n\
          # ms action(0 down 1 up 2 move 3 hover 4 exit 5-8 buttons) x y pressure tilt route note\n",
@@ -101,7 +110,15 @@ mod tests {
     use super::*;
 
     fn s(action: u8, x: i32) -> PenSample {
-        PenSample { x, y: 5, pressure: 0, tilt_x: 1, tilt_y: 2, eraser: false, action }
+        PenSample {
+            x,
+            y: 5,
+            pressure: 0,
+            tilt_x: 1,
+            tilt_y: 2,
+            eraser: false,
+            action,
+        }
     }
 
     #[test]
@@ -112,10 +129,16 @@ mod tests {
         }
         record(&s(0, 7), true, "down");
         let text = render();
-        let skips = text.lines().filter(|l| l.contains("90000") && l.ends_with("skip")).count();
+        let skips = text
+            .lines()
+            .filter(|l| l.contains("90000") && l.ends_with("skip"))
+            .count();
         assert!((1..=3).contains(&skips), "1 in 25 of 50: {}", skips);
         assert!(text.lines().any(|l| l.contains(" 0 7 5 0 1,2 pen down")));
-        assert!(ring().lock().unwrap().recs.len() <= CAPACITY && ring().lock().unwrap().recs.len() > before);
+        assert!(
+            ring().lock().unwrap().recs.len() <= CAPACITY
+                && ring().lock().unwrap().recs.len() > before
+        );
     }
 
     #[test]

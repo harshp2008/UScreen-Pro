@@ -78,7 +78,14 @@ impl HoverFilter {
     }
 
     /// Judge one hover sample at `now`, with the tablet's physical size `mm` (width, height).
-    pub fn sample(&mut self, x: i32, y: i32, now: Instant, mm: (f64, f64), cfg: &StillCfg) -> HoverVerdict {
+    pub fn sample(
+        &mut self,
+        x: i32,
+        y: i32,
+        now: Instant,
+        mm: (f64, f64),
+        cfg: &StillCfg,
+    ) -> HoverVerdict {
         let p = (x, y);
         if self.parked {
             let anchor = self.anchor.unwrap_or(p);
@@ -127,29 +134,57 @@ mod tests {
         let (mut f, cfg, t0) = (HoverFilter::default(), StillCfg::default(), Instant::now());
         assert_eq!(f.sample(1000, 1000, t0, MM, &cfg), HoverVerdict::Follow);
         // jitter well inside 1.5 mm
-        assert_eq!(f.sample(1000 + dx(0.4), 1000, ms(t0, 100), MM, &cfg), HoverVerdict::Follow);
-        assert_eq!(f.sample(1000, 1000 + 20, ms(t0, 250), MM, &cfg), HoverVerdict::Follow);
-        assert_eq!(f.sample(1000 + dx(0.5), 1000, ms(t0, 320), MM, &cfg), HoverVerdict::Park);
+        assert_eq!(
+            f.sample(1000 + dx(0.4), 1000, ms(t0, 100), MM, &cfg),
+            HoverVerdict::Follow
+        );
+        assert_eq!(
+            f.sample(1000, 1000 + 20, ms(t0, 250), MM, &cfg),
+            HoverVerdict::Follow
+        );
+        assert_eq!(
+            f.sample(1000 + dx(0.5), 1000, ms(t0, 320), MM, &cfg),
+            HoverVerdict::Park
+        );
         assert!(f.is_parked());
-        assert_eq!(f.sample(1000 + dx(0.6), 1000, ms(t0, 340), MM, &cfg), HoverVerdict::Skip);
-        assert_eq!(f.sample(1000 + dx(2.0), 1000, ms(t0, 900), MM, &cfg), HoverVerdict::Skip, "noise cannot wake it");
+        assert_eq!(
+            f.sample(1000 + dx(0.6), 1000, ms(t0, 340), MM, &cfg),
+            HoverVerdict::Skip
+        );
+        assert_eq!(
+            f.sample(1000 + dx(2.0), 1000, ms(t0, 900), MM, &cfg),
+            HoverVerdict::Skip,
+            "noise cannot wake it"
+        );
     }
 
     #[test]
     fn a_parked_pen_wakes_on_clear_movement_and_is_followed_again() {
         let (mut f, cfg, t0) = (HoverFilter::default(), StillCfg::default(), Instant::now());
         f.sample(1000, 1000, t0, MM, &cfg);
-        assert_eq!(f.sample(1000, 1000, ms(t0, 400), MM, &cfg), HoverVerdict::Park);
-        assert_eq!(f.sample(1000 + dx(6.0), 1000, ms(t0, 500), MM, &cfg), HoverVerdict::Wake);
+        assert_eq!(
+            f.sample(1000, 1000, ms(t0, 400), MM, &cfg),
+            HoverVerdict::Park
+        );
+        assert_eq!(
+            f.sample(1000 + dx(6.0), 1000, ms(t0, 500), MM, &cfg),
+            HoverVerdict::Wake
+        );
         assert!(!f.is_parked());
-        assert_eq!(f.sample(1000 + dx(7.0), 1000, ms(t0, 520), MM, &cfg), HoverVerdict::Follow);
+        assert_eq!(
+            f.sample(1000 + dx(7.0), 1000, ms(t0, 520), MM, &cfg),
+            HoverVerdict::Follow
+        );
     }
 
     #[test]
     fn a_pen_that_keeps_moving_is_never_parked() {
         let (mut f, cfg, t0) = (HoverFilter::default(), StillCfg::default(), Instant::now());
         for i in 0..50u64 {
-            assert_eq!(f.sample(1000 + dx(2.0) * i as i32, 1000, ms(t0, i * 30), MM, &cfg), HoverVerdict::Follow);
+            assert_eq!(
+                f.sample(1000 + dx(2.0) * i as i32, 1000, ms(t0, i * 30), MM, &cfg),
+                HoverVerdict::Follow
+            );
         }
     }
 
@@ -173,7 +208,10 @@ mod tests {
         assert!(f.is_parked());
         f.reset();
         assert!(!f.is_parked());
-        assert_eq!(f.sample(1000, 1000, ms(t0, 500), MM, &cfg), HoverVerdict::Follow);
+        assert_eq!(
+            f.sample(1000, 1000, ms(t0, 500), MM, &cfg),
+            HoverVerdict::Follow
+        );
     }
 
     #[test]

@@ -4,7 +4,6 @@
 //! Kept in one place so the numbers can be checked against `linux/input-event-codes.h` and
 //! `linux/uinput.h` without reading any logic.
 
-
 // Linux input event constants
 pub(in crate::input) const EV_SYN: u16 = 0x00;
 pub(in crate::input) const EV_KEY: u16 = 0x01;
@@ -101,4 +100,3 @@ pub(in crate::input) const MOUSE_DEVICE_NAME: &str = "UScreen Mouse";
 pub(in crate::input) const RESOLUTION_UNITS_PER_MM: i32 = 211;
 /// The virtual pen's pressure axis runs 0..=PEN_PRESSURE_MAX.
 pub(in crate::input) const PEN_PRESSURE_MAX: i32 = 4096;
-

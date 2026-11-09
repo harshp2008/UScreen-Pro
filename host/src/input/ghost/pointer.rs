@@ -13,7 +13,6 @@ use std::time::{Duration, Instant};
 pub(super) const MUTTER_POINTER_GRACE: Duration = Duration::from_millis(300);
 
 impl InjectDevices {
-
     /// Put the absolute pointer under the pen (no button): the visible cursor.
     ///
     /// While the tablet tool is in range its events hide the pointer unless a pointer-class event
@@ -58,7 +57,13 @@ impl InjectDevices {
     /// is the pen: clients (Chrome, Qt/Krita) that see a tool in range treat the session as a pen's
     /// and mishandle a plain mouse button pressed beside it (measured: quick taps were dropped when
     /// the tool re-entered range with each button press). In the mouse route the tool stays away.
-    pub(in crate::input) fn ghost_pen(&mut self, s: &PenSample, to_pen: bool, primary: &str, secondary: &str) {
+    pub(in crate::input) fn ghost_pen(
+        &mut self,
+        s: &PenSample,
+        to_pen: bool,
+        primary: &str,
+        secondary: &str,
+    ) {
         // Any sample ends an out-of-range wait, and brings a hidden cursor back (the pointer
         // motion below is what shows it).
         if s.action != 4 {
@@ -222,7 +227,9 @@ impl InjectDevices {
     /// (0 = never), hide the cursor by sending a tablet-class frame with no pointer motion.
     /// Returns whether it hid the cursor now.
     pub(in crate::input) fn ghost_idle_tick(&mut self, timeout_secs: u32) -> bool {
-        let Some(since) = self.ghost_out_since else { return false };
+        let Some(since) = self.ghost_out_since else {
+            return false;
+        };
         if timeout_secs == 0 || self.ghost_hidden || self.tip != Tip::None {
             return false;
         }
@@ -255,7 +262,12 @@ pub(in crate::input) fn apply_physical(
 ) {
     if guard.has_pointer() && !session_is_x11() {
         let to_pen = route_to_pen(&opts.stylus_art_apps);
-        guard.ghost_pen(s, to_pen, &opts.stylus_button_primary, &opts.stylus_button_secondary);
+        guard.ghost_pen(
+            s,
+            to_pen,
+            &opts.stylus_button_primary,
+            &opts.stylus_button_secondary,
+        );
     } else {
         super::events::apply_pen(guard, opts, s);
     }

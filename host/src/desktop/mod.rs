@@ -55,7 +55,9 @@ pub fn detect() -> Box<dyn DesktopBackend> {
             return Box::new(b);
         }
     }
-    let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_ascii_lowercase();
+    let desktop = std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .to_ascii_lowercase();
     if desktop.contains("gnome") {
         Box::new(gnome::GnomeDesktop::new())
     } else {
@@ -72,7 +74,11 @@ pub fn session_is_x11() -> bool {
 /// files (focus, route toggle, recorder requests).
 pub fn data_file(name: &str) -> Option<std::path::PathBuf> {
     let home = std::env::var_os("HOME")?;
-    Some(std::path::Path::new(&home).join(".local/share/uscreen").join(name))
+    Some(
+        std::path::Path::new(&home)
+            .join(".local/share/uscreen")
+            .join(name),
+    )
 }
 
 /// Identity of the focused window, any of which may be empty.
@@ -101,7 +107,10 @@ impl AppIdentity {
 
     /// Whether any of this app's names contains an entry of `art_apps` (lowercase).
     pub fn is_art(&self, art_apps: &[String]) -> bool {
-        self.names()
-            .any(|n| art_apps.iter().any(|a| !a.is_empty() && n.contains(a.as_str())))
+        self.names().any(|n| {
+            art_apps
+                .iter()
+                .any(|a| !a.is_empty() && n.contains(a.as_str()))
+        })
     }
 }

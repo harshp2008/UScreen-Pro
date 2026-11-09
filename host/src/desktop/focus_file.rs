@@ -19,13 +19,18 @@ impl FocusFile {
     /// `Unchanged` until the file's mtime changes; then the app it names, or `Unknown` if it
     /// cannot be read or parsed.
     pub(super) fn poll(&mut self) -> FocusUpdate {
-        let Some(path) = Self::path() else { return FocusUpdate::Unchanged };
+        let Some(path) = Self::path() else {
+            return FocusUpdate::Unchanged;
+        };
         let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
         if mtime == self.last_mtime {
             return FocusUpdate::Unchanged;
         }
         self.last_mtime = mtime;
-        match std::fs::read_to_string(&path).ok().and_then(|t| serde_json::from_str::<AppIdentity>(&t).ok()) {
+        match std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|t| serde_json::from_str::<AppIdentity>(&t).ok())
+        {
             Some(app) => FocusUpdate::Known(app),
             None => FocusUpdate::Unknown,
         }

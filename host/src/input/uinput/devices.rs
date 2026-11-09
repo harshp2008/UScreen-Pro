@@ -237,7 +237,11 @@ impl InjectDevices {
     /// right-click zone and the wake nudge); without them it wants the mouse and the keyboard for
     /// the key-combo gestures. Stylus and Display mode need none of them, and the touchpad is
     /// removed there so a second pointing device can never fight the pen or the screen.
-    pub(in crate::input) fn ensure_devices_for(&mut self, mode: crate::config::InputMode, native: bool) {
+    pub(in crate::input) fn ensure_devices_for(
+        &mut self,
+        mode: crate::config::InputMode,
+        native: bool,
+    ) {
         use crate::config::InputMode;
         match mode {
             InputMode::Touchpad => {
@@ -267,7 +271,10 @@ impl InjectDevices {
                     self.pad_state = PadState::new();
                 }
                 Err(e) => {
-                    warn!("No multi-touch touchpad: {}. Native gestures will do nothing.", e);
+                    warn!(
+                        "No multi-touch touchpad: {}. Native gestures will do nothing.",
+                        e
+                    );
                     return None;
                 }
             }
@@ -515,7 +522,10 @@ impl InjectDevices {
 
     /// Safety net: Ctrl held for a pinch whose end never arrived is let go after this long.
     pub(in crate::input) fn expire_pinch(&mut self) {
-        if self.pinch_since.is_some_and(|t| t.elapsed() > std::time::Duration::from_millis(1500)) {
+        if self
+            .pinch_since
+            .is_some_and(|t| t.elapsed() > std::time::Duration::from_millis(1500))
+        {
             self.end_pinch();
         }
     }
@@ -538,4 +548,3 @@ impl InjectDevices {
         self.mouse.as_mut()
     }
 }
-

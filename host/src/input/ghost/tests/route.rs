@@ -1,8 +1,8 @@
 //! Tests of which app counts as an art app and of the per-app route overrides.
 
+use super::super::route::{decide, route_to_pen, set_focus, toggle_route};
 use super::support::*;
 use crate::desktop::AppIdentity;
-use super::super::route::{decide, route_to_pen, set_focus, toggle_route};
 use std::collections::HashMap;
 
 #[test]
@@ -21,10 +21,19 @@ fn route_follows_the_app_then_the_override() {
     assert!(decide(Some(&krita), &ov, None, &art()));
     assert!(!decide(Some(&chrome), &ov, None, &art()));
     ov.insert(chrome.key().unwrap(), true);
-    assert!(decide(Some(&chrome), &ov, None, &art()), "forced tablet for Chrome");
+    assert!(
+        decide(Some(&chrome), &ov, None, &art()),
+        "forced tablet for Chrome"
+    );
     ov.insert(krita.key().unwrap(), false);
-    assert!(!decide(Some(&krita), &ov, None, &art()), "forced mouse for Krita");
-    assert!(!decide(None, &ov, None, &art()), "unknown focus defaults to the mouse");
+    assert!(
+        !decide(Some(&krita), &ov, None, &art()),
+        "forced mouse for Krita"
+    );
+    assert!(
+        !decide(None, &ov, None, &art()),
+        "unknown focus defaults to the mouse"
+    );
     assert!(decide(None, &ov, Some(true), &art()));
 }
 

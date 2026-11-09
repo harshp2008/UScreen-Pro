@@ -33,10 +33,23 @@ fn the_mouse_route_never_puts_the_tablet_tool_in_range() {
     }
     let (pen, ptr) = (frames(&pp), frames(&qp));
     done(&[&pp, &qp]);
-    assert!(!has(&pen, (EV_KEY, BTN_TOOL_PEN, 1)), "no proximity-in, ever: clients would treat it as a pen session");
+    assert!(
+        !has(&pen, (EV_KEY, BTN_TOOL_PEN, 1)),
+        "no proximity-in, ever: clients would treat it as a pen session"
+    );
     assert!(!has(&pen, (EV_KEY, BTN_TOUCH, 1)));
-    assert!(!pen.iter().flatten().any(|e| e.0 == EV_ABS && e.1 == ABS_X), "no tablet motion either");
-    let left: Vec<i32> = ptr.iter().flat_map(|f| f.iter().filter(|e| e.1 == BTN_LEFT && e.2 == 1).map(|e| e.2)).collect();
+    assert!(
+        !pen.iter().flatten().any(|e| e.0 == EV_ABS && e.1 == ABS_X),
+        "no tablet motion either"
+    );
+    let left: Vec<i32> = ptr
+        .iter()
+        .flat_map(|f| {
+            f.iter()
+                .filter(|e| e.1 == BTN_LEFT && e.2 == 1)
+                .map(|e| e.2)
+        })
+        .collect();
     assert_eq!(left.len(), 2, "both taps click");
     assert!(has(&ptr, (EV_ABS, ABS_X, 110)));
     assert_eq!(d.pen_mouse_buttons, 0);
@@ -48,7 +61,10 @@ fn a_route_flip_while_hovering_moves_the_tool_in_and_out_of_range() {
     d.ghost_pen(&sample(3, 100), true, "right", "middle");
     assert!(d.pen_proximity);
     d.ghost_pen(&sample(3, 110), false, "right", "middle");
-    assert!(!d.pen_proximity, "left the pen route: the tool leaves range");
+    assert!(
+        !d.pen_proximity,
+        "left the pen route: the tool leaves range"
+    );
     let pen = frames(&pp);
     done(&[&pp, &qp]);
     assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 0)));
@@ -62,8 +78,15 @@ fn a_still_pen_keeps_the_pointer_alive_with_a_one_unit_nudge() {
     }
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
-    let xs: Vec<i32> = ptr.iter().flat_map(|f| f.iter().filter(|e| e.1 == ABS_X).map(|e| e.2)).collect();
-    assert_eq!(xs, vec![500, 501, 500], "a repeat is written beside the position, never twice the same");
+    let xs: Vec<i32> = ptr
+        .iter()
+        .flat_map(|f| f.iter().filter(|e| e.1 == ABS_X).map(|e| e.2))
+        .collect();
+    assert_eq!(
+        xs,
+        vec![500, 501, 500],
+        "a repeat is written beside the position, never twice the same"
+    );
 }
 
 #[test]
@@ -73,16 +96,28 @@ fn panic_release_lets_go_of_everything_on_both_devices() {
     d.ghost_pen(&sample(5, 0), false, "right", "middle"); // barrel -> right held
     assert_eq!(d.pen_mouse_buttons, 1 | 2);
     d.ghost_panic_release(false);
-    assert_eq!(d.pen_mouse_buttons, 2, "the barrel button keeps its own lifecycle");
+    assert_eq!(
+        d.pen_mouse_buttons, 2,
+        "the barrel button keeps its own lifecycle"
+    );
     d.ghost_panic_release(true);
     let (pen, ptr) = (frames(&pp), frames(&qp));
     done(&[&pp, &qp]);
     assert_eq!(d.pen_mouse_buttons, 0);
     assert_eq!(d.tip, Tip::None);
-    for e in [(EV_KEY, BTN_LEFT, 0), (EV_KEY, BTN_RIGHT, 0), (EV_KEY, BTN_MIDDLE, 0)] {
+    for e in [
+        (EV_KEY, BTN_LEFT, 0),
+        (EV_KEY, BTN_RIGHT, 0),
+        (EV_KEY, BTN_MIDDLE, 0),
+    ] {
         assert!(has(&ptr, e), "pointer: {e:?}");
     }
-    for e in [(EV_KEY, BTN_TOUCH, 0), (EV_KEY, BTN_STYLUS, 0), (EV_KEY, BTN_TOOL_PEN, 0), (EV_KEY, BTN_TOOL_RUBBER, 0)] {
+    for e in [
+        (EV_KEY, BTN_TOUCH, 0),
+        (EV_KEY, BTN_STYLUS, 0),
+        (EV_KEY, BTN_TOOL_PEN, 0),
+        (EV_KEY, BTN_TOOL_RUBBER, 0),
+    ] {
         assert!(has(&pen, e), "pen: {e:?}");
     }
 }
@@ -113,14 +148,28 @@ fn non_art_app_tip_is_a_left_click_on_the_pointer_only() {
         .collect();
     assert_eq!(left.iter().filter(|v| **v == 1).count(), 1, "one press");
     assert_eq!(left.first(), Some(&1));
-    assert_eq!(left.last(), Some(&0), "and it ends released (a redundant release is dropped by the kernel)");
-    assert!(!has(&pen, (EV_KEY, BTN_TOUCH, 1)), "the tablet never touches");
+    assert_eq!(
+        left.last(),
+        Some(&0),
+        "and it ends released (a redundant release is dropped by the kernel)"
+    );
     assert!(
-        pen.iter().all(|f| !f.contains(&(EV_ABS, ABS_PRESSURE, 2000))),
+        !has(&pen, (EV_KEY, BTN_TOUCH, 1)),
+        "the tablet never touches"
+    );
+    assert!(
+        pen.iter()
+            .all(|f| !f.contains(&(EV_ABS, ABS_PRESSURE, 2000))),
         "no pressure reaches the tablet in a non-art app"
     );
-    assert!(!has(&pen, (EV_KEY, BTN_TOOL_PEN, 1)), "and it stays out of range");
-    assert!(has(&ptr, (EV_ABS, ABS_X, 150)), "the pointer follows to the lift point");
+    assert!(
+        !has(&pen, (EV_KEY, BTN_TOOL_PEN, 1)),
+        "and it stays out of range"
+    );
+    assert!(
+        has(&ptr, (EV_ABS, ABS_X, 150)),
+        "the pointer follows to the lift point"
+    );
     assert_eq!(d.pen_mouse_buttons, 0);
 }
 
@@ -139,7 +188,10 @@ fn art_app_tip_goes_to_the_pen_with_pressure_and_never_clicks() {
         !ptr.iter().flatten().any(|e| e.0 == EV_KEY && e.2 == 1),
         "the pointer presses no button"
     );
-    assert!(has(&ptr, (EV_ABS, ABS_X, 130)), "but follows the pen to the lift point");
+    assert!(
+        has(&ptr, (EV_ABS, ABS_X, 130)),
+        "but follows the pen to the lift point"
+    );
 }
 
 #[test]
@@ -156,7 +208,10 @@ fn a_stroke_stays_on_the_device_it_started_on_when_the_route_flips() {
         .collect();
     assert_eq!(left.iter().filter(|v| **v == 1).count(), 1);
     assert_eq!(left.last(), Some(&0), "released on the pointer");
-    assert!(!has(&pen, (EV_KEY, BTN_TOUCH, 1)), "never touched the tablet");
+    assert!(
+        !has(&pen, (EV_KEY, BTN_TOUCH, 1)),
+        "never touched the tablet"
+    );
 }
 
 #[test]
@@ -181,7 +236,11 @@ fn leaving_range_stops_pointer_updates_and_starts_the_idle_clock() {
     let ptr = frames(&qp);
     let pen = frames(&pp);
     done(&[&pp, &qp]);
-    assert_eq!(ptr.iter().flatten().filter(|e| e.1 == ABS_X).count(), 1, "range exit moves nothing on the pointer");
+    assert_eq!(
+        ptr.iter().flatten().filter(|e| e.1 == ABS_X).count(),
+        1,
+        "range exit moves nothing on the pointer"
+    );
     assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 0)));
     assert!(d.ghost_out_since.is_some());
     assert!(!d.pen_proximity);
@@ -202,7 +261,14 @@ fn idle_hide_is_off_at_zero_and_fires_once_after_the_timeout_with_no_pointer_mot
     done(&[&pp, &qp]);
     assert_eq!(ptr.len(), ptr_before, "the hide never touches the pointer");
     let n = pen.len();
-    assert_eq!(pen[n - 2], vec![(EV_KEY, BTN_TOOL_PEN, 1), (EV_ABS, ABS_X, 321), (EV_ABS, ABS_Y, 500)]);
+    assert_eq!(
+        pen[n - 2],
+        vec![
+            (EV_KEY, BTN_TOOL_PEN, 1),
+            (EV_ABS, ABS_X, 321),
+            (EV_ABS, ABS_Y, 500)
+        ]
+    );
     assert_eq!(pen[n - 1], vec![(EV_KEY, BTN_TOOL_PEN, 0)]);
     // Coming back shows the cursor again and re-arms the clock.
     let (mut d2, p2, q2) = rig();

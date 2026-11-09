@@ -12,7 +12,9 @@ pub(super) struct GenericDesktop {
 
 impl GenericDesktop {
     pub(super) fn new() -> Self {
-        Self { focus: FocusFile::default() }
+        Self {
+            focus: FocusFile::default(),
+        }
     }
 }
 

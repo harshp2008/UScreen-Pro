@@ -53,7 +53,6 @@ impl PadState {
     }
 }
 
-
 impl UInputDevice {
     /// Put the tablet's fingers on the pad: the full set that is down right now. Fingers that are
     /// no longer listed are lifted (tracking id -1), new ones get the lowest free slot and a fresh
@@ -62,7 +61,11 @@ impl UInputDevice {
     ///
     /// Sending the whole set every time (instead of down / move / up events) means a lost message
     /// can never leave a finger stuck on the pad: the next frame simply does not list it.
-    pub(in crate::input) fn inject_pad(&mut self, st: &mut PadState, fingers: &[PadFinger]) -> Result<()> {
+    pub(in crate::input) fn inject_pad(
+        &mut self,
+        st: &mut PadState,
+        fingers: &[PadFinger],
+    ) -> Result<()> {
         if fingers.is_empty() && st.count() == 0 {
             return Ok(());
         }
@@ -93,7 +96,8 @@ impl UInputDevice {
                 .clamp(0, (PAD_WIDTH_MM * PAD_UNITS_PER_MM as f64) as i32 - 1);
             let y = ((f.y_mm * PAD_UNITS_PER_MM as f64) as i32)
                 .clamp(0, (PAD_HEIGHT_MM * PAD_UNITS_PER_MM as f64) as i32 - 1);
-            let pressure = (PAD_PRESSURE_LOW + f.pressure.clamp(0.0, 1.0) * PAD_PRESSURE_SPAN) as i32;
+            let pressure =
+                (PAD_PRESSURE_LOW + f.pressure.clamp(0.0, 1.0) * PAD_PRESSURE_SPAN) as i32;
             self.emit(EV_ABS, ABS_MT_SLOT, slot as i32)?;
             if is_new {
                 self.emit(EV_ABS, ABS_MT_TRACKING_ID, st.next_tracking)?;

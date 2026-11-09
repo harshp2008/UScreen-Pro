@@ -20,9 +20,14 @@ pub(in crate::input) fn start_focus_watcher() {
         .name("uscreen-focus".into())
         .spawn(|| {
             let mut desktop = crate::desktop::detect();
-            info!("Desktop backend: {} (focus reporting: {})", desktop.name(), desktop.capabilities().focus);
+            info!(
+                "Desktop backend: {} (focus reporting: {})",
+                desktop.name(),
+                desktop.capabilities().focus
+            );
             let mut last_toggle = std::fs::read_to_string(toggle_file().unwrap_or_default()).ok();
-            let mut last_dump = std::fs::read_to_string(dump_request_file().unwrap_or_default()).ok();
+            let mut last_dump =
+                std::fs::read_to_string(dump_request_file().unwrap_or_default()).ok();
             loop {
                 std::thread::sleep(Duration::from_millis(150));
                 match desktop.poll_focus() {
@@ -37,8 +42,14 @@ pub(in crate::input) fn start_focus_watcher() {
                         if last_dump.is_some() {
                             let text = crate::input::recorder::render();
                             match std::fs::write(&out, &text) {
-                                Ok(()) => info!("Pen recorder written to {:?} ({} lines)", out, text.lines().count()),
-                                Err(e) => warn!("Could not write the pen recorder to {:?}: {}", out, e),
+                                Ok(()) => info!(
+                                    "Pen recorder written to {:?} ({} lines)",
+                                    out,
+                                    text.lines().count()
+                                ),
+                                Err(e) => {
+                                    warn!("Could not write the pen recorder to {:?}: {}", out, e)
+                                }
                             }
                         }
                     }
@@ -65,7 +76,10 @@ pub(in crate::input) fn start_focus_watcher() {
 }
 
 /// Drive the idle hide for the daemon's lifetime: a few ticks a second, reading the timeout live.
-pub(in crate::input) fn spawn_idle_task(uinput: Arc<std::sync::Mutex<InjectDevices>>, instance: u32) {
+pub(in crate::input) fn spawn_idle_task(
+    uinput: Arc<std::sync::Mutex<InjectDevices>>,
+    instance: u32,
+) {
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(Duration::from_millis(50));
         let mut n: u32 = 0;
@@ -75,9 +89,15 @@ pub(in crate::input) fn spawn_idle_task(uinput: Arc<std::sync::Mutex<InjectDevic
             // The idle hide is checked a few times a second, reading the timeout live (before the
             // device lock is taken, as the event path does).
             let opts = crate::config::options::current_options(instance);
-            let timeout = if n % 5 == 0 { opts.stylus_idle_hide_timeout } else { 0 };
+            let timeout = if n % 5 == 0 {
+                opts.stylus_idle_hide_timeout
+            } else {
+                0
+            };
             let to_pen = route_to_pen(&opts.stylus_art_apps);
-            let Ok(mut guard) = uinput.lock() else { continue };
+            let Ok(mut guard) = uinput.lock() else {
+                continue;
+            };
             guard.auto_check_route(to_pen);
             guard.auto_flush_exit();
             if timeout != 0 && guard.ghost_idle_tick(timeout) {
