@@ -54,7 +54,7 @@ Minimum Android version is **8.1**.
 ## Plug in and use
 
 1. Start the daemon (`systemctl --user enable --now uscreen`, or `uscreen
-   start` for one session, or the *Start* button in `uscreen-gui`).
+   start` for one session, or the *Start* button in `uscreen-pro-gui`).
 2. Plug the USB cable in. The daemon forwards the ports over adb and launches
    the app on the tablet by itself.
 3. The tablet appears as a new monitor in your display settings, sized to the

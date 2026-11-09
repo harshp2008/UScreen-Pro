@@ -36,25 +36,26 @@ build-helper:
 	cp host/evdi/evdi_helper $(BIN_DIR)/evdi_helper
 	@echo "✓ EVDI helper: host/evdi/evdi_helper"
 
-## build: Build all workspace binaries (uscreen daemon and uscreen-gui) in release profile
+## build: Build all workspace binaries (daemon, pen menu, desktop app) in release profile
 build: build-helper
 	$(CARGO) build --release
-	@echo "✓ Binaries: $(PWD)/target/release/uscreen and uscreen-gui"
+	@echo "✓ Binaries: $(PWD)/target/release/uscreen, uscreen-menu and uscreen-pro-gui"
 
 ## install: Install binaries, assets, desktop entry, systemd user service, and GNOME Shell extension
 install: build edid
 	mkdir -p $(BIN_DIR) $(DATA_DIR)/edid
 	# Remove old binaries first to avoid 'text file busy' errors if daemon is running
-	rm -f $(BIN_DIR)/uscreen $(BIN_DIR)/uscreen-gui $(BIN_DIR)/evdi_helper
+	rm -f $(BIN_DIR)/uscreen $(BIN_DIR)/uscreen-gui $(BIN_DIR)/uscreen-pro-gui $(BIN_DIR)/uscreen-menu $(BIN_DIR)/evdi_helper
 	cp target/release/uscreen $(BIN_DIR)/uscreen
-	cp target/release/uscreen-gui $(BIN_DIR)/uscreen-gui
+	cp target/release/uscreen-pro-gui $(BIN_DIR)/uscreen-pro-gui
+	cp target/release/uscreen-menu $(BIN_DIR)/uscreen-menu
 	cp host/evdi/evdi_helper $(BIN_DIR)/evdi_helper
 	cp edid/s9ultra.bin $(DATA_DIR)/edid/
 	@if [ -f android/app/build/outputs/apk/debug/app-debug.apk ]; then \
 		cp android/app/build/outputs/apk/debug/app-debug.apk $(DATA_DIR)/app-debug.apk; \
 		echo "✓ Installed APK to $(DATA_DIR)/app-debug.apk"; \
 	fi
-	@echo "✓ Installed to $(BIN_DIR)/uscreen, $(BIN_DIR)/uscreen-gui and $(BIN_DIR)/evdi_helper"
+	@echo "✓ Installed to $(BIN_DIR)/uscreen, uscreen-menu, uscreen-pro-gui and evdi_helper"
 	mkdir -p ${HOME}/.local/share/applications
 	cp scripts/uscreen.desktop ${HOME}/.local/share/applications/ 2>/dev/null || true
 	mkdir -p ${HOME}/.local/share/icons/hicolor/scalable/apps
@@ -143,7 +144,7 @@ dist:
 dist-local: build
 	rm -rf dist/uscreen-$(VERSION)
 	mkdir -p dist/uscreen-$(VERSION)/bin dist/uscreen-$(VERSION)/scripts dist/uscreen-$(VERSION)/packaging
-	cp target/release/uscreen target/release/uscreen-gui host/evdi/evdi_helper dist/uscreen-$(VERSION)/bin/
+	cp target/release/uscreen target/release/uscreen-menu target/release/uscreen-pro-gui host/evdi/evdi_helper dist/uscreen-$(VERSION)/bin/
 	cp scripts/install.sh scripts/uscreen.desktop scripts/uscreen.service dist/uscreen-$(VERSION)/scripts/
 	cp packaging/uscreen-evdi.conf packaging/uscreen-modules.conf packaging/uscreen.service packaging/60-uscreen-uinput.rules dist/uscreen-$(VERSION)/packaging/
 	mkdir -p dist/uscreen-$(VERSION)/packaging/icons && cp packaging/icons/uscreen.svg packaging/icons/uscreen-pen.svg dist/uscreen-$(VERSION)/packaging/icons/

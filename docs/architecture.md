@@ -41,7 +41,7 @@
   - `doctor.rs`: Comprehensive diagnostic suite verifying DRM nodes, permissions, and encoder health.
 - `evdi_helper` — one per tablet slot, owns one EVDI card. Handles POSIX signals for nominal 60 FPS streaming, 1 FPS keep-alive standby throttle (`SIGUSR1`), and full keyframe refresh (`SIGUSR2`).
 - `ffmpeg` — one per slot (unless built with the in-process encoder).
-- `uscreen-gui` — optional egui settings window, talks to the daemon through the control socket, config file, and PID file.
+- `uscreen-pro-gui` — optional Tauri settings window, talks to the daemon through the control socket, config file, and PID file.
 - `android/` — Android client:
   - `MainActivity.kt`: Lifecycle, Keyguard, WakeLock, refresh rate, and hover dispatch.
   - `ui/Theme.kt`: OLED-optimized dark theme.

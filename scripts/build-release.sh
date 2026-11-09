@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 # Build release binaries against an old glibc so they run on any current
 # distribution. Built on the developer's own machine they required glibc 2.43
-# (uscreen-gui) and 2.39 (uscreen), which rules out every Debian and Ubuntu
+# (the old GUI) and 2.39 (uscreen), which rules out every Debian and Ubuntu
 # release in use. Debian 12 has 2.36, and anything built there runs on
 # everything newer.
 #
 # Needs a distrobox container named "uscreen-build" made from debian:12 with
-# build-essential, pkg-config, libdrm-dev, the X11/Wayland dev packages for
-# the GUI, git, dpkg-dev, fakeroot, rpm and rustup.
+# build-essential, pkg-config, libdrm-dev, libgtk-4-dev (pen menu), nodejs + npm and
+# the Tauri/webkit2gtk-4.1 dev packages (desktop app), git, dpkg-dev, fakeroot, rpm and rustup.
+# NOTE: the GUI and pen menu steps below were migrated from the retired egui app and have not
+# been run; check them on the first release build.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 CONTAINER="${USCREEN_BUILD_CONTAINER:-uscreen-build}"
@@ -23,7 +25,8 @@ distrobox enter "$CONTAINER" -- bash -lc "
   cd '$PWD'
   export CARGO_TARGET_DIR='$PWD/target-deb12'
   cargo build --release --locked --manifest-path host/Cargo.toml
-  cargo build --release --locked --manifest-path gui/Cargo.toml
+  cargo build --release --locked --manifest-path menu/Cargo.toml
+  (cd uscreen-pro-gui && npm ci && npm run tauri build -- --no-bundle)
 
   # libevdi is not packaged on Debian 12, so the tarball carries its own copy
   # next to the helper, found through an \\\$ORIGIN rpath. It stays a separate
@@ -37,7 +40,7 @@ distrobox enter "$CONTAINER" -- bash -lc "
 "
 [ -f target-deb12/.build-ok ] || { echo "!! build inside $CONTAINER failed"; exit 1; }
 
-for b in target-deb12/release/uscreen target-deb12/release/uscreen-gui target-deb12/evdi_helper; do
+for b in target-deb12/release/uscreen target-deb12/release/uscreen-menu target-deb12/release/uscreen-pro-gui target-deb12/evdi_helper; do
   need="$(objdump -T "$b" | grep -oE 'GLIBC_[0-9.]+' | sort -Vu | tail -1)"
   echo "  $(basename "$b"): needs $need"
   case "$need" in GLIBC_2.3[0-6]|GLIBC_2.[0-2]*|GLIBC_2.[0-9]) ;; *) echo "  !! $b needs $need — not portable"; exit 1;; esac
@@ -46,7 +49,7 @@ done
 # Same layout as `make dist-local`, from the portable binaries.
 D="dist/uscreen-$VERSION"
 rm -rf "$D"; mkdir -p "$D/bin" "$D/scripts" "$D/packaging"
-cp target-deb12/release/uscreen target-deb12/release/uscreen-gui target-deb12/evdi_helper "$D/bin/"
+cp target-deb12/release/uscreen target-deb12/release/uscreen-menu target-deb12/release/uscreen-pro-gui target-deb12/evdi_helper "$D/bin/"
 cp target-deb12/evdi-src/library/libevdi.so.1.15.0 "$D/bin/"
 ln -sf libevdi.so.1.15.0 "$D/bin/libevdi.so.1"
 cp scripts/install.sh scripts/uscreen.desktop scripts/uscreen.service "$D/scripts/"

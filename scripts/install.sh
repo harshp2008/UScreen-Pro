@@ -150,9 +150,10 @@ install_files() {
         src_bin="$PROJECT_DIR/target/release"
     fi
 
-    rm -f "$BIN_DIR/uscreen" "$BIN_DIR/uscreen-gui" "$BIN_DIR/evdi_helper"
+    # uscreen-gui is the retired egui app; an old install may still have it.
+    rm -f "$BIN_DIR/uscreen" "$BIN_DIR/uscreen-gui" "$BIN_DIR/uscreen-pro-gui" "$BIN_DIR/evdi_helper"
     cp "$src_bin/uscreen" "$BIN_DIR/uscreen"
-    cp "$src_bin/uscreen-gui" "$BIN_DIR/uscreen-gui" 2>/dev/null || warn "uscreen-gui not found, skipping"
+    cp "$src_bin/uscreen-pro-gui" "$BIN_DIR/uscreen-pro-gui" 2>/dev/null || warn "uscreen-pro-gui not found, skipping"
     if [ -f "$src_bin/evdi_helper" ]; then
         cp "$src_bin/evdi_helper" "$BIN_DIR/evdi_helper"
         # The release helper finds libevdi next to itself ($ORIGIN rpath).
@@ -174,8 +175,8 @@ install_files() {
     fi
 
     # Absolute path: the app menu does not necessarily have ~/.local/bin on
-    # its PATH, so a bare "uscreen-gui" can be a menu entry that does nothing.
-    sed "s|^Exec=.*|Exec=$BIN_DIR/uscreen-gui|" "$SCRIPT_DIR/uscreen.desktop" > "$APP_DIR/uscreen.desktop" \
+    # its PATH, so a bare "uscreen-pro-gui" can be a menu entry that does nothing.
+    sed "s|^Exec=.*|Exec=$BIN_DIR/uscreen-pro-gui|" "$SCRIPT_DIR/uscreen.desktop" > "$APP_DIR/uscreen.desktop" \
         && info "Desktop entry installed (UScreen in the app menu)"
 
     # The menu entry and the tray look the icon up by name in the hicolor
@@ -317,7 +318,7 @@ main() {
     install_spawn_at
     system_setup
     echo ""
-    info "Done! Launch 'UScreen' from your app menu (or run: uscreen-gui)"
+    info "Done! Launch 'UScreen' from your app menu (or run: uscreen-pro-gui)"
     info "Install the APK on your tablet, enable USB debugging, plug in — that's it."
     check_path
 }

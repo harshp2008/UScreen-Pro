@@ -125,7 +125,7 @@ extended display, pressure but no tilt.
 ## Settings
 
 Everything lives in `~/.config/uscreen/config.toml` and is reachable from
-`uscreen-gui`, the ⚙ sheet in the tablet app, the tray icon, or CLI flags.
+`uscreen-pro-gui`, the ⚙ sheet in the tablet app, the tray icon, or CLI flags.
 
 - **Graphics tablet mode** — flip *Graphics tablet* on the tablet: nothing is
   streamed, the pen drives your own screen, zero display latency. Switch back

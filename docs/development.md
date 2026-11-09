@@ -64,7 +64,6 @@ host/                   Rust daemon (binary `uscreen`)
   evdi/                   C helper: EVDI framebuffer capture -> NV12 -> FIFO
 menu/                   `uscreen-menu`: the pen's long-press menu window (GTK 4), launched by the daemon
 uscreen-pro-gui/        Tauri + React desktop app (settings, pairing, status)
-gui-legacy/             retired egui app, excluded from the workspace (still referenced by packaging)
 android/                Kotlin/Compose app: MediaCodec decoder, touch/pen capture, touchpad engine
 extensions/             GNOME Shell extension: focus reporting, route hotkey, context probe
 packaging/              deb control/postinst, rpm spec, PKGBUILD, udev/modprobe files

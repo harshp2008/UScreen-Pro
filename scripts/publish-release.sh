@@ -18,7 +18,7 @@ RELEASE_DATE="${RELEASE_DATE:-$(date +%F)}"
 
 # Every place that repeats the version has to agree with the Makefile before
 # anything is built, so the public page never advertises the previous release.
-for f in host/Cargo.toml gui/Cargo.toml; do
+for f in host/Cargo.toml menu/Cargo.toml; do
   grep -q "^version = \"$VERSION\"" "$f" || { echo "!! $f is not at version $VERSION"; exit 1; }
 done
 grep -q "versionName = \"$VERSION\"" android/app/build.gradle.kts \

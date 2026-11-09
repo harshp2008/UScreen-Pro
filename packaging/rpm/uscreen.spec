@@ -6,7 +6,7 @@ License:        MIT
 URL:            https://github.com/majmichu1/UScreen
 Source0:        uscreen-%{version}-linux-x86_64.tar.gz
 BuildArch:      x86_64
-Requires:       ffmpeg android-tools
+Requires:       ffmpeg android-tools gtk4
 # The helper ships with its own libevdi next to it (LGPL, $ORIGIN rpath), so
 # only the kernel module is needed from the system. That is packaged on
 # openSUSE (evdi) and not on Fedora at all, hence Recommends rather than
@@ -24,7 +24,8 @@ plain graphics tablet for the host's own screen.
 
 %install
 install -Dm755 bin/uscreen          %{buildroot}%{_bindir}/uscreen
-install -Dm755 bin/uscreen-gui      %{buildroot}%{_bindir}/uscreen-gui
+install -Dm755 bin/uscreen-menu     %{buildroot}%{_bindir}/uscreen-menu
+install -Dm755 bin/uscreen-pro-gui  %{buildroot}%{_bindir}/uscreen-pro-gui
 install -Dm755 bin/evdi_helper      %{buildroot}%{_libdir}/uscreen/evdi_helper
 install -Dm755 bin/libevdi.so.1.15.0 %{buildroot}%{_libdir}/uscreen/libevdi.so.1.15.0
 ln -sf libevdi.so.1.15.0            %{buildroot}%{_libdir}/uscreen/libevdi.so.1
@@ -55,7 +56,8 @@ udevadm trigger --name-match=uinput 2>/dev/null || true
 
 %files
 %{_bindir}/uscreen
-%{_bindir}/uscreen-gui
+%{_bindir}/uscreen-menu
+%{_bindir}/uscreen-pro-gui
 %{_libdir}/uscreen/evdi_helper
 %{_libdir}/uscreen/libevdi.so.1
 %{_libdir}/uscreen/libevdi.so.1.15.0

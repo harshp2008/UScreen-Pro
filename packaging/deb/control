@@ -3,7 +3,7 @@ Version: 1.2.12
 Section: video
 Priority: optional
 Architecture: amd64
-Depends: ffmpeg, adb | android-tools-adb, libdrm2
+Depends: ffmpeg, adb | android-tools-adb, libdrm2, libgtk-4-1
 Recommends: evdi-dkms
 Maintainer: majmichu1 <157926347+majmichu1@users.noreply.github.com>
 Homepage: https://github.com/majmichu1/UScreen
