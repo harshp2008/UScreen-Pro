@@ -1,3 +1,7 @@
+<!--
+  docs/backlog.md: work that was agreed for later, by area. Nothing here is started unless it says so.
+  Owns the list of future work; what was done is in CHANGELOG.md.
+-->
 # Backlog
 
 Things we agreed to develop later, roughly by area. Nothing here is started unless it says so.

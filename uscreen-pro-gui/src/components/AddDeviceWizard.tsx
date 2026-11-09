@@ -1,3 +1,7 @@
+/*
+ * The 'Add device' dialog: Prepare Device, Connect USB, Install, Wireless, Finish, plus the no-cable wireless path and the 'reconfigure wireless' entry.
+ * Owns the wizard's state and calls the Tauri adb and pairing commands; the generic building blocks are in wizard/WizardParts.tsx and the pairing helper dialog in ManualPairDialog.tsx.
+ */
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {

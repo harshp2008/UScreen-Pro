@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  String resources of the Android app (only the app name; all other text is in the Compose code).
+-->
 <resources>
     <string name="app_name">UScreen Pro</string>
 </resources>

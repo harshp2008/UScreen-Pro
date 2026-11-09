@@ -1,3 +1,6 @@
+/*
+ * Entry point: mounts <App/>. Outside Tauri in development it installs the in-browser mock of the Tauri IPC first (src/lib/devMock.ts).
+ */
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";

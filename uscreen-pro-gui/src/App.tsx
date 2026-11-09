@@ -1,3 +1,8 @@
+/*
+ * Root of the UScreen Pro window.
+ * Owns the shared state (daemon status, config and its saved fingerprints), the three-way merge of tablet-side changes into the open window, and routing between the views.
+ * Does not own how a view looks (src/views, src/components) or how settings are stored (src-tauri).
+ */
 import { useTheme } from "./lib/theme";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";

@@ -1,3 +1,7 @@
+<!--
+  docs/compatibility.md: what UScreen has actually been run on, from the maintainer and from compatibility reports.
+  Owns the table of tested systems; the support policy per desktop is in docs/desktop-backends.md.
+-->
 # Compatibility
 
 What UScreen has actually been run on. Rows come from the maintainer and from

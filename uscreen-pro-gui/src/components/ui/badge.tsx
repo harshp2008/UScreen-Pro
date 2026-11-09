@@ -1,3 +1,6 @@
+/*
+ * Badge: a small rounded status label. shadcn/ui component, restyled for this app.
+ */
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 

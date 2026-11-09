@@ -1,3 +1,7 @@
+<!--
+  README.md: the project's front page: what UScreen is, how to install and run it, and the map of the repository.
+  Owns the overview; the details are in docs/ and, later, the documentation site in website/.
+-->
 # UScreen for Linux — Android Tablet as a USB Second Monitor
 
 **UScreen is an open-source SuperDisplay alternative for Linux.** It turns an

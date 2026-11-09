@@ -1,3 +1,7 @@
+<!--
+  docs/installation.md: installing the Linux side and the Android app for users.
+  Owns the user-facing steps; the installer's modes and internals are in docs/installer.md.
+-->
 # Installing UScreen for Linux
 
 Two halves: the Linux side (daemon, GUI, tray) and the Android app. They ship

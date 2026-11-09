@@ -1,3 +1,6 @@
+/*
+ * Toggle button and its variants over Radix. shadcn/ui component, restyled for this app.
+ */
 import * as React from "react"
 import * as TogglePrimitive from "@radix-ui/react-toggle"
 import { cva, type VariantProps } from "class-variance-authority"

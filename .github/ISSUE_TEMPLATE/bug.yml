@@ -1,3 +1,4 @@
+# Issue form for bug reports.
 name: Bug report
 description: Something does not work
 labels: [bug]

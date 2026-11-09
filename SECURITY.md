@@ -1,3 +1,6 @@
+<!--
+  SECURITY.md: what UScreen does on your machine, what the installer and packages change, how to uninstall completely, how to report a vulnerability and how releases are verified.
+-->
 # Security
 
 ## What UScreen does on your machine

@@ -1,3 +1,7 @@
+<!--
+  docs/installer.md: how scripts/install.sh works: modes, parts, restart rules and the EVDI strategy per distribution.
+  Owns the installer reference; its tests are in scripts/tests/.
+-->
 # Installer
 
 `scripts/install.sh` installs UScreen from a source checkout or a release tarball.

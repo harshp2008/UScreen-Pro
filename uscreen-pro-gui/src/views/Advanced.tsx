@@ -1,3 +1,6 @@
+/*
+ * The Advanced page: the experimental switches (off by default) and the app-lock list. Presentational; state arrives as props from App.tsx.
+ */
 import { Check } from "lucide-react";
 import { useRef, useState } from "react";
 import { AppLockList } from "../components/ui/AppLockList";

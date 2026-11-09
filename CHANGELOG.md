@@ -1,3 +1,7 @@
+<!--
+  CHANGELOG.md: release notes, newest first, one section per version.
+  Owns what changed between releases; comment-only and documentation changes do not need an entry.
+-->
 # Changelog
 
 Full notes for each version are on the

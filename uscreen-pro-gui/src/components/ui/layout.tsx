@@ -1,3 +1,6 @@
+/*
+ * Layout building blocks of the settings pages: sections, rows with an info tip, the inherited-value control of per-device overrides, switch rows and page headers.
+ */
 import { ChevronRight, Info, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";

@@ -1,3 +1,6 @@
+/*
+ * Toggle group primitives over Radix. shadcn/ui component, restyled for this app.
+ */
 "use client"
 
 import * as React from "react"

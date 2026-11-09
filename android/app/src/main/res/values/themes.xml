@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android theme of the app window (the Compose theme is in ui/Theme.kt).
+-->
 <resources>
     <style name="Theme.UScreen" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>

@@ -1,3 +1,7 @@
+<!--
+  docs/desktop-backends.md: what a desktop backend can provide, the checklist to add a desktop, each backend's status, and the GNOME backend in detail.
+  Owns that guide; the code is in host/src/desktop/.
+-->
 # Desktop backends: supporting a new desktop
 
 UScreen's host asks one question of the desktop layer (`host/src/desktop/`) instead of checking

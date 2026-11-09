@@ -1,3 +1,5 @@
+# CI: builds the Linux host (daemon, pen menu, EVDI helper) and the Android APK on pushes to main and develop and on pull requests to main.
+# It does not build the desktop app and does not run the installer tests (installer.yml does).
 name: Build UScreen
 
 on:

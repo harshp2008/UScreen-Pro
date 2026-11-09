@@ -1,3 +1,4 @@
+# R8/ProGuard keep rules of the Android release build (OkHttp and its dependencies).
 # OkHttp
 -dontwarn okhttp3.**
 -dontwarn okio.**

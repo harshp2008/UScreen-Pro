@@ -1,3 +1,7 @@
+<!--
+  CONTRIBUTING.md: how to build, test and propose a change.
+  Owns the contribution workflow; the architecture is in docs/architecture.md and the comment rules in docs/comment-style.md.
+-->
 # Contributing
 
 The most useful contribution right now is a **compatibility report**: which

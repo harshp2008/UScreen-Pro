@@ -1,3 +1,6 @@
+/*
+ * The page of one device: identity, connection, stream and input overrides, and its actions (pause, install, forget). Presentational; state arrives as props from App.tsx.
+ */
 import { useState } from "react";
 import { AlertTriangle, Check, Pause, Play, Trash2, Wifi } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";

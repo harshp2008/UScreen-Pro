@@ -1,3 +1,6 @@
+/*
+ * The global Settings page: the defaults every device inherits. Presentational; state arrives as props from App.tsx.
+ */
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";

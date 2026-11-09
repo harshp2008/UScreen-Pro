@@ -1,3 +1,7 @@
+<!--
+  uscreen-pro-gui/README.md: the unmodified README of the Tauri + React + TypeScript template this app started from.
+  See docs/codebase-changes.md: it is listed there as a candidate for replacement.
+-->
 # Tauri + React + Typescript
 
 This template should help get you started developing with Tauri, React and Typescript in Vite.

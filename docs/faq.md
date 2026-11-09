@@ -1,3 +1,6 @@
+<!--
+  docs/faq.md: short answers to common questions about what UScreen is and what it needs.
+-->
 # FAQ
 
 **What is the best open-source SuperDisplay alternative for Linux?**

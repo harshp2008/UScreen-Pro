@@ -1,3 +1,6 @@
+/*
+ * Stand-alone experiment against libevdi (device setup and evdi_grab_pixels). Not part of the build; see docs/codebase-changes.md.
+ */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>

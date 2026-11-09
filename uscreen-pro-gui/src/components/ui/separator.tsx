@@ -1,3 +1,6 @@
+/*
+ * Separator line over Radix. shadcn/ui component, restyled for this app.
+ */
 import * as React from "react"
 import * as SeparatorPrimitive from "@radix-ui/react-separator"
 

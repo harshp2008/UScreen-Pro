@@ -1,3 +1,6 @@
+/*
+ * The custom window title bar: drag area, theme menu and the minimise, maximise and close buttons (the window has no native decorations).
+ */
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/ui/button";
 import { Copy, Minus, Monitor, Moon, Square, Sun, X, type LucideIcon } from "lucide-react";

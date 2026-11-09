@@ -1,3 +1,6 @@
+/*
+ * Plain input element. shadcn/ui component, restyled for this app.
+ */
 import * as React from "react"
 
 import { cn } from "@/lib/utils"

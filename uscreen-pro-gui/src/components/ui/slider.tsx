@@ -1,3 +1,6 @@
+/*
+ * Slider over Radix. shadcn/ui component, restyled for this app.
+ */
 import * as React from "react"
 import * as SliderPrimitive from "@radix-ui/react-slider"
 

@@ -1,3 +1,7 @@
+<!--
+  docs/benchmarks.md: latency and throughput numbers the project measured, with the test configuration and method.
+  Owns measured results from one machine and one tablet; it makes no claim for other hardware.
+-->
 # Benchmarks
 
 Numbers measured by the project, with the method, so they can be reproduced

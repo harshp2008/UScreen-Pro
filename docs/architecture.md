@@ -1,3 +1,7 @@
+<!--
+  docs/architecture.md: how the pieces fit: the capture pipeline, the processes and modules, the wire protocol and the security model.
+  Owns the big picture; per-component details are in the source comments.
+-->
 # Architecture
 
 ## Pipeline

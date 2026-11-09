@@ -1,3 +1,7 @@
+/*
+ * Settings sections shared by the global Settings page and a device page: input mode, display and power, battery, idle dimming and fade curves.
+ * Owns the rows and their wording; the values and saving live in App.tsx.
+ */
 import type { ReactNode } from "react";
 import { CurveEditor } from "./CurveEditor";
 import { NumberInput, Segmented, Select } from "./ui/controls";

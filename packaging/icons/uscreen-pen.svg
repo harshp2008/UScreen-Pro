@@ -1,3 +1,6 @@
+<!--
+  Pen icon shown by the tray in Stylus mode; uscreen-pen-64.rgba is its 64-pixel RGBA bitmap.
+-->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <!-- Graphics-tablet mode: same emerald tile as the app icon; the screen goes dark and the stylus takes over. -->
   <rect width="1024" height="1024" rx="232" fill="#059669"/>

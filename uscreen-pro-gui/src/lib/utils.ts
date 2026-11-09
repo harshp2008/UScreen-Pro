@@ -1,3 +1,6 @@
+/*
+ * cn(): joins class names and resolves Tailwind conflicts (clsx + tailwind-merge).
+ */
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 

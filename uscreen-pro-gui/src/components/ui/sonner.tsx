@@ -1,3 +1,6 @@
+/*
+ * Toast container (sonner) that follows the app theme.
+ */
 "use client"
 
 import { Toaster as Sonner } from "sonner"

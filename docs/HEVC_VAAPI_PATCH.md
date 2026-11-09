@@ -1,3 +1,7 @@
+<!--
+  docs/HEVC_VAAPI_PATCH.md: notes on the HEVC VA-API hardware encoder support and its fallback to H.264 VA-API.
+  Owns the description of that change; encoder selection is in host/src/capture/.
+-->
 # HEVC VA-API Hardware Encoder Patch
 
 ## Summary

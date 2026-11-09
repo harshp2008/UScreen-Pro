@@ -1,3 +1,6 @@
+/*
+ * The 'System health' page: daemon and build status, device tools that act over ADB, and the list of devices. Presentational; state arrives as props from App.tsx.
+ */
 import { Clock, Download, LoaderCircle, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";

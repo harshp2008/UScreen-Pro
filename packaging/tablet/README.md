@@ -1,3 +1,6 @@
+<!--
+  packaging/tablet/README.md: optional udev rules for a physical drawing tablet (not installed by the packages or the installer).
+-->
 # Physical drawing tablet udev rules (optional)
 
 Example rules for an XP-Pen `28bd:0931`. Generate the ones for your tablet with

@@ -1,3 +1,7 @@
+<!--
+  docs/development.md: building from source, running and testing, the project layout, the command line, encoder tuning and releasing.
+  Owns the developer workflow; installing as a user is in docs/installation.md.
+-->
 # Development
 
 ## Building from source

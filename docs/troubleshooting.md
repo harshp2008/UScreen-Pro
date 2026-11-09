@@ -1,3 +1,7 @@
+<!--
+  docs/troubleshooting.md: symptoms, causes and fixes for the problems users hit most.
+  Owns the fixes; the installer and doctor output they refer to are produced by scripts/install.sh and 'uscreen doctor'.
+-->
 # Troubleshooting
 
 Run `uscreen doctor` first. It checks the kernel modules, `/dev/uinput`
