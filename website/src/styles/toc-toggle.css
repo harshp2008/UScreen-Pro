@@ -1,0 +1,56 @@
+/* Hide the "On this page" column (wide screens only) and widen the text. The button is made by
+   src/scripts/toc-toggle.js; the attribute `data-toc-hidden` on <html> is set by the same script
+   before the first paint. Below 72rem Starlight shows its own table of contents above the page
+   and none of this applies. No animation is used, so there is nothing for
+   prefers-reduced-motion to switch off. */
+.toc-toggle {
+  display: none;
+}
+
+@media (min-width: 72rem) {
+  .toc-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.375rem;
+    background: transparent;
+    color: var(--sl-color-gray-2);
+    cursor: pointer;
+  }
+  .toc-toggle:hover {
+    border-color: var(--sl-color-gray-3);
+    color: var(--sl-color-white);
+  }
+  .toc-toggle[aria-pressed='true'] {
+    background: var(--sl-color-accent-low);
+    border-color: var(--sl-color-accent);
+    color: var(--sl-color-white);
+  }
+  .toc-toggle:focus-visible {
+    outline: 2px solid var(--sl-color-accent);
+    outline-offset: 2px;
+  }
+
+  /* The column is removed, and the main pane takes the whole width right of the left sidebar
+     (Starlight keeps room for the column in its width formula). The content column grows from
+     45rem to 50rem (720px to 800px) and everything in it uses that one width: paragraphs, lists,
+     quotes, tables, code blocks, asides and records. This is the only place the width is set.
+     (It was 60rem for tables, code and asides and 45rem for text, so the former stuck out to the
+     right of the latter.) Measured at 1440 on the longest paragraph of two pages: about 110
+     characters per line at 50rem, against about 120 at 56rem and about 93 with the contents shown.
+     On a pane narrower than 50rem the column simply fills it. */
+  :root[data-toc-hidden] {
+    --sl-content-width: 50rem;
+  }
+  :root[data-toc-hidden] .right-sidebar-container {
+    display: none;
+  }
+  :root[data-toc-hidden][data-has-sidebar][data-has-toc] .main-pane {
+    --sl-content-margin-inline: auto;
+    width: 100%;
+  }
+}

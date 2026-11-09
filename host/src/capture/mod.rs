@@ -328,7 +328,7 @@ impl CaptureManager {
 
     /// Stop the pipeline and wait for the children to actually be gone.
     ///
-    /// The synchronous [`stop`] only *sends* signals, so the daemon could exit
+    /// The synchronous `stop` only *sends* signals, so the daemon could exit
     /// while ffmpeg was still holding the capture FIFO. That window collides
     /// with an immediate restart — which is exactly what "Apply & restart" in
     /// the GUI does — and two processes on one FIFO produce torn frames.

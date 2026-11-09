@@ -1,0 +1,206 @@
+/* Records: a table with long cells shown as one card per row (src/integrations/records.mjs writes
+   the markup):
+     ul.records[.records-stack] > li.record > div.record-key + dl.record-fields
+                                              > div.field.field-short|field-long > dt + dd
+     ol.records.records-steps: the same, and the key is span.record-num + span.record-note.
+   A card has the key in a gutter at the left and the other columns in the body: a short cell is a
+   small label over its value, side by side with the others in a wrapping row; a long cell is a label
+   over full-width text. The short fields come first in the HTML (records.mjs), so the screen order
+   is the markup order and no `order` is needed. Colours are Starlight tokens, mixed: the
+   same rule gives a tinted card on the white page of the light theme and on the dark page. */
+.sl-markdown-content .records {
+  --rec-card: color-mix(in srgb, var(--sl-color-gray-6) 50%, var(--sl-color-black));
+  --rec-line: color-mix(in srgb, var(--sl-color-gray-5) 45%, var(--sl-color-gray-6));
+  /* The inline-code chip of the page (custom.css) is nearly the colour of the card, so a little
+     darker keeps the chips visible on it. The .code-any chip and its two box-shadows read this
+     variable, so they stay in step. */
+  --sl-color-bg-inline-code: color-mix(in srgb, var(--sl-color-gray-5) 20%, var(--sl-color-gray-6));
+  list-style: none;
+  padding: 0;
+  margin-block: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  font-size: var(--sl-text-sm);
+  /* The list is the container of the narrow-layout query below: the content column is narrower
+     than the screen once the sidebar is open, so a screen width would be the wrong measure. */
+  container-type: inline-size;
+}
+
+/* Starlight puts a 1rem top margin on every block that follows another block, 0.25rem on `li + li`
+   and `dt + dd`, and 1.25rem under the last child of a list item. The blocks below set their own
+   spacing, so those margins are reset. */
+.sl-markdown-content .records .record,
+.sl-markdown-content .records .record-key,
+.sl-markdown-content .records .record-fields,
+.sl-markdown-content .records .field,
+.sl-markdown-content .records dt,
+.sl-markdown-content .records dd {
+  margin: 0;
+}
+
+.sl-markdown-content .records .record {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12.5rem) minmax(0, 1fr);
+  column-gap: 1.25rem;
+  padding: 1.3rem 1.4rem;
+  border: 1px solid var(--rec-line);
+  border-radius: 0.6rem;
+  background: var(--rec-card);
+}
+
+/* The key: monospace, no chip. A path breaks after a `/` (the <wbr> of code-breaks.mjs) and only
+   as a last resort inside a piece longer than the column. */
+.sl-markdown-content .records .record-key {
+  min-width: 0;
+  font-family: var(--sl-font-system-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--sl-color-white);
+  overflow-wrap: break-word;
+}
+.sl-markdown-content .records:not(.records-sentence) .record-key code {
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+}
+.sl-markdown-content .records:not(.records-sentence) .record-key code :is(.code-any, .code-nb) {
+  background: none;
+  box-shadow: none;
+}
+.sl-markdown-content .records:not(.records-sentence) .record-key code .code-any {
+  display: inline;
+  max-width: none;
+  overflow-wrap: break-word;
+}
+
+/* A key that is a sentence (`records-sentence`, records.mjs: median key over 48 characters, not
+   steps) is not an identifier: body font, weight 600, 1rem (the field text is 0.875rem), a 1.5
+   line height for the lines of a sentence. Code inside it keeps the chip of any inline code
+   (custom.css), at the normal weight. */
+.sl-markdown-content .records.records-sentence .record-key {
+  font-family: inherit;
+  font-size: var(--sl-text-base);
+  line-height: 1.5;
+}
+.sl-markdown-content .records.records-sentence .record-key code {
+  font-weight: 400;
+}
+
+/* The body: a hairline at the left of the fields. */
+.sl-markdown-content .records .record-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.2rem 2rem;
+  min-width: 0;
+  padding-inline-start: 1.25rem;
+  border-inline-start: 1px solid var(--rec-line);
+}
+.sl-markdown-content .records .field {
+  min-width: 0;
+}
+.sl-markdown-content .records .field-long {
+  flex-basis: 100%;
+}
+.sl-markdown-content .records dt {
+  margin-bottom: 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--sl-color-gray-3);
+  overflow-wrap: break-word;
+}
+.sl-markdown-content .records dd {
+  min-width: 0;
+  padding: 0; /* Starlight indents a <dd> by 1rem */
+  overflow-wrap: break-word;
+  line-height: 1.75;
+}
+.sl-markdown-content .records .field-long dd {
+  max-width: 70ch;
+}
+
+/* Steps: a big number, with the rest of the key as a note under it. The number is not monospace and
+   has the accent colour; a piece of code in the note keeps the code font. */
+.sl-markdown-content .records.records-steps .record-key {
+  font-family: inherit;
+  font-weight: inherit;
+  color: inherit;
+}
+.sl-markdown-content .records .record-num {
+  display: block;
+  font-size: 2rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--sl-color-text-accent);
+}
+.sl-markdown-content .records .record-note {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--sl-color-gray-3);
+}
+.sl-markdown-content .records .record-note code {
+  font-family: var(--sl-font-system-mono);
+}
+
+/* custom.css gives a piece of code longer than 20 characters (.code-any) `max-width: 100%`, but
+   the chip of its parent <code> adds 0.3em of padding on each side (6px with the old 2px 6px chip),
+   so a 60-character test name was wider than its column. A table cell hides that behind its own
+   padding; a field has none. 0.6em of the piece's own size is the two paddings. */
+.sl-markdown-content .records .field :not(pre) > code .code-any {
+  max-width: calc(100% - 0.6em);
+}
+
+/* A list whose keys are sentences or that has a field longer than 400 characters (titled cards,
+   records.mjs; both are `records-stack`), and any list narrower than 36rem: one column, the key
+   as the title of the card, a hairline under it instead of at the left of the body, then the
+   short fields in a wrapping row and each long field as a label over full-width text. */
+.sl-markdown-content .records.records-stack .record {
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: 0.6rem;
+}
+.sl-markdown-content .records.records-stack .record-fields {
+  padding-inline-start: 0;
+  padding-top: 0.7rem;
+  border-inline-start: 0;
+  border-top: 1px solid var(--rec-line);
+}
+.sl-markdown-content .records.records-stack.records-steps .record-key {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.sl-markdown-content .records.records-stack .record-num {
+  font-size: 1.4rem;
+}
+.sl-markdown-content .records.records-stack .record-note {
+  margin-top: 0;
+}
+@container (max-width: 36rem) {
+  .sl-markdown-content .records .record {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0.6rem;
+  }
+  .sl-markdown-content .records .record-fields {
+    padding-inline-start: 0;
+    padding-top: 0.7rem;
+    border-inline-start: 0;
+    border-top: 1px solid var(--rec-line);
+  }
+  .sl-markdown-content .records.records-steps .record-key {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  .sl-markdown-content .records .record-num {
+    font-size: 1.4rem;
+  }
+  .sl-markdown-content .records .record-note {
+    margin-top: 0;
+  }
+}

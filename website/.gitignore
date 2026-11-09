@@ -1,0 +1,12 @@
+# website/.gitignore: what is generated or downloaded and so is not committed.
+node_modules/
+dist/
+.astro/
+# Written by scripts/generate.mjs from docs/, CHANGELOG.md, the host's --help and the config source.
+src/content/docs/project/*
+!src/content/docs/project/index.md
+src/content/docs/release-notes/
+src/content/docs/reference/
+src/content/docs/changelog.md
+src/content/docs/configuration.md
+public/api/

@@ -135,6 +135,27 @@ installer and CI read, and the Tauri command names are as before.
 - `scripts/install.sh` deletes the extension's old `lib/*.js` and `compat/*.js` before copying the new ones, so a module
   removed later does not linger on an upgrade.
 
+## The documentation site and the findings (phases 7 and 8)
+
+- `website/` is a Starlight (Astro) site built like the spawn-at project's: the same Starlight and Astro versions, the same
+  theme CSS, the `records` and `code-breaks` integrations, the table of contents toggle, and a GitHub Pages workflow
+  (`.github/workflows/docs.yml`). The framework was confirmed from that project's `package.json` and `astro.config.mjs`.
+  Where it differs: the sidebar, the content, and Node scripts instead of `cargo xtask` for generating and checking pages.
+- Generated at build time (not committed): the Project documents (from `docs/`), the release notes (from `CHANGELOG.md`), the
+  CLI reference (from `uscreen --help`) and the configuration page (from the config structs).
+- Committed: the hand-written guide pages and the 62 experiment records converted from `experiments_and_findings/`.
+- The site is built with `cd website && npm ci && npm run build`; the build ends with a check that fails on a broken link or
+  anchor, a request to another site, an en dash where a flag may have been, or personal data.
+- `uscreen doctor`, `uscreen --help` and the rest were not changed. The rustdoc build now passes with warnings as errors (three
+  documentation comments were corrected for that).
+
+### What was redacted before publishing
+
+`website/scripts/redact.mjs` runs over every generated or converted page: home paths (72 in the experiment records),
+the maintainer's login and host name written as `harsh` in journal and process output (160), e-mail addresses (15, the
+extension uuid and git's remote user excepted), IP addresses (1), a MAC address (1) and device serials (3). The raw
+write-ups in `experiments_and_findings/` are not edited, and their screenshots and logs are not published.
+
 ## Comments (phase 1)
 
 - The comment rules are in [comment-style.md](comment-style.md).

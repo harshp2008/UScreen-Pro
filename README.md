@@ -208,6 +208,7 @@ More in [docs/faq.md](docs/faq.md).
 - [Architecture and protocol](docs/architecture.md) · [Development, building, releasing](docs/development.md)
 - [Benchmarks](docs/benchmarks.md) · [Compatibility](docs/compatibility.md) · [FAQ](docs/faq.md)
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
+- [Documentation site](https://harshp2008.github.io/UScreen-Pro/) (built from `website/`; see [website/README.md](website/README.md))
 
 ## Codebase Architecture
 

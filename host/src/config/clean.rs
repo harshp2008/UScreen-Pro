@@ -47,7 +47,7 @@ pub fn default_art_apps() -> Vec<String> {
     .collect()
 }
 
-/// `right`, `middle` or `none`; anything else falls back to [default].
+/// `right`, `middle` or `none`; anything else falls back to `default`.
 pub fn clean_pen_button(v: &str, default: &str) -> String {
     match v.trim().to_ascii_lowercase().as_str() {
         b @ ("right" | "middle" | "none") => b.to_string(),

@@ -1,0 +1,309 @@
+/* Look of the UScreen docs. Only Starlight's documented CSS variables are set here, plus a few
+   rules for tables and code blocks. No fonts are loaded: the system font stacks of Starlight apply. */
+
+:root {
+  /* Body text is Starlight's 16px (1rem). `--sl-text-body` is not set here: Starlight reads it only
+     in its Card and ContentNotice components, so setting it never changed the text of a page
+     (measured: the paragraphs of the built site are 16px). */
+  --sl-text-code: 0.9rem;
+  /* A little shorter than the 3.5rem / 4rem default, so the header takes less of the screen. */
+  --sl-nav-height: 3rem;
+  /* Starlight's 1.75 (28px at 16px) and a 1.5rem (24px) gap between blocks (paragraph, list, table,
+     code block, aside: every block after another one gets this margin-top; Starlight's is 1rem). */
+  --sl-line-height: 1.8;
+  --sl-content-gap-y: 1.5rem;
+  /* Headings: Starlight's sizes (42px, 35px, 29px, 24px on a wide screen) are 2.6 to 1.5 times the
+     16px body text. Its media query sets them again at 50em, but it is in a CSS layer and this file
+     is not, so these values win at every width: 2rem, 1.5rem, 1.25rem, 1.0625rem. The weight is
+     Starlight's 600 (it renders as the bold face, see the bold rule below). */
+  --sl-text-h1: 2rem;
+  --sl-text-h2: 1.5rem;
+  --sl-text-h3: 1.25rem;
+  --sl-text-h4: 1.0625rem;
+  --sl-line-height-headings: 1.25;
+}
+
+/* Blue accent. Links use --sl-color-text-accent, which Starlight maps to the accent colours.
+   The inline-code chip is Starlight's gray-5 (dark) or gray-6 (light) pulled toward the page
+   colour, so a line with several pieces of code is not a row of boxes. */
+:root,
+:root[data-theme='dark'] {
+  --sl-color-accent-low: #0e2a52;
+  --sl-color-accent: #3b82f6;
+  --sl-color-accent-high: #9cc3ff;
+  --sl-color-bg-inline-code: color-mix(in srgb, var(--sl-color-gray-5) 55%, var(--sl-color-black));
+}
+
+:root[data-theme='light'] {
+  --sl-color-accent-low: #dbe8ff;
+  --sl-color-accent: #1f5fbf;
+  --sl-color-accent-high: #123d80;
+  --sl-color-text-accent: #1a56ad;
+  --sl-color-bg-inline-code: color-mix(in srgb, var(--sl-color-gray-6) 60%, var(--sl-color-black));
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --sl-color-accent-low: #dbe8ff;
+    --sl-color-accent: #1f5fbf;
+    --sl-color-accent-high: #123d80;
+    --sl-color-text-accent: #1a56ad;
+    --sl-color-bg-inline-code: color-mix(in srgb, var(--sl-color-gray-6) 60%, var(--sl-color-black));
+  }
+}
+
+/* Rhythm. Starlight puts 0.25rem between list items and 1.5em above a heading. Items several
+   lines long ran together at 0.25rem, and a heading was as close to the text above as to its own.
+   Here: 0.7em between the items of a list, and a heading has 2.4em (h2) or 2em (h3) above it
+   against 1.5rem (the block gap) below it. */
+.sl-markdown-content li + li:not(:where(.not-content *)) {
+  margin-top: 0.7em;
+}
+.sl-markdown-content li > :is(ul, ol):not(:where(.not-content *)) {
+  margin-top: 0.5em;
+}
+/* A loose list (items that hold a paragraph) got a 1.25rem bottom margin on the last block of every
+   item from Starlight, so its items were 20px apart and a tight list's 8px. The last block of an
+   item has no bottom margin, so the gap between items is the one above, whatever the list holds;
+   a second paragraph inside an item is 0.5em below the first. */
+.sl-markdown-content li > :last-child:not(:where(.not-content *)) {
+  margin-bottom: 0;
+}
+.sl-markdown-content li > p + p:not(:where(.not-content *)) {
+  margin-top: 0.5em;
+}
+.sl-markdown-content
+  :not(h1, h2, h3, h4, h5, h6, .sl-heading-wrapper)
+  + .sl-heading-wrapper.level-h2 {
+  margin-top: 2.4em;
+}
+.sl-markdown-content
+  :not(h1, h2, h3, h4, h5, h6, .sl-heading-wrapper)
+  + .sl-heading-wrapper.level-h3 {
+  margin-top: 2em;
+}
+/* A subheading directly under a heading (no text between): 0.75rem, not the block gap. */
+.sl-markdown-content .sl-heading-wrapper.level-h2 + .sl-heading-wrapper.level-h3 {
+  margin-top: 0.75rem;
+}
+
+/* Bold: weight 700 and a step brighter than the body text. Until now the weight was 600 and the
+   colour the body's, so the only cue was a heavier stroke (the colours were identical: 10.06:1
+   against the page in the dark theme, 11.71:1 in the light one). This font stack has no 500 or 600
+   face on Linux (Noto Sans: Regular and Bold): a 500 falls back to Regular, which is why 500 looked
+   like no bold at all, and a 600 renders as the Bold face, while Windows and macOS have a real 600.
+   700 is one weight on every system. --sl-color-gray-1 is #edeef3 on the dark page (15.31:1) and
+   #23262f on the white one (15.11:1); the body text is gray-2 (10.06:1 and 11.71:1). Bold inside a
+   link, a heading, an aside (whose text is already the brightest colour) or a card key keeps the
+   colour of its surroundings. */
+.sl-markdown-content :is(strong, b):not(:where(.not-content *)) {
+  font-weight: 700;
+  color: var(--sl-color-gray-1);
+}
+.sl-markdown-content
+  :is(a, h1, h2, h3, h4, h5, h6, .starlight-aside, .record-key)
+  :is(strong, b) {
+  color: inherit;
+}
+
+/* The header line is lighter than the default. */
+header.header {
+  border-bottom-color: var(--sl-color-hairline-light);
+}
+
+/* Links in the text are underlined, so they do not rely on colour alone. */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  text-underline-offset: 0.2em;
+}
+
+/* Images (public/img/, see "Images" in the rules page): as wide as the column at most, never
+   stretched, a hairline border and a small radius. A markdown image is an <img> inside a <p>, so
+   the paragraph's top margin is the block gap; the image is a block so that the line box leaves no
+   gap under it. The panel colour shows behind a transparent SVG (a placeholder or a diagram) in
+   both themes; a screenshot covers it. */
+.sl-markdown-content img:not(:where(.not-content *)) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--sl-color-hairline);
+  border-radius: 0.5rem;
+  background: var(--sl-color-bg-nav);
+}
+
+/* Tables: a rule under the header row, a quiet rule between rows, and the table scrolls inside
+   its own box when it is wider than the column. */
+.sl-markdown-content table:not(:where(.not-content *)) {
+  max-width: 100%;
+  font-size: var(--sl-text-sm);
+}
+.sl-markdown-content thead th:not(:where(.not-content *)) {
+  border-bottom: 2px solid var(--sl-color-gray-4);
+}
+.sl-markdown-content tbody tr:last-child :is(td):not(:where(.not-content *)) {
+  border-bottom: 0;
+}
+.sl-markdown-content td:not(:where(.not-content *)) {
+  border-bottom-color: var(--sl-color-hairline-light);
+}
+
+/* Inline code breaks only where src/integrations/code-breaks.mjs put a <wbr> (after `/`, `::`, `,`)
+   and at spaces. `break-word` is the last resort for a piece longer than a whole line; it is not
+   `anywhere`, which lets the browser cut between any two characters and makes the smallest width
+   of a table cell one character. A browser also breaks after a hyphen and before a bracket that
+   follows a symbol, so the integration wraps every piece that holds such a character in
+   .code-nb (no break at all). A piece of more than 20 characters is wrapped in .code-any, which
+   may be cut anywhere, so that a 50-character test name does not force a table column that wide. */
+.sl-markdown-content :not(pre) > code {
+  overflow-wrap: break-word;
+}
+/* The chip: Starlight's is 13px (0.8125rem, whatever the text around it) with 2px 6px padding and
+   a 2px negative block margin. This one scales with the text (a 14px table cell gets 11.9px
+   code), is padded 0.1em 0.3em and has no margin, border or colour of its own. */
+.sl-markdown-content :not(pre) > code:not(:where(.not-content *)) {
+  font-size: 0.85em;
+  padding: 0.1em 0.3em;
+  margin-block: 0;
+  border: 0;
+}
+.sl-markdown-content :not(pre) > code .code-nb {
+  white-space: nowrap;
+}
+.sl-markdown-content :not(pre) > code .code-any {
+  overflow-wrap: anywhere;
+  /* An inline-block moves to the next line as a whole and is cut only when it is wider than the
+     line itself; a plain inline piece would also break after its hyphens. */
+  display: inline-block;
+  max-width: 100%;
+  /* The chip is as high as the one of the plain code next to it: the font's own height plus the
+     0.1em block padding of the parent <code> (a 13.6px piece: 15px + 2 x 1.36px = 17.72px). With
+     the line height of the text around it (1.8, 24.48px) the piece was the whole line high and
+     stood out from its neighbours. `normal` gives the font's height at once, but also packs the
+     lines of a piece that wraps; the @supports rule below keeps the line height and trims the
+     space above the first line and below the last instead, so that nothing around the piece moves. */
+  line-height: normal;
+  padding-block: 0.1em;
+  /* The chip of the parent <code> (background and 0.1em 0.3em padding) is painted only behind the
+     line the inline-block sits on, its last one, so the other lines had no chip. The same colour
+     is painted behind every line of the piece, and the 0.3em at each end are box-shadows (em of
+     this piece, which has the font size of the parent <code>), which take no room: a cell does
+     not get wider. */
+  background-color: var(--sl-color-bg-inline-code);
+  box-shadow:
+    -0.3em 0 var(--sl-color-bg-inline-code),
+    0.3em 0 var(--sl-color-bg-inline-code);
+}
+@supports (text-box: trim-both text) {
+  .sl-markdown-content :not(pre) > code .code-any {
+    line-height: inherit;
+    text-box: trim-both text;
+  }
+}
+/* The underline of a link does not reach into an inline-block, so it is drawn again. */
+.sl-markdown-content a:not(:where(.not-content *)) > code .code-any {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/* Code in a heading. Starlight sets `font-size: inherit` there, so a piece of code is as many pixels
+   as the heading text; but a monospace face is wider (the code in a 35px heading was 4% to 13%
+   wider per character than the text next to it, measured with Chrome 153 and the fallback fonts of
+   a Linux machine) and the chip adds 2px and 6px of padding, so it looked larger than the words
+   around it. 0.9em makes the code about 7% narrower per character than the heading text and about
+   10% lower in x-height there, so it is never larger; a monospace face with a wider advance than
+   that one still comes out near the width of the text. A long heading is balanced so that it does
+   not leave one short word on the last line, and may break inside a piece that is longer than the
+   line; nothing is inserted, so what a reader copies is the heading as written. */
+.sl-markdown-content :is(h1, h2, h3, h4) code {
+  font-size: 0.9em;
+}
+.sl-markdown-content :is(h1, h2, h3, h4),
+h1#_top {
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+
+/* Code blocks keep their own horizontal scroll; the page never scrolls sideways. A long
+   `curl ... | bash` line scrolls inside the block. */
+.expressive-code,
+.expressive-code .frame,
+.expressive-code pre {
+  max-width: 100%;
+}
+.expressive-code pre {
+  overflow-x: auto;
+}
+.sl-markdown-content,
+main {
+  min-width: 0;
+}
+html,
+body {
+  overflow-x: clip;
+}
+
+/* Sources: the `## Sources` heading and its list stay in every page (the site check requires
+   them). Heading and list are set smaller and muted so they do not compete with the page. The
+   heading wrapper is Starlight's; the general sibling selector reaches everything after it. */
+.sl-markdown-content .sl-heading-wrapper:has(> #sources) {
+  margin-top: 2rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--sl-color-hairline-light);
+}
+/* The size is set on the wrapper and the heading inherits it: Starlight sizes the anchor icon and
+   its offset in em of the wrapper, so shrinking only the h2 would leave the icon on the text. */
+.sl-markdown-content .sl-heading-wrapper:has(> #sources) {
+  font-size: var(--sl-text-base);
+}
+.sl-markdown-content #sources {
+  font-size: inherit;
+  color: var(--sl-color-gray-3);
+}
+.sl-markdown-content .sl-heading-wrapper:has(> #sources) ~ * {
+  font-size: var(--sl-text-sm);
+  line-height: 1.5;
+  color: var(--sl-color-gray-3);
+}
+.sl-markdown-content .sl-heading-wrapper:has(> #sources) ~ * :is(li, p) {
+  margin-top: 0.25rem;
+}
+
+/* Previous / next links: Starlight's cards (a.pagination-links > a[rel=prev|next], title in
+   span.link-title) are made compact. The label stays small, the title is one line with an
+   ellipsis, and the two cards sit side by side and stack below 18rem each. */
+.pagination-links {
+  gap: 0.5rem;
+  /* Starlight's 18rem minimum does not fit twice in the 34.5rem content column, so the cards
+     stacked. With 12rem they sit side by side down to a 24.5rem column, and stack below it. */
+  grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+}
+.pagination-links > a {
+  padding: 0.5rem 0.75rem;
+  gap: 0.25rem;
+  min-width: 0;
+  box-shadow: none;
+  font-size: var(--sl-text-xs);
+  overflow-wrap: normal;
+}
+.pagination-links > a svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+.pagination-links > a > span {
+  min-width: 0;
+}
+.pagination-links .link-title {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--sl-text-base);
+  line-height: 1.4;
+}
+
+/* The page footer starts with an empty `div.meta` (no edit link, no last-updated date). It still
+   has `margin-top: 3rem` and is followed by the footer's 1.5rem flex gap, which left 4.5rem of
+   blank space above the previous/next links. Hiding the empty block leaves the footer's own
+   1.5rem top margin. */
+footer > .meta:empty {
+  display: none;
+}

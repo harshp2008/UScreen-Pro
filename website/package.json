@@ -1,0 +1,19 @@
+{
+  "name": "uscreen-docs",
+  "private": true,
+  "type": "module",
+  "description": "The UScreen documentation site (Starlight). `npm run build` writes the generated pages first, then builds the site.",
+  "engines": {
+    "node": ">=22.22.0"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "dev": "npm run generate && ASTRO_TELEMETRY_DISABLED=1 astro dev",
+    "build": "npm run generate && ASTRO_TELEMETRY_DISABLED=1 astro build && node scripts/copy-rustdoc.mjs && node scripts/check-site.mjs",
+    "preview": "ASTRO_TELEMETRY_DISABLED=1 astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.42.6",
+    "astro": "7.4.0"
+  }
+}
