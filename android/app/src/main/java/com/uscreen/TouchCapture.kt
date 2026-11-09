@@ -671,6 +671,21 @@ class TouchCapture {
         syncPenButton(event)
     }
 
+    /** Last sequence number put on an input message; see [sendSeq]. */
+    private var inputSeq = 0L
+
+    /**
+     * Send an input message numbered with a `seq` that only goes up. The host discards a message
+     * whose number is not higher than the last it processed, so a duplicate (same number) or a
+     * straggler (older number) cannot press twice or undo a later event. Numbering and sending are
+     * one step under one lock, so the numbers leave in the order they were given.
+     */
+    @Synchronized
+    private fun sendSeq(msg: JSONObject) {
+        msg.put("seq", ++inputSeq)
+        webSocket?.send(msg.toString())
+    }
+
     /** The pen's side buttons as the host last heard them. */
     private var penButtonDown = false
     private var penSecondaryDown = false
@@ -734,7 +749,7 @@ class TouchCapture {
             put("action", action)
             put("display_id", targetDisplayId)
         }
-        webSocket?.send(msg.toString())
+        sendSeq(msg)
     }
 
     /** [action]: 5 / 6 first button down / up, 7 / 8 second button down / up. */
@@ -749,7 +764,7 @@ class TouchCapture {
             put("eraser", false)
             put("action", action)
         }
-        webSocket?.send(msg.toString())
+        sendSeq(msg)
     }
 
     private fun sendPenProximityExit() {
@@ -769,7 +784,7 @@ class TouchCapture {
             put("eraser", false)
             put("action", 4) // HOVER_EXIT / pen left proximity
         }
-        webSocket?.send(msg.toString())
+        sendSeq(msg)
     }
 
     private val releasePenButtons: Runnable = Runnable {
@@ -794,7 +809,7 @@ class TouchCapture {
             put("slot", slot)
             put("display_id", targetDisplayId)
         }
-        webSocket?.send(msg.toString())
+        sendSeq(msg)
     }
 
     /**
@@ -1000,11 +1015,11 @@ and consults it when choosing between the device's adb entries.
             )
         }
         override fun button(button: Int, down: Boolean) {
-            webSocket?.send(JSONObject().apply {
+            sendSeq(JSONObject().apply {
                 put("type", "button")
                 put("button", button)
                 put("down", down)
-            }.toString())
+            })
             if (down) onHaptic?.invoke()
         }
     }, schedule = { delayMs ->
@@ -1013,11 +1028,11 @@ and consults it when choosing between the device's adb entries.
     }).also { it.log = { line -> if (DEBUG_INPUT) Log.d("UScreenInput", line) } }
 
     private fun sendGesture(kind: String, amount: Double) {
-        webSocket?.send(JSONObject().apply {
+        sendSeq(JSONObject().apply {
             put("type", "gesture")
             put("kind", kind)
             put("amount", amount)
-        }.toString())
+        })
     }
 
     /**
@@ -1156,20 +1171,20 @@ and consults it when choosing between the device's adb entries.
         val empty = slots.length() == 0
         if (empty && !rawDown) return
         rawDown = !empty
-        webSocket?.send(JSONObject().apply {
+        sendSeq(JSONObject().apply {
             put("type", "touchpad_raw")
             put("slots", slots)
-        }.toString())
+        })
     }
 
     /** Right click from the click strip: the host's relative mouse, since the pad only sees fingers. */
     private fun sendRightClick() {
         for (down in listOf(true, false)) {
-            webSocket?.send(JSONObject().apply {
+            sendSeq(JSONObject().apply {
                 put("type", "button")
                 put("button", 1)
                 put("down", down)
-            }.toString())
+            })
         }
         onHaptic?.invoke()
     }
@@ -1229,11 +1244,11 @@ and consults it when choosing between the device's adb entries.
     }
 
     private fun sendRel(type: String, dx: Float, dy: Float) {
-        webSocket?.send(JSONObject().apply {
+        sendSeq(JSONObject().apply {
             put("type", type)
             put("dx", dx.toDouble())
             put("dy", dy.toDouble())
-        }.toString())
+        })
     }
 
     /** Release every finger the host still thinks is pressed (and any button the touchpad holds). */

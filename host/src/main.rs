@@ -130,6 +130,28 @@ async fn main() -> Result<()> {
             std::fs::write(&path, stamp.to_string())?;
             println!("Toggled: the running daemon flips the pen route for the focused app.");
         }
+        Some(Commands::DebugDump) => {
+            let req = input::dump_request_file().ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
+            let out = input::dump_file().ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
+            if let Some(dir) = req.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            let before = std::fs::metadata(&out).and_then(|m| m.modified()).ok();
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0);
+            std::fs::write(&req, stamp.to_string())?;
+            for _ in 0..30 {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                let now = std::fs::metadata(&out).and_then(|m| m.modified()).ok();
+                if now.is_some() && now != before {
+                    println!("Pen recorder written to {}", out.display());
+                    return Ok(());
+                }
+            }
+            anyhow::bail!("the daemon did not answer: is it running? (uscreen start)");
+        }
         Some(Commands::ResetGuard) => match guard::reset() {
             Ok(true) => println!(
                 "Safety record cleared. Restart the daemon to re-enable the virtual display."

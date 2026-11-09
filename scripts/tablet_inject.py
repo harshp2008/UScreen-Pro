@@ -351,6 +351,16 @@ class Tablet:
                 time.sleep(0.008)
             self.pen_frame(*self.screen.raw(f[0], f[1]), in_range=False)
             time.sleep(0.25)
+        elif c == "pen-rest":
+            # A pen lying near the glass: in range the whole time, a pixel of noise, 100 Hz.
+            end = time.time() + f[2]
+            i = 0
+            while time.time() < end:
+                self.pen_frame(*self.screen.raw(f[0] + (i % 3) - 1, f[1] + (i % 2)))
+                time.sleep(0.01)
+                i += 1
+            self.pen_frame(*self.screen.raw(f[0], f[1]), in_range=False)
+            time.sleep(0.25)
         elif c == "drag":
             self.drag(f[0], f[1], f[2], f[3], int(f[4]), int(f[5]) if len(f) > 5 else 16)
         elif c == "scroll2":

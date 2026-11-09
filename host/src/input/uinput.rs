@@ -254,6 +254,60 @@ pub(super) struct LinuxInputEvent {
 /// a tablet pen differently and rejects a device that mixes both.
 pub(super) struct UInputDevice {
     pub(super) file: File,
+    /// Every key/button this device has been told is down, as bits (see [`key_bit`]). Updated by
+    /// [`UInputDevice::emit`] alone, so it is true whatever code path did the emitting: the one
+    /// source for [`DevState`] and for [`UInputDevice::force_release`].
+    pub(super) held: u32,
+}
+
+/// The bit of `held` a key code owns: buttons in the low five bits, tools above them.
+pub(super) fn key_bit(code: u16) -> Option<u32> {
+    Some(match code {
+        BTN_LEFT => 1 << 0,
+        BTN_RIGHT => 1 << 1,
+        BTN_MIDDLE => 1 << 2,
+        BTN_TOUCH => 1 << 3,
+        BTN_STYLUS => 1 << 4,
+        BTN_TOOL_PEN => 1 << 5,
+        BTN_TOOL_RUBBER => 1 << 6,
+        BTN_TOOL_FINGER => 1 << 7,
+        BTN_TOOL_DOUBLETAP => 1 << 8,
+        BTN_TOOL_TRIPLETAP => 1 << 9,
+        BTN_TOOL_QUADTAP => 1 << 10,
+        BTN_TOOL_QUINTTAP => 1 << 11,
+        _ => return None,
+    })
+}
+
+/// The codes `held` bits stand for, in bit order.
+const HELD_CODES: [u16; 12] = [
+    BTN_LEFT,
+    BTN_RIGHT,
+    BTN_MIDDLE,
+    BTN_TOUCH,
+    BTN_STYLUS,
+    BTN_TOOL_PEN,
+    BTN_TOOL_RUBBER,
+    BTN_TOOL_FINGER,
+    BTN_TOOL_DOUBLETAP,
+    BTN_TOOL_TRIPLETAP,
+    BTN_TOOL_QUADTAP,
+    BTN_TOOL_QUINTTAP,
+];
+
+/// Mask of the button bits (left, right, middle, tip contact, barrel) in `held`.
+const BUTTON_BITS: u32 = 0b1_1111;
+
+/// What a virtual device is doing, derived from what it holds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DevState {
+    /// Nothing held: no button, no tool in range.
+    Idle,
+    /// A tool is in range (pen near the glass, fingers on the pad) but no button is down.
+    Hovering,
+    /// At least one button or the tip contact is down; the mask has bit 0 left, 1 right, 2 middle,
+    /// 3 tip contact, 4 barrel button.
+    Down(u8),
 }
 
 impl UInputDevice {
@@ -294,7 +348,7 @@ impl UInputDevice {
 
         info!("uinput touchscreen '{}' created", name);
         std::thread::sleep(std::time::Duration::from_millis(200));
-        Ok(Self { file })
+        Ok(Self { file, held: 0 })
     }
 
     /// Pen tablet device: stylus tool + pressure + tilt.
@@ -335,7 +389,7 @@ impl UInputDevice {
 
         info!("uinput pen tablet '{}' created", name);
         std::thread::sleep(std::time::Duration::from_millis(200));
-        Ok(Self { file })
+        Ok(Self { file, held: 0 })
     }
 
     /// An absolute-positioning pointer, the same shape as a VM's virtual
@@ -375,7 +429,7 @@ impl UInputDevice {
 
         info!("uinput pointer '{}' created", name);
         std::thread::sleep(std::time::Duration::from_millis(200));
-        Ok(Self { file })
+        Ok(Self { file, held: 0 })
     }
 
     /// A multi-touch touchpad, like the clickpad of a laptop. The tablet's raw fingers are replayed
@@ -425,7 +479,7 @@ impl UInputDevice {
 
         info!("uinput touchpad '{}' created", name);
         std::thread::sleep(std::time::Duration::from_millis(200));
-        Ok(Self { file })
+        Ok(Self { file, held: 0 })
     }
 
     /// Put the tablet's fingers on the pad: the full set that is down right now. Fingers that are
@@ -542,7 +596,7 @@ impl UInputDevice {
 
         info!("uinput mouse '{}' created", name);
         std::thread::sleep(std::time::Duration::from_millis(200));
-        Ok(Self { file })
+        Ok(Self { file, held: 0 })
     }
 
     /// A plain keyboard, made the first time a touchpad gesture needs a key.
@@ -563,7 +617,7 @@ impl UInputDevice {
 
         info!("uinput keyboard '{}' created", name);
         std::thread::sleep(std::time::Duration::from_millis(200));
-        Ok(Self { file })
+        Ok(Self { file, held: 0 })
     }
 
     /// Tap a key combination: press every code in order, then release them in reverse.
@@ -693,6 +747,50 @@ impl UInputDevice {
     }
 
     pub(super) fn emit(&mut self, type_: u16, code: u16, value: i32) -> Result<()> {
+        if type_ == EV_KEY {
+            if let Some(bit) = key_bit(code) {
+                match value {
+                    0 => self.held &= !bit,
+                    1 => self.held |= bit,
+                    _ => {}
+                }
+            }
+        }
+        self.write_raw(type_, code, value)
+    }
+
+    /// The device's state, derived from what it holds (see [`DevState`]).
+    pub(super) fn state(&self) -> DevState {
+        let buttons = self.held & BUTTON_BITS;
+        if buttons != 0 {
+            DevState::Down(buttons as u8)
+        } else if self.held != 0 {
+            DevState::Hovering
+        } else {
+            DevState::Idle
+        }
+    }
+
+    /// Release every key and tool the device holds, and zero the pressure axis if it has one.
+    /// Returns whether anything was held. Costs nothing on an idle device.
+    pub(super) fn force_release(&mut self, pressure_axis: bool) -> bool {
+        if self.held == 0 {
+            return false;
+        }
+        for (i, code) in HELD_CODES.iter().enumerate() {
+            if self.held & (1 << i) != 0 {
+                let _ = self.emit(EV_KEY, *code, 0);
+            }
+        }
+        if pressure_axis {
+            let _ = self.emit(EV_ABS, ABS_PRESSURE, 0);
+        }
+        let _ = self.syn();
+        self.held = 0;
+        true
+    }
+
+    fn write_raw(&mut self, type_: u16, code: u16, value: i32) -> Result<()> {
         let ev = LinuxInputEvent {
             tv_sec: 0,
             tv_usec: 0,
@@ -825,7 +923,14 @@ impl UInputDevice {
                 self.emit(EV_ABS, ABS_PRESSURE, 0)?;
                 self.syn()?;
 
+                // Whichever tool key is held goes up, not only the one this sample names: a
+                // stroke that began with the eraser end and is lifted by a sample that does not
+                // say so (a cancel) would otherwise leave BTN_TOOL_RUBBER down for good.
                 self.emit(EV_KEY, tool, 0)?;
+                let other = if eraser { BTN_TOOL_PEN } else { BTN_TOOL_RUBBER };
+                if key_bit(other).is_some_and(|b| self.held & b != 0) {
+                    self.emit(EV_KEY, other, 0)?;
+                }
                 self.syn()?;
             }
             2 => {
@@ -881,6 +986,19 @@ impl Drop for UInputDevice {
         }
         info!("uinput device destroyed");
     }
+}
+
+/// Which virtual device(s) [`InjectDevices::force_release_all`] acts on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Which {
+    /// `UScreen Pen`.
+    Pen,
+    /// `UScreen Pointer` (the absolute mouse).
+    Pointer,
+    /// The touchpad: the relative mouse and the multi-touch pad.
+    Touchpad,
+    /// Everything, including the touchscreen.
+    All,
 }
 
 /// The pair of virtual input devices backing one tablet connection.
@@ -944,6 +1062,18 @@ pub(super) struct InjectDevices {
     /// short grace (see `auto_flush_exit`), because Android sends a hover exit right before every
     /// touch-down and the tool must not leave and re-enter range around the click.
     pub(super) auto_exit_at: Option<std::time::Instant>,
+    /// Auto mode: when the open stroke's DOWN arrived (`Some` while a stroke is open).
+    pub(super) auto_down_at: Option<std::time::Instant>,
+    /// Auto mode: when the open stroke last got a sample.
+    pub(super) auto_last_at: Option<std::time::Instant>,
+    /// Auto mode: when the last stroke was lifted.
+    pub(super) auto_up_at: Option<std::time::Instant>,
+    /// Auto mode: parks a pen that rests near the glass, so it stops taking the cursor.
+    pub(super) hover_filter: super::stillness::HoverFilter,
+    /// Thresholds of the hover filter.
+    pub(super) still_cfg: super::stillness::StillCfg,
+    /// The tablet's physical size in millimetres (width, height), for distances.
+    pub(super) tablet_mm: (f64, f64),
     /// Ghost tracking: the last position written to the pointer (to nudge a repeat, see `ghost_place_pointer`).
     pub(super) ghost_last_written: (i32, i32),
     /// Ctrl is held on the keyboard for a pinch in progress, and when the last pinch step came.
@@ -981,6 +1111,12 @@ impl InjectDevices {
             ghost_out_since: None,
             ghost_hidden: false,
             auto_exit_at: None,
+            auto_down_at: None,
+            auto_last_at: None,
+            auto_up_at: None,
+            hover_filter: Default::default(),
+            still_cfg: Default::default(),
+            tablet_mm: (266.0, 166.0),
             ghost_last_written: (-1, -1),
             pinch_since: None,
         }
@@ -1042,6 +1178,8 @@ impl InjectDevices {
         self.tip = Tip::None;
         self.auto_exit_at = None;
         self.end_pinch();
+        // Last word: whatever any device still holds, by its own account, goes up.
+        self.force_release_all(Which::All);
     }
 
     /// The keyboard, created on first use. `None` when uinput is not available.
@@ -1240,6 +1378,61 @@ impl InjectDevices {
             _ => {}
         }
         self.pen_mouse_buttons = held;
+    }
+
+    /// The single way to let go of a device: every key, button and tool it holds goes up (read
+    /// from the device's own held set, not from a parallel record that could disagree), pressure
+    /// goes to zero, and the bookkeeping of that device returns to `Idle`. Call it on every
+    /// transition that must not leave anything held: route change, mode change, cancel, the pen
+    /// leaving range, disconnect.
+    pub(super) fn force_release_all(&mut self, which: Which) {
+        let all = which == Which::All;
+        if all || which == Which::Pen {
+            if let Some(ref mut dev) = self.pen {
+                dev.force_release(true);
+            }
+            self.pen_proximity = false;
+            self.pen_button = false;
+        }
+        if all || which == Which::Pointer {
+            if let Some(ref mut dev) = self.pointer {
+                dev.force_release(false);
+            }
+            self.pen_mouse_buttons = 0;
+        }
+        if all || which == Which::Touchpad {
+            if let Some(ref mut dev) = self.mouse {
+                dev.force_release(false);
+            }
+            self.mouse_buttons = 0;
+            self.release_pad();
+            if let Some(ref mut dev) = self.pad {
+                dev.force_release(false);
+            }
+        }
+        if all {
+            if let Some(ref mut dev) = self.touch {
+                dev.force_release(false);
+            }
+            self.active_slots = 0;
+        }
+        if all || which != Which::Touchpad {
+            self.tip = Tip::None;
+            self.auto_exit_at = None;
+            self.auto_down_at = None;
+            self.auto_last_at = None;
+        }
+    }
+
+    /// The state of one device (`Idle` for a device that does not exist).
+    pub(super) fn dev_state(&self, which: Which) -> DevState {
+        let dev = match which {
+            Which::Pen => self.pen.as_ref(),
+            Which::Pointer => self.pointer.as_ref(),
+            Which::Touchpad => self.mouse.as_ref(),
+            Which::All => None,
+        };
+        dev.map(|d| d.state()).unwrap_or(DevState::Idle)
     }
 
     /// Let go of every button the pen holds on the absolute pointer.

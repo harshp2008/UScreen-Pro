@@ -130,6 +130,9 @@ pub(crate) enum Commands {
     /// Flip the pen between pressure-tablet and mouse routing for the focused app (the same as
     /// Ctrl+Alt+P with the GNOME extension); bind this to a key on desktops without the extension
     ToggleTablet,
+    /// Write the pen recorder (the last few thousand pen samples and what the router did with
+    /// them) to ~/.local/share/uscreen/pen_dump.txt; run it right after the pen misbehaves
+    DebugDump,
     /// Clear the compositor-safety record so the virtual display may be created
     /// again after a safe-mode start (restart the daemon afterwards)
     ResetGuard,

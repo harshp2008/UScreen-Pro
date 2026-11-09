@@ -29,10 +29,12 @@ mod ghost;
 mod mapping;
 mod physical;
 mod protocol;
+mod recorder;
 mod server;
+mod stillness;
 mod uinput;
 
-pub use ghost::toggle_file;
+pub use ghost::{dump_file, dump_request_file, toggle_file};
 pub use physical::{detect_tablet, tablet_rules};
 pub use protocol::InputConfig;
 pub use server::InputServer;

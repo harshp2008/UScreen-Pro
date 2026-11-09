@@ -15,6 +15,8 @@
 //! one tablet-class frame (proximity in/out) is sent with no pointer motion, and Mutter hides the
 //! pointer until the next pointer-class event.
 
+use super::recorder::record;
+use super::stillness::HoverVerdict;
 use super::*;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
@@ -153,6 +155,16 @@ pub fn toggle_file() -> Option<std::path::PathBuf> {
     data_file("toggle_request")
 }
 
+/// The file `uscreen debug-dump` writes to ask the daemon for the pen recorder's contents.
+pub fn dump_request_file() -> Option<std::path::PathBuf> {
+    data_file("dump_request")
+}
+
+/// Where the daemon writes the pen recorder's contents.
+pub fn dump_file() -> Option<std::path::PathBuf> {
+    data_file("pen_dump.txt")
+}
+
 /// Start the focus watcher once per process: it follows the focused app (extension file on
 /// Wayland, `_NET_ACTIVE_WINDOW` on X11) and the toggle request file.
 pub(super) fn start_focus_watcher() {
@@ -165,6 +177,7 @@ pub(super) fn start_focus_watcher() {
         .spawn(|| {
             let mut last_focus_mtime = None;
             let mut last_toggle = std::fs::read_to_string(toggle_file().unwrap_or_default()).ok();
+            let mut last_dump = std::fs::read_to_string(dump_request_file().unwrap_or_default()).ok();
             let mut x11 = if session_is_x11() { X11Focus::connect() } else { None };
             loop {
                 std::thread::sleep(Duration::from_millis(150));
@@ -178,6 +191,19 @@ pub(super) fn start_focus_watcher() {
                             .ok()
                             .and_then(|t| serde_json::from_str::<AppIdentity>(&t).ok());
                         set_focus(app);
+                    }
+                }
+                if let (Some(req), Some(out)) = (dump_request_file(), dump_file()) {
+                    let now = std::fs::read_to_string(&req).ok();
+                    if now != last_dump {
+                        last_dump = now;
+                        if last_dump.is_some() {
+                            let text = super::recorder::render();
+                            match std::fs::write(&out, &text) {
+                                Ok(()) => info!("Pen recorder written to {:?} ({} lines)", out, text.lines().count()),
+                                Err(e) => warn!("Could not write the pen recorder to {:?}: {}", out, e),
+                            }
+                        }
                     }
                 }
                 if let Some(path) = toggle_file() {
@@ -256,6 +282,14 @@ const MUTTER_POINTER_GRACE: Duration = Duration::from_millis(300);
 /// How long an announced range exit waits for the pen to come back before the tool really leaves
 /// range (Android's hover exit precedes the touch-down by a few milliseconds).
 const AUTO_EXIT_GRACE: Duration = Duration::from_millis(150);
+
+/// A DOWN while a stroke is open and a sample arrived this recently is the drag going on (a
+/// repeated DOWN), not a new press. Older than this, the stroke lost its UP and is closed first.
+const AUTO_STALE_STROKE: Duration = Duration::from_millis(500);
+
+/// A MOVE this soon after a lift is a straggler that overtook the UP, not a stroke that lost its
+/// DOWN: it must not press again.
+const AUTO_LIFT_QUIET: Duration = Duration::from_millis(100);
 
 impl InjectDevices {
     /// Put the absolute pointer under the pen (no button): the visible cursor.
@@ -378,89 +412,121 @@ impl InjectDevices {
         }
     }
 
-    /// **Auto mode** (Android pen, `stylus_style = "auto"`): one pen, two devices, nothing dropped.
+    /// **Auto mode** (Android pen, `stylus_style = "auto"`): the pen is a mouse or a graphics tablet,
+    /// per stroke, depending on the focused app (`to_pen`).
     ///
-    /// * The tablet device *always* gets the pen: tool in range, X/Y, pressure and tilt, whatever
-    ///   app has focus (or none is known). Krita keeps its pressure and tilt on every route.
-    /// * The absolute pointer *always* gets X/Y, so the cursor is always visible.
-    /// * The tip is the only switch: an art app (`to_pen`) gets it as the tablet's contact
-    ///   (`BTN_TOUCH`); an unknown or other app gets `BTN_LEFT` on the pointer (text selection).
-    ///   The tablet keeps flowing either way.
-    ///
-    /// Android sends a range exit just before every touch-down. The tool is therefore not taken out
-    /// of range at once: the exit is carried out after [`AUTO_EXIT_GRACE`] (see
-    /// [`Self::auto_flush_exit`]) unless the pen is back first, so a click never has the tool leave
-    /// and re-enter range around it. The held buttons are let go of at once, though.
+    /// * The pointer follows every sample (X/Y first, then the button), so the cursor is always
+    ///   visible and a click lands where the pen is.
+    /// * **Mouse route** (not an art app, or unknown): the tip is `BTN_LEFT` on the pointer, held for
+    ///   the whole stroke; moves go to the pointer only. The tablet device gets nothing, the tool
+    ///   stays out of range (a tool in range next to a mouse button makes clients treat the stroke
+    ///   as a pen's and drop the drag).
+    /// * **Art route**: the tablet gets the tool, X/Y, tilt, `BTN_TOUCH` and the real pressure,
+    ///   unmodified; there is no `BTN_LEFT`.
+    /// * The route is **latched at DOWN**: a focus change in mid-stroke never moves, cuts or
+    ///   releases the stroke. Only an UP, a cancel (reaches here as an UP), a disconnect, or the
+    ///   user changing the mode/style ends it. Everything is released through the tracked device
+    ///   state ([`Self::force_release_all`]).
+    /// * A DOWN while the stroke is open is the drag continuing; a MOVE with no stroke open (its
+    ///   DOWN was lost) starts the stroke, so the drag is not lost.
     pub(super) fn auto_pen(&mut self, s: &PenSample, to_pen: bool, primary: &str, secondary: &str) {
         if s.action != 4 {
             self.ghost_out_since = None;
             self.ghost_hidden = false;
         }
-        if matches!(s.action, 0 | 2 | 3) {
-            // The pen is (still) there: the announced exit is void.
+        if matches!(s.action, 0..=3) {
+            // The pen is (still) there: an announced exit is void.
             self.auto_exit_at = None;
         }
-        let pressure_contact = s.pressure.clamp(1, PEN_PRESSURE_MAX);
+        if s.action != 3 {
+            // Anything but a hover (touch, lift, range exit) ends a parked spell.
+            self.hover_filter.reset();
+        }
+        let open = self.auto_down_at.is_some();
+        if s.action != 3 {
+            record(s, to_pen, match s.action {
+                0 => "down",
+                1 => "up",
+                2 => "move",
+                4 => "exit",
+                _ => "button",
+            });
+        }
         match s.action {
             0 => {
                 self.ghost_place_pointer(s.x, s.y);
-                self.ghost_end_stroke(s);
-                self.tip = if s.eraser {
-                    Tip::None
-                } else if to_pen {
-                    Tip::Pen
-                } else {
-                    Tip::Pointer
-                };
-                match self.tip {
-                    Tip::Pen => self.ghost_tablet(s, 0),
-                    Tip::Pointer => {
-                        // The tool is in range already (hover); a pen that appears with its tip
-                        // down gets its range announced first.
-                        if !self.pen_proximity {
-                            let mut h = *s;
-                            h.pressure = 0;
-                            self.ghost_tablet(&h, 3);
-                        }
-                        self.ghost_pointer_button(BTN_LEFT, 1, true);
-                        let mut m = *s;
-                        m.pressure = pressure_contact;
-                        self.ghost_tablet(&m, 2);
+                if open {
+                    if self.auto_last_at.is_some_and(|t| t.elapsed() < AUTO_STALE_STROKE) {
+                        // The same press again: the drag goes on, nothing is released or pressed.
+                        self.auto_continue(s);
+                        return;
                     }
-                    Tip::None => self.ghost_tablet(s, 3),
+                    warn!("Pen DOWN with a stale stroke open (its UP was lost): closing it first");
+                    self.auto_end_stroke(s);
                 }
-                self.last_pen_pos = (s.x, s.y);
+                self.auto_begin(s, to_pen);
             }
             2 => {
                 self.ghost_place_pointer(s.x, s.y);
-                if self.tip == Tip::None {
-                    self.ghost_tablet(s, 3);
+                if open {
+                    self.auto_continue(s);
+                } else if !s.eraser && self.auto_up_at.is_none_or(|t| t.elapsed() >= AUTO_LIFT_QUIET) {
+                    warn!("Pen MOVE with no stroke open (its DOWN was lost): starting the stroke");
+                    self.auto_begin(s, to_pen);
                 } else {
-                    let mut m = *s;
-                    m.pressure = pressure_contact;
-                    self.ghost_tablet(&m, 2);
+                    self.auto_hover(s, to_pen);
                 }
                 self.last_pen_pos = (s.x, s.y);
             }
             3 => {
-                self.ghost_place_pointer(s.x, s.y);
-                self.ghost_tablet(s, 3);
-                self.last_pen_pos = (s.x, s.y);
+                if open {
+                    // A hover inside a stroke: the cursor follows, nothing else.
+                    self.ghost_place_pointer(s.x, s.y);
+                    self.last_pen_pos = (s.x, s.y);
+                    return;
+                }
+                let verdict = self.hover_filter.sample(s.x, s.y, Instant::now(), self.tablet_mm, &self.still_cfg);
+                match verdict {
+                    // A pen resting near the glass writes nothing: the mouse keeps the cursor.
+                    HoverVerdict::Skip => record(s, to_pen, "skip"),
+                    HoverVerdict::Park => {
+                        record(s, to_pen, "park");
+                        self.ghost_tool_away(s);
+                    }
+                    HoverVerdict::Follow | HoverVerdict::Wake => {
+                        if verdict == HoverVerdict::Wake {
+                            record(s, to_pen, "wake");
+                        } else {
+                            record(s, to_pen, "hover");
+                        }
+                        self.ghost_place_pointer(s.x, s.y);
+                        self.auto_hover(s, to_pen);
+                        self.last_pen_pos = (s.x, s.y);
+                    }
+                }
             }
             1 => {
                 self.ghost_place_pointer(s.x, s.y);
-                self.ghost_end_stroke(s);
-                self.ghost_panic_release(false);
+                self.auto_end_stroke(s);
+                // Whatever the lift did not manage to let go of, let go of now (only what is held:
+                // the tablet device is not written to when it is idle).
+                self.auto_let_go_left();
                 self.auto_exit_at = None;
+                self.auto_up_at = Some(Instant::now());
                 self.last_pen_pos = (s.x, s.y);
             }
             4 => {
-                self.ghost_end_stroke(s);
-                self.auto_let_go();
+                if open {
+                    // Android announces a range exit just before a touch-down, never inside a
+                    // stroke; one that does arrive must not let go of a held button.
+                    tracing::debug!("Pen range exit inside a stroke ignored");
+                    return;
+                }
+                self.ghost_tool_away(s);
                 self.auto_exit_at = Some(Instant::now());
                 self.ghost_out_since = Some(Instant::now());
             }
-            5 | 6 if to_pen => self.ghost_tablet(s, s.action),
+            5 | 6 if self.tip == Tip::Pen || (!open && to_pen) => self.ghost_tablet(s, s.action),
             5..=8 => {
                 let name = if s.action <= 6 { primary } else { secondary };
                 let down = s.action == 5 || s.action == 7;
@@ -475,28 +541,87 @@ impl InjectDevices {
         }
     }
 
-    /// Let go of the left button and the tablet contact at once, leaving the tool in range.
-    fn auto_let_go(&mut self) {
-        if let Some(ref mut dev) = self.pointer {
-            let _ = dev.emit(EV_KEY, BTN_LEFT, 0);
-            let _ = dev.syn();
+    /// Start a stroke on the route `to_pen` says (latched until the lift). The pointer is already
+    /// at the pen, so the button goes down after the position.
+    fn auto_begin(&mut self, s: &PenSample, to_pen: bool) {
+        self.tip = if to_pen {
+            Tip::Pen
+        } else if s.eraser {
+            Tip::None
+        } else {
+            Tip::Pointer
+        };
+        let now = Instant::now();
+        self.auto_down_at = Some(now);
+        self.auto_last_at = Some(now);
+        match self.tip {
+            // Tool, X/Y, tilt, then BTN_TOUCH with the real pressure (see `inject_pen`).
+            Tip::Pen => self.ghost_tablet(s, 0),
+            Tip::Pointer => {
+                self.ghost_tool_away(s);
+                self.ghost_pointer_button(BTN_LEFT, 1, true);
+            }
+            Tip::None => self.ghost_tool_away(s),
         }
-        self.pen_mouse_buttons &= !1u8;
-        if let Some(ref mut dev) = self.pen {
-            let _ = dev.emit(EV_KEY, BTN_TOUCH, 0);
-            let _ = dev.emit(EV_ABS, ABS_PRESSURE, 0);
-            let _ = dev.syn();
+        self.last_pen_pos = (s.x, s.y);
+    }
+
+    /// One more sample of the open stroke, on the route it started on.
+    fn auto_continue(&mut self, s: &PenSample) {
+        self.auto_last_at = Some(Instant::now());
+        if self.tip == Tip::Pen {
+            let mut m = *s;
+            m.pressure = s.pressure.clamp(1, PEN_PRESSURE_MAX);
+            self.ghost_tablet(&m, 2);
         }
-        self.tip = Tip::None;
+        self.last_pen_pos = (s.x, s.y);
+    }
+
+    /// A hovering sample: the tool follows on the art route and stays away on the mouse route.
+    fn auto_hover(&mut self, s: &PenSample, to_pen: bool) {
+        if to_pen {
+            self.ghost_tablet(s, 3);
+        } else {
+            self.ghost_tool_away(s);
+        }
+    }
+
+    /// The lift's safety net: the left button and the tablet contact/tool, if still held.
+    fn auto_let_go_left(&mut self) {
+        let left = matches!(self.dev_state(Which::Pointer), DevState::Down(m) if m & 1 != 0);
+        if left {
+            self.ghost_pointer_button(BTN_LEFT, 1, false);
+        }
+        if self.dev_state(Which::Pen) != DevState::Idle {
+            self.ghost_panic_release(false);
+        }
+    }
+
+    /// Close the open stroke (lift on the tablet or release the left button).
+    fn auto_end_stroke(&mut self, s: &PenSample) {
+        self.ghost_end_stroke(s);
+        self.auto_down_at = None;
+        self.auto_last_at = None;
+    }
+
+    /// Called from the ticker: the focus can change while the pen holds still (no samples). With no
+    /// stroke open and the route now the mouse, the tool leaves range; an open stroke is left alone.
+    pub(super) fn auto_check_route(&mut self, to_pen: bool) {
+        if self.auto_down_at.is_none() && !to_pen && self.pen_proximity {
+            let (x, y) = self.last_pen_pos;
+            let s = PenSample { x, y, pressure: 0, tilt_x: 0, tilt_y: 0, eraser: false, action: 4 };
+            self.ghost_tool_away(&s);
+        }
     }
 
     /// Carry out an announced range exit once the pen has not come back for [`AUTO_EXIT_GRACE`]:
-    /// the full panic release (left button, tablet contact and tool, on both devices).
+    /// every button and tool on both devices goes up (including a barrel button still held).
     pub(super) fn auto_flush_exit(&mut self) {
         if let Some(at) = self.auto_exit_at {
-            if at.elapsed() >= AUTO_EXIT_GRACE {
+            if at.elapsed() >= AUTO_EXIT_GRACE && self.auto_down_at.is_none() {
                 self.auto_exit_at = None;
-                self.ghost_panic_release(false);
+                self.force_release_all(Which::Pen);
+                self.force_release_all(Which::Pointer);
             }
         }
     }
@@ -638,12 +763,11 @@ pub(super) fn spawn_idle_task(uinput: Arc<std::sync::Mutex<InjectDevices>>, inst
             n = n.wrapping_add(1);
             // The idle hide is checked a few times a second, reading the timeout live (before the
             // device lock is taken, as the event path does).
-            let timeout = if n % 5 == 0 {
-                crate::options::current_options(instance).stylus_idle_hide_timeout
-            } else {
-                0
-            };
+            let opts = crate::options::current_options(instance);
+            let timeout = if n % 5 == 0 { opts.stylus_idle_hide_timeout } else { 0 };
+            let to_pen = route_to_pen(&opts.stylus_art_apps);
             let Ok(mut guard) = uinput.lock() else { continue };
+            guard.auto_check_route(to_pen);
             guard.auto_flush_exit();
             if timeout != 0 && guard.ghost_idle_tick(timeout) {
                 info!("Pen out of range for {}s — cursor hidden", timeout);
@@ -707,7 +831,7 @@ mod tests {
         let mk = |n: &str| {
             let path = std::env::temp_dir().join(format!("uscreen-ghost-{}-{}-{}", n, std::process::id(), id));
             let file = OpenOptions::new().create(true).truncate(true).write(true).open(&path).unwrap();
-            (UInputDevice { file }, path)
+            (UInputDevice { file, held: 0 }, path)
         };
         let (pen, pp) = mk("pen");
         let (pointer, qp) = mk("pointer");
@@ -968,131 +1092,241 @@ mod tests {
         assert_eq!(d.tip, Tip::None);
     }
 
-    // ---- Auto mode (Android): tablet data always flows, the tip is the only switch ----
+    // ---- Auto mode (Android): the route is latched per stroke ----
 
     fn auto(d: &mut InjectDevices, a: u8, x: i32, to_pen: bool) {
         d.auto_pen(&sample(a, x), to_pen, "right", "middle");
     }
 
+    /// The `BTN_LEFT` transitions the kernel would pass on: it drops a key event that repeats the
+    /// current value (the lift's belt-and-braces release of an already released button).
+    fn left_events(ptr: &[Vec<(u16, u16, i32)>]) -> Vec<i32> {
+        let mut v: Vec<i32> = ptr.iter().flatten().filter(|e| e.0 == EV_KEY && e.1 == BTN_LEFT).map(|e| e.2).collect();
+        v.dedup();
+        v
+    }
+
     #[test]
-    fn auto_non_art_app_gets_pressure_and_tilt_on_the_tablet_and_a_left_click_on_the_pointer() {
+    fn auto_mouse_route_stroke_is_pointer_only_position_first_then_one_press_held_to_the_lift() {
+        // Android: hover, range exit just before the touch-down, down, moves, up. Unknown focus is
+        // the same route (`to_pen == false`).
         let (mut d, pp, qp) = rig();
-        auto(&mut d, 3, 100, false);
+        auto(&mut d, 3, 90, false);
+        auto(&mut d, 4, 0, false);
         auto(&mut d, 0, 100, false);
-        for i in 1..=3 {
+        for i in 1..=4 {
             auto(&mut d, 2, 100 + i * 10, false);
         }
-        auto(&mut d, 1, 130, false);
+        auto(&mut d, 1, 140, false);
         let (pen, ptr) = (frames(&pp), frames(&qp));
         done(&[&pp, &qp]);
-        assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 1)), "tool in range");
-        assert!(has(&pen, (EV_ABS, ABS_PRESSURE, 2000)), "pressure reaches the tablet");
-        assert!(has(&pen, (EV_ABS, ABS_TILT_X, 3)) && has(&pen, (EV_ABS, ABS_TILT_Y, -3)), "tilt too");
-        assert!(has(&pen, (EV_ABS, ABS_X, 130)), "and position");
-        assert!(!has(&pen, (EV_KEY, BTN_TOUCH, 1)), "the tablet contact belongs to art apps");
-        let left: Vec<i32> = ptr.iter().flat_map(|f| f.iter().filter(|e| e.1 == BTN_LEFT).map(|e| e.2)).collect();
-        assert_eq!(left.iter().filter(|v| **v == 1).count(), 1, "one press");
-        assert_eq!(left.last(), Some(&0), "ends released");
-        assert!(has(&ptr, (EV_ABS, ABS_X, 130)), "pointer follows");
-        assert_eq!(d.pen_mouse_buttons, 0);
+        assert!(pen.iter().flatten().next().is_none(), "the tablet device gets nothing at all on the mouse route");
+        assert_eq!(left_events(&ptr), vec![1, 0], "one press, no extra press or release during the drag, one release");
+        let press = ptr.iter().position(|f| f.contains(&(EV_KEY, BTN_LEFT, 1))).unwrap();
+        let at_down = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 100))).unwrap();
+        assert!(at_down < press, "ABS_X/Y reach the pointer before BTN_LEFT goes down");
+        let release = ptr.iter().position(|f| f.contains(&(EV_KEY, BTN_LEFT, 0))).unwrap();
+        for i in 1..=4 {
+            let m = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 100 + i * 10))).unwrap();
+            assert!(press < m && m < release, "move {} is between the press and the release", i);
+        }
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
     }
 
     #[test]
-    fn auto_unknown_focus_still_sends_the_tablet_stream_and_clicks_left() {
-        // Unknown focus is `to_pen == false`: this is the case that used to lose Krita's pressure.
-        let (mut d, pp, qp) = rig();
-        auto(&mut d, 0, 50, false);
-        auto(&mut d, 2, 60, false);
-        auto(&mut d, 1, 60, false);
-        let (pen, ptr) = (frames(&pp), frames(&qp));
-        done(&[&pp, &qp]);
-        assert!(has(&pen, (EV_ABS, ABS_PRESSURE, 2000)));
-        assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 1)), "range announced even when the tip arrives first");
-        assert!(has(&ptr, (EV_KEY, BTN_LEFT, 1)) && has(&ptr, (EV_KEY, BTN_LEFT, 0)));
-    }
-
-    #[test]
-    fn auto_art_app_tip_is_the_tablet_contact_and_never_a_click() {
+    fn auto_art_route_stroke_is_the_tablet_with_real_pressure_and_no_click() {
         let (mut d, pp, qp) = rig();
         auto(&mut d, 3, 100, true);
+        auto(&mut d, 4, 0, true);
         auto(&mut d, 0, 100, true);
         auto(&mut d, 2, 120, true);
         auto(&mut d, 1, 120, true);
         let (pen, ptr) = (frames(&pp), frames(&qp));
         done(&[&pp, &qp]);
+        assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 1)));
         assert!(has(&pen, (EV_KEY, BTN_TOUCH, 1)) && has(&pen, (EV_KEY, BTN_TOUCH, 0)));
-        assert!(has(&pen, (EV_ABS, ABS_PRESSURE, 2000)));
+        let pressures: Vec<i32> = pen.iter().flatten().filter(|e| e.1 == ABS_PRESSURE && e.2 > 0).map(|e| e.2).collect();
+        assert!(!pressures.is_empty() && pressures.iter().all(|p| *p == 2000), "real pressure, never squeezed: {:?}", pressures);
+        assert!(has(&pen, (EV_ABS, ABS_TILT_X, 3)));
         assert!(!has(&ptr, (EV_KEY, BTN_LEFT, 1)), "no left click in an art app");
         assert!(has(&ptr, (EV_ABS, ABS_X, 120)), "the cursor still follows");
+        assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
     }
 
     #[test]
-    fn auto_range_exit_before_a_tap_never_takes_the_tool_out_of_range() {
-        // Android: hover, hover exit, down, up - twice. The exit must be void when the pen lands.
+    fn auto_art_route_eraser_end_draws_with_the_rubber_tool() {
         let (mut d, pp, qp) = rig();
-        for _ in 0..2 {
-            auto(&mut d, 3, 100, false);
-            auto(&mut d, 4, 0, false);
-            auto(&mut d, 0, 100, false);
-            auto(&mut d, 1, 100, false);
-        }
+        let mut s = sample(0, 100);
+        s.eraser = true;
+        d.auto_pen(&s, true, "right", "middle");
         let pen = frames(&pp);
         done(&[&pp, &qp]);
-        // Between the first hover and the first lift the tool is never reported out of range.
-        let first_out = pen.iter().position(|f| f.contains(&(EV_KEY, BTN_TOOL_PEN, 0)));
-        let first_touch = pen.iter().position(|f| f.contains(&(EV_KEY, BTN_TOUCH, 1)));
-        let first_lift_frame = pen.iter().position(|f| f.contains(&(EV_ABS, ABS_PRESSURE, 0)) && f.contains(&(EV_KEY, BTN_TOOL_PEN, 0)));
-        assert!(first_touch.is_none(), "mouse route: no tablet contact");
-        if let (Some(out), Some(lift)) = (first_out, first_lift_frame) {
-            assert!(out >= lift, "the first range exit is the lift's, not the hover exit's");
-        }
+        assert!(has(&pen, (EV_KEY, BTN_TOOL_RUBBER, 1)) && has(&pen, (EV_KEY, BTN_TOUCH, 1)));
     }
 
     #[test]
-    fn auto_range_exit_lets_go_at_once_and_takes_the_tool_out_after_the_grace() {
+    fn auto_mouse_route_eraser_end_never_clicks() {
+        let (mut d, pp, qp) = rig();
+        let mut s = sample(0, 100);
+        s.eraser = true;
+        d.auto_pen(&s, false, "right", "middle");
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert!(left_events(&ptr).is_empty());
+    }
+
+    #[test]
+    fn auto_a_focus_change_in_mid_stroke_neither_cuts_nor_moves_the_stroke() {
+        // Chrome (mouse) stroke, the focus flips to Krita and back while the button is down.
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 0, 10, false);
+        auto(&mut d, 2, 20, true);
+        auto(&mut d, 2, 30, false);
+        auto(&mut d, 2, 40, true);
+        d.auto_check_route(true);
+        d.auto_flush_exit();
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1), "still held");
+        auto(&mut d, 1, 40, true);
+        let (pen, ptr) = (frames(&pp), frames(&qp));
+        done(&[&pp, &qp]);
+        assert_eq!(left_events(&ptr), vec![1, 0]);
+        assert!(pen.iter().flatten().next().is_none(), "the stroke stayed on the pointer");
+
+        // And the other way: a Krita stroke stays a tablet stroke when the focus leaves.
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 0, 10, true);
+        auto(&mut d, 2, 20, false);
+        d.auto_check_route(false);
+        assert_eq!(d.dev_state(Which::Pen), DevState::Down(0b1000), "the contact is still down");
+        auto(&mut d, 2, 30, false);
+        auto(&mut d, 1, 30, false);
+        let (pen, ptr) = (frames(&pp), frames(&qp));
+        done(&[&pp, &qp]);
+        assert!(!has(&ptr, (EV_KEY, BTN_LEFT, 1)));
+        let lift = pen.iter().position(|f| f.contains(&(EV_KEY, BTN_TOUCH, 0))).unwrap();
+        let last_move = pen.iter().rposition(|f| f.contains(&(EV_ABS, ABS_X, 30))).unwrap();
+        assert!(last_move <= lift, "every move before the lift reached the tablet");
+        assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
+    }
+
+    #[test]
+    fn auto_a_repeated_down_in_mid_drag_is_a_move_not_a_release_and_press() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 3, 10, false);
+        auto(&mut d, 0, 10, false);
+        auto(&mut d, 2, 20, false);
+        auto(&mut d, 0, 30, false); // a DOWN again, long after the first? no: while the drag runs
+        auto(&mut d, 2, 40, false);
+        auto(&mut d, 1, 40, false);
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert_eq!(left_events(&ptr), vec![1, 0], "the hold is never interrupted");
+        assert!(has(&ptr, (EV_ABS, ABS_X, 30)), "the repeated DOWN's position still moves the cursor");
+    }
+
+    #[test]
+    fn auto_a_down_after_a_lost_up_closes_the_old_stroke_first() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 0, 10, false);
+        std::thread::sleep(AUTO_STALE_STROKE + Duration::from_millis(30));
+        auto(&mut d, 0, 90, false); // the UP in between never arrived
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert_eq!(left_events(&ptr), vec![1, 0, 1]);
+    }
+
+    #[test]
+    fn auto_a_move_whose_down_was_lost_starts_the_stroke() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 3, 10, false);
+        auto(&mut d, 2, 20, false); // no DOWN ever arrived
+        auto(&mut d, 2, 30, false);
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
+        auto(&mut d, 1, 30, false);
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert_eq!(left_events(&ptr), vec![1, 0]);
+    }
+
+    #[test]
+    fn auto_a_straggler_move_right_after_the_lift_does_not_press_again() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 0, 10, false);
+        auto(&mut d, 1, 10, false);
+        auto(&mut d, 2, 15, false); // arrived late
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert_eq!(left_events(&ptr), vec![1, 0]);
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
+    }
+
+    #[test]
+    fn auto_a_range_exit_inside_a_stroke_does_not_let_go() {
         let (mut d, pp, qp) = rig();
         auto(&mut d, 0, 10, false);
         auto(&mut d, 4, 0, false);
-        // At once: the left button is up and the tablet contact is up, the tool is still in range.
-        assert!(has(&frames(&qp), (EV_KEY, BTN_LEFT, 0)));
-        assert!(!has(&frames(&pp), (EV_KEY, BTN_TOOL_PEN, 0)));
-        assert!(d.pen_proximity);
-        assert_eq!(d.tip, Tip::None);
-        d.auto_flush_exit();
-        assert!(d.pen_proximity, "not before the grace");
         std::thread::sleep(AUTO_EXIT_GRACE + Duration::from_millis(20));
         d.auto_flush_exit();
-        let (pen, ptr) = (frames(&pp), frames(&qp));
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
+        auto(&mut d, 2, 20, false);
+        auto(&mut d, 1, 20, false);
+        let ptr = frames(&qp);
         done(&[&pp, &qp]);
-        assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 0)), "then the tool leaves");
-        assert!(has(&ptr, (EV_KEY, BTN_LEFT, 0)));
-        assert!(!d.pen_proximity);
+        assert_eq!(left_events(&ptr), vec![1, 0]);
+    }
+
+    #[test]
+    fn auto_range_exit_before_the_tip_keeps_a_held_barrel_button() {
+        // Android: barrel held, hover exit, DOWN within a few ms: a right-drag.
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 5, 0, false);
+        auto(&mut d, 4, 0, false);
+        d.auto_flush_exit();
+        auto(&mut d, 0, 10, false);
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b11));
+        done(&[&pp, &qp]);
+    }
+
+    #[test]
+    fn auto_range_exit_that_lasts_leaves_both_devices_idle_including_the_right_button() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 5, 0, false); // barrel held
+        auto(&mut d, 3, 10, true);
+        auto(&mut d, 4, 0, true);
+        std::thread::sleep(AUTO_EXIT_GRACE + Duration::from_millis(20));
+        d.auto_flush_exit();
+        done(&[&pp, &qp]);
+        assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
         assert!(d.auto_exit_at.is_none());
     }
 
     #[test]
-    fn auto_pen_up_lets_go_of_the_button_and_the_tool_on_both_devices() {
+    fn auto_pen_up_lets_go_on_both_devices() {
         let (mut d, pp, qp) = rig();
         auto(&mut d, 0, 10, false);
         auto(&mut d, 1, 10, false);
-        let (pen, ptr) = (frames(&pp), frames(&qp));
+        auto(&mut d, 0, 20, true);
+        auto(&mut d, 1, 20, true);
         done(&[&pp, &qp]);
-        assert!(has(&ptr, (EV_KEY, BTN_LEFT, 0)));
-        assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 0)) && has(&pen, (EV_KEY, BTN_TOUCH, 0)));
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
+        assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
         assert_eq!(d.pen_mouse_buttons, 0);
         assert!(!d.pen_proximity);
     }
 
     #[test]
-    fn auto_a_route_flip_mid_stroke_does_not_strand_the_left_button() {
+    fn auto_hover_follows_the_route_the_tool_in_range_only_on_the_art_route() {
         let (mut d, pp, qp) = rig();
-        auto(&mut d, 0, 10, false);
-        auto(&mut d, 2, 20, true);
-        auto(&mut d, 1, 20, true);
-        let ptr = frames(&qp);
+        auto(&mut d, 3, 100, true);
+        assert!(d.pen_proximity);
+        auto(&mut d, 3, 110, false);
+        assert!(!d.pen_proximity, "left the art app: the tool leaves range");
+        auto(&mut d, 3, 120, true);
+        assert!(d.pen_proximity);
+        d.auto_check_route(false); // the focus moved with the pen held still
+        assert!(!d.pen_proximity);
         done(&[&pp, &qp]);
-        assert!(has(&ptr, (EV_KEY, BTN_LEFT, 1)) && has(&ptr, (EV_KEY, BTN_LEFT, 0)));
-        assert_eq!(d.pen_mouse_buttons, 0);
     }
 
     #[test]
@@ -1106,5 +1340,120 @@ mod tests {
         let pen = frames(&pp);
         done(&[&pp, &qp]);
         assert!(has(&pen, (EV_KEY, BTN_STYLUS, 1)), "art route: the tablet's barrel button");
+    }
+
+    // ---- Resting pen: parked hover writes nothing ----
+
+    #[test]
+    fn auto_a_resting_pen_is_parked_and_stops_touching_the_cursor() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 3, 5000, false);
+        auto(&mut d, 3, 5010, false); // noise
+        std::thread::sleep(d.still_cfg.park_after + Duration::from_millis(40));
+        auto(&mut d, 3, 5005, false); // parks here
+        let writes_when_parked = frames(&qp).len();
+        for i in 0..20 {
+            auto(&mut d, 3, 5000 + (i % 7), false); // a parked pen's noise
+        }
+        let after = frames(&qp).len();
+        done(&[&pp, &qp]);
+        assert!(writes_when_parked >= 1, "it was followed before parking");
+        assert_eq!(after, writes_when_parked, "nothing more is written to the pointer while parked");
+    }
+
+    #[test]
+    fn auto_a_parked_pen_on_the_art_route_leaves_range_and_wakes_on_clear_movement() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 3, 5000, true);
+        assert!(d.pen_proximity);
+        std::thread::sleep(d.still_cfg.park_after + Duration::from_millis(40));
+        auto(&mut d, 3, 5002, true);
+        assert!(!d.pen_proximity, "parked: the tablet tool is out of range and cannot own the cursor");
+        auto(&mut d, 3, 5003, true);
+        assert!(!d.pen_proximity);
+        auto(&mut d, 3, 5000 + 4000, true); // ~ 16 mm away
+        assert!(d.pen_proximity, "woken by clear movement: the tool is back");
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert!(has(&ptr, (EV_ABS, ABS_X, 9000)));
+    }
+
+    #[test]
+    fn auto_touching_down_works_from_a_parked_pen() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 3, 5000, false);
+        std::thread::sleep(d.still_cfg.park_after + Duration::from_millis(40));
+        auto(&mut d, 3, 5001, false);
+        auto(&mut d, 4, 0, false);
+        auto(&mut d, 0, 5001, false);
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
+        auto(&mut d, 1, 5001, false);
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert_eq!(left_events(&ptr), vec![1, 0]);
+    }
+
+    // ---- Tracked state and forced releases ----
+
+    #[test]
+    fn device_state_follows_what_the_device_holds() {
+        let (mut d, pp, qp) = rig();
+        assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
+        auto(&mut d, 3, 10, true);
+        assert_eq!(d.dev_state(Which::Pen), DevState::Hovering);
+        auto(&mut d, 0, 10, true);
+        assert_eq!(d.dev_state(Which::Pen), DevState::Down(0b1000), "tip contact");
+        auto(&mut d, 1, 10, true);
+        assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
+        auto(&mut d, 0, 20, false);
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
+        done(&[&pp, &qp]);
+    }
+
+    #[test]
+    fn force_release_all_lets_go_of_everything_a_device_holds() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 5, 0, false); // barrel -> right button on the pointer
+        auto(&mut d, 0, 10, false);
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b11));
+        d.force_release_all(Which::Pointer);
+        assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
+        assert!(d.auto_down_at.is_none(), "the stroke is closed with it");
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert!(has(&ptr, (EV_KEY, BTN_LEFT, 0)) && has(&ptr, (EV_KEY, BTN_RIGHT, 0)));
+        assert_eq!(d.pen_mouse_buttons, 0);
+        assert_eq!(d.tip, Tip::None);
+    }
+
+    #[test]
+    fn a_second_left_down_on_the_pointer_device_is_written_as_it_comes() {
+        // The device layer no longer rewrites a press (an inserted release would break a hold).
+        let (mut d, pp, qp) = rig();
+        {
+            let dev = d.pointer.as_mut().unwrap();
+            dev.emit(EV_KEY, BTN_LEFT, 1).unwrap();
+            dev.syn().unwrap();
+            dev.emit(EV_KEY, BTN_LEFT, 1).unwrap();
+            dev.syn().unwrap();
+        }
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        let raw: Vec<i32> = ptr.iter().flatten().filter(|e| e.1 == BTN_LEFT).map(|e| e.2).collect();
+        assert_eq!(raw, vec![1, 1]);
+    }
+
+    #[test]
+    fn a_lift_that_does_not_name_the_eraser_still_releases_the_rubber_tool() {
+        // Plain tablet path: DOWN with the eraser end, then an UP sample (a cancel) without it.
+        let (mut d, pp, qp) = rig();
+        {
+            let pen = d.pen.as_mut().unwrap();
+            pen.inject_pen(10, 10, 500, 0, 0, 0, true).unwrap();
+            assert_ne!(pen.held & key_bit(BTN_TOOL_RUBBER).unwrap(), 0);
+            pen.inject_pen(10, 10, 0, 0, 0, 1, false).unwrap();
+            assert_eq!(pen.state(), DevState::Idle, "no tool key left down");
+        }
+        done(&[&pp, &qp]);
     }
 }

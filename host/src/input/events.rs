@@ -253,6 +253,11 @@ pub(super) fn handle_event(
                 warn!("Ignoring implausible resolution {}x{}", width, height);
                 return;
             }
+            if (50..=1000).contains(&width_mm) && (50..=1000).contains(&height_mm) {
+                if let Ok(mut guard) = uinput.lock() {
+                    guard.tablet_mm = (width_mm as f64, height_mm as f64);
+                }
+            }
             let mut new = tx.borrow().clone();
             // Reject nonsense physical sizes rather than baking them into an
             // EDID: a bad DPI makes the desktop come up at a absurd scale.
@@ -495,7 +500,7 @@ mod tests {
             .write(true)
             .open(&path)
             .unwrap();
-        (UInputDevice { file }, path)
+        (UInputDevice { file, held: 0 }, path)
     }
 
     #[test]

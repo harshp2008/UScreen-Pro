@@ -193,14 +193,23 @@ impl InputServer {
             let mut opts_rx = crate::options::options_rx(self.config.instance);
             let devices = uinput.clone();
             tokio::spawn(async move {
+                // What the pen/touch routing was last told, to notice a change of mode or style.
+                let mut prev: Option<(crate::config::InputMode, String)> = None;
                 loop {
-                    let (mode, native) = {
+                    let (mode, native, style) = {
                         let o = opts_rx.borrow_and_update();
-                        (o.input_mode, o.native_gestures_effective())
+                        (o.input_mode, o.native_gestures_effective(), o.stylus_style.clone())
                     };
+                    // Tablet -> Mouse -> Touchpad, display <-> stylus, auto <-> tablet: whatever
+                    // the old routing held (a pen button, a drag, a finger) must not outlive it.
+                    let changed = prev.as_ref().is_some_and(|p| *p != (mode, style.clone()));
+                    prev = Some((mode, style));
                     let d = devices.clone();
                     let _ = tokio::task::spawn_blocking(move || {
                         if let Ok(mut guard) = d.lock() {
+                            if changed {
+                                guard.force_release_all(Which::All);
+                            }
                             guard.ensure_devices_for(mode, native);
                         }
                     })
@@ -261,6 +270,31 @@ impl InputServer {
     }
 }
 
+/// The newest authenticated connection of each tablet slot. A tablet that reconnects (Wi-Fi
+/// jitter, a roaming access point) leaves its old connection draining for a while; that one
+/// must neither feed events in after the new one took over nor release the new one's buttons
+/// when it finally closes.
+fn latest_connection() -> &'static std::sync::Mutex<std::collections::HashMap<u32, u64>> {
+    static LATEST: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u32, u64>>> =
+        std::sync::OnceLock::new();
+    LATEST.get_or_init(Default::default)
+}
+
+fn register_connection(instance: u32) -> u64 {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+    let id = NEXT.fetch_add(1, Ordering::SeqCst);
+    latest_connection().lock().unwrap_or_else(|e| e.into_inner()).insert(instance, id);
+    id
+}
+
+fn is_latest_connection(instance: u32, id: u64) -> bool {
+    latest_connection()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&instance)
+        .is_none_or(|latest| *latest == id)
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn handle_connection(
     raw_stream: tokio::net::TcpStream,
@@ -303,6 +337,8 @@ pub(super) async fn handle_connection(
         })
     };
     let mut last_sent = current_settings(&settings_tx);
+    // Sequence numbers are per connection: a reconnect (or an app restart) starts a new count.
+    let mut seq_filter = SeqFilter::default();
     // Per-device options (touchpad mode, immersive mode, battery saver, idle dimming). Sent right
     // after the greeting and again whenever they change, whoever changed them.
     let mut options_rx = crate::options::options_rx(config.instance);
@@ -337,6 +373,8 @@ pub(super) async fn handle_connection(
             return Ok(());
         }
     }
+
+    let conn_id = register_connection(config.instance);
 
     let resp = InputResponse {
         status: "connected".to_string(),
@@ -464,7 +502,20 @@ pub(super) async fn handle_connection(
             }
         };
 
+        if !is_latest_connection(config.instance, conn_id) {
+            info!("Input connection superseded by a newer one — closing the old one");
+            break;
+        }
         match msg {
+            Ok(Message::Text(text)) if !seq_filter.accept(classify(&text)) => {
+                // A duplicate or a straggler: it must not act on devices that already moved on.
+                if seq_filter.dropped <= 3 || seq_filter.dropped % 100 == 0 {
+                    warn!(
+                        "Discarded a stale or duplicate input message ({} so far)",
+                        seq_filter.dropped
+                    );
+                }
+            }
             Ok(Message::Text(text)) => match serde_json::from_str::<InputEvent>(&text) {
                 Ok(event) => {
                     handle_event(
@@ -492,9 +543,29 @@ pub(super) async fn handle_connection(
     // outlive the connection, so without this the next client inherits a
     // phantom finger or a pen stuck in proximity — which shows up as
     // unstoppable scrolling.
-    if let Ok(mut guard) = uinput.lock() {
-        guard.release_all();
+    // A superseded connection leaves the devices to its successor: releasing now would cut a
+    // stroke the new connection may already have started.
+    if is_latest_connection(config.instance, conn_id) {
+        if let Ok(mut guard) = uinput.lock() {
+            guard.release_all();
+        }
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod connection_tests {
+    use super::*;
+
+    #[test]
+    fn only_the_newest_connection_of_a_slot_is_current() {
+        let a = register_connection(901);
+        assert!(is_latest_connection(901, a));
+        let b = register_connection(901);
+        assert!(!is_latest_connection(901, a), "the old connection is superseded");
+        assert!(is_latest_connection(901, b));
+        let other = register_connection(902);
+        assert!(is_latest_connection(901, b) && is_latest_connection(902, other), "slots are independent");
+    }
 }
