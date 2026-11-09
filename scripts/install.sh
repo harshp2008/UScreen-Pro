@@ -257,6 +257,34 @@ system_setup() {
     fi
 }
 
+# spawn-at places the long-press menu window exactly at the pen (https://github.com/harshp2008/spawn-at).
+# Not installed: install the latest release. Installed: update it, unless it is a dev build, which
+# is somebody's own working copy and is left alone. A failure here never stops the UScreen install.
+install_spawn_at() {
+    local url="https://raw.githubusercontent.com/harshp2008/spawn-at/main/install.sh"
+    if command -v spawn-at >/dev/null 2>&1; then
+        local ver
+        ver="$(spawn-at -V 2>/dev/null | head -n1 || true)"
+        case "$ver" in
+            *"DEV BUILD"*)
+                info "spawn-at is a dev build (${ver}) — leaving it as it is"
+                return 0
+                ;;
+        esac
+        info "spawn-at found (${ver:-unknown version}) — checking for an update"
+        spawn-at update --headless || warn "spawn-at update failed — keeping the installed version"
+        return 0
+    fi
+    info "Installing spawn-at (places the long-press menu)"
+    if ! command -v curl >/dev/null 2>&1; then
+        warn "curl is missing — skipping spawn-at; the pen menu will not be available"
+        return 0
+    fi
+    if ! curl -fsSL "$url" | bash -s -- --headless; then
+        warn "spawn-at did not install — the pen menu will not be available (UScreen itself is fine)"
+    fi
+}
+
 main() {
     echo "================================================"
     echo "  UScreen installer"
@@ -265,6 +293,7 @@ main() {
     check_deps
     build_if_needed
     install_files
+    install_spawn_at
     system_setup
     echo ""
     info "Done! Launch 'UScreen' from your app menu (or run: uscreen-gui)"
