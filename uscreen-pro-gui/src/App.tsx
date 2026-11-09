@@ -18,6 +18,9 @@ import "./index.css";
 
 const SCROLL_PREFIX = "uscreen-scroll:";
 
+/**
+ * The remembered scroll offset in pixels of the view [key] for this session, or 0 when none is stored or storage is unavailable.
+ */
 function readScroll(key: string): number {
   try {
     return Number(sessionStorage.getItem(SCROLL_PREFIX + key)) || 0;
@@ -26,6 +29,9 @@ function readScroll(key: string): number {
   }
 }
 
+/**
+ * Remembers the scroll offset [top] of the view [key] for the session; silently skipped when storage is unavailable.
+ */
 function writeScroll(key: string, top: number) {
   try {
     sessionStorage.setItem(SCROLL_PREFIX + key, String(Math.round(top)));
@@ -48,11 +54,15 @@ const stable = (v: unknown) =>
  * file value (so changes made on the tablet appear), a value they edited here stays theirs.
  */
 function mergeConfig(base: AppConfig, local: AppConfig, remote: AppConfig): AppConfig {
+  /**
+   * The merged value: the local one if it differs from the base (edited here), otherwise the one now in the file.
+   */
   const take = (b: unknown, l: unknown, r: unknown) => (stable(l) !== stable(b) ? l : r);
   const merged: Record<string, unknown> = {};
   const keys = new Set([...Object.keys(remote), ...Object.keys(local)]);
   for (const k of keys) {
     if (k === "tablets") continue;
+    /** Reads the top-level setting [k] from an object. */
     const rec = (o: unknown) => (o as Record<string, unknown>)[k];
     merged[k] = take(rec(base), rec(local), rec(remote));
   }
@@ -72,6 +82,7 @@ function mergeConfig(base: AppConfig, local: AppConfig, remote: AppConfig): AppC
     }
     const profile: Record<string, unknown> = {};
     for (const k of new Set([...Object.keys(r), ...Object.keys(l)])) {
+      /** Reads the profile setting [k] from an object. */
       const rec = (o: unknown) => (o as Record<string, unknown>)[k];
       const v = take(rec(b), rec(l), rec(r));
       if (v !== undefined) profile[k] = v;
@@ -81,6 +92,7 @@ function mergeConfig(base: AppConfig, local: AppConfig, remote: AppConfig): AppC
   return { ...(merged as unknown as AppConfig), tablets };
 }
 
+/** A readable message from a thrown value. */
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Fingerprint of the global settings only; per-device edits have their own Save button. */
@@ -107,6 +119,7 @@ export default function App() {
   const [autostart, setAutostart] = useState(false);
   /* null = closed. `serial` pins the wizard to the clicked new device; `reconfigure` re-runs only wireless setup. */
   const [wizard, setWizard] = useState<{ serial?: string; reconfigure?: boolean } | null>(null);
+  /** Opens the add-device wizard (with no preselected device) or closes it. */
   const setWizardOpen = (open: boolean) => setWizard(open ? {} : null);
   const [busy, setBusy] = useState(false);
   const [daemonBusy, setDaemonBusy] = useState<"starting" | "stopping" | null>(null);
@@ -120,6 +133,7 @@ export default function App() {
     setViewState(next);
   }, []);
 
+  /** Reads the daemon status once; a failure is only logged and the next poll tries again. */
   const fetchStatus = useCallback(async () => {
     try {
       setStatus(await invoke<DaemonStatus>("get_daemon_status"));
@@ -132,6 +146,9 @@ export default function App() {
   const baseRef = useRef<AppConfig | null>(null);
   const configRef = useRef<AppConfig | null>(null);
 
+  /**
+   * Loads `config.toml` through Tauri and resets everything that measures edits against it: the base copy, the saved fingerprints of the globals and of each device profile.
+   */
   const fetchConfig = useCallback(async () => {
     try {
       const cfg = await invoke<AppConfig>("get_config");
@@ -145,8 +162,8 @@ export default function App() {
   }, []);
 
   /*
-   * The tablet app writes its own changes into the settings file, so the file is re-read twice a
-   * second-ish and merged in: what changed there shows here at once, without losing what is being
+   * The tablet app writes its own changes into the settings file, so the file is re-read every 1.5 s
+   * and merged in: what changed there shows here at once, without losing what is being
    * edited here and not yet saved.
    */
   const syncConfig = useCallback(async () => {
@@ -237,6 +254,9 @@ export default function App() {
   }, [status]);
 
   useEffect(() => {
+    /**
+     * Keyboard shortcuts: Ctrl or Alt plus N opens the wizard, 1/2/3 switch to Settings, Advanced and Health.
+     */
     const onKey = (e: KeyboardEvent) => {
       if (!(e.ctrlKey || e.altKey)) return;
       if (e.key === "n") setWizard({});
@@ -272,8 +292,10 @@ export default function App() {
     }
   }
 
+  /** Edits global settings in the window's copy only; saving is separate. */
   const patchConfig = (patch: Partial<AppConfig>) => setConfig((c) => (c ? { ...c, ...patch } : c));
 
+  /** Writes the global settings to the file, then re-syncs and confirms with a toast. */
   const saveConfig = () =>
     guarded(async () => {
       if (!config) return;
@@ -303,6 +325,7 @@ export default function App() {
     }
   };
 
+  /** Turns the login autostart on or off and shows the state that was actually set. */
   const toggleAutostart = async (enabled: boolean) => {
     try {
       setAutostart(await invoke<boolean>("set_autostart_status", { enabled }));
@@ -319,6 +342,9 @@ export default function App() {
   const profileDirty =
     !!serial && !!profile && stable(profile) !== (savedProfiles[serial] ?? stable({ label: device?.model ?? serial }));
 
+  /**
+   * Edits the open device's profile in the window's copy (creating it from the model name if absent); saving is separate.
+   */
   const patchProfile = (patch: Partial<TabletProfile>) => {
     if (!serial) return;
     setConfig((c) =>
@@ -326,6 +352,7 @@ export default function App() {
     );
   };
 
+  /** Writes the open device's profile to the file and marks it as saved. */
   const saveProfile = () =>
     guarded(async () => {
       if (!serial || !profile) return;
@@ -350,6 +377,7 @@ export default function App() {
       );
     }, "Forget failed");
 
+  /** Pauses or resumes the open device's session. */
   const togglePause = () =>
     guarded(async () => {
       if (!device) return;
@@ -368,6 +396,9 @@ export default function App() {
     await fetchStatus();
   };
 
+  /**
+   * Starts or stops the daemon, showing the starting or stopping state until the status is read again.
+   */
   const toggleDaemon = async () => {
     const running = status?.is_running ?? false;
     setDaemonBusy(running ? "stopping" : "starting");
@@ -381,6 +412,7 @@ export default function App() {
     }
   };
 
+  /** Restarts the adb server, then re-reads the status. */
   const restartAdb = () =>
     guarded(async () => {
       await invoke("restart_adb_server");

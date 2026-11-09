@@ -26,6 +26,7 @@ internal class FingerState(
 
 /** All fingers touching at one instant (a `HardwareState` in libgestures). */
 internal class HardwareState(val time: Double, val fingers: List<FingerState>) {
+    /** The finger with [id], or null when it is not touching. */
     fun get(id: Int): FingerState? = fingers.firstOrNull { it.id == id }
 }
 
@@ -44,6 +45,9 @@ internal class HardwareState(val time: Double, val fingers: List<FingerState>) {
  * neither click, scroll nor move the pointer.
  */
 internal class PalmFilter {
+    /**
+     * What the filter remembers about one contact: where it landed and whether it is a palm, started in the edge zone, or has become a pointing finger.
+     */
     private class Rec(val ox: Float, val oy: Float) {
         var palm = false
         var edge = false
@@ -59,11 +63,15 @@ internal class PalmFilter {
     var lastPalms: Set<Int> = emptySet()
         private set
 
+    /** Forgets every contact, e.g. when the touchpad session restarts. */
     fun reset() {
         recs.clear()
         lastPalms = emptySet()
     }
 
+    /**
+     * Returns [hw] without the contacts classified as palms; contacts that lifted are forgotten, and a contact keeps its classification for as long as it lives.
+     */
     fun filter(hw: HardwareState): HardwareState {
         recs.keys.retainAll(hw.fingers.map { it.id }.toSet())
         val kept = ArrayList<FingerState>(hw.fingers.size)
@@ -91,11 +99,15 @@ internal class PalmFilter {
         return HardwareState(hw.time, kept)
     }
 
+    /**
+     * A large, long and thin contact (at least 15 mm long and twice as long as wide) is the side of a hand.
+     */
     private fun isSideOfHand(f: FingerState): Boolean =
         f.touchMinor > 0f &&
             f.touchMajor >= ELONGATED_MIN_MM &&
             f.touchMajor / f.touchMinor >= ELONGATED_RATIO
 
+    /** Thresholds in millimetres, taken from libgestures' palm classifier (pressure is 0..1). */
     companion object {
         const val PALM_WIDTH_MM = 21.2f
         const val PALM_PRESSURE = 0.98f

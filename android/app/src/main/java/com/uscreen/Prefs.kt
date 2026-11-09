@@ -12,6 +12,9 @@ class Prefs(context: Context) {
     private val sp: SharedPreferences =
         context.getSharedPreferences("uscreen", Context.MODE_PRIVATE)
 
+    /**
+     * Preference value constants and the mapping between stored numbers and the names used on the wire.
+     */
     companion object {
         /**
          * Defaults deliberately match the host's own defaults. They used to be
@@ -44,18 +47,21 @@ class Prefs(context: Context) {
             else -> "auto"
         }
 
+        /** Wire name to orientation value; unknown names give automatic. */
         fun orientationFromName(n: String) = when (n) {
             "camera_up" -> ORIENTATION_CAMERA_UP
             "camera_down" -> ORIENTATION_CAMERA_DOWN
             else -> ORIENTATION_AUTO
         }
 
+        /** Theme value to wire name (`light`, `dark` or `system`). */
         fun themeName(v: Int) = when (v) {
             THEME_LIGHT -> "light"
             THEME_DARK -> "dark"
             else -> "system"
         }
 
+        /** Wire name to theme value; unknown names give the system theme. */
         fun themeFromName(n: String) = when (n) {
             "light" -> THEME_LIGHT
             "dark" -> THEME_DARK

@@ -82,6 +82,7 @@ val OnSurface: Color @Composable @ReadOnlyComposable get() = LocalPalette.curren
 val Muted: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.muted
 val Subtle: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.subtle
 
+/** The Material colour scheme (dark or light) for palette [p]. */
 private fun colorScheme(p: UScreenPalette) =
     if (p.dark) darkColorScheme(
         primary = p.accentSoft,
@@ -150,6 +151,7 @@ private val UScreenShapes = Shapes(
 // 11 px captions, 20 px medium titles.
 private val UScreenFont = FontFamily.SansSerif
 private val UScreenTypography = Typography().let { t ->
+    /** Copies the style with this app's font, [size] sp, [weight] and [line] sp line height. */
     fun TextStyle.sans(size: Int, weight: FontWeight, line: Int) =
         copy(fontFamily = UScreenFont, fontSize = size.sp, fontWeight = weight, lineHeight = line.sp)
     t.copy(

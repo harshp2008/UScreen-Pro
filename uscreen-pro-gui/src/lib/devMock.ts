@@ -94,6 +94,7 @@ if (scenario !== "empty" && scenario !== "multi") {
   };
 }
 
+/** A fake connected-device entry for the dev mock. */
 const dev = (d: { serial: string; model: string }, paired: boolean) => ({
   ...d,
   state: "device",
@@ -104,6 +105,7 @@ const dev = (d: { serial: string; model: string }, paired: boolean) => ({
   install: null,
 });
 
+/** A fake daemon status for the dev mock. */
 const status = (): DaemonStatus => ({
   is_running: running,
   pid: running ? 4242 : undefined,
@@ -114,6 +116,7 @@ const status = (): DaemonStatus => ({
   devices: scenario === "multi" ? [dev(PHONE, false), dev(TABLET, false)] : scenario === "empty" ? [dev(PHONE, false)] : [dev(TABLET, true), ...(scenario === "two" ? [dev(PHONE, false)] : [])],
 });
 
+/** Resolves after [ms] milliseconds. */
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Install an in-browser fake of the Tauri IPC (including a log at `window.__ipcLog`) so the UI can be developed and screenshotted without the Rust backend. */

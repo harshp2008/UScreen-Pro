@@ -7,6 +7,9 @@ import { ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL } from "../lib/opt
 import { ModePanel, ModeSection, TabletPanel } from "../components/PowerSettings";
 import type { AppConfig, CurvePreset, InputMode } from "../lib/types";
 
+/**
+ * Props of the Settings page: global settings, whether they have unsaved edits, autostart state and callbacks.
+ */
 interface Props {
   config: AppConfig;
   dirty: boolean;

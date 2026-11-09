@@ -20,6 +20,9 @@ object Haptics {
     /** Strength, 1..255: noticeable but light. */
     private const val CLICK_AMPLITUDE = 80
 
+    /**
+     * The system vibrator: the default one of the `VibratorManager` on Android 12 (S) and later, the legacy service before that; null when the device has none.
+     */
     private fun vibrator(context: Context): Vibrator? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             context.getSystemService(VibratorManager::class.java)?.defaultVibrator

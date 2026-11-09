@@ -26,6 +26,7 @@ const toggleVariants = cva(
   }
 )
 
+/** Styled wrapper around Radix toggle with this app's classes (shadcn/ui pattern). */
 const Toggle = React.forwardRef<
   React.ElementRef<typeof TogglePrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof TogglePrimitive.Root> &

@@ -9,6 +9,9 @@ import { ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL, TRANSPORTS, label
 import { ModePanel, ModeSection, TabletPanel, POWER_TIP, type PowerValues } from "../components/PowerSettings";
 import type { AppConfig, ConnectedDevice, CurvePreset, TabletProfile } from "../lib/types";
 
+/**
+ * Props of a device page: the device, its profile, the global config and callbacks to change, save, pause, forget and install.
+ */
 interface Props {
   serial: string;
   device?: ConnectedDevice;
@@ -90,6 +93,7 @@ export function DeviceSettings({
     stylus_idle_hide_timeout: p.stylus_idle_hide_timeout ?? g.stylus_idle_hide_timeout,
   };
 
+  /** The override switch builder of a power setting row, seeded with the global value. */
   const powerOverride = (key: keyof PowerValues, inherited: string) => ov(key, g[key], inherited);
 
   const online = device?.state === "device";

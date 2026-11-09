@@ -23,10 +23,12 @@ const badgeVariants = cva(
   }
 )
 
+/** Props of [Badge]: HTML div attributes plus the colour variant. */
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>,
     VariantProps<typeof badgeVariants> {}
 
+/** Small rounded label in one of the badge variants. */
 function Badge({ className, variant, ...props }: BadgeProps) {
   return (
     <div className={cn(badgeVariants({ variant }), className)} {...props} />

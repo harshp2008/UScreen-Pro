@@ -3,8 +3,12 @@ import * as SliderPrimitive from "@radix-ui/react-slider"
 
 import { cn } from "@/lib/utils"
 
+/** Props of the slider: those of the Radix slider root. */
 type SliderProps = React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>
 
+/**
+ * Styled wrapper around Radix slider with this app's classes (shadcn/ui pattern). Defaults to 0..100 in steps of 1.
+ */
 const Slider = React.forwardRef<
   React.ElementRef<typeof SliderPrimitive.Root>,
   SliderProps

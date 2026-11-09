@@ -2,8 +2,10 @@
 
 import { Toaster as Sonner } from "sonner"
 
+/** Props of the toast container: those of the sonner toaster. */
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
+/** Toast container that follows the app theme (system by default). */
 const Toaster = ({ theme = "system", ...props }: ToasterProps) => {
   return (
     <Sonner

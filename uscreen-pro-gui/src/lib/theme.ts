@@ -17,6 +17,7 @@ export function readThemePref(): ThemePref {
   return "system";
 }
 
+/** Whether the system prefers a dark colour scheme. */
 const systemDark = () => window.matchMedia(QUERY).matches;
 
 /** Put the `.dark` class (the library's baseline scheme key, see index.css) in step with the preference. */
@@ -35,11 +36,17 @@ export function useTheme() {
     setDark(apply(pref));
     if (pref !== "system") return;
     const mq = window.matchMedia(QUERY);
+    /**
+     * Re-applies the system scheme when the OS preference changes (only while the choice is `system`).
+     */
     const onChange = () => setDark(apply("system"));
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, [pref]);
 
+  /**
+   * Stores and applies a new theme choice; if storage is unavailable the choice just does not persist.
+   */
   const setPref = useCallback((next: ThemePref) => {
     setPrefState(next);
     try {

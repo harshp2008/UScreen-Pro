@@ -201,6 +201,7 @@ fun evaluateDiagnostic(
     return Pair(state, message)
 }
 
+/** Why nothing is streaming yet: waiting for the host, host offline, or USB debugging disabled. */
 private enum class NoStream { WAITING, HOST_OFFLINE, DEBUGGING_DISABLED }
 
 /**

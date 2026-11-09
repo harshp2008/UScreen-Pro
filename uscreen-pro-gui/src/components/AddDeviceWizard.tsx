@@ -43,15 +43,21 @@ import { DebugTimeline, Instructions, Note, StepLog } from "./wizard/WizardParts
 const STEPS = ["Prepare Device", "Connect USB", "Install", "Wireless", "Finish"] as const;
 const WIRELESS_STEP = 4;
 const FINISH_STEP = 5;
+/** Wizard step: 0 landing, 1 Prepare Device, 2 Connect USB, 3 Install, 4 Wireless, 5 Finish. */
 type Step = 0 | 1 | 2 | 3 | 4 | 5;
+/** How the device is being added: with a cable first (`usb`) or the no-cable wireless path. */
 type Via = "usb" | "wireless";
+/** Progress of a background operation (installing the app, or the wireless setup). */
 type InstallState = "idle" | "running" | "ok" | "failed";
+/** The transport the device prefers once added: automatic, USB or Wi-Fi. */
 type Transport = "auto" | "usb" | "wifi";
+/** Which wireless method is shown: automatic pairing or the Tailscale address. */
 type WirelessTab = "auto" | "tailscale";
 /* Backend error prefix of a failed router reachability check (see pairing.rs). */
 const ROUTER_BLOCKED_PREFIX = "ROUTER_BLOCKED|";
 const TAILSCALE_DOWNLOAD_URL = "https://tailscale.com/download";
 
+/** Props of the wizard. It is mounted only while open, so every field starts from its initial value. */
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -67,6 +73,7 @@ interface Props {
   onDeviceAdded: (serial: string) => void | Promise<void>;
 }
 
+/** A readable message from a thrown value. */
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
@@ -165,6 +172,9 @@ export function AddDeviceWizard({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [moreBelow, setMoreBelow] = useState(false);
 
+  /**
+   * Lists adb devices once; keeps the previous array when nothing changed so the 1.5 s poll does not re-render the dialog.
+   */
   const poll = useCallback(async () => {
     try {
       const next = (await invoke<AdbEntry[] | null>("list_adb_devices")) ?? [];
@@ -189,6 +199,9 @@ export function AddDeviceWizard({
     if (usb && via === "usb") setDevice(usb);
   }, [usb, via]);
 
+  /**
+   * Installs the app on [serial] over USB and records the outcome; a result from a superseded run is ignored.
+   */
   const runInstall = useCallback(async (serial: string) => {
     const run = ++installRun.current;
     setInstallLog([]);
@@ -270,6 +283,7 @@ export function AddDeviceWizard({
     }
   }
 
+  /** Fills this PC's Tailscale address; a failure is shown only when [quiet] is false. */
   async function detectTailscaleIp(quiet: boolean) {
     try {
       setTsHostIp(await invoke<string>("detect_tailscale_ip"));
@@ -325,6 +339,7 @@ export function AddDeviceWizard({
     );
   }, [disconnected]);
 
+  /** Restarts the adb server and polls once more, for when a device is not shown. */
   async function retryConnection() {
     setRetryingConn(true);
     try {
@@ -399,6 +414,7 @@ export function AddDeviceWizard({
     };
   }, [open, finishWireless]);
 
+  /** Asks the device to open its Wireless debugging settings screen and shows the reply. */
   async function openWirelessSettings() {
     if (!contextSerial) return;
     try {
@@ -420,6 +436,7 @@ export function AddDeviceWizard({
     }
   }
 
+  /** Saves the new device's profile (label, nickname, transport, Wi-Fi address) and closes the wizard. */
   async function finish() {
     const serial = device?.serial;
     if (!serial) return;
@@ -445,6 +462,7 @@ export function AddDeviceWizard({
     }
   }
 
+  /** Updates whether more content is hidden below the visible part of the scroller (more than 4 px). */
   const measureScroll = useCallback(() => {
     const el = scrollerRef.current;
     if (el) setMoreBelow(el.scrollHeight - el.scrollTop - el.clientHeight > 4);
@@ -472,16 +490,19 @@ export function AddDeviceWizard({
   /* Next is always shown on USB steps; each step enables it once its own condition holds. */
   const nextEnabled =
     disconnected ? false : step === 1 ? true : step === 2 ? usb?.state === "device" : step === 3 ? install.state === "ok" : step === 4 ? wireless.state === "ok" || ts.state === "ok" : false;
+  /** Next step; on Connect USB it also pins the chosen device. */
   const goNext = () => {
     if (step === 2 && usb) setChosenSerial(usb.serial);
     if (step >= 1 && step <= 4) setStep((step + 1) as Step);
   };
+  /** Skips the wireless step: the device is saved with USB only. */
   const skipWireless = () => {
     setWirelessSkipped(true);
     setWifiEndpoint(null);
     setTransport("auto");
     setStep(FINISH_STEP);
   };
+  /** Starts the USB flow with no device chosen yet. */
   const startUsb = () => {
     /* A new run starts with no device chosen; the picker (or the pinned serial) decides. */
     setPickedSerial(null);
@@ -490,6 +511,7 @@ export function AddDeviceWizard({
     setWirelessOpen(false);
     setStep(1);
   };
+  /** Previous step; from Finish on the wireless path it returns to the landing screen. */
   const goBack = () => {
     if (step === FINISH_STEP && via === "wireless") {
       setWifiEndpoint(null);

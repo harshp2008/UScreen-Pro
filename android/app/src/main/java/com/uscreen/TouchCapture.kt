@@ -29,6 +29,9 @@ import java.util.concurrent.TimeUnit
  * reconnects with a fixed delay when the socket drops.
  */
 class TouchCapture {
+    /**
+     * Constants of the input link: log tag, the host's default input port (8891), the platform's palm tool type, the pointer speed (`PAD_GAIN`), the size of the host's virtual touchpad in millimetres, and the grace period for a held pen side button.
+     */
     companion object {
         const val TAG = "UScreenTouch"
         const val DEFAULT_PORT = 8891
@@ -150,6 +153,9 @@ class TouchCapture {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     private val wsListener = object : WebSocketListener() {
+        /**
+         * Socket opened: the link is up, any earlier notice is cleared (the host replays whatever is still in force right after its greeting).
+         */
         override fun onOpen(webSocket: WebSocket, response: Response) {
             isConnected = true
             // Anything still in force is replayed by the host right after the greeting.
@@ -191,6 +197,9 @@ class TouchCapture {
             Log.i(TAG, "Sent initial connection ping")
         }
 
+        /**
+         * Reads the host's JSON messages (the greeting with its mode, settings, notices); anything it does not recognise is ignored.
+         */
         override fun onMessage(webSocket: WebSocket, text: String) {
             // The host greets with its mode; everything else it might say is
             // ignored, this channel is otherwise ours to talk on.
@@ -245,16 +254,19 @@ class TouchCapture {
             } catch (_: Exception) {}
         }
 
+        /** The host is closing: close our side with the normal code. */
         override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
             webSocket.close(1000, null)
         }
 
+        /** Socket closed: mark the link down, clear notices and schedule a reconnect. */
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             isConnected = false
             onHostNotice?.invoke(null)
             scheduleReconnect()
         }
 
+        /** Connection failed: mark the link down, clear notices and schedule a reconnect. */
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             isConnected = false
             onHostNotice?.invoke(null)
@@ -333,6 +345,7 @@ class TouchCapture {
         connectWebSocket()
     }
 
+    /** Opens a WebSocket to the host's input port, cancelling any earlier one. */
     private fun connectWebSocket() {
         webSocket?.cancel()
         val request = Request.Builder()
@@ -347,6 +360,9 @@ class TouchCapture {
      */
     @Volatile var autoReconnect = true
 
+    /**
+     * After `ReconnectPolicy.RETRY_INTERVAL_MS`, reconnects if still down; does nothing when auto-reconnect is off.
+     */
     private fun scheduleReconnect() {
         if (!autoReconnect) return
         reconnectJob?.cancel()
@@ -390,6 +406,7 @@ class TouchCapture {
         }
     }
 
+    /** Size and offset of the area of the view that shows the stream, in view pixels. */
     private data class CoordinateQuad(val w: Float, val h: Float, val ox: Float, val oy: Float)
 
     /**
@@ -606,6 +623,7 @@ class TouchCapture {
         }
     }
 
+    /** Whether the pointer at [index] is the eraser end of a pen; false if the platform cannot say. */
     private fun isEraser(event: MotionEvent, index: Int): Boolean {
         return try {
             event.getToolType(index) == MotionEvent.TOOL_TYPE_ERASER
@@ -614,6 +632,7 @@ class TouchCapture {
         }
     }
 
+    /** The axis value of the pointer at [index], or 0 if the axis is unavailable. */
     private fun getAxis(event: MotionEvent, axis: Int, index: Int): Double {
         return try {
             event.getAxisValue(axis, index).toDouble()
@@ -622,6 +641,7 @@ class TouchCapture {
         }
     }
 
+    /** The axis value of a batched (historical) sample, or 0 if unavailable. */
     private fun getHistoricalAxis(event: MotionEvent, axis: Int, index: Int, hist: Int): Double {
         return try {
             event.getHistoricalAxisValue(axis, index, hist).toDouble()
@@ -663,6 +683,9 @@ class TouchCapture {
         return Math.toDegrees(tx) to Math.toDegrees(ty)
     }
 
+    /**
+     * Sends one pen sample of the pointer at [index]: position mapped to the stream, pressure, tilt from the tilt and orientation axes, eraser flag and [action]; then syncs the side button state.
+     */
     private fun sendPenEvent(event: MotionEvent, index: Int, action: Int,
                               vw: Float, vh: Float) {
         val (x, y) = mapCoordinates(event.getX(index), event.getY(index), vw, vh)
@@ -732,6 +755,9 @@ class TouchCapture {
         emitPen(lastPenX, lastPenY, 0.0, 0.0, 0.0, false, 1)
     }
 
+    /**
+     * Sends a `pen` message with position (0..1 of the virtual display), pressure, tilt in degrees, eraser flag and action code; tracks whether the tip is down and remembers the last position.
+     */
     private fun emitPen(x: Double, y: Double, pressure: Double,
                         tiltX: Double, tiltY: Double, eraser: Boolean, action: Int) {
         when (action) {
@@ -771,6 +797,9 @@ class TouchCapture {
         sendSeq(msg)
     }
 
+    /**
+     * The pen left proximity: sends action 4. A held side button is released only if the pen stays away for `PEN_BUTTON_GRACE_MS`, because Android sends a hover exit just before every touch-down and an immediate release would open a context menu.
+     */
     private fun sendPenProximityExit() {
         // Android sends a hover exit just before the tip touches down, and the side button can be
         // held through it. Letting go of the button at once would send a release and a new press
@@ -802,6 +831,7 @@ class TouchCapture {
         }
     }
 
+    /** Sends one finger of direct touch: position, pressure, action and slot. */
     private fun sendTouch(x: Float, y: Float, pressure: Double,
                           action: Int, slot: Int) {
         val msg = JSONObject().apply {
@@ -968,6 +998,7 @@ and consults it when choosing between the device's adb entries.
     @Volatile private var lastPenNanos = 0L
     private val PEN_OWNS_SCREEN_NS = 500_000_000L
 
+    /** Whether the pen was active within the last half second; while it is, fingers are ignored. */
     private fun penIsActive(): Boolean =
         lastPenNanos != 0L && System.nanoTime() - lastPenNanos < PEN_OWNS_SCREEN_NS
 
@@ -1002,12 +1033,18 @@ and consults it when choosing between the device's adb entries.
             val k = PAD_GAIN / mmPerPx()
             sendRel("rel", dxMm * k, dyMm * k)
         }
+        /** Scrolls by [dxMm], [dyMm] converted to tablet pixels. */
         override fun scroll(dxMm: Float, dyMm: Float) {
             val k = 1f / mmPerPx()
             sendRel("scroll", dxMm * k, dyMm * k)
         }
+        /** Sends a pinch of [deltaMm] converted to pixels. */
         override fun pinch(deltaMm: Float) = sendGesture("pinch", (deltaMm / mmPerPx()).toDouble())
+        /** Ends the pinch. */
         override fun pinchEnd() = sendGesture("pinch_end", 0.0)
+        /**
+         * Maps a swipe to a host gesture: left is `workspace_next`, right `workspace_prev`, up or down `overview`.
+         */
         override fun swipe(fingers: Int, direction: TouchpadEngine.Swipe) {
             sendGesture(
                 when (direction) {
@@ -1018,6 +1055,7 @@ and consults it when choosing between the device's adb entries.
                 0.0,
             )
         }
+        /** Sends a button press or release and gives haptic feedback on press. */
         override fun button(button: Int, down: Boolean) {
             sendSeq(JSONObject().apply {
                 put("type", "button")
@@ -1031,6 +1069,7 @@ and consults it when choosing between the device's adb entries.
         mainHandler.postDelayed(padTimer, delayMs)
     }).also { it.log = { line -> if (DEBUG_INPUT) Log.d("UScreenInput", line) } }
 
+    /** Sends a `gesture` message of [kind] with [amount]. */
     private fun sendGesture(kind: String, amount: Double) {
         sendSeq(JSONObject().apply {
             put("type", "gesture")
@@ -1161,6 +1200,9 @@ and consults it when choosing between the device's adb entries.
         }
     }
 
+    /**
+     * The number of fingers on the pad, not counting [excludeIndex], pen-like contacts, palms or fingers that landed outside the touch area.
+     */
     private fun countPadFingers(event: MotionEvent, excludeIndex: Int): Int {
         var n = 0
         for (i in 0 until event.pointerCount) {
@@ -1171,6 +1213,9 @@ and consults it when choosing between the device's adb entries.
         return n
     }
 
+    /**
+     * Sends the raw touchpad slots for the host's native touchpad; an empty list lifts all fingers and is only sent if some were down.
+     */
     private fun sendRaw(slots: org.json.JSONArray) {
         val empty = slots.length() == 0
         if (empty && !rawDown) return
@@ -1219,6 +1264,7 @@ and consults it when choosing between the device's adb entries.
     @Volatile var touchpadShape = TouchpadShape.FULL
         private set
 
+    /** Chooses the touch area shape; fingers down in the old shape are forgotten. */
     fun setTouchpadShape(shape: String) {
         if (touchpadShape == shape) return
         touchpadShape = shape
@@ -1234,6 +1280,7 @@ and consults it when choosing between the device's adb entries.
     @Volatile var stylusMode = false
         private set
 
+    /** Turns stylus-only mode on or off, lifting whatever a finger still held. */
     fun setStylusMode(on: Boolean) {
         if (stylusMode == on) return
         stylusMode = on
@@ -1247,6 +1294,7 @@ and consults it when choosing between the device's adb entries.
         liftTouches()
     }
 
+    /** Sends a relative movement message of [type] (`rel` or `scroll`) in tablet pixels. */
     private fun sendRel(type: String, dx: Float, dy: Float) {
         sendSeq(JSONObject().apply {
             put("type", type)
@@ -1321,5 +1369,8 @@ and consults it when choosing between the device's adb entries.
 
 /** A state the host announced over the input socket; the UI covers the screen with an overlay while it holds. */
 data class HostNotice(val kind: Kind, val host: String = "", val device: String = "") {
+    /**
+     * What the host announced: its operation is paused, its settings are being changed, or the app is being updated.
+     */
     enum class Kind { PAUSED, SETTINGS, UPDATING }
 }

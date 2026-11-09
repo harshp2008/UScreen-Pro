@@ -61,8 +61,12 @@ export interface PowerValues {
 export const POWER_TIP =
   "Streaming at high resolutions/framerates consumes significant power. If your device charges slowly, try lowering the FPS, or use Touchpad Mode.";
 
+/** Text for a boolean setting. */
 const onOff = (v: boolean) => (v ? "On" : "Off");
 
+/**
+ * Props shared by the power-settings sections: effective values, a change callback, and on device pages a builder of the override switch.
+ */
 interface Common {
   /** Effective values: the global ones on the Settings page, override-or-global on a device page. */
   values: PowerValues;
@@ -71,6 +75,7 @@ interface Common {
   override?: (key: keyof PowerValues, inherited: string) => Override;
 }
 
+/** The override switch builder for a row, if the page supports overrides. */
 const overrideOf = (c: Common) => (key: keyof PowerValues, inherited: string) => c.override?.(key, inherited);
 
 /** The input-mode row with its one-line help. Global: the default mode for new devices. Device: its live mode. */

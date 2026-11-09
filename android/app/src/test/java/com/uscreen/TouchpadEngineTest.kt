@@ -14,6 +14,9 @@ import org.junit.Test
  * tidy.
  */
 class TouchpadEngineTest {
+    /**
+     * Records everything the engine outputs: totals of movement, scroll and pinch, the swipes and an ordered event log.
+     */
     private class Rec : TouchpadEngine.Output {
         val events = ArrayList<String>()
         var moveX = 0f; var moveY = 0f
@@ -21,16 +24,27 @@ class TouchpadEngineTest {
         var pinchTotal = 0f
         var moves = 0
         val swipes = ArrayList<Pair<Int, TouchpadEngine.Swipe>>()
+        /** Adds the movement to the totals and logs `move`. */
         override fun move(dxMm: Float, dyMm: Float) { moveX += dxMm; moveY += dyMm; moves++; events.add("move") }
+        /** Logs a button as `b<n>v` (down) or `b<n>^` (up). */
         override fun button(button: Int, down: Boolean) { events.add("b$button${if (down) "v" else "^"}") }
+        /** Adds the scroll to the totals and logs `scroll`. */
         override fun scroll(dxMm: Float, dyMm: Float) { scrollX += dxMm; scrollY += dyMm; events.add("scroll") }
+        /** Adds the pinch to the total and logs `pinch`. */
         override fun pinch(deltaMm: Float) { pinchTotal += deltaMm; events.add("pinch") }
+        /** Logs the end of the pinch. */
         override fun pinchEnd() { events.add("pinchEnd") }
+        /** Records the swipe and logs it. */
         override fun swipe(fingers: Int, direction: TouchpadEngine.Swipe) { swipes.add(fingers to direction); events.add("swipe$fingers$direction") }
+        /** The button events in order. */
         fun buttons() = events.filter { it.startsWith("b") }
+        /** How many logged events start with [prefix]. */
         fun count(prefix: String) = events.count { it.startsWith(prefix) }
     }
 
+    /**
+     * A simulated touch surface (200 x 125 mm, right-click zone on) that drives the engine with frames and a fake clock and runs its timer when due.
+     */
     private class Sim {
         val rec = Rec()
         var timerAt = -1.0
@@ -41,6 +55,7 @@ class TouchpadEngineTest {
         private val rnd = Random(7)
         val fingers = LinkedHashMap<Int, FloatArray>() // id -> x, y, major, pressure
 
+        /** A small random offset in millimetres, within +-0.15 mm, to mimic sensor noise. */
         fun jitter() = (rnd.nextFloat() - 0.5f) * 0.3f
 
         /** Advance [dt] seconds, running the engine's timer if it falls due. */
@@ -52,14 +67,17 @@ class TouchpadEngineTest {
             now = end
         }
 
+        /** Sends the current fingers to the engine as one frame. */
         fun frame() {
             engine.onFrame(HardwareState(now, fingers.map { (id, v) -> FingerState(id, v[0], v[1], v[2], v[2] * 0.8f, v[3]) }))
         }
 
+        /** Puts finger [id] down at ([x], [y]) with contact length [major]. */
         fun down(id: Int, x: Float, y: Float, major: Float = 9f) {
             fingers[id] = floatArrayOf(x, y, major, 0.3f); frame()
         }
 
+        /** Lifts finger [id]. */
         fun up(id: Int) { fingers.remove(id); frame() }
 
         /** Move the listed fingers by (dx, dy) in total over [seconds], sampled at 120 Hz with jitter. */
@@ -77,6 +95,7 @@ class TouchpadEngineTest {
             }
         }
 
+        /** Holds the fingers still for [seconds], with a little noise, one frame per 1/120 s. */
         fun hold(seconds: Double) {
             val steps = (seconds * 120).toInt()
             for (s in 0 until steps) {

@@ -12,6 +12,7 @@ export interface Bezier {
 export const BEZIER_Y_MIN = -2;
 export const BEZIER_Y_MAX = 3;
 
+/** Limits [n] to [lo]..[hi]. */
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
@@ -41,6 +42,7 @@ export function parseBezier(value: string): Bezier | null {
 
 /** y(x) of a CSS cubic-bezier(x1, y1, x2, y2), solved by bisection on the x polynomial. */
 export function bezierFn({ x1, y1, x2, y2 }: Bezier): (x: number) => number {
+  /** One coordinate of a cubic Bezier at parameter [t] with control values [a] and [b]. */
   const cubic = (a: number, b: number, t: number) => 3 * a * (1 - t) ** 2 * t + 3 * b * (1 - t) * t ** 2 + t ** 3;
   return (x) => {
     if (x <= 0) return 0;

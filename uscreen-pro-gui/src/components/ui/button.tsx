@@ -34,12 +34,16 @@ const buttonVariants = cva(
   }
 )
 
+/**
+ * Props of [Button]: HTML button attributes, the variant and size, and `asChild` to render another element.
+ */
 export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
 }
 
+/** Button in the app's variants and sizes; forwards its ref. */
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button"

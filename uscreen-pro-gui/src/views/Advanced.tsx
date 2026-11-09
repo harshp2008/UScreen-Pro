@@ -5,6 +5,9 @@ import { Button } from "@/components/ui/button";
 import { PageHeader, Section, SwitchRow } from "../components/ui/layout";
 import type { AppConfig } from "../lib/types";
 
+/**
+ * Props of the Advanced page: global settings, whether they have unsaved edits, and change and save callbacks.
+ */
 interface Props {
   config: AppConfig;
   dirty: boolean;
@@ -19,6 +22,9 @@ export function Advanced({ config: c, dirty, onChange, onSave }: Props) {
   const [enabled, setEnabled] = useState(c.locked_apps.length > 0);
   const stash = useRef<string[]>(c.locked_apps);
 
+  /**
+   * Turns the app lock on or off; turning it off remembers the list so turning it on again restores it.
+   */
   function toggle(on: boolean) {
     setEnabled(on);
     if (on) onChange({ locked_apps: stash.current });

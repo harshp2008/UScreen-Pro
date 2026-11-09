@@ -19,10 +19,12 @@ object TouchpadShape {
         val width get() = right - left
         val height get() = bottom - top
 
+        /** Whether ([x], [y]) is inside the rectangle, edges included. */
         fun contains(x: Float, y: Float) = x >= left && x <= right && y >= top && y <= bottom
 
         /** The point of this rectangle nearest to ([x], [y]). */
         fun clampX(x: Float) = x.coerceIn(left, right)
+        /** The y value nearest to [y] inside the rectangle. */
         fun clampY(y: Float) = y.coerceIn(top, bottom)
     }
 

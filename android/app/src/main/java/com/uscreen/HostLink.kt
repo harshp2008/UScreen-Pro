@@ -98,6 +98,9 @@ data class HostConfig(
         else -> null
     }
 
+    /**
+     * Wire names of the input modes, pen styles and pen buttons exactly as they appear in `config_update` messages and on disk; do not rename them.
+     */
     companion object {
         const val MODE_DISPLAY = "display"
         const val MODE_TOUCHPAD = "touchpad"
@@ -206,6 +209,7 @@ data class HostConfig(
  * flaky cable never adds up to an offline verdict. Time is passed in so tests need no real clock.
  */
 class ReconnectPolicy(private val offlineAfterMs: Long = OFFLINE_AFTER_MS) {
+    /** Timing constants of the reconnect policy. */
     companion object {
         /** Gap between two connection attempts. */
         const val RETRY_INTERVAL_MS = 2_000L
@@ -252,6 +256,7 @@ object FadeCurve {
 
     /** Same curve as an [Interpolator]. */
     object Exponential : Interpolator {
+        /** Maps linear time to the `exponential` curve. */
         override fun getInterpolation(input: Float): Float = exponential(input)
     }
 

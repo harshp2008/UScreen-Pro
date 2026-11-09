@@ -29,6 +29,7 @@ export function StepLog({ lines, running }: { lines: string[]; running: boolean 
   );
 }
 
+/** A tinted message box; `tone` selects neutral, warning, error or success colours. */
 export function Note({ tone = "neutral", children }: { tone?: "neutral" | "warning" | "error" | "success"; children: ReactNode }) {
   const tones = {
     neutral: "bg-muted text-foreground",
@@ -39,6 +40,7 @@ export function Note({ tone = "neutral", children }: { tone?: "neutral" | "warni
   return <div className={cn("rounded-lg px-3 py-2 text-xs leading-relaxed", tones[tone])}>{children}</div>;
 }
 
+/** A numbered list of steps. */
 export function Instructions({ items }: { items: ReactNode[] }) {
   return (
     <ol className="space-y-2 text-muted-foreground">

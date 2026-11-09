@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { TextInput } from "./ui/controls";
 
+/** A readable message from a thrown value. */
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
@@ -27,6 +28,9 @@ export function ManualPairDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Pairs with the typed address and code and connects to the connect address; reports the connect endpoint, or an error.
+   */
   async function submit() {
     setError(null);
     setBusy(true);

@@ -24,6 +24,7 @@ import android.util.Log
  * stops itself instead of crashing the app.
  */
 class StreamingService : Service() {
+    /** Notification channel and notification ids, and the log tag. */
     companion object {
         const val CHANNEL_ID = "uscreen_streaming"
         const val NOTIFICATION_ID = 1
@@ -33,11 +34,15 @@ class StreamingService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
 
+    /** Creates the notification channel. */
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
     }
 
+    /**
+     * Starts as a foreground service with an ongoing notification and takes the wake and Wi-Fi locks; stays sticky so the system restarts it.
+     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
@@ -123,6 +128,7 @@ class StreamingService : Service() {
         return START_STICKY
     }
 
+    /** Releases the wake and Wi-Fi locks if they are held. */
     override fun onDestroy() {
         wakeLock?.let {
             if (it.isHeld) it.release()
@@ -133,8 +139,10 @@ class StreamingService : Service() {
         super.onDestroy()
     }
 
+    /** Not bindable. */
     override fun onBind(intent: Intent?): IBinder? = null
 
+    /** Creates the low-importance, badge-less channel for the ongoing streaming notification. */
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,

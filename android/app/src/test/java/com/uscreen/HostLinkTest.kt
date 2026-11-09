@@ -5,7 +5,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+/**
+ * Tests of the reconnect policy, the fade curves, charging text and the host-to-tablet settings model.
+ */
 class HostLinkTest {
+    /** The host counts as offline only after the full 120 s window of consecutive failures. */
     @Test
     fun hostIsOnlyOfflineAfterTheFullWindowOfFailures() {
         val p = ReconnectPolicy()
@@ -17,6 +21,7 @@ class HostLinkTest {
         assertTrue(p.expired(500_000))
     }
 
+    /** One success resets the clock; later failures inside one streak do not restart it. */
     @Test
     fun oneSuccessResetsTheClock() {
         val p = ReconnectPolicy()
@@ -30,12 +35,16 @@ class HostLinkTest {
         assertTrue(p.expired(230_000))
     }
 
+    /** The retry interval is 2 s and the offline window is 2 min. */
     @Test
     fun retryIntervalIsTwoSecondsAndWindowTwoMinutes() {
         assertEquals(2_000L, ReconnectPolicy.RETRY_INTERVAL_MS)
         assertEquals(120_000L, ReconnectPolicy.OFFLINE_AFTER_MS)
     }
 
+    /**
+     * The exponential curve starts at 0, ends at exactly 1, is slow at first and clamps input above 1.
+     */
     @Test
     fun exponentialCurveStartsAtZeroEndsAtOneAndIsSlowFirst() {
         assertEquals(0f, FadeCurve.exponential(0f), 1e-6f)
@@ -45,6 +54,9 @@ class HostLinkTest {
         assertEquals(1f, FadeCurve.exponential(7f), 1e-6f)
     }
 
+    /**
+     * Charging text follows plugged state, status and the current reading, including milliamp-reporting devices.
+     */
     @Test
     fun chargingTextFollowsTheReading() {
         val usb = android.os.BatteryManager.BATTERY_PLUGGED_USB
@@ -58,6 +70,9 @@ class HostLinkTest {
         assertEquals("Fully charged", ChargingStatus.describe(ac, android.os.BatteryManager.BATTERY_STATUS_FULL, 10_000))
     }
 
+    /**
+     * Tablet-side settings map to `HostConfig` fields; an unknown input mode is rejected, and touchpad mode stops video streaming.
+     */
     @Test
     fun tabletSettingsMapToHostConfigFields() {
         val base = HostConfig()
@@ -72,6 +87,9 @@ class HostLinkTest {
         assertEquals(null, base.withSetting("nonsense", true))
     }
 
+    /**
+     * `bezier:` curve strings are parsed and their control points clamped; malformed strings give null.
+     */
     @Test
     fun bezierCurveStringsAreParsedAndClamped() {
         assertEquals(listOf(0.25f, 0.1f, 0.25f, 1f), FadeCurve.parseBezier("bezier:0.25,0.1,0.25,1")?.toList())
@@ -81,6 +99,9 @@ class HostLinkTest {
         assertEquals(null, FadeCurve.parseBezier("bezier:a,b,c,d"))
     }
 
+    /**
+     * The newer settings (touchpad haptics, right-click method) follow the same rules as the older ones: defaults, validation and JSON.
+     */
     @Test
     fun newSettingsFollowTheSameRulesAsTheOthers() {
         val base = HostConfig()
@@ -102,6 +123,9 @@ class HostLinkTest {
         assertEquals(base.rightClickMethod, HostConfig.fromJson(org.json.JSONObject("""{"right_click_method":"x"}"""), base).rightClickMethod)
     }
 
+    /**
+     * Stylus settings are validated: style, primary and secondary button names, with defaults auto, right and middle.
+     */
     @Test
     fun stylusSettingsAreValidated() {
         val base = HostConfig()
@@ -122,6 +146,7 @@ class HostLinkTest {
         assertEquals(base.stylusButtonSecondary, c.stylusButtonSecondary)
     }
 
+    /** The touchpad shape is a setting: default full screen, validated, and read from JSON. */
     @Test
     fun touchpadShapeIsASetting() {
         val base = HostConfig()
@@ -133,6 +158,7 @@ class HostLinkTest {
         assertEquals(TouchpadShape.FULL, HostConfig.fromJson(org.json.JSONObject("""{"touchpad_shape":"x"}"""), base).touchpadShape)
     }
 
+    /** Native gestures default to on, accept only booleans, and follow the host's JSON. */
     @Test
     fun nativeGesturesAreOnByDefaultAndFollowTheHost() {
         val base = HostConfig()
@@ -145,6 +171,7 @@ class HostLinkTest {
         assertEquals(true, HostConfig.fromJson(org.json.JSONObject("""{"touchpad_shape":"full_screen"}"""), base).nativeGestures)
     }
 
+    /** Touchpad sensitivity defaults to 100 and is clamped to its range (50 to 200). */
     @Test
     fun touchpadSensitivityDefaultsTo100AndStaysInRange() {
         val base = HostConfig()
@@ -157,6 +184,9 @@ class HostLinkTest {
         assertEquals(100, HostConfig.fromJson(org.json.JSONObject("""{"touchpad_shape":"full_screen"}"""), base).touchpadSensitivity)
     }
 
+    /**
+     * The rectangle shapes are centred and as large as their aspect ratio allows inside the screen (checked on 2560 x 1600).
+     */
     @Test
     fun theRectanglesAreCentredAndAsLargeAsTheirRatioAllows() {
         // The tablet itself: 2560x1600 (16:10).

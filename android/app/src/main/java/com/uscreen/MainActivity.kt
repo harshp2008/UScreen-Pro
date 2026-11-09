@@ -89,6 +89,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Takes a partial wake lock (up to 10 hours, not reference counted) so the CPU keeps running the sockets while the screen is off; failure is logged, not fatal.
+     */
     private fun acquireWakeLock() {
         if (wakeLock == null) {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -103,12 +106,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Releases the wake lock if it is held; errors are ignored. */
     private fun releaseWakeLock() {
         try {
             wakeLock?.let { if (it.isHeld) it.release() }
         } catch (_: Exception) {}
     }
 
+    /** Reads the keyguard state, dismisses an insecure keyguard, and re-applies the brightness policy. */
     private fun checkKeyguardState() {
         val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         val locked = km.isKeyguardLocked
@@ -143,9 +148,13 @@ class MainActivity : AppCompatActivity() {
         touchCapture?.sendWake()
     }
 
+    /**
+     * Listens for screen on/off and user-present broadcasts to re-check the keyguard; registered once.
+     */
     private fun registerLockReceiver() {
         if (lockReceiver != null) return
         val receiver = object : BroadcastReceiver() {
+            /** Re-checks the keyguard on screen off, screen on and user present. */
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF,
@@ -165,6 +174,7 @@ class MainActivity : AppCompatActivity() {
         lockReceiver = receiver
     }
 
+    /** Unregisters the lock receiver if registered. */
     private fun unregisterLockReceiver() {
         lockReceiver?.let {
             try { unregisterReceiver(it) } catch (_: Exception) {}
@@ -191,6 +201,9 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    /**
+     * Creates the activity: the theme is applied before `super.onCreate` so the first frame is already in the chosen scheme, then the preferences, the content and the connections are set up.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before super.onCreate, so the first frame is already in the chosen scheme.
         prefs = Prefs(this)
@@ -555,6 +568,9 @@ class MainActivity : AppCompatActivity() {
     /** True while video is flowing; only then is the picture pinned to landscape. */
     private var streaming = false
 
+    /**
+     * Sets the screen orientation: free while nothing streams (onboarding follows the device); once video flows, landscape with the camera up, camera down, or following the tilt sensor, per the setting.
+     */
     private fun applyOrientation() {
         if (!streaming) {
             // Onboarding and the waiting screen follow the device, so portrait works too.
@@ -578,6 +594,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Starts the tilt listener that switches between the two landscape orientations by sensor; does nothing when it is running or the sensor cannot detect orientation.
+     */
     @Suppress("DEPRECATION")
     private fun startTiltListener() {
         if (tiltListener != null) return
@@ -585,6 +604,7 @@ class MainActivity : AppCompatActivity() {
         val size = android.graphics.Point().also { display.getRealSize(it) }
         val naturalLandscape = OrientationPolicy.naturallyLandscape(size.x, size.y, display.rotation)
         tiltListener = object : android.view.OrientationEventListener(this) {
+            /** Requests the landscape orientation that matches the sensor reading. */
             override fun onOrientationChanged(orientation: Int) {
                 val want = OrientationPolicy.landscapeForSensor(orientation, naturalLandscape) ?: return
                 if (requestedOrientation != want) requestedOrientation = want
@@ -592,11 +612,13 @@ class MainActivity : AppCompatActivity() {
         }.also { if (it.canDetectOrientation()) it.enable() else tiltListener = null }
     }
 
+    /** Stops the tilt listener. */
     private fun stopTiltListener() {
         tiltListener?.disable()
         tiltListener = null
     }
 
+    /** Pauses: not in the foreground any more, so the brightness override is given back to the system. */
     override fun onPause() {
         super.onPause()
         // Never leave a brightness override behind when the window is not the one in front.
@@ -604,6 +626,7 @@ class MainActivity : AppCompatActivity() {
         if (::dimmer.isInitialized) dimmer.restoreSystem()
     }
 
+    /** Resumes: foreground again, re-checks the keyguard, re-applies the layout and pings the host. */
     override fun onResume() {
         super.onResume()
         inForeground = true
@@ -665,11 +688,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * A new launch intent (the host starts the app with the token, ports and host address as extras): applies them and restarts the connections.
+     */
     override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         intent?.let { applyIntentExtras(it, restart = true) }
     }
 
+    /**
+     * Applies the extras of the launch intent: session token, video and input ports and the host address; reconnects when the ports or the host changed and [restart] is true.
+     */
     private fun applyIntentExtras(intent: Intent, restart: Boolean) {
         val fromIntent = intent.getStringExtra("token")
         if (fromIntent != null) prefs.hostToken = fromIntent
@@ -719,6 +748,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Forwards stylus hover to the input link; other motion events are left to the system. */
     override fun onGenericMotionEvent(event: android.view.MotionEvent): Boolean {
         val w = window.decorView.width
         val h = window.decorView.height
@@ -728,6 +758,7 @@ class MainActivity : AppCompatActivity() {
         return super.onGenericMotionEvent(event)
     }
 
+    /** On window focus: re-applies the immersive layout and asks for the highest refresh rate. */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
@@ -736,12 +767,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Connects the input link and pings the host. */
     override fun onStart() {
         super.onStart()
         touchCapture?.connect()
         touchCapture?.sendPing()
     }
 
+    /**
+     * Stops: gives the brightness back and, unless `keepConnectedInBackground` is set, closes the video and input connections.
+     */
     override fun onStop() {
         super.onStop()
         inForeground = false
@@ -753,6 +788,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Destroys the activity: releases brightness, tilt listener, receiver and wake lock, and stops the streaming service.
+     */
     override fun onDestroy() {
         super.onDestroy()
         dimmer.restoreSystem()

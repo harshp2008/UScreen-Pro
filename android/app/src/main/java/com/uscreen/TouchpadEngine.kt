@@ -38,23 +38,33 @@ internal class TouchpadEngine(
     /** Called with a delay in milliseconds when [onTimer] must be called; replaces an earlier request. */
     private val schedule: (Long) -> Unit = {},
 ) {
+    /** Where the engine sends its results. All distances are millimetres on the tablet's touch area. */
     interface Output {
+        /** Move the pointer by this much (right and down are positive). */
         fun move(dxMm: Float, dyMm: Float)
 
         /** 0 = left, 1 = right, 2 = middle. */
         fun button(button: Int, down: Boolean)
+        /** Scroll by this much; the sign already includes the natural-scroll setting. */
         fun scroll(dxMm: Float, dyMm: Float)
 
         /** Change of the distance between two fingers; positive is fingers moving apart. */
         fun pinch(deltaMm: Float)
+        /** The two-finger pinch ended; release the zoom modifier. */
         fun pinchEnd()
+        /** A [fingers]-finger swipe in [direction], reported once per touch. */
         fun swipe(fingers: Int, direction: Swipe)
     }
 
+    /** Direction of a multi-finger swipe, as the fingers moved on the pad. */
     enum class Swipe { LEFT, RIGHT, UP, DOWN }
 
+    /**
+     * The gesture the current set of fingers has been classified as; `NONE` while it is undecided or no finger is down.
+     */
     private enum class Type { NONE, MOVE, SCROLL, PINCH, SWIPE }
 
+    /** A position in millimetres. */
     private class Pt(val x: Float, val y: Float)
 
     /** Content follows the fingers, as on a phone. */
@@ -134,8 +144,12 @@ internal class TouchpadEngine(
 
     // ---------------------------------------------------------------------------------------
 
+    /** The landing time in seconds of finger [id], or 0 if unknown. */
     private fun originTime(id: Int) = origin[id]?.first ?: 0.0
 
+    /**
+     * Handles one frame: updates the finger history (the last 8 frames, newest first), restarts the references when the set of fingers changes, runs the tap machine first (a button change wins over motion in the same frame), then classifies and emits the gesture.
+     */
     private fun process(hw: HardwareState, now: Double) {
         history.add(0, hw)
         while (history.size > 8) history.removeAt(history.size - 1)
@@ -180,6 +194,9 @@ internal class TouchpadEngine(
         lastHw = hw
     }
 
+    /**
+     * Turns a tap result into button events; a left tap whose first finger landed in the right-click zone becomes a right tap. Schedules the next evaluation when the tap machine asked for a timeout.
+     */
     private fun applyTap(res: TapToClick.Result, now: Double) {
         var down = res.down
         var up = res.up
@@ -198,17 +215,22 @@ internal class TouchpadEngine(
         if (res.timeout > 0) schedule((res.timeout * 1000).toLong() + 5L)
     }
 
+    /** Presses and releases the button for [bit] at once. */
     private fun click(bit: Int) {
         out.button(buttonIndex(bit), true)
         out.button(buttonIndex(bit), false)
     }
 
+    /** Output button index for a tap button bit: 0 left, 1 right, 2 middle. */
     private fun buttonIndex(bit: Int) = when (bit) {
         TapToClick.RIGHT -> 1
         TapToClick.MIDDLE -> 2
         else -> 0
     }
 
+    /**
+     * Whether [f] is in the right-click zone: the right half of the pad, within the bottom `ZONE_FRACTION` of its height. False when the pad size is unknown.
+     */
     private fun inRightZone(f: FingerState?): Boolean {
         if (f == null || padWidthMm <= 0f || padHeightMm <= 0f) return false
         return f.x >= padWidthMm / 2f && f.y >= padHeightMm * (1f - TouchpadShape.ZONE_FRACTION)
@@ -217,6 +239,9 @@ internal class TouchpadEngine(
     // ---------------------------------------------------------------------------------------
     // Gesture type (ImmediateInterpreter::UpdateCurrentGestureType)
 
+    /**
+     * Classifies the gesture (libgestures' UpdateCurrentGestureType) from the number of fingers, their movement and recent finger changes. A drag keeps moving; a pinch and a scroll stay what they are while two fingers remain; a swipe stays a swipe for three or four.
+     */
     private fun updateGesture(hw: HardwareState, now: Double) {
         val n = hw.fingers.size
         val before = gesture
@@ -302,6 +327,7 @@ internal class TouchpadEngine(
         return dot / size
     }
 
+    /** Forgets the pinch decision and its reference distance. */
     private fun resetPinch() {
         pinchGuessStart = -1.0
         pinchGuess = false
@@ -350,6 +376,9 @@ internal class TouchpadEngine(
         return false
     }
 
+    /**
+     * Whether the two fingers have moved apart or together consistently over the last few frames, based on the angle between their movements.
+     */
     private fun zoomFingersConsistent(id1: Int, id2: Int): Boolean {
         val curr = history[min(history.size - 1, PINCH_ZOOM_MIN_EVENTS)]
         val c1 = curr.get(id1) ?: return false
@@ -422,6 +451,9 @@ internal class TouchpadEngine(
     // ---------------------------------------------------------------------------------------
     // Output
 
+    /**
+     * Reports the largest per-finger movement since the last report as pointer movement; does nothing while a tap is still possible, and keeps accumulating until the movement reaches `MOVE_REPORT_MM`.
+     */
     private fun emitMove(hw: HardwareState, now: Double) {
         if (tap.tapInProgress) return // a tap has not been ruled out yet; the motion is kept, not lost
         var bestDx = 0f; var bestDy = 0f; var best = 0f
@@ -437,6 +469,9 @@ internal class TouchpadEngine(
         out.move(bestDx, bestDy)
     }
 
+    /**
+     * Scrolls by the average finger movement since the last report, signed by the natural-scroll setting.
+     */
     private fun emitScroll(hw: HardwareState) {
         var sx = 0f; var sy = 0f
         for (f in hw.fingers) {
@@ -450,6 +485,7 @@ internal class TouchpadEngine(
         out.scroll(sx / n * sign, sy / n * sign)
     }
 
+    /** Reports the change of finger distance since the last report while a pinch is locked. */
     private fun emitPinch(hw: HardwareState) {
         if (!(pinchLocked && pinchGuess) || hw.fingers.size != 2) return
         val d = hypot(hw.fingers[0].x - hw.fingers[1].x, hw.fingers[0].y - hw.fingers[1].y)
@@ -460,6 +496,9 @@ internal class TouchpadEngine(
         out.pinch(delta)
     }
 
+    /**
+     * Fires one swipe once the fingers' average travel from where the swipe began reaches `SWIPE_FIRE_MM`; the larger axis decides the direction.
+     */
     private fun emitSwipe(hw: HardwareState) {
         if (swipeDone) return
         val n = hw.fingers.size
@@ -478,12 +517,16 @@ internal class TouchpadEngine(
         out.swipe(n, dir)
     }
 
+    /** Distance in millimetres between two positions; 0 if either is missing. */
     private fun dist(a: Pt?, b: Pt?): Float =
         if (a == null || b == null) 0f else hypot(a.x - b.x, a.y - b.y)
 
+    /** The value with the larger magnitude. */
     private fun maxMag(a: Float, b: Float) = if (abs(a) > abs(b)) a else b
+    /** The value with the smaller magnitude. */
     private fun minMag(a: Float, b: Float) = if (abs(a) < abs(b)) a else b
 
+    /** Default thresholds taken from libgestures' immediate interpreter, in millimetres and seconds. */
     companion object {
         // libgestures defaults (immediate_interpreter.cc), millimetres and seconds
         const val CHANGE_TIMEOUT = 0.2

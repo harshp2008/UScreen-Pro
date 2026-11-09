@@ -8,6 +8,7 @@ import { Slider } from "./controls";
 
 export const TooltipProvider = UiTooltipProvider;
 
+/** A small info icon whose tooltip shows [text]. */
 export function InfoTip({ text }: { text: string }) {
   return (
     <Tooltip delayDuration={150}>
@@ -110,6 +111,9 @@ export function Tabs({
   );
 }
 
+/**
+ * The state of a per-device override row: whether it overrides the global value, how to change that, and the global value text shown while it inherits.
+ */
 export interface Override {
   enabled: boolean;
   onChange: (enabled: boolean) => void;
@@ -272,6 +276,9 @@ export function SliderRow({
   );
 }
 
+/**
+ * A row with a label, an optional tip and a switch; on device pages it can show the inherited global value instead.
+ */
 export function SwitchRow({
   label,
   tip,
@@ -292,6 +299,7 @@ export function SwitchRow({
   );
 }
 
+/** Page title with an optional subtitle and right-aligned actions. */
 export function PageHeader({ title, subtitle, children }: { title: string; subtitle?: string; children?: ReactNode }) {
   return (
     <div className="flex min-h-9 flex-wrap items-center justify-between gap-3">

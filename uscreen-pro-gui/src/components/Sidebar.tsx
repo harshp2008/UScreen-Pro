@@ -5,6 +5,9 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import type { AppConfig, ConnectedDevice, View } from "../lib/types";
 
+/**
+ * Props of the sidebar: current view, connected devices, config, daemon state and navigation callbacks.
+ */
 interface Props {
   view: View;
   devices: ConnectedDevice[];
@@ -20,6 +23,7 @@ interface Props {
   onAddDevice: (serial?: string) => void;
 }
 
+/** One row of the sidebar with an icon, label, optional badge and status. */
 function NavItem({
   selected,
   icon,
@@ -63,6 +67,7 @@ function NavItem({
   );
 }
 
+/** Small caption above a group of sidebar rows. */
 function SectionLabel({ children }: { children: ReactNode }) {
   return <div className="px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{children}</div>;
 }

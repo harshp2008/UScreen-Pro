@@ -106,6 +106,7 @@ export function Segmented({
   );
 }
 
+/** Single-line text input in the app's style; forwards value, change and key handlers. */
 export function TextInput({
   className,
   value,
@@ -184,6 +185,9 @@ export function NumberInput({
 }) {
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
+  /**
+   * Applies the typed number: a non-number reverts to the current value, anything else is clamped to the range and reported only when it changed.
+   */
   const commit = () => {
     const n = Number(draft);
     if (!Number.isFinite(n) || draft.trim() === "") {

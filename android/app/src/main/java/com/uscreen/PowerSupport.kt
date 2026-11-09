@@ -46,6 +46,9 @@ class ScreenDimmer(private val window: () -> Window?, private val context: Conte
     /** Give brightness back to the system setting. */
     fun restoreSystem() = setNow(WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE)
 
+    /**
+     * Animates the window brightness from its current level to [target] along [curve]; with a zero duration or no change it sets the level at once.
+     */
     private fun fadeTo(target: Float, durationMs: Long, curve: String) {
         val from = currentLevel()
         animator?.cancel()
@@ -73,6 +76,7 @@ class ScreenDimmer(private val window: () -> Window?, private val context: Conte
         }
     }
 
+    /** Writes [level] to the window's screen brightness attribute (a no-op without a window). */
     private fun apply(level: Float) {
         val w = window() ?: return
         val lp = w.attributes
@@ -125,8 +129,10 @@ class UScreenAdminReceiver : DeviceAdminReceiver()
 
 /** Locks the tablet for battery saver. */
 object ScreenLock {
+    /** The device-admin component of this app. */
     private fun component(context: Context) = ComponentName(context, UScreenAdminReceiver::class.java)
 
+    /** The device policy manager. */
     private fun dpm(context: Context) =
         context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
 

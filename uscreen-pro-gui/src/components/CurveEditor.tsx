@@ -11,6 +11,9 @@ const CUSTOM = "custom";
 const MISSING = "missing";
 const DEFAULT_BEZIER: Bezier = { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 };
 
+/**
+ * Props of the curve editor: the stored curve value, the saved presets and callbacks to change either.
+ */
 interface Props {
   label: string;
   tip?: string;
@@ -70,8 +73,12 @@ export function CurveEditor({ label, tip, value, onChange, presets, onPresetsCha
   const trimmed = name.trim();
   const clash = presets.some((p) => p.name.toLowerCase() === trimmed.toLowerCase());
 
+  /** Changes some control points of the custom curve and reports the new `bezier:` string. */
   const setPoint = (patch: Partial<Bezier>) => onChange(formatBezier({ ...bezier, ...patch }));
 
+  /**
+   * Saves the current custom curve under the typed name (replacing a preset of the same name, ignoring case) and selects it.
+   */
   const savePreset = () => {
     if (!trimmed) return;
     const b = clampBezier(bezier);

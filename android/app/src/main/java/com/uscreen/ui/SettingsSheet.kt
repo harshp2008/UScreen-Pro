@@ -205,6 +205,9 @@ private val curveLabels = mapOf(
     "exponential" to "Exponential",
 )
 
+/**
+ * Display label of a dim curve wire name; a `bezier:` curve is shown as 'Custom curve' and unknown names as they are.
+ */
 private fun curveText(wire: String) = curveLabels[wire] ?: if (wire.startsWith("bezier:")) "Custom curve" else wire
 
 /**

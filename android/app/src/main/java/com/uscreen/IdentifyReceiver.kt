@@ -23,6 +23,9 @@ import android.os.Build
  * only the shell and the system hold, so other apps cannot trigger it.
  */
 class IdentifyReceiver : BroadcastReceiver() {
+    /**
+     * Posts a high-importance notification titled `UScreen: <name>` and, for an ordered broadcast, reports `posted` or `blocked` (notifications off) as the result so the sender can tell.
+     */
     override fun onReceive(context: Context, intent: Intent) {
         val name = intent.getStringExtra("name")?.trim().takeUnless { it.isNullOrEmpty() } ?: Build.MODEL
         val nm = context.getSystemService(NotificationManager::class.java)
@@ -54,6 +57,7 @@ class IdentifyReceiver : BroadcastReceiver() {
         }
     }
 
+    /** Notification channel and notification ids. */
     companion object {
         private const val CHANNEL_ID = "uscreen_identify"
         private const val NOTIFICATION_ID = 2

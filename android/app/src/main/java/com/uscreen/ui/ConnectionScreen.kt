@@ -435,16 +435,22 @@ fun UScreenMain(
                 SurfaceView(ctx).apply {
                     holder.setFormat(android.graphics.PixelFormat.OPAQUE)
                     holder.addCallback(
+                        /**
+                         * Reports the video surface to the caller when it appears or changes and when it goes away, so the decoder is attached to a live surface only.
+                         */
                         object : SurfaceHolder.Callback {
+                            /** The surface exists: attach the decoder. */
                             override fun surfaceCreated(holder: SurfaceHolder) {
                                 onSurfaceReady(this@apply)
                             }
+                            /** The surface size or format changed: attach the decoder again. */
                             override fun surfaceChanged(
                                 holder: SurfaceHolder,
                                 format: Int, width: Int, height: Int
                             ) {
                                 onSurfaceReady(this@apply)
                             }
+                            /** The surface is going away: detach the decoder. */
                             override fun surfaceDestroyed(holder: SurfaceHolder) {
                                 onSurfaceDestroyed()
                             }

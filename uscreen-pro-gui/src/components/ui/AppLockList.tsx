@@ -15,6 +15,9 @@ export function AppLockList({ apps, onChange }: { apps: string[]; onChange: (app
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * Adds the typed application id to the list after checking its characters and that it is not already there; shows the problem otherwise.
+   */
   function add() {
     const id = draft.trim();
     if (!id) return;

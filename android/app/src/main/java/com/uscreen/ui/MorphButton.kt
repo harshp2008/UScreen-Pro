@@ -37,6 +37,9 @@ import androidx.compose.runtime.getValue
  * The polygons are rebuilt per measured size so the pill always has a half-height radius.
  */
 class PillToSquareShape(private val progress: Float) : Shape {
+    /**
+     * Builds the outline by morphing between the pill and the pressed polygon at [progress]; an empty size gives a plain rectangle.
+     */
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
         val w = size.width
         val h = size.height

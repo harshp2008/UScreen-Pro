@@ -5,6 +5,7 @@
 import { toast as sonner } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 
+/** Options of a toast; `id` replaces an existing toast with the same id. */
 type Opts = { id?: string };
 
 /** Thin wrapper over sonner keeping the call shape the app uses; errors stay up longer than other toasts. */

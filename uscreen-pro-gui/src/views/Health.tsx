@@ -5,10 +5,12 @@ import { Button } from "@/components/ui/button";
 import { PageHeader, Section } from "../components/ui/layout";
 import type { DaemonStatus } from "../lib/types";
 
+/** A green or red status dot. */
 function Dot({ ok }: { ok: boolean }) {
   return <span className={`size-2 shrink-0 rounded-full ${ok ? "bg-success" : "bg-destructive"}`} />;
 }
 
+/** A bordered info card with a caption. */
 function Card({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="min-w-0 rounded-lg border border-border bg-card p-3">

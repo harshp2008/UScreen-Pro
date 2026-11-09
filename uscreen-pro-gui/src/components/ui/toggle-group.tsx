@@ -14,6 +14,7 @@ const ToggleGroupContext = React.createContext<
   variant: "default",
 })
 
+/** Styled wrapper around Radix toggle group with this app's classes (shadcn/ui pattern). */
 const ToggleGroup = React.forwardRef<
   React.ElementRef<typeof ToggleGroupPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
@@ -32,6 +33,7 @@ const ToggleGroup = React.forwardRef<
 
 ToggleGroup.displayName = ToggleGroupPrimitive.Root.displayName
 
+/** Styled wrapper around Radix toggle group item with this app's classes (shadcn/ui pattern). */
 const ToggleGroupItem = React.forwardRef<
   React.ElementRef<typeof ToggleGroupPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> &

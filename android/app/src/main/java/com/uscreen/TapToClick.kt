@@ -32,6 +32,9 @@ import kotlin.math.hypot
  *  - every state that waits has a timer, so a still finger does not leave the button unpressed.
  */
 internal class TapToClick(private val cfg: Config = Config()) {
+    /**
+     * Thresholds of the tap state machine. Times are seconds, distances are millimetres. `tapTimeout` is how long a tap may last, `interTapTimeout` the wait for a second tap, `tapDragTimeout` the wait to continue a drag, `tapMoveDist` how far a finger may move and still tap, `tapMaxFingerAge` the oldest a finger may be and still count, `tapMinSeparation` the closest two fingers may be to count as separate, `closeEnough` how near a new finger must be to one already in the tap.
+     */
     class Config(
         val tapTimeout: Double = 0.25,
         val interTapTimeout: Double = 0.15,
@@ -47,6 +50,7 @@ internal class TapToClick(private val cfg: Config = Config()) {
         val dragLockEnable: Boolean = false,
     )
 
+    /** States of the tap machine, as in libgestures' diagram above. */
     enum class State { IDLE, FIRST_TAP_BEGAN, TAP_COMPLETE, SUBSEQUENT_TAP_BEGAN, DRAG, DRAG_RELEASE, DRAG_RETOUCH }
 
     /** What to do with the buttons; [timeout] is seconds until [update] should be called again, or -1. */
@@ -75,22 +79,28 @@ internal class TapToClick(private val cfg: Config = Config()) {
         val seen = HashSet<Int>()
         var fingersBelowMaxAge = true
 
+        /** Adds a touching finger to the tap unless it is too far from every finger already in it. */
         fun noteTouch(id: Int, fs: FingerState) {
             // A new finger has to be close enough to one already in the tap.
             if (touched.isNotEmpty() && touched.values.none { dist(it, fs) <= cfg.closeEnough }) return
             touched[id] = fs
         }
 
+        /** Marks a finger of the tap as lifted. */
         fun noteRelease(id: Int) {
             if (id in touched) released.add(id)
         }
 
+        /** Forgets a finger completely. */
         fun remove(id: Int) {
             touched.remove(id)
             released.remove(id)
             seen.remove(id)
         }
 
+        /**
+         * Applies one frame: drops dead fingers, adds new ones, marks lifted ones, and notes the fingers that are down; clears `fingersBelowMaxAge` when any finger is older than `tapMaxFingerAge` (`origin` gives each finger's landing time in seconds).
+         */
         fun update(
             hw: HardwareState,
             added: Set<Int>,
@@ -108,6 +118,7 @@ internal class TapToClick(private val cfg: Config = Config()) {
             }
         }
 
+        /** Empties the record for the next tap. */
         fun clear() {
             touched.clear()
             released.clear()
@@ -115,12 +126,16 @@ internal class TapToClick(private val cfg: Config = Config()) {
             fingersBelowMaxAge = true
         }
 
+        /** Whether any finger of the tap has moved more than [max] millimetres from where it landed. */
         fun moving(hw: HardwareState, max: Float): Boolean =
             touched.any { (id, start) ->
                 val fs = hw.get(id) ?: return@any false
                 dist(fs, start) > max
             }
 
+        /**
+         * Whether every finger moved no more than [maxSpeed] millimetres since the previous frame; fingers missing from either frame count as still.
+         */
         fun motionless(hw: HardwareState, prev: HardwareState?, maxSpeed: Float): Boolean =
             touched.keys.all { id ->
                 val fs = hw.get(id)
@@ -128,7 +143,9 @@ internal class TapToClick(private val cfg: Config = Config()) {
                 fs == null || p == null || dist(fs, p) <= maxSpeed
             }
 
+        /** True once any finger has touched. */
         fun tapBegan() = touched.isNotEmpty()
+        /** True once every finger that touched has lifted. */
         fun tapComplete() = touched.isNotEmpty() && touched.size == released.size
 
         /** Left, right or middle by the number of fingers; 0 when it is not a tap we answer. */
@@ -140,6 +157,7 @@ internal class TapToClick(private val cfg: Config = Config()) {
         }
     }
 
+    /** Returns to idle and forgets all fingers, as at the start of a gesture session. */
     fun reset() {
         state = State.IDLE
         stateEntered = -1.0
@@ -338,6 +356,7 @@ internal class TapToClick(private val cfg: Config = Config()) {
     /** Set by the engine: the finger that began this tap landed in the right-click zone. */
     var rightZoneHit = false
 
+    /** Moves to [s] and records [now] as the entry time, unless already in [s]. */
     private fun enter(s: State, now: Double) {
         if (state != s) {
             state = s
@@ -345,17 +364,25 @@ internal class TapToClick(private val cfg: Config = Config()) {
         }
     }
 
+    /**
+     * How long the machine may stay in [s] before the timeout acts: the tap timeout in the touching states, the inter-tap timeout after a completed tap, the drag timeout after a drag release.
+     */
     private fun timeoutFor(s: State): Double = when (s) {
         State.IDLE, State.FIRST_TAP_BEGAN, State.SUBSEQUENT_TAP_BEGAN, State.DRAG, State.DRAG_RETOUCH -> cfg.tapTimeout
         State.TAP_COMPLETE -> cfg.interTapTimeout
         State.DRAG_RELEASE -> cfg.tapDragTimeout
     }
 
+    /**
+     * Whether another finger is closer than `tapMinSeparation`, which would make [fs] part of a hand rather than a separate tap.
+     */
     private fun tooCloseToTap(hw: HardwareState, fs: FingerState): Boolean =
         hw.fingers.any { it.id != fs.id && dist(it, fs) < cfg.tapMinSeparation }
 
+    /** Euclidean distance in millimetres. */
     private fun dist(a: FingerState, b: FingerState) = hypot(a.x - b.x, a.y - b.y)
 
+    /** Button masks: none, left, right and middle. */
     companion object {
         const val NONE = 0
         const val LEFT = 1

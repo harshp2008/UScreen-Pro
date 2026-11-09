@@ -29,6 +29,9 @@ import java.util.concurrent.atomic.AtomicReference
  * second for the on-screen stats.
  */
 class VideoReceiver {
+    /**
+     * Defaults and the wire format of the video link: loopback host and port 8890 (adb reverse), the two MIME types, the packet types (config 0, frame 1, host shutdown 2), and the 5-byte frame header.
+     */
     companion object {
         const val HOST = "127.0.0.1"
         const val PORT = 8890
@@ -151,8 +154,10 @@ class VideoReceiver {
      * Ten milliseconds a step is monotonic, plausible, and still divides out.
      */
     private fun ptsFor(seq: Int): Long = (seq.toLong() and 0xFFFFFFFFL) * PTS_STEP_US
+    /** Inverse of `ptsFor`: the sequence number carried by a presentation timestamp. */
     private fun seqFromPts(pts: Long): Int = (pts / PTS_STEP_US).toInt()
 
+    /** The software decoder for the current codec, the last tier of decoder fallback. */
     private fun softwareDecoderName(): String =
         if (mimeType == MIME_TYPE_HEVC) "c2.android.hevc.decoder" else "c2.android.avc.decoder"
 
@@ -178,6 +183,7 @@ class VideoReceiver {
     private var splitCount = 0
     private var lastSplitLogNanos = 0L
 
+    /** Records when the decoder released frame [seq], searching the ring from the newest entry. */
     private fun noteReleased(seq: Int) {
         for (n in 0 until ARRIVAL_RING) {
             val i = (arrivalWrite - 1 - n + ARRIVAL_RING * 2) % ARRIVAL_RING
@@ -188,6 +194,9 @@ class VideoReceiver {
         }
     }
 
+    /**
+     * Records when frame [seq] finished arriving; the index wraps at a multiple of the ring size so the modulo lookups stay valid.
+     */
     private fun noteArrival(seq: Int) {
         val i = arrivalWrite % ARRIVAL_RING
         arrivalSeq[i] = seq
@@ -290,6 +299,9 @@ class VideoReceiver {
         releaseCodec()
     }
 
+    /**
+     * Creates and starts the decoder for the current codec and size on [surface], returning false if that failed; the decoder tier chooses between hardware low-latency, hardware and software.
+     */
     private fun setupCodec(surface: Surface): Boolean {
         var created: MediaCodec? = null
         try {
@@ -515,6 +527,9 @@ class VideoReceiver {
         }
     }
 
+    /**
+     * The receive loop: waits for a surface, honours the battery-saver pause, sets up the decoder (stepping down a tier after a failure), connects to the host, and reads packets until stopped.
+     */
     private suspend fun connectAndReceive() {
         while (isRunning) {
             try {
@@ -789,6 +804,7 @@ class VideoReceiver {
         }
     }
 
+    /** Rebuilds the decoder on the current surface, if there is a valid one. */
     private fun resetCodec() {
         synchronized(this) {
             releaseCodec()
@@ -799,6 +815,7 @@ class VideoReceiver {
         }
     }
 
+    /** Reads exactly [length] bytes into [buffer], throwing `EOFException` if the stream ends first. */
     private fun readExact(stream: InputStream, buffer: ByteArray, length: Int) {
         var offset = 0
         while (offset < length) {

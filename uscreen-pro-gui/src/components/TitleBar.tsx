@@ -13,6 +13,7 @@ import type { ThemePref } from "@/lib/theme";
 import appIcon from "../assets/uscreen-pro.svg";
 import { cn } from "@/lib/utils";
 
+/** A window control button (minimise, maximise, close); `danger` gives the close button its red hover. */
 function WindowButton({
   label,
   onClick,
@@ -63,6 +64,7 @@ export function TitleBar({ theme, onThemeChange }: { theme: ThemePref; onThemeCh
 
   useEffect(() => {
     if (!win) return;
+    /** Reads the maximised state of the window into state. */
     const sync = () => void win.isMaximized().then((m) => setMaximized(Boolean(m)));
     sync();
     const unlisten = win.onResized(sync);
