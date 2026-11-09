@@ -77,6 +77,7 @@ pub fn classify(text: &str) -> Option<(u64, SeqKind)> {
     if !text.contains("\"seq\"") {
         return None;
     }
+    /// The few fields of a message that classification needs; everything else in the JSON is ignored.
     #[derive(Deserialize)]
     struct Envelope {
         #[serde(rename = "type")]
@@ -97,11 +98,13 @@ pub fn classify(text: &str) -> Option<(u64, SeqKind)> {
     Some((seq, kind))
 }
 
+/// Tests for sequence filtering of out-of-order or duplicated input messages.
 #[cfg(test)]
 mod seq_tests {
     use super::*;
     use SeqKind::*;
 
+    /// Messages with increasing sequence numbers all pass.
     #[test]
     fn increasing_numbers_pass() {
         let mut f = SeqFilter::default();
@@ -109,6 +112,7 @@ mod seq_tests {
         assert_eq!(f.dropped, 0);
     }
 
+    /// A second DOWN with the same number is a duplicate and is dropped and counted.
     #[test]
     fn a_duplicate_down_is_dropped() {
         let mut f = SeqFilter::default();
@@ -117,6 +121,7 @@ mod seq_tests {
         assert_eq!(f.dropped, 1);
     }
 
+    /// Moves are never dropped, even when repeated or older than the newest number seen.
     #[test]
     fn moves_are_never_dropped_even_repeated_or_late() {
         let mut f = SeqFilter::default();
@@ -126,6 +131,7 @@ mod seq_tests {
         assert_eq!(f.dropped, 0);
     }
 
+    /// A DOWN that arrives after later moves still passes, so the drag is not lost.
     #[test]
     fn a_down_that_arrives_after_later_moves_still_starts_the_drag() {
         let mut f = SeqFilter::default();
@@ -135,6 +141,7 @@ mod seq_tests {
         assert!(f.accept(Some((8, Up))));
     }
 
+    /// A DOWN that arrives after its own UP is dropped, because pressing then would leave the button stuck.
     #[test]
     fn a_stale_down_after_its_up_is_dropped() {
         let mut f = SeqFilter::default();
@@ -143,6 +150,7 @@ mod seq_tests {
         assert!(f.accept(Some((8, Down))));
     }
 
+    /// An UP older than the newest DOWN is dropped.
     #[test]
     fn a_stale_up_after_a_newer_down_is_dropped() {
         let mut f = SeqFilter::default();
@@ -150,6 +158,7 @@ mod seq_tests {
         assert!(!f.accept(Some((3, Up))));
     }
 
+    /// Messages with no sequence number are always accepted.
     #[test]
     fn messages_without_a_number_always_pass() {
         let mut f = SeqFilter::default();
@@ -157,6 +166,7 @@ mod seq_tests {
         assert!(f.accept(None) && f.accept(None));
     }
 
+    /// `classify` maps message type and action to DOWN, UP, MOVE or other.
     #[test]
     fn classify_reads_type_and_action() {
         assert_eq!(
@@ -183,6 +193,7 @@ mod seq_tests {
         assert_eq!(classify(r#"{"type":"pen","note":"seq","action":0}"#), None);
     }
 
+    /// Frame acknowledgements (`rendered`) carry the video frame counter in `seq`, not an input number, and must never move the filter.
     #[test]
     fn frame_acks_are_not_input_and_never_move_the_filter() {
         // `rendered` carries the video frame counter in `seq`; it used to be taken for an input

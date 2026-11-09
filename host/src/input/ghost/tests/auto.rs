@@ -6,6 +6,7 @@ use super::super::*;
 use super::support::*;
 use std::time::Duration;
 
+/// Mouse route (Android hover, range exit just before the touch-down, down, moves, up): only the pointer device is written, position first, then one press held until the lift.
 #[test]
 fn auto_mouse_route_stroke_is_pointer_only_position_first_then_one_press_held_to_the_lift() {
     // Android: hover, range exit just before the touch-down, down, moves, up. Unknown focus is
@@ -59,6 +60,7 @@ fn auto_mouse_route_stroke_is_pointer_only_position_first_then_one_press_held_to
     assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
 }
 
+/// Art route (focus in a drawing app): the tablet device gets the stroke with real pressure and the pointer never clicks.
 #[test]
 fn auto_art_route_stroke_is_the_tablet_with_real_pressure_and_no_click() {
     let (mut d, pp, qp) = rig();
@@ -91,6 +93,7 @@ fn auto_art_route_stroke_is_the_tablet_with_real_pressure_and_no_click() {
     assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
 }
 
+/// On the art route the eraser end of the pen is written with the rubber tool.
 #[test]
 fn auto_art_route_eraser_end_draws_with_the_rubber_tool() {
     let (mut d, pp, qp) = rig();
@@ -102,6 +105,7 @@ fn auto_art_route_eraser_end_draws_with_the_rubber_tool() {
     assert!(has(&pen, (EV_KEY, BTN_TOOL_RUBBER, 1)) && has(&pen, (EV_KEY, BTN_TOUCH, 1)));
 }
 
+/// On the mouse route the eraser end never produces a click.
 #[test]
 fn auto_mouse_route_eraser_end_never_clicks() {
     let (mut d, pp, qp) = rig();
@@ -113,6 +117,7 @@ fn auto_mouse_route_eraser_end_never_clicks() {
     assert!(left_events(&ptr).is_empty());
 }
 
+/// Focus moving to a drawing app and back while the button is down neither cuts the stroke nor moves the cursor.
 #[test]
 fn auto_a_focus_change_in_mid_stroke_neither_cuts_nor_moves_the_stroke() {
     // Chrome (mouse) stroke, the focus flips to Krita and back while the button is down.
@@ -167,6 +172,7 @@ fn auto_a_focus_change_in_mid_stroke_neither_cuts_nor_moves_the_stroke() {
     assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
 }
 
+/// A second DOWN while a drag is in progress is treated as a move, not as a release followed by a new press.
 #[test]
 fn auto_a_repeated_down_in_mid_drag_is_a_move_not_a_release_and_press() {
     let (mut d, pp, qp) = rig();
@@ -189,6 +195,7 @@ fn auto_a_repeated_down_in_mid_drag_is_a_move_not_a_release_and_press() {
     );
 }
 
+/// A DOWN arriving after a lost UP (past `AUTO_STALE_STROKE`) first closes the old stroke, then starts the new one.
 #[test]
 fn auto_a_down_after_a_lost_up_closes_the_old_stroke_first() {
     let (mut d, pp, qp) = rig();
@@ -206,6 +213,7 @@ fn auto_a_down_after_a_lost_up_closes_the_old_stroke_first() {
     );
 }
 
+/// A MOVE with no preceding DOWN starts the stroke, once it leaves the click slop.
 #[test]
 fn auto_a_move_whose_down_was_lost_starts_the_stroke() {
     let (mut d, pp, qp) = rig();
@@ -219,6 +227,7 @@ fn auto_a_move_whose_down_was_lost_starts_the_stroke() {
     assert_eq!(left_events(&ptr), vec![1, 0]);
 }
 
+/// A MOVE arriving just after the lift (out of order) does not press again.
 #[test]
 fn auto_a_straggler_move_right_after_the_lift_does_not_press_again() {
     let (mut d, pp, qp) = rig();
@@ -231,6 +240,7 @@ fn auto_a_straggler_move_right_after_the_lift_does_not_press_again() {
     assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
 }
 
+/// A range exit in the middle of a pressed stroke does not release the button.
 #[test]
 fn auto_a_range_exit_inside_a_stroke_does_not_let_go() {
     let (mut d, pp, qp) = rig();
@@ -247,6 +257,7 @@ fn auto_a_range_exit_inside_a_stroke_does_not_let_go() {
     assert_eq!(left_events(&ptr), vec![1, 0]);
 }
 
+/// Barrel button held, range exit, and a DOWN within a few milliseconds: the right button stays held for a right-drag.
 #[test]
 fn auto_range_exit_before_the_tip_keeps_a_held_barrel_button() {
     // Android: barrel held, hover exit, DOWN within a few ms: a right-drag.
@@ -269,6 +280,7 @@ fn auto_range_exit_before_the_tip_keeps_a_held_barrel_button() {
     done(&[&pp, &qp]);
 }
 
+/// A range exit that lasts past the grace period leaves both devices idle, including the right button.
 #[test]
 fn auto_range_exit_that_lasts_leaves_both_devices_idle_including_the_right_button() {
     let (mut d, pp, qp) = rig();
@@ -283,6 +295,7 @@ fn auto_range_exit_that_lasts_leaves_both_devices_idle_including_the_right_butto
     assert!(d.auto_exit_at.is_none());
 }
 
+/// A pen UP releases the button on both devices.
 #[test]
 fn auto_pen_up_lets_go_on_both_devices() {
     let (mut d, pp, qp) = rig();
@@ -297,6 +310,7 @@ fn auto_pen_up_lets_go_on_both_devices() {
     assert!(!d.pen_proximity);
 }
 
+/// Hover is written to the pointer on the mouse route; the tablet tool is put in range only on the art route.
 #[test]
 fn auto_hover_follows_the_route_the_tool_in_range_only_on_the_art_route() {
     let (mut d, pp, qp) = rig();
@@ -311,6 +325,7 @@ fn auto_hover_follows_the_route_the_tool_in_range_only_on_the_art_route() {
     done(&[&pp, &qp]);
 }
 
+/// The barrel button maps to the right button on the mouse route.
 #[test]
 fn auto_barrel_button_follows_the_route() {
     let (mut d, pp, qp) = rig();
@@ -327,6 +342,7 @@ fn auto_barrel_button_follows_the_route() {
     );
 }
 
+/// Wobble inside the click-slop zone never reaches the pointer, and the lift releases at the press point.
 #[test]
 fn slop_a_wobble_inside_the_zone_never_reaches_the_pointer_and_the_lift_releases_at_the_press_point(
 ) {
@@ -348,6 +364,7 @@ fn slop_a_wobble_inside_the_zone_never_reaches_the_pointer_and_the_lift_releases
     assert_eq!(left_events(&ptr), vec![1, 0], "a clean click");
 }
 
+/// Once a stroke moves out of the slop zone (about 12 mm in the test) the pointer follows it for the rest of the stroke.
 #[test]
 fn slop_leaving_the_zone_releases_the_pointer_for_the_rest_of_the_stroke() {
     let (mut d, pp, qp) = rig();
@@ -363,6 +380,7 @@ fn slop_leaving_the_zone_releases_the_pointer_for_the_rest_of_the_stroke() {
     assert!(!x.contains(&5100), "the wobble inside the zone was held");
 }
 
+/// The click-slop zone is not applied on the art route, so small moves reach the tablet.
 #[test]
 fn slop_does_not_apply_on_the_art_route() {
     let (mut d, pp, qp) = rig();
@@ -375,6 +393,7 @@ fn slop_does_not_apply_on_the_art_route() {
     assert!(has(&pen, (EV_ABS, ABS_X, 5060)), "and so does the tablet");
 }
 
+/// The slop anchor is cleared when the stroke ends.
 #[test]
 fn slop_is_cleared_when_the_stroke_ends() {
     let (mut d, pp, qp) = rig();
@@ -386,6 +405,7 @@ fn slop_is_cleared_when_the_stroke_ends() {
     done(&[&pp, &qp]);
 }
 
+/// A resting pen with only noise-sized movement is parked after `park_after`: it stops writing to the cursor.
 #[test]
 fn auto_a_resting_pen_is_parked_and_stops_touching_the_cursor() {
     let (mut d, pp, qp) = rig();
@@ -406,6 +426,7 @@ fn auto_a_resting_pen_is_parked_and_stops_touching_the_cursor() {
     );
 }
 
+/// On the art route a parked pen leaves range, then wakes and re-enters on clear movement.
 #[test]
 fn auto_a_parked_pen_on_the_art_route_leaves_range_and_wakes_on_clear_movement() {
     let (mut d, pp, qp) = rig();
@@ -426,6 +447,7 @@ fn auto_a_parked_pen_on_the_art_route_leaves_range_and_wakes_on_clear_movement()
     assert!(has(&ptr, (EV_ABS, ABS_X, 9000)));
 }
 
+/// A touch-down from a parked pen works and is delivered.
 #[test]
 fn auto_touching_down_works_from_a_parked_pen() {
     let (mut d, pp, qp) = rig();
@@ -447,6 +469,7 @@ fn auto_touching_down_works_from_a_parked_pen() {
 
 // ---- Long press (pen menu) ----
 
+/// Test rig with a menu channel attached and a 60 ms long-press time; returns the devices, both capture files and the channel receiver.
 fn menu_rig() -> (
     InjectDevices,
     std::path::PathBuf,
@@ -460,6 +483,7 @@ fn menu_rig() -> (
     (d, pp, qp, rx)
 }
 
+/// A still tip held for the long-press time asks the menu runner to open, while the finger stays down, and no click is sent when the menu is shown.
 #[test]
 fn long_press_a_still_tip_asks_for_the_menu_while_it_is_down_and_never_clicks_when_it_is_shown() {
     let (mut d, pp, qp, rx) = menu_rig();
@@ -486,6 +510,7 @@ fn long_press_a_still_tip_asks_for_the_menu_while_it_is_down_and_never_clicks_wh
     assert!(!xs(&ptr).contains(&9000), "and the cursor stays put");
 }
 
+/// A tap elsewhere after the menu opened asks the runner to close it; the touch that opened it does not.
 #[test]
 fn a_tap_elsewhere_after_the_menu_opened_asks_for_it_to_close_but_the_opening_touch_does_not() {
     let (mut d, pp, qp, rx) = menu_rig();
@@ -506,6 +531,7 @@ fn a_tap_elsewhere_after_the_menu_opened_asks_for_it_to_close_but_the_opening_to
     done(&[&pp, &qp]);
 }
 
+/// If the runner declines the menu, the held-back press is delivered and the hold continues as a normal press.
 #[test]
 fn long_press_declined_delivers_the_held_back_press_and_the_hold_goes_on() {
     let (mut d, pp, qp, rx) = menu_rig();
@@ -527,6 +553,7 @@ fn long_press_declined_delivers_the_held_back_press_and_the_hold_goes_on() {
     assert!(xs(&ptr).contains(&9000));
 }
 
+/// A lift before the runner answers is clicked late only if the menu was declined (not shown).
 #[test]
 fn long_press_a_lift_before_the_answer_is_clicked_late_only_if_declined() {
     for (shown, pressed) in [(false, true), (true, false)] {
@@ -543,6 +570,7 @@ fn long_press_a_lift_before_the_answer_is_clicked_late_only_if_declined() {
     }
 }
 
+/// Without a menu runner a long press just clicks.
 #[test]
 fn long_press_without_a_runner_just_clicks() {
     let (mut d, pp, qp) = rig(); // no menu_tx
@@ -557,6 +585,7 @@ fn long_press_without_a_runner_just_clicks() {
     assert_eq!(left_events(&ptr), vec![1, 0]);
 }
 
+/// A tap presses and releases together at the lift, at the place where the pen landed, not where it wobbled.
 #[test]
 fn a_tap_presses_and_releases_together_at_the_lift_where_it_landed() {
     let (mut d, pp, qp) = rig();
@@ -570,6 +599,7 @@ fn a_tap_presses_and_releases_together_at_the_lift_where_it_landed() {
     assert!(!xs(&ptr).contains(&5060), "released where the tip landed");
 }
 
+/// A short tap never asks for the menu.
 #[test]
 fn long_press_a_short_tap_does_not_ask() {
     let (mut d, pp, qp, rx) = menu_rig();
@@ -579,6 +609,7 @@ fn long_press_a_short_tap_does_not_ask() {
     assert!(rx.try_recv().is_err());
 }
 
+/// A hold that goes on to drag out of the slop zone never asks for the menu.
 #[test]
 fn long_press_a_hold_that_then_drags_does_not_ask() {
     let (mut d, pp, qp, rx) = menu_rig();
@@ -590,6 +621,7 @@ fn long_press_a_hold_that_then_drags_does_not_ask() {
     assert!(rx.try_recv().is_err());
 }
 
+/// The art route never asks for the menu.
 #[test]
 fn long_press_never_asks_on_the_art_route() {
     let (mut d, pp, qp, rx) = menu_rig();
@@ -602,6 +634,7 @@ fn long_press_never_asks_on_the_art_route() {
 
 // ---- Click hold: a tap keeps the button down for a natural time ----
 
+/// A tap keeps the button down until `click_hold` is up (60 ms in the test).
 #[test]
 fn click_hold_a_tap_keeps_the_button_down_until_the_hold_time_is_up() {
     let (mut d, pp, qp) = rig();
@@ -627,6 +660,7 @@ fn click_hold_a_tap_keeps_the_button_down_until_the_hold_time_is_up() {
     assert_eq!(left_events(&ptr), vec![1, 0]);
 }
 
+/// The cursor does not move while a tap's button is still held.
 #[test]
 fn click_hold_the_cursor_does_not_move_while_a_tap_is_held() {
     let (mut d, pp, qp) = rig();
@@ -651,6 +685,7 @@ fn click_hold_the_cursor_does_not_move_while_a_tap_is_held() {
     );
 }
 
+/// A new touch releases the previous tap's held button before moving.
 #[test]
 fn click_hold_a_new_touch_releases_the_previous_tap_before_moving() {
     let (mut d, pp, qp) = rig();

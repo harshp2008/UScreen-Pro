@@ -46,6 +46,7 @@ use tracing::{info, warn};
 const READY_PROBE_MAX: Duration = Duration::from_millis(500);
 /// Consecutive fast probes the gate wants before declaring the shell idle.
 const READY_PROBES_NEEDED: u32 = 2;
+/// Pause between two readiness probes of the shell.
 const READY_PROBE_GAP: Duration = Duration::from_millis(250);
 /// Never proceed on a sluggish-but-answering shell before this long.
 const READY_SLOW_FALLBACK: Duration = Duration::from_secs(180);
@@ -54,12 +55,16 @@ const READY_SLOW_FALLBACK: Duration = Duration::from_secs(180);
 const HOTPLUG_MIN_GAP: Duration = Duration::from_secs(3);
 /// More than this many changes inside `HOTPLUG_WINDOW` triggers a cool-down.
 const HOTPLUG_MAX_PER_WINDOW: usize = 4;
+/// Sliding window in which `HOTPLUG_MAX_PER_WINDOW` topology changes are allowed.
 const HOTPLUG_WINDOW: Duration = Duration::from_secs(60);
+/// How long hotplugs are held back once the window limit is exceeded.
 const HOTPLUG_COOLDOWN: Duration = Duration::from_secs(30);
 
+/// How often the watchdog samples the compositor's responsiveness.
 const WATCHDOG_PERIOD: Duration = Duration::from_secs(1);
 /// A probe that takes longer than this (or times out) is a stall sample.
 const STALL_PROBE: Duration = Duration::from_millis(2000);
+/// A probe that has not answered after this long is abandoned and counted as a stall sample.
 const PROBE_TIMEOUT: Duration = Duration::from_secs(3);
 /// Consecutive stall samples that trip the breaker.
 const STALLS_TO_TRIP: u32 = 3;
@@ -304,6 +309,7 @@ pub fn spawn_watchdog(
     (trip_rx, ok_rx)
 }
 
+/// Tests for the boot verdict, the hotplug limiter, the stall detector and the breaker, using a private fake session bus where D-Bus is needed.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -311,6 +317,7 @@ mod tests {
     /// Tests below mutate process-wide environment (bus address, desktop name).
     static ENV: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
+    /// Builds a guard record in `state` stamped with `boot`; zero timestamp and strikes.
     fn rec(state: RunState, boot: &str) -> GuardRecord {
         GuardRecord {
             boot_id: boot.into(),
@@ -320,23 +327,27 @@ mod tests {
         }
     }
 
+    /// With no record on disk the verdict is `Normal`.
     #[test]
     fn no_history_is_normal() {
         assert_eq!(evaluate(None, "b2"), Verdict::Normal);
     }
 
+    /// A display still marked up when a different boot starts means the last session ended in a crash or hard reset, so the next start is safe mode.
     #[test]
     fn display_up_on_a_previous_boot_means_safe_mode() {
         let r = rec(RunState::DisplayUp, "b1");
         assert!(matches!(evaluate(Some(&r), "b2"), Verdict::Safe(_)));
     }
 
+    /// The same boot id means only the daemon restarted, which is not a reason for safe mode.
     #[test]
     fn display_up_in_the_same_boot_is_just_a_daemon_restart() {
         let r = rec(RunState::DisplayUp, "b1");
         assert_eq!(evaluate(Some(&r), "b1"), Verdict::Normal);
     }
 
+    /// Runs that ended healthy or were stopped cleanly never cause safe mode.
     #[test]
     fn healthy_and_stopped_runs_never_trigger_safe_mode() {
         for s in [RunState::Healthy, RunState::Stopped] {
@@ -344,6 +355,7 @@ mod tests {
         }
     }
 
+    /// A tripped breaker forces safe mode on the next start, even within the same boot.
     #[test]
     fn a_tripped_run_is_safe_even_within_the_same_boot() {
         let r = rec(RunState::Tripped, "b1");
@@ -351,6 +363,7 @@ mod tests {
         assert!(matches!(evaluate(Some(&r), "b2"), Verdict::Safe(_)));
     }
 
+    /// The record survives a JSON round trip and the state is written as `display_up` on disk.
     #[test]
     fn record_round_trips_through_json() {
         let r = rec(RunState::DisplayUp, "abc");
@@ -359,6 +372,7 @@ mod tests {
         assert!(serde_json::to_string(&r).unwrap().contains("display_up"));
     }
 
+    /// Hotplugs are spaced by the minimum gap; once the per-window cap is reached the delay runs to the cool-down measured from the last change, and history is forgotten when the window has passed.
     #[test]
     fn hotplugs_are_spaced_and_capped() {
         let mut l = HotplugLimiter::default();
@@ -383,6 +397,7 @@ mod tests {
             .is_zero());
     }
 
+    /// Stall samples must be consecutive to trip the breaker; a fast or missing sample resets the count.
     #[test]
     fn breaker_trips_only_on_consecutive_stalls() {
         let mut d = StallDetector::default();
@@ -444,14 +459,17 @@ mod tests {
             let _ = self.0.wait();
         }
     }
+    /// Fake `org.gnome.Mutter.DisplayConfig` service whose `GetCurrentState` answers after a fixed delay, to exercise the probe timeouts.
     struct FakeConfig(Duration);
     #[zbus::interface(name = "org.gnome.Mutter.DisplayConfig")]
     impl FakeConfig {
+        /// Answers after the configured delay with an empty result.
         async fn get_current_state(&self) -> u32 {
             tokio::time::sleep(self.0).await;
             0
         }
     }
+    /// Starts a private session `dbus-daemon` with a fake display-config service answering after `delay`; returns `None` when `dbus-daemon` is not installed so the test is skipped.
     async fn fake_bus(delay: Duration) -> Option<(FakeShell, zbus::Connection, String)> {
         use std::io::BufRead;
         let mut child = std::process::Command::new("dbus-daemon")
@@ -540,6 +558,7 @@ mod tests {
         assert!(lat.iter().all(|s| s.is_some_and(|d| d < STALL_PROBE)));
     }
 
+    /// The first two trips return the 60 s and 300 s back-off from `TRIP_BACKOFF`; the third returns `None` and latches the display off.
     #[test]
     fn breaker_backoff_then_latch() {
         let mut g = Guard {

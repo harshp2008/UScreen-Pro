@@ -19,9 +19,11 @@ use tracing::{info, warn};
 
 /// How many APK installs may run at once; more than this saturates adb and slows every install.
 pub const MAX_CONCURRENT: usize = 2;
+/// Upper bound for one `adb install` attempt.
 const INSTALL_TIMEOUT: Duration = Duration::from_secs(180);
 /// A finished job stays visible this long so the GUI's 3 s poll is guaranteed to see it.
 const DONE_VISIBLE: Duration = Duration::from_secs(20);
+/// How long a failed job stays visible for the GUI to show.
 const FAILED_VISIBLE: Duration = Duration::from_secs(120);
 /// An automatic update that did not fix the mismatch is not retried for this long, so a stale
 /// APK on disk can never put a device into an install loop.
@@ -50,6 +52,7 @@ impl State {
     }
 }
 
+/// State of one device's install job: its phase, a human-readable detail and when the phase began.
 #[derive(Clone, Debug)]
 struct Job {
     state: State,
@@ -59,16 +62,19 @@ struct Job {
 
 /// The install jobs, by device.
 fn jobs() -> &'static Mutex<HashMap<String, Job>> {
+    /// Map from device key to its job, created on first use.
     static JOBS: OnceLock<Mutex<HashMap<String, Job>>> = OnceLock::new();
     JOBS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
 /// Limits how many installs run at once.
 fn semaphore() -> &'static Semaphore {
+    /// Process-wide limit on concurrent installs (`MAX_CONCURRENT`).
     static SEM: OnceLock<Semaphore> = OnceLock::new();
     SEM.get_or_init(|| Semaphore::new(MAX_CONCURRENT))
 }
 
+/// Number of installs running now, for log lines only.
 static RUNNING: AtomicUsize = AtomicUsize::new(0);
 
 /// Record the state of a device's install job.
@@ -300,6 +306,7 @@ pub fn enqueue(req: Request) -> bool {
 
 /// When each device was last installed to automatically, to avoid retry loops.
 fn last_auto() -> &'static Mutex<HashMap<String, Instant>> {
+    /// Per-device time of the last automatic update, created on first use.
     static LAST: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
     LAST.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -336,12 +343,14 @@ pub async fn check_on_connect(req: Request) -> Option<(String, String)> {
     Some((shown, host))
 }
 
+/// Tests for parsing the installed version and for the concurrency limit.
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::atomic::AtomicUsize;
     use std::sync::Arc;
 
+    /// The version name is read from `dumpsys package` output, and a missing package gives `None`.
     #[test]
     fn reads_version_name_from_dumpsys() {
         let text = "Packages:\n  Package [com.uscreen] (abc):\n    versionCode=22 minSdk=29\n    versionName=82b9705-dirty\n    splits=[base]\n";
@@ -355,6 +364,7 @@ mod tests {
     /// Three devices need an update: two run together, the third waits until one finishes.
     #[tokio::test]
     async fn at_most_two_installs_run_and_the_third_waits() {
+        /// A test-local semaphore with the production limit, so tests do not share the real one.
         static SEM: OnceLock<Semaphore> = OnceLock::new();
         let sem: &'static Semaphore = SEM.get_or_init(|| Semaphore::new(MAX_CONCURRENT));
         let live = Arc::new(AtomicUsize::new(0));

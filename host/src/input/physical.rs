@@ -16,6 +16,7 @@ use evdev::{AbsoluteAxisCode, Device, EventType};
 use std::os::fd::AsRawFd;
 use std::time::Duration;
 
+/// Used when the tablet's `EVIOCGABS` cannot be read: 15-bit full scale (0..=32767) for X and Y.
 const ABS_RANGE_FALLBACK: i32 = 32767;
 /// XP-Pen / Huion tablets report tilt as raw units over ±127 for a ±60° pen.
 const TILT_FULL_SCALE_DEG: f64 = 60.0;
@@ -31,6 +32,7 @@ pub(super) struct AbsRange {
 }
 
 impl Default for AbsRange {
+    /// Defaults for a tablet whose ranges could not be read: 32767 on both axes, pressure 8191, tilt 60° over ±127 raw units.
     fn default() -> Self {
         Self {
             x_max: ABS_RANGE_FALLBACK,
@@ -179,6 +181,7 @@ impl PhysState {
     }
 }
 
+/// Linux key code of the pen's second barrel button (`BTN_STYLUS2`).
 const BTN_STYLUS2: u16 = 0x14c;
 
 /// Whether a device with these capabilities is a pen tablet's pen interface. A tablet exposes several
@@ -401,10 +404,12 @@ pub fn tablet_rules(vid: u16, pid: u16) -> (String, String) {
     (access, hide)
 }
 
+/// Tests of the physical-pen state machine: report assembly on `SYN_REPORT`, scaling and device selection.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A pen state with a 1000 x 500 x 8000 range and 0.5 degrees per tilt unit.
     fn st() -> PhysState {
         PhysState::new(AbsRange {
             x_max: 1000,
@@ -414,14 +419,17 @@ mod tests {
         })
     }
 
+    /// Sends `SYN_REPORT` and returns the samples it completes.
     fn syn(s: &mut PhysState) -> Vec<PenSample> {
         s.feed(EV_SYN, SYN_REPORT, 0)
     }
 
+    /// The action codes of `v`, in order.
     fn actions(v: &[PenSample]) -> Vec<u8> {
         v.iter().map(|s| s.action).collect()
     }
 
+    /// A full stroke yields hover, down, moves, up, hover, then out-of-range, in that order, one sample per report.
     #[test]
     fn a_stroke_is_hover_down_moves_up_hover_then_out_of_range() {
         let mut s = st();
@@ -457,6 +465,7 @@ mod tests {
         assert!(syn(&mut s).is_empty(), "nothing more once out of range");
     }
 
+    /// Position, pressure and tilt come out scaled to the virtual pen's range.
     #[test]
     fn positions_pressure_and_tilt_are_scaled_to_the_virtual_pen() {
         let mut s = st();
@@ -470,6 +479,7 @@ mod tests {
         assert_eq!((out[0].tilt_x, out[0].tilt_y), (-30, 90));
     }
 
+    /// Touch in the very report that brings the pen into range yields a hover sample first and then the down.
     #[test]
     fn touching_in_the_report_that_enters_range_hovers_first() {
         let mut s = st();
@@ -479,6 +489,7 @@ mod tests {
         assert_eq!(actions(&syn(&mut s)), vec![3, 0]);
     }
 
+    /// If the pen leaves range while touching, the tip is lifted and held buttons are released before the out-of-range sample.
     #[test]
     fn leaving_range_while_touching_lifts_and_releases_buttons_first() {
         let mut s = st();
@@ -496,6 +507,7 @@ mod tests {
         assert_eq!(actions(&syn(&mut s)), vec![3]);
     }
 
+    /// The eraser end is flagged on the hover sample.
     #[test]
     fn the_eraser_end_is_flagged() {
         let mut s = st();
@@ -508,6 +520,7 @@ mod tests {
         assert_eq!(actions(&out), vec![4]);
     }
 
+    /// Only the pen interface is selected, not the tablet's mouse-like or express-key nodes, and never our virtual devices.
     #[test]
     fn only_the_pen_interface_of_a_tablet_is_picked() {
         let abs = [ABS_X, ABS_Y, ABS_PRESSURE, ABS_TILT_X, ABS_TILT_Y];
@@ -541,6 +554,7 @@ mod tests {
         assert!(!is_pen_tablet("UScreen Pen", UINPUT_VENDOR, &abs, &keys));
     }
 
+    /// `vendor:product` text parses case-insensitively and rejects empty or non-hex input.
     #[test]
     fn vendor_product_ids_parse() {
         assert_eq!(parse_vid_pid("28bd:0931"), Some((0x28bd, 0x0931)));
@@ -549,6 +563,7 @@ mod tests {
         assert_eq!(parse_vid_pid("xx:yy"), None);
     }
 
+    /// The udev rule text uses the lowercase four-digit hex ids.
     #[test]
     fn udev_rules_name_the_ids_in_lowercase_hex() {
         let (access, hide) = tablet_rules(0x28bd, 0x0931);

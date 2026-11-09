@@ -32,6 +32,7 @@ pub(super) struct StillCfg {
 }
 
 impl Default for StillCfg {
+    /// Defaults: park after 300 ms within 1.5 mm, wake beyond 5 mm, 2 mm click slop, 500 ms long press, 90 ms click hold.
     fn default() -> Self {
         Self {
             park_radius_mm: 1.5,
@@ -57,6 +58,7 @@ pub(super) enum HoverVerdict {
     Wake,
 }
 
+/// Tracks whether a hovering pen is resting. `anchor` is where the current still period began (normalised 0..65535 position), `since` when it began, `parked` whether the cursor was released.
 #[derive(Debug, Default)]
 pub(super) struct HoverFilter {
     anchor: Option<(i32, i32)>,
@@ -123,10 +125,12 @@ impl HoverFilter {
     }
 }
 
+/// Tests for hover parking, using a 266 x 166 mm tablet as the physical size.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Physical size in millimetres (width, height) assumed by the tests.
     const MM: (f64, f64) = (266.0, 166.0);
 
     /// Units for `mm` millimetres along x.
@@ -134,10 +138,12 @@ mod tests {
         (mm * SPAN / MM.0) as i32
     }
 
+    /// `t0` plus `n` milliseconds.
     fn ms(t0: Instant, n: u64) -> Instant {
         t0 + Duration::from_millis(n)
     }
 
+    /// A still pen is followed at first, parked after `park_after` of jitter inside the radius, and its samples are then skipped.
     #[test]
     fn a_still_pen_is_followed_then_parked_then_skipped() {
         let (mut f, cfg, t0) = (HoverFilter::default(), StillCfg::default(), Instant::now());
@@ -167,6 +173,7 @@ mod tests {
         );
     }
 
+    /// A parked pen wakes when it moves beyond the wake radius and is then followed again.
     #[test]
     fn a_parked_pen_wakes_on_clear_movement_and_is_followed_again() {
         let (mut f, cfg, t0) = (HoverFilter::default(), StillCfg::default(), Instant::now());
@@ -186,6 +193,7 @@ mod tests {
         );
     }
 
+    /// A pen moving 2 mm per 30 ms never stays inside the park radius long enough to park.
     #[test]
     fn a_pen_that_keeps_moving_is_never_parked() {
         let (mut f, cfg, t0) = (HoverFilter::default(), StillCfg::default(), Instant::now());
@@ -197,6 +205,7 @@ mod tests {
         }
     }
 
+    /// A slow drift moves the anchor along instead of parking: each sample leaves the previous anchor's circle before 300 ms are up.
     #[test]
     fn a_slow_drift_re_anchors_instead_of_parking() {
         // Moving 1 mm per 100 ms: each sample leaves the 1.5 mm circle of the previous anchor
@@ -209,6 +218,7 @@ mod tests {
         }
     }
 
+    /// `reset` drops the anchor and the parked state.
     #[test]
     fn reset_starts_over() {
         let (mut f, cfg, t0) = (HoverFilter::default(), StillCfg::default(), Instant::now());
@@ -223,6 +233,7 @@ mod tests {
         );
     }
 
+    /// The same normalised step is a larger distance in millimetres on a larger tablet.
     #[test]
     fn distances_use_the_physical_size() {
         // The same normalised step is a bigger distance on a bigger tablet.

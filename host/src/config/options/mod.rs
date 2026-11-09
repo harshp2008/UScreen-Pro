@@ -40,11 +40,13 @@ pub fn set_cli_mode(mode: InputMode) {
     let _ = CLI_MODE.set(mode);
 }
 
+/// Tests for resolving global and per-device settings into `DeviceOptions`, and for the idle-dim timer.
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Mutex as StdMutex;
 
+    /// A per-device override wins; anything it leaves unset comes from the global settings.
     #[test]
     fn device_override_wins_and_global_fills_the_rest() {
         let cfg = FileConfig {
@@ -76,6 +78,7 @@ mod tests {
         assert_eq!(g.idle_dim_timeout_secs, 90);
     }
 
+    /// Out-of-range profile values are clamped to their limits; an unknown dim curve becomes `ease_out` and an unknown orientation becomes `auto`.
     #[test]
     fn bad_profile_values_are_clamped() {
         let p = TabletProfile {
@@ -95,6 +98,7 @@ mod tests {
         assert_eq!(o.orientation, "auto");
     }
 
+    /// Saved and custom dim curves reach the tablet as cubic-Bezier strings.
     #[test]
     fn saved_and_custom_curves_reach_the_tablet_as_bezier_strings() {
         let cfg = FileConfig {
@@ -120,6 +124,7 @@ mod tests {
         assert_eq!(DeviceOptions::resolve(&gone, None).dim_curve, "ease_out");
     }
 
+    /// Settings sent from the tablet are stored as device overrides and report whether anything changed.
     #[test]
     fn tablet_settings_become_device_overrides() {
         let mut p = TabletProfile::default();
@@ -142,6 +147,7 @@ mod tests {
         assert!(set_override(&mut p, "nonsense", &json!(true)).is_err());
     }
 
+    /// The old `pen_only` and `touchpad_mode` flags migrate to `input_mode` when the config is loaded.
     #[test]
     fn legacy_flags_migrate_to_input_mode() {
         let mut cfg: FileConfig =
@@ -159,6 +165,7 @@ mod tests {
         assert_eq!(again.input_mode, Some(InputMode::Display));
     }
 
+    /// The config update sent to a tablet carries every option key, so the tablet never keeps a stale value.
     #[test]
     fn config_update_carries_every_option() {
         let v = DeviceOptions::resolve(&FileConfig::default(), None).config_update();
@@ -197,6 +204,7 @@ mod tests {
         assert_eq!(v["input_mode"], "display");
     }
 
+    /// After the idle timeout the screen dims, and it un-dims when the pointer returns.
     #[tokio::test]
     async fn dims_after_the_timeout_and_undims_when_the_pointer_returns() {
         let o = DeviceOptions {
@@ -235,6 +243,7 @@ mod tests {
         assert_eq!(got[1]["curve"], "exponential");
     }
 
+    /// Activity restarts the idle timer and wakes a dimmed tablet.
     #[tokio::test]
     async fn activity_restarts_the_timer_and_wakes_a_dimmed_tablet() {
         let o = DeviceOptions {
@@ -268,6 +277,7 @@ mod tests {
         assert_eq!(sent.lock().unwrap()[1]["type"], "undim_screen");
     }
 
+    /// No dimming while the pointer is on the tablet or when the feature is off.
     #[tokio::test]
     async fn never_dims_while_the_pointer_is_on_the_tablet_or_the_feature_is_off() {
         let on = DeviceOptions {
@@ -301,6 +311,7 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1400)).await;
         assert!(sent.lock().unwrap().is_empty());
     }
+    /// Touchpad and stylus modes have no pointer-crossing signal, so they dim on inactivity alone.
     #[tokio::test]
     async fn touchpad_and_stylus_dim_on_inactivity_alone() {
         let o = DeviceOptions {
@@ -324,6 +335,7 @@ mod tests {
         assert_eq!(sent.lock().unwrap().len(), 1);
     }
 
+    /// The pen menu settings follow the device override and are included in the update sent to the tablet.
     #[test]
     fn the_pen_menu_settings_follow_the_device_override_and_reach_the_tablet() {
         let cfg = FileConfig::default();
