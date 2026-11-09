@@ -36,9 +36,11 @@ pub async fn adb_monitor(
     let mut slot_0_last_relaunch = Instant::now() - Duration::from_secs(60);
     let mut slot_0_relaunches: u32 = 0;
     let mut slot_0_relaunch_wait = Duration::from_secs(5);
+    /// Upper bound of the doubling wait between relaunches of the tablet app (10 minutes).
     const RELAUNCH_WAIT_MAX: Duration = Duration::from_secs(600);
 
     let mut polls_since_check: u32 = 0;
+    /// The app on the tablet is checked every this many polls.
     const APP_CHECK_EVERY: u32 = 2;
     let mut extras: HashMap<String, ExtraSession> = HashMap::new();
     let mut hw_cache: HashMap<String, String> = HashMap::new();

@@ -205,6 +205,7 @@ pub struct AppConfig {
 }
 
 impl Default for AppConfig {
+    /// Defaults of the desktop app's copy of the config: `h264_nvenc`, 60 fps, 20000 kbit/s.
     fn default() -> Self {
         Self {
             encoder: "h264_nvenc".into(),
@@ -377,6 +378,7 @@ fn stream_args_differ(a: &AppConfig, b: &AppConfig) -> bool {
     )
 }
 
+/// Whether the stream-affecting settings of `b` differ from `a`; a missing `a` counts as different.
 fn profile_args_differ(a: Option<&TabletProfile>, b: &TabletProfile) -> bool {
     let key = |p: &TabletProfile| {
         (
@@ -486,16 +488,19 @@ pub async fn save_curve_presets(presets: Vec<CurvePreset>) -> Result<(), String>
     store(&cfg).await
 }
 
+/// Tests for last-change-wins between global and per-device settings.
 #[cfg(test)]
 mod last_change_wins_tests {
     use super::*;
 
+    /// A default profile changed by `f`.
     fn profile(f: impl FnOnce(&mut TabletProfile)) -> TabletProfile {
         let mut p = TabletProfile::default();
         f(&mut p);
         p
     }
 
+    /// Changing a global setting clears that pin on every device and keeps the other pins.
     #[test]
     fn a_global_change_clears_that_pin_on_every_device_and_keeps_the_rest() {
         let mut previous = AppConfig::default();
@@ -516,6 +521,7 @@ mod last_change_wins_tests {
         assert_eq!(p.label, "Tab", "device identity is never cleared");
     }
 
+    /// A global save keeps the device profiles that are on disk, not the window's stale copy.
     #[test]
     fn a_global_save_keeps_the_profiles_on_disk_not_the_windows_stale_copy() {
         let mut previous = AppConfig::default();

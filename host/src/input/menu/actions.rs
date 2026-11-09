@@ -52,10 +52,12 @@ impl MenuAction {
     }
 }
 
+/// Tests for menu action names and key sequences.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Every action's name parses back to itself and an unknown name gives `None`.
     #[test]
     fn names_round_trip() {
         for a in MenuAction::ORDER {
@@ -64,6 +66,7 @@ mod tests {
         assert_eq!(MenuAction::from_name("reboot"), None);
     }
 
+    /// Each action sends Ctrl plus its letter (Copy C, Undo Z, Select all A).
     #[test]
     fn every_action_is_ctrl_plus_its_letter() {
         assert_eq!(MenuAction::Copy.keys(), [KEY_LEFTCTRL, KEY_C]);

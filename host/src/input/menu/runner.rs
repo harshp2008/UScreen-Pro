@@ -223,10 +223,12 @@ fn parse_choice(text: &str) -> Option<MenuAction> {
     MenuAction::from_name(v.get("action")?.as_str()?)
 }
 
+/// Tests for parsing the menu's result and building its command line.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The choice is read from the JSON line the menu prints.
     #[test]
     fn the_choice_is_read_from_the_result_line() {
         assert_eq!(
@@ -237,6 +239,7 @@ mod tests {
         assert_eq!(parse_choice("junk"), None);
     }
 
+    /// The menu command names every button and the result file.
     #[test]
     fn the_command_names_every_button_and_the_result_file() {
         let c = menu_command(

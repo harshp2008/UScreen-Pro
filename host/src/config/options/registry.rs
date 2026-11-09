@@ -2,6 +2,7 @@
 
 use super::*;
 
+/// One tablet instance's live settings: the profile keys that identify it, a watch channel with its resolved `DeviceOptions`, and derived mode flags.
 pub(super) struct Slot {
     /// Profile keys of the device in this slot (hardware serial, adb serial), best first.
     pub(super) keys: Vec<String>,
@@ -18,6 +19,7 @@ pub(super) struct Slot {
 
 /// The registry of per-tablet slots, by instance number.
 pub(super) fn slots() -> &'static Mutex<HashMap<u32, Slot>> {
+    /// Process-wide table of slots keyed by instance number, created on first use.
     static SLOTS: OnceLock<Mutex<HashMap<u32, Slot>>> = OnceLock::new();
     SLOTS.get_or_init(|| Mutex::new(HashMap::new()))
 }

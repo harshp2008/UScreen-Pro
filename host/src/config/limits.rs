@@ -38,9 +38,11 @@ pub const MAX_QUALITY: u32 = 32;
 /// Shortest and longest idle timeout (seconds) before the tablet is dimmed.
 pub const MIN_IDLE_TIMEOUT_SECS: u32 = 10;
 
+/// Longest idle timeout in seconds.
 pub const MAX_IDLE_TIMEOUT_SECS: u32 = 300;
 
 /// Shortest and longest fade (milliseconds) of the idle dim / undim animation.
 pub const MIN_FADE_MS: u32 = 100;
 
+/// Longest fade in milliseconds.
 pub const MAX_FADE_MS: u32 = 30_000;

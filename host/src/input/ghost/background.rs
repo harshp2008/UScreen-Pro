@@ -12,6 +12,7 @@ use std::time::Duration;
 /// Start the background watcher once per process: it polls the desktop backend for the focused
 /// app and watches the route-toggle and recorder-dump request files.
 pub(in crate::input) fn start_focus_watcher() {
+    /// Makes sure the watcher is started once per process.
     static STARTED: OnceLock<()> = OnceLock::new();
     if STARTED.set(()).is_err() {
         return;

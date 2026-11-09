@@ -21,6 +21,7 @@ pub struct DaemonStatus {
     pub devices: Vec<ConnectedDevice>,
 }
 
+/// Runtime directory of the daemon: `XDG_RUNTIME_DIR`, else `/run/user/<uid>`, else `~/.cache`, plus `uscreen`.
 fn runtime_dir() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
         .map(PathBuf::from)
@@ -33,14 +34,17 @@ fn runtime_dir() -> PathBuf {
         .join("uscreen")
 }
 
+/// Path of the daemon's control socket.
 fn control_sock_path() -> PathBuf {
     runtime_dir().join("control.sock")
 }
 
+/// Path of the daemon's pid file.
 fn pid_path() -> PathBuf {
     config::home_dir().join(".local/share/uscreen/uscreen.pid")
 }
 
+/// Sends one command to the control socket and returns the reply; an error if the socket does not exist.
 async fn send_control_cmd(cmd: &str) -> Result<String, String> {
     let path = control_sock_path();
     if !path.exists() {
@@ -248,8 +252,10 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
     })
 }
 
+/// Name of the systemd user unit.
 const UNIT: &str = "uscreen.service";
 
+/// Runs `systemctl --user` with `args`; `None` if it could not be run.
 async fn systemctl(args: &[&str]) -> Option<std::process::Output> {
     Command::new("systemctl")
         .arg("--user")
@@ -259,18 +265,21 @@ async fn systemctl(args: &[&str]) -> Option<std::process::Output> {
         .ok()
 }
 
+/// Whether the systemd user unit is installed.
 async fn unit_installed() -> bool {
     systemctl(&["cat", UNIT])
         .await
         .is_some_and(|o| o.status.success())
 }
 
+/// Whether the systemd user unit is active.
 async fn unit_active() -> bool {
     systemctl(&["is-active", UNIT])
         .await
         .is_some_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "active")
 }
 
+/// First existing daemon binary among `~/.local/bin`, `/usr/local/bin` and `/usr/bin`.
 pub(crate) fn daemon_binary() -> Option<PathBuf> {
     [
         config::home_dir().join(".local/bin/uscreen"),
@@ -281,6 +290,7 @@ pub(crate) fn daemon_binary() -> Option<PathBuf> {
     .find(|p| p.exists())
 }
 
+/// Whether the pid in the pid file is a live process.
 async fn pid_alive() -> bool {
     let pid = tokio::fs::read_to_string(pid_path())
         .await
@@ -300,6 +310,7 @@ async fn wait_for(want: bool, secs: u64) -> bool {
     pid_alive().await == want
 }
 
+/// The command's stderr, or `fallback` when stderr is empty.
 fn failure(out: &std::process::Output, fallback: &str) -> String {
     let err = String::from_utf8_lossy(&out.stderr).trim().to_string();
     if err.is_empty() {

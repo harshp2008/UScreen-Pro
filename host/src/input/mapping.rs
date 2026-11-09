@@ -6,6 +6,7 @@
 
 use super::*;
 
+/// D-Bus interface name of a KWin input device.
 pub(super) const KWIN_INPUT_IFACE: &str = "org.kde.KWin.InputDevice";
 
 /// The screen the user is actually looking at: the first enabled output that is

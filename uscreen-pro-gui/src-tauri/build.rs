@@ -1,5 +1,8 @@
+//! Build script of the desktop app: stamps `GIT_VERSION_STRING`, then runs the Tauri build step.
+
 use std::process::Command;
 
+/// Sets `GIT_VERSION_STRING` for the compiler from the environment or the git hash, as the host's build script does.
 fn main() {
     let version_string = std::env::var("GIT_VERSION_STRING")
         .ok()

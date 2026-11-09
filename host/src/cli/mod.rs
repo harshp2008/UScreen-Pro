@@ -14,6 +14,7 @@ use std::path::PathBuf;
     version = env!("GIT_VERSION_STRING"),
     about = "USB second-screen server for Linux"
 )]
+/// Parsed command line: an optional subcommand, and the options for running the daemon (display, EDID file, helper path, encoder, fps, bitrate, size). Options override `config.toml`.
 pub(crate) struct Cli {
     #[command(subcommand)]
     pub(crate) command: Option<Commands>,

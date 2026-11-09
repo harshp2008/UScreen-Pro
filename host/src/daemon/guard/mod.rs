@@ -454,6 +454,7 @@ mod tests {
     /// A private bus with a fake DisplayConfig whose answer is `delay` late.
     struct FakeShell(std::process::Child);
     impl Drop for FakeShell {
+        /// Kills and reaps the fake session bus.
         fn drop(&mut self) {
             let _ = self.0.kill();
             let _ = self.0.wait();

@@ -101,10 +101,12 @@ pub fn token_matches(expected: &str, presented: &str) -> bool {
     diff == 0
 }
 
+/// Tests for token comparison and the runtime directory.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A token matches only if it is exactly equal; prefixes and empty strings do not match.
     #[test]
     fn token_comparison_is_exact() {
         assert!(token_matches("abc123", "abc123"));
@@ -113,6 +115,7 @@ mod tests {
         assert!(!token_matches("abc123", ""));
     }
 
+    /// The runtime directory is private: mode 0700, or the user's own cache directory.
     #[test]
     fn runtime_dir_is_private() {
         use std::os::unix::fs::PermissionsExt;

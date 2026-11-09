@@ -18,9 +18,12 @@
 use std::path::PathBuf;
 use tracing::{info, warn};
 
+/// D-Bus object path of KWin's virtual keyboard.
 const OBJECT: &str = "/VirtualKeyboard";
+/// D-Bus interface of KWin's virtual keyboard.
 const IFACE: &str = "org.kde.kwin.VirtualKeyboard";
 /// Only when explicitly asked for, rather than on touch input.
+/// Hold the on-screen keyboard until explicitly asked for.
 const MODE_MANUAL: &str = "0";
 
 /// Where the previous on-screen-keyboard setting is saved so it can be restored.

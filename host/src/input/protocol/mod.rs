@@ -184,6 +184,7 @@ pub struct InputConfig {
 }
 
 impl Default for InputConfig {
+    /// Defaults: port 8891, instance 0, no token.
     fn default() -> Self {
         Self {
             port: 8891,

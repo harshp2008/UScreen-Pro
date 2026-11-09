@@ -105,6 +105,7 @@ impl TimingReader {
 }
 
 impl Drop for TimingReader {
+    /// Unmaps the shared timing memory.
     fn drop(&mut self) {
         if !self.mmap_ptr.is_null() && self.mmap_ptr != libc::MAP_FAILED as *const _ {
             unsafe {

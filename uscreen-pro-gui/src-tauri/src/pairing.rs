@@ -14,7 +14,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, State};
 
+/// mDNS service type of an adb device offering to pair.
 const PAIRING_TYPE: &str = "_adb-tls-pairing._tcp";
+/// mDNS service type of an adb device accepting connections.
 const CONNECT_TYPE: &str = "_adb-tls-connect._tcp";
 /// Hard limit on the `adb mdns services` discovery loop. Many routers drop multicast, so
 /// waiting longer than this only leaves the user staring at a spinner.
@@ -23,6 +25,7 @@ const QR_TIMEOUT: Duration = Duration::from_secs(30);
 pub const PAIR_PROGRESS: &str = "pair_progress";
 /// Event the frontend listens for when discovery gave up.
 pub const MDNS_TIMEOUT_EVENT: &str = "mdns_timeout";
+/// Message shown when mDNS discovery times out.
 const MDNS_TIMEOUT_MESSAGE: &str = "mDNS discovery timed out. Your Wi-Fi router may be blocking device discovery. Please use Manual Pairing.";
 
 /// Data the UI needs to render the wireless-pairing QR code.
@@ -55,6 +58,7 @@ pub struct ManualPairResult {
 #[derive(Default)]
 pub struct PairingState(pub Arc<AtomicU64>);
 
+/// One entry of `adb mdns services`: name, service type and address with port.
 struct MdnsService {
     name: String,
     kind: String,
@@ -62,11 +66,13 @@ struct MdnsService {
 }
 
 impl MdnsService {
+    /// The IP part of the address, without the port.
     fn ip(&self) -> &str {
         self.addr.rsplit_once(':').map_or(&self.addr, |(ip, _)| ip)
     }
 }
 
+/// The services listed by `adb mdns services`; empty if adb fails.
 async fn mdns_services() -> Vec<MdnsService> {
     let Ok(out) = adb::run(None, &["mdns", "services"], Duration::from_secs(5)).await else {
         return Vec::new();
@@ -86,6 +92,7 @@ async fn mdns_services() -> Vec<MdnsService> {
         .collect()
 }
 
+/// Polls the mDNS list until a connect service for `ip` shows up or `wait` is over; returns its endpoint.
 async fn discover_connect_endpoint(ip: &str, wait: Duration) -> Option<String> {
     let start = Instant::now();
     loop {
@@ -103,6 +110,7 @@ async fn discover_connect_endpoint(ip: &str, wait: Duration) -> Option<String> {
     }
 }
 
+/// Runs `adb pair`; returns its output, or an error when the output does not report success.
 async fn adb_pair(endpoint: &str, code: &str) -> Result<String, String> {
     let out = adb::run(None, &["pair", endpoint, code], Duration::from_secs(20)).await?;
     // `adb pair` exits 0 even on "Failed: Wrong password", so the output is the only signal.
@@ -118,6 +126,7 @@ async fn adb_pair(endpoint: &str, code: &str) -> Result<String, String> {
     }
 }
 
+/// Runs `adb connect`; returns the endpoint when adb reports connected or already connected.
 async fn adb_connect(endpoint: &str) -> Result<String, String> {
     let out = adb::run(None, &["connect", endpoint], Duration::from_secs(15)).await?;
     let text = combined_of(&out);
@@ -132,6 +141,7 @@ async fn adb_connect(endpoint: &str) -> Result<String, String> {
     }
 }
 
+/// Emits a `pairing_event` to the window with a kind, a message and the optional endpoint to connect to.
 fn emit(app: &AppHandle, kind: &'static str, message: impl Into<String>, connect: Option<String>) {
     let _ = app.emit(
         "pairing_event",
@@ -350,6 +360,7 @@ pub const ROUTER_BLOCKED_PREFIX: &str = "ROUTER_BLOCKED|";
 /// adb's classic TCP port. Tailscale has no mDNS, so the Tailscale path always uses it.
 const TAILSCALE_ADB_PORT: u16 = 5555;
 
+/// Parses `value` as an IPv4 address; the error names `label`.
 fn parse_ipv4(label: &str, value: &str) -> Result<std::net::Ipv4Addr, String> {
     value.trim().parse().map_err(|_| {
         format!(
@@ -520,15 +531,18 @@ pub async fn bootstrap_wireless_over_usb(app: AppHandle, serial: String) -> Resu
     Err(format!("Could not connect to {endpoint}: {last}"))
 }
 
+/// Tests for host reachability.
 #[cfg(test)]
 mod reachability_tests {
     use super::host_reachable;
 
+    /// A closed port on a live host counts as reachable, since the refusal proves the host answered.
     #[tokio::test]
     async fn refused_port_on_a_live_host_counts_as_reachable() {
         assert!(host_reachable("127.0.0.1").await);
     }
 
+    /// An address that is never routed (TEST-NET-1) is unreachable.
     #[tokio::test]
     async fn blackholed_address_is_unreachable() {
         // TEST-NET-1 (RFC 5737) is never routed: a timeout or "unreachable" error, never a reset.

@@ -17,7 +17,9 @@ pub(in crate::input) const PAD_SLOTS: usize = 10;
 /// tiny; libinput drops contacts below its "touching" threshold and treats very high ones as palms,
 /// so the tablet's value is squeezed into a band that is always a plain finger.
 pub(in crate::input) const PAD_PRESSURE_MAX: i32 = 255;
+/// Pressure band low end: the tablet's 0..1 pressure is mapped to 50 + 40 x p.
 const PAD_PRESSURE_LOW: f64 = 50.0;
+/// Width of the pressure band.
 const PAD_PRESSURE_SPAN: f64 = 40.0;
 
 /// One finger on the tablet's touchpad, as the host receives it: Android pointer id and a

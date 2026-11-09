@@ -542,6 +542,7 @@ impl UInputDevice {
     }
 }
 impl Drop for UInputDevice {
+    /// Destroys the uinput device with `UI_DEV_DESTROY`.
     fn drop(&mut self) {
         unsafe {
             let fd = self.file.as_raw_fd();

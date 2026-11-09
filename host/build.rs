@@ -6,6 +6,7 @@
 
 use std::process::Command;
 
+/// Sets `GIT_VERSION_STRING` for the compiler: the environment value if set, else the short git hash (the crate version when git is unavailable), with `-dirty` appended when the tree has uncommitted changes. Re-runs when HEAD, the index, refs or the variable change.
 fn main() {
     // Determine git commit hash and dirty status for runtime versioning
     let version_string = std::env::var("GIT_VERSION_STRING")

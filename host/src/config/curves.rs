@@ -14,6 +14,7 @@ pub const CURVES: [&str; 5] = [
 /// Highest and lowest control-point y of a custom Bezier fade (x is limited to 0..1).
 pub const BEZIER_Y_MIN: f64 = -2.0;
 
+/// Highest control-point y of a custom Bezier fade.
 pub const BEZIER_Y_MAX: f64 = 3.0;
 
 /// A fade curve the user saved in the GUI: a CSS-style cubic Bezier through (0,0) and (1,1).

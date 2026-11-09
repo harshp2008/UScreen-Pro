@@ -105,10 +105,12 @@ pub async fn list_adb_devices() -> Vec<AdbEntry> {
     list_entries().await
 }
 
+/// Normalises a model name for matching: trimmed, upper-case, dashes as spaces.
 fn norm_model(m: &str) -> String {
     m.trim().to_uppercase().replace('-', " ")
 }
 
+/// The adb entries of one physical tablet, merged across USB and Wi-Fi: model, preferred serial, which transports exist, state and all serials.
 struct Group {
     model: String,
     primary_serial: String,
@@ -136,6 +138,7 @@ pub(crate) async fn ro_serial(serial: &str) -> Option<String> {
     (!s.is_empty() && s != "unknown").then_some(s)
 }
 
+/// The `versionName` of the Android app on the first of `serials` that reports one, or `None` when none does.
 async fn installed_app_version(serials: &[String]) -> Option<String> {
     for s in serials {
         let Ok(out) = run(
@@ -649,10 +652,12 @@ pub async fn wireless_device_info(endpoint: String) -> Result<WirelessDeviceInfo
     })
 }
 
+/// Tests that serial-taking commands refuse to run without a target.
 #[cfg(test)]
 mod serial_tests {
     use super::*;
 
+    /// An empty or blank serial is refused.
     #[test]
     fn empty_serial_is_refused() {
         assert!(require_serial("").is_err());
@@ -660,12 +665,14 @@ mod serial_tests {
         assert!(require_serial("PHONE_SERIAL").is_ok());
     }
 
+    /// The identify title and shell quoting handle apostrophes.
     #[test]
     fn identify_title_and_quoting() {
         assert_eq!(identify_title("Tab S9"), "UScreen: Tab S9");
         assert_eq!(sh_quote("Dipal's tab"), "'Dipal'\\''s tab'");
     }
 
+    /// Commands that take a serial return an error instead of running against the default device.
     #[tokio::test]
     async fn serial_commands_refuse_to_run_without_a_target() {
         assert!(identify_device(String::new(), None).await.is_err());

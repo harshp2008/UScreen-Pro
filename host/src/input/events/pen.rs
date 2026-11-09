@@ -9,6 +9,7 @@ use crate::input::ghost::{route_to_pen, session_is_x11};
 /// easy to lose somewhere between the tablet's view hierarchy and here, and
 /// without a count there is no way to tell "not sent" from "sent but ignored".
 static PEN_ACTIONS: std::sync::Mutex<[u32; 8]> = std::sync::Mutex::new([0; 8]);
+/// Time of the last pen-action log line, for the three-second throttle.
 static PEN_LOG_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 
 /// Count one pen action and, at most every three seconds, log the counts.

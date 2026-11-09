@@ -23,10 +23,12 @@ pub struct ForgetReport {
     pub notes: Vec<String>,
 }
 
+/// Path of adb's list of authorised hosts, `~/.android/adb_known_hosts.pb`.
 fn known_hosts_path() -> PathBuf {
     config::home_dir().join(".android/adb_known_hosts.pb")
 }
 
+/// Reads a protobuf varint from `buf` at `pos` and advances `pos`; `None` if the buffer ends early.
 fn read_varint(buf: &[u8], pos: &mut usize) -> Option<u64> {
     let mut value = 0u64;
     let mut shift = 0;
@@ -76,6 +78,7 @@ pub(crate) fn strip_known_host(data: &[u8], hw_serial: &str) -> Option<(Vec<u8>,
     Some((out, removed))
 }
 
+/// Removes the pairing record of `hw_serial` from adb's known-hosts file and notes the outcome in `report`.
 fn forget_pairing_record(hw_serial: &str, report: &mut ForgetReport) {
     let path = known_hosts_path();
     let Ok(data) = std::fs::read(&path) else {
@@ -100,6 +103,7 @@ fn forget_pairing_record(hw_serial: &str, report: &mut ForgetReport) {
     }
 }
 
+/// Runs `adb disconnect` for `target` and logs the result in `report`.
 async fn adb_disconnect(target: &str, report: &mut ForgetReport) {
     let line = match adb::run(None, &["disconnect", target], Duration::from_secs(8)).await {
         Ok(out) => format!("adb disconnect {target}: {}", adb::combined_of(&out)),
@@ -202,10 +206,12 @@ pub async fn forget_device(serial: String) -> Result<ForgetReport, String> {
     Ok(report)
 }
 
+/// Tests for removing a device's record from the known-hosts protobuf.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Builds one known-hosts entry (a length-delimited field containing the host name).
     fn entry(name: &str) -> Vec<u8> {
         let mut inner = vec![0x0a, name.len() as u8];
         inner.extend_from_slice(name.as_bytes());
@@ -214,6 +220,7 @@ mod tests {
         e
     }
 
+    /// Only the forgotten device's record is removed; the other record is kept.
     #[test]
     fn removes_only_the_forgotten_devices_record() {
         // The two records as they sit in a real adb_known_hosts.pb.
@@ -226,12 +233,14 @@ mod tests {
         assert_eq!((same, none), (file.clone(), 0));
     }
 
+    /// A serial that is a prefix of another (`ABC12` and `ABC1234`) does not match.
     #[test]
     fn a_serial_that_prefixes_another_is_not_matched() {
         let file = entry("adb-ABC1234-xyz");
         assert_eq!(strip_known_host(&file, "ABC12").unwrap().1, 0);
     }
 
+    /// A file that does not have the expected shape is refused, not rewritten.
     #[test]
     fn refuses_a_file_that_is_not_in_the_expected_shape() {
         assert!(strip_known_host(&[0x12, 0x02, 0x41, 0x42], "X").is_none());
