@@ -395,10 +395,63 @@ fn profile_args_differ(a: Option<&TabletProfile>, b: &TabletProfile) -> bool {
     a.map(key) != Some(key(b))
 }
 
+/// Profile keys that describe the device itself; a change to a global value never clears these.
+const DEVICE_OWN_KEYS: &[&str] = &[
+    "label",
+    "nickname",
+    "width",
+    "height",
+    "width_mm",
+    "height_mm",
+    "wifi_address",
+    "preferred_transport",
+    "wireless_configured",
+    "app_version",
+    "secure_port",
+    "api_level",
+    "touchpad_mode",
+];
+
+/// What a save of the global settings writes, "last change wins":
+/// * the device profiles on disk are kept as they are (the tablet app may have changed them since
+///   this window loaded its copy; a global save must not overwrite that), and
+/// * every global setting that changed has its per-device override cleared, so the change reaches
+///   every device (a tablet pins a value to itself only by changing it afterwards).
+fn apply_global_change(previous: &AppConfig, mut config: AppConfig) -> Result<AppConfig, String> {
+    config.tablets = previous.tablets.clone();
+    let (Ok(serde_json::Value::Object(old)), Ok(serde_json::Value::Object(new))) =
+        (serde_json::to_value(previous), serde_json::to_value(&config))
+    else {
+        return Ok(config);
+    };
+    let changed: Vec<&String> = new
+        .iter()
+        .filter(|(k, v)| k.as_str() != "tablets" && old.get(*k) != Some(*v))
+        .map(|(k, _)| k)
+        .filter(|k| !DEVICE_OWN_KEYS.contains(&k.as_str()))
+        .collect();
+    if changed.is_empty() {
+        return Ok(config);
+    }
+    let mut tablets = serde_json::to_value(&config.tablets).map_err(|e| e.to_string())?;
+    if let Some(map) = tablets.as_object_mut() {
+        for profile in map.values_mut() {
+            if let Some(fields) = profile.as_object_mut() {
+                for k in &changed {
+                    fields.remove(k.as_str());
+                }
+            }
+        }
+    }
+    config.tablets = serde_json::from_value(tablets).map_err(|e| e.to_string())?;
+    Ok(config)
+}
+
 /// Tauri command: persist global settings and, if any of them changes the pipeline arguments, restart the affected pipelines.
 #[tauri::command]
 pub async fn save_config(app: tauri::AppHandle, config: AppConfig) -> Result<(), String> {
     let previous = load().await;
+    let config = apply_global_change(&previous, config)?;
     store(&config).await?;
     // Placebo-settings fix: the daemon only read config.toml on tablet connect, so a save has
     // to tell it to respawn the pipelines of every device using the global values.
@@ -431,4 +484,50 @@ pub async fn save_curve_presets(presets: Vec<CurvePreset>) -> Result<(), String>
     let mut cfg = load().await;
     cfg.curve_presets = presets;
     store(&cfg).await
+}
+
+#[cfg(test)]
+mod last_change_wins_tests {
+    use super::*;
+
+    fn profile(f: impl FnOnce(&mut TabletProfile)) -> TabletProfile {
+        let mut p = TabletProfile::default();
+        f(&mut p);
+        p
+    }
+
+    #[test]
+    fn a_global_change_clears_that_pin_on_every_device_and_keeps_the_rest() {
+        let mut previous = AppConfig::default();
+        previous.tablets.insert(
+            "A".into(),
+            profile(|p| {
+                p.label = "Tab".into();
+                p.show_stats = Some(true);
+                p.fps = Some(60);
+            }),
+        );
+        let mut edited = previous.clone();
+        edited.show_stats = !previous.show_stats;
+        let out = apply_global_change(&previous, edited).unwrap();
+        let p = &out.tablets["A"];
+        assert_eq!(p.show_stats, None, "the changed setting follows the global value again");
+        assert_eq!(p.fps, Some(60), "untouched pins stay");
+        assert_eq!(p.label, "Tab", "device identity is never cleared");
+    }
+
+    #[test]
+    fn a_global_save_keeps_the_profiles_on_disk_not_the_windows_stale_copy() {
+        let mut previous = AppConfig::default();
+        previous.tablets.insert(
+            "A".into(),
+            profile(|p| {
+                p.extra.insert("pen_menu".into(), toml::Value::Boolean(false));
+            }),
+        );
+        let mut stale = AppConfig::default();
+        stale.tablets.insert("A".into(), profile(|_| {}));
+        let out = apply_global_change(&previous, stale).unwrap();
+        assert_eq!(out.tablets["A"].extra.get("pen_menu"), Some(&toml::Value::Boolean(false)));
+    }
 }

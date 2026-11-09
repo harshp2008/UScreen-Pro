@@ -42,6 +42,45 @@ const stable = (v: unknown) =>
       : x,
   );
 
+/**
+ * Three-way merge of the settings file as it is now (`remote`) into the window's copy (`local`),
+ * given what the window last loaded (`base`): a value the user has not touched here takes the new
+ * file value (so changes made on the tablet appear), a value they edited here stays theirs.
+ */
+function mergeConfig(base: AppConfig, local: AppConfig, remote: AppConfig): AppConfig {
+  const take = (b: unknown, l: unknown, r: unknown) => (stable(l) !== stable(b) ? l : r);
+  const merged: Record<string, unknown> = {};
+  const keys = new Set([...Object.keys(remote), ...Object.keys(local)]);
+  for (const k of keys) {
+    if (k === "tablets") continue;
+    const rec = (o: unknown) => (o as Record<string, unknown>)[k];
+    merged[k] = take(rec(base), rec(local), rec(remote));
+  }
+  const tablets: Record<string, TabletProfile> = {};
+  for (const serial of new Set([...Object.keys(remote.tablets), ...Object.keys(local.tablets)])) {
+    const r = remote.tablets[serial];
+    const l = local.tablets[serial];
+    const b = base.tablets[serial];
+    if (!r) {
+      // Gone from the file: keep it only if there are unsaved edits to it here.
+      if (l && b && stable(l) !== stable(b)) tablets[serial] = l;
+      continue;
+    }
+    if (!l || !b) {
+      tablets[serial] = r;
+      continue;
+    }
+    const profile: Record<string, unknown> = {};
+    for (const k of new Set([...Object.keys(r), ...Object.keys(l)])) {
+      const rec = (o: unknown) => (o as Record<string, unknown>)[k];
+      const v = take(rec(b), rec(l), rec(r));
+      if (v !== undefined) profile[k] = v;
+    }
+    tablets[serial] = profile as unknown as TabletProfile;
+  }
+  return { ...(merged as unknown as AppConfig), tablets };
+}
+
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /** Fingerprint of the global settings only; per-device edits have their own Save button. */
@@ -89,14 +128,41 @@ export default function App() {
     }
   }, []);
 
+  /** What the settings file held when this window last read it; edits are measured against it. */
+  const baseRef = useRef<AppConfig | null>(null);
+  const configRef = useRef<AppConfig | null>(null);
+
   const fetchConfig = useCallback(async () => {
     try {
       const cfg = await invoke<AppConfig>("get_config");
+      baseRef.current = cfg;
       setConfig(cfg);
       setSavedConfig(globalsKey(cfg));
       setSavedProfiles(Object.fromEntries(Object.entries(cfg.tablets).map(([k, v]) => [k, stable(v)])));
     } catch (e) {
       toast.error(`Could not load config: ${errText(e)}`);
+    }
+  }, []);
+
+  /*
+   * The tablet app writes its own changes into the settings file, so the file is re-read twice a
+   * second-ish and merged in: what changed there shows here at once, without losing what is being
+   * edited here and not yet saved.
+   */
+  const syncConfig = useCallback(async () => {
+    const base = baseRef.current;
+    const local = configRef.current;
+    if (!base || !local) return;
+    try {
+      const remote = await invoke<AppConfig>("get_config");
+      if (stable(remote) === stable(base)) return;
+      const merged = mergeConfig(base, local, remote);
+      baseRef.current = remote;
+      setConfig(merged);
+      setSavedConfig(globalsKey(remote));
+      setSavedProfiles(Object.fromEntries(Object.entries(remote.tablets).map(([k, v]) => [k, stable(v)])));
+    } catch {
+      /* a failed read just means the next poll tries again */
     }
   }, []);
 
@@ -109,6 +175,15 @@ export default function App() {
     void fetchStatus();
     invoke<boolean>("get_autostart_status").then(setAutostart).catch(() => {});
   }, [fetchConfig, fetchStatus]);
+
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
+
+  useEffect(() => {
+    const timer = setInterval(() => void syncConfig(), 1500);
+    return () => clearInterval(timer);
+  }, [syncConfig]);
 
   useEffect(() => {
     const timer = setInterval(fetchStatus, fastPoll ? 1000 : 3000);
@@ -203,7 +278,7 @@ export default function App() {
     guarded(async () => {
       if (!config) return;
       await invoke("save_config", { config });
-      setSavedConfig(globalsKey(config));
+      await syncConfig();
       toast.success("Settings saved");
     }, "Save failed");
 
@@ -256,6 +331,7 @@ export default function App() {
       if (!serial || !profile) return;
       await invoke("save_device_profile", { serial, profile });
       setSavedProfiles((m) => ({ ...m, [serial]: stable(profile) }));
+      await syncConfig();
       toast.success(`Saved ${profile.nickname || serial}`);
     }, "Save failed");
 

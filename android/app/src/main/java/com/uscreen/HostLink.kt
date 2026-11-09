@@ -57,6 +57,12 @@ data class HostConfig(
     val stylusStyle: String = STYLUS_AUTO,
     val stylusButtonPrimary: String = PEN_BUTTON_RIGHT,
     val stylusButtonSecondary: String = PEN_BUTTON_MIDDLE,
+    /** The pen's long-press menu on the computer (cut, copy, paste ...), its look and hold time. */
+    val penMenu: Boolean = true,
+    val penMenuStyle: String = "text",
+    val penMenuHoldMs: Int = 500,
+    /** Seconds out of range before the computer hides the idle pen cursor; 0 = never. */
+    val stylusIdleHideTimeout: Int = 0,
 ) {
     /** True while the host streams video to this tablet (only Display mode does). */
     val streamsVideo: Boolean get() = inputMode == MODE_DISPLAY
@@ -85,6 +91,10 @@ data class HostConfig(
         "stylus_style" -> (value as? String)?.takeIf { it in STYLUS_STYLES }?.let { copy(stylusStyle = it) }
         "stylus_button_primary" -> (value as? String)?.takeIf { it in PEN_BUTTONS }?.let { copy(stylusButtonPrimary = it) }
         "stylus_button_secondary" -> (value as? String)?.takeIf { it in PEN_BUTTONS }?.let { copy(stylusButtonSecondary = it) }
+        "pen_menu" -> (value as? Boolean)?.let { copy(penMenu = it) }
+        "pen_menu_style" -> (value as? String)?.takeIf { it == "text" || it == "icons" }?.let { copy(penMenuStyle = it) }
+        "pen_menu_hold_ms" -> (value as? Int)?.let { copy(penMenuHoldMs = it.coerceIn(300, 3000)) }
+        "stylus_idle_hide_timeout" -> (value as? Int)?.let { copy(stylusIdleHideTimeout = it.coerceIn(0, 3600)) }
         else -> null
     }
 
@@ -150,6 +160,11 @@ data class HostConfig(
                 .takeIf { it in PEN_BUTTONS } ?: base.stylusButtonPrimary,
             stylusButtonSecondary = o.optString("stylus_button_secondary", base.stylusButtonSecondary)
                 .takeIf { it in PEN_BUTTONS } ?: base.stylusButtonSecondary,
+            penMenu = o.optBoolean("pen_menu", base.penMenu),
+            penMenuStyle = o.optString("pen_menu_style", base.penMenuStyle)
+                .takeIf { it == "text" || it == "icons" } ?: base.penMenuStyle,
+            penMenuHoldMs = o.optInt("pen_menu_hold_ms", base.penMenuHoldMs).coerceIn(300, 3000),
+            stylusIdleHideTimeout = o.optInt("stylus_idle_hide_timeout", base.stylusIdleHideTimeout).coerceIn(0, 3600),
         )
 
         /** The saved copy of the synced settings, so a restart shows the last known values before the host answers. */
@@ -175,6 +190,10 @@ data class HostConfig(
             stylusStyle = prefs.stylusStyle,
             stylusButtonPrimary = prefs.stylusButtonPrimary,
             stylusButtonSecondary = prefs.stylusButtonSecondary,
+            penMenu = prefs.penMenu,
+            penMenuStyle = prefs.penMenuStyle,
+            penMenuHoldMs = prefs.penMenuHoldMs,
+            stylusIdleHideTimeout = prefs.stylusIdleHideTimeout,
         )
     }
 }

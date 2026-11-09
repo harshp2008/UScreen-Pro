@@ -30,21 +30,21 @@ const FOCUS_SETTLE: Duration = Duration::from_millis(60);
 
 /// Start the runner for one tablet: creates the request channel (the sender is stored in the
 /// devices, where the long-press detection finds it) and the thread that answers requests.
-pub(in crate::input) fn spawn(uinput: Arc<Mutex<InjectDevices>>) {
+pub(in crate::input) fn spawn(uinput: Arc<Mutex<InjectDevices>>, instance: u32) {
     let (tx, rx) = channel();
     if let Ok(mut g) = uinput.lock() {
         g.menu_tx = Some(tx);
     }
     let r = std::thread::Builder::new()
         .name("uscreen-menu".into())
-        .spawn(move || run(uinput, rx));
+        .spawn(move || run(uinput, rx, instance));
     if let Err(e) = r {
         warn!("Could not start the pen menu thread: {}", e);
     }
 }
 
 /// The runner thread: answers each menu request (showing the menu and sending the chosen keys) until the channel closes.
-fn run(uinput: Arc<Mutex<InjectDevices>>, rx: Receiver<()>) {
+fn run(uinput: Arc<Mutex<InjectDevices>>, rx: Receiver<()>, instance: u32) {
     let mut desktop = crate::desktop::detect();
     let caps = desktop.capabilities();
     info!(
@@ -56,7 +56,7 @@ fn run(uinput: Arc<Mutex<InjectDevices>>, rx: Receiver<()>) {
     while rx.recv().is_ok() {
         // Requests that piled up while a menu was open are stale.
         while rx.try_recv().is_ok() {}
-        handle_request(desktop.as_mut(), &uinput);
+        handle_request(desktop.as_mut(), &uinput, instance);
     }
 }
 
@@ -64,8 +64,8 @@ fn run(uinput: Arc<Mutex<InjectDevices>>, rx: Receiver<()>) {
 /// this must tell the router what happened: no menu applies (the press goes out and the hold goes on
 /// as an ordinary click) or the menu is up (the rest of the touch is swallowed). The chosen action is
 /// carried out once the menu closes.
-fn handle_request(desktop: &mut dyn DesktopBackend, uinput: &Arc<Mutex<InjectDevices>>) {
-    let Some(plan) = plan(desktop) else {
+fn handle_request(desktop: &mut dyn DesktopBackend, uinput: &Arc<Mutex<InjectDevices>>, instance: u32) {
+    let Some(plan) = plan(desktop, instance) else {
         resolve(uinput, false);
         return;
     };
@@ -150,9 +150,11 @@ struct Plan {
 
 /// Decide whether a menu applies here: the setting, the desktop's abilities, an app that is not an
 /// art app, and `decision::items` on what the desktop says is under the pointer.
-fn plan(desktop: &mut dyn DesktopBackend) -> Option<Plan> {
+fn plan(desktop: &mut dyn DesktopBackend, instance: u32) -> Option<Plan> {
     let cfg = crate::config::FileConfig::load();
-    if !cfg.pen_menu {
+    // This tablet's own settings (its override, else the global value).
+    let opts = crate::config::options::current_options(instance);
+    if !opts.pen_menu {
         return None;
     }
     let caps = desktop.capabilities();
@@ -170,7 +172,7 @@ fn plan(desktop: &mut dyn DesktopBackend) -> Option<Plan> {
     }
     Some(Plan {
         buttons,
-        style: cfg.pen_menu_style,
+        style: opts.pen_menu_style,
         result: data_file("menu_result")?,
     })
 }

@@ -122,7 +122,7 @@ impl InputServer {
         // first slot only, so two Android tablets never fight over one physical pen.
         start_focus_watcher();
         spawn_idle_task(uinput.clone(), self.config.instance);
-        menu::spawn(uinput.clone());
+        menu::spawn(uinput.clone(), self.config.instance);
         if self.config.instance == 0 {
             physical::spawn(uinput.clone(), 0, self.running.clone());
         }

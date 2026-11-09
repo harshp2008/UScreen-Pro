@@ -123,6 +123,18 @@ pub struct TabletProfile {
     /// What the pen's second side button does in `mouse` style: `right`, `middle` or `none`. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stylus_button_secondary: Option<String>,
+    /// The pen's long-press menu (cut, copy, paste ...). Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pen_menu: Option<bool>,
+    /// Menu buttons as `text` or `icons`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pen_menu_style: Option<String>,
+    /// Milliseconds the pen is held still before the menu appears. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pen_menu_hold_ms: Option<u32>,
+    /// Seconds out of range before the idle pen cursor is hidden (0 = never). Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stylus_idle_hide_timeout: Option<u32>,
     /// Firmware/APK version reported by the connected Android client.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,

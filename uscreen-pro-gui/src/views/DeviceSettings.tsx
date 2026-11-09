@@ -84,6 +84,10 @@ export function DeviceSettings({
     stylus_style: p.stylus_style ?? g.stylus_style,
     stylus_button_primary: p.stylus_button_primary ?? g.stylus_button_primary,
     stylus_button_secondary: p.stylus_button_secondary ?? g.stylus_button_secondary,
+    pen_menu: p.pen_menu ?? g.pen_menu,
+    pen_menu_style: p.pen_menu_style ?? g.pen_menu_style,
+    pen_menu_hold_ms: p.pen_menu_hold_ms ?? g.pen_menu_hold_ms,
+    stylus_idle_hide_timeout: p.stylus_idle_hide_timeout ?? g.stylus_idle_hide_timeout,
   };
 
   const powerOverride = (key: keyof PowerValues, inherited: string) => ov(key, g[key], inherited);
@@ -114,7 +118,7 @@ export function DeviceSettings({
         <div className="flex items-center justify-between gap-3 rounded-lg bg-warning/15 px-3 py-2 text-warning">
           <span className="flex items-center gap-2">
             <AlertTriangle className="size-4 shrink-0" />
-            Tablet app is {device?.device_version}, host is {hostVersion}.
+            Android app is {device?.device_version}, host is {hostVersion}.
           </span>
           <Button size="sm" variant="ghost" className="text-warning" onClick={onInstallApk}>
             Update app
@@ -185,7 +189,7 @@ export function DeviceSettings({
         onChange={setTab}
         tabs={[
           { value: "mode", label: labelOf(INPUT_MODES, power.input_mode) },
-          { value: "tablet", label: "Tablet app" },
+          { value: "tablet", label: "Android app" },
         ]}
       />
 

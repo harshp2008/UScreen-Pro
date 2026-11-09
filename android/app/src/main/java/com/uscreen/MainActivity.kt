@@ -394,6 +394,10 @@ class MainActivity : AppCompatActivity() {
         prefs.stylusStyle = cfg.stylusStyle
         prefs.stylusButtonPrimary = cfg.stylusButtonPrimary
         prefs.stylusButtonSecondary = cfg.stylusButtonSecondary
+        prefs.penMenu = cfg.penMenu
+        prefs.penMenuStyle = cfg.penMenuStyle
+        prefs.penMenuHoldMs = cfg.penMenuHoldMs
+        prefs.stylusIdleHideTimeout = cfg.stylusIdleHideTimeout
         // Touchpad mode is made of finger input, so it overrides the "Touch input" switch.
         touchCapture?.setTouchEnabled(cfg.touchInput || cfg.inputMode == HostConfig.MODE_TOUCHPAD)
         touchCapture?.setTouchpadMode(cfg.inputMode == HostConfig.MODE_TOUCHPAD)

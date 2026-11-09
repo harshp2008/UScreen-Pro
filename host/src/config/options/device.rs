@@ -43,6 +43,8 @@ pub struct DeviceOptions {
     pub stylus_idle_hide_timeout: u32,
     /// The pen's long-press menu is on. Global.
     pub pen_menu: bool,
+    /// Pen menu buttons: `text` or `icons`.
+    pub pen_menu_style: String,
     /// Milliseconds the pen is held still before the menu appears. Global.
     pub pen_menu_hold_ms: u32,
     /// Milliseconds a pen tap keeps the left button down (0 = release at once). Global.
@@ -91,6 +93,10 @@ impl DeviceOptions {
         g.stylus_style = pick!(stylus_style);
         g.stylus_button_primary = pick!(stylus_button_primary);
         g.stylus_button_secondary = pick!(stylus_button_secondary);
+        g.pen_menu = pick!(pen_menu);
+        g.pen_menu_style = pick!(pen_menu_style);
+        g.pen_menu_hold_ms = pick!(pen_menu_hold_ms);
+        g.stylus_idle_hide_timeout = pick!(stylus_idle_hide_timeout);
         g.sanitize();
         let global_mode = CLI_MODE
             .get()
@@ -127,6 +133,7 @@ impl DeviceOptions {
             stylus_button_secondary: g.stylus_button_secondary.clone(),
             stylus_idle_hide_timeout: g.stylus_idle_hide_timeout,
             pen_menu: g.pen_menu,
+            pen_menu_style: g.pen_menu_style.clone(),
             pen_menu_hold_ms: g.pen_menu_hold_ms,
             pen_click_hold_ms: g.pen_click_hold_ms,
             stylus_art_apps: g.stylus_art_apps.clone(),
@@ -166,6 +173,10 @@ impl DeviceOptions {
             "stylus_style": self.stylus_style,
             "stylus_button_primary": self.stylus_button_primary,
             "stylus_button_secondary": self.stylus_button_secondary,
+            "pen_menu": self.pen_menu,
+            "pen_menu_style": self.pen_menu_style,
+            "pen_menu_hold_ms": self.pen_menu_hold_ms,
+            "stylus_idle_hide_timeout": self.stylus_idle_hide_timeout,
             "wifi_configured": self.wifi_configured,
         })
     }

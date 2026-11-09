@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { CurveEditor } from "./CurveEditor";
-import { NumberInput, Segmented } from "./ui/controls";
+import { NumberInput, Segmented, Select } from "./ui/controls";
 import { Columns, Section, SettingRow, SliderRow, SwitchRow, type Override } from "./ui/layout";
 import {
   CURVES,
@@ -8,8 +8,11 @@ import {
   FADE_MIN_MS,
   IDLE_TIMEOUT_MAX,
   IDLE_TIMEOUT_MIN,
+  IDLE_HIDE,
   INPUT_MODES,
   INPUT_MODE_HELP,
+  PEN_MENU_HOLD,
+  PEN_MENU_STYLE,
   ORIENTATIONS,
   RIGHT_CLICK_METHODS,
   TOUCHPAD_SHAPES,
@@ -48,6 +51,10 @@ export interface PowerValues {
   stylus_style: string;
   stylus_button_primary: string;
   stylus_button_secondary: string;
+  pen_menu: boolean;
+  pen_menu_style: string;
+  pen_menu_hold_ms: number;
+  stylus_idle_hide_timeout: number;
 }
 
 /** Tooltip of the Input mode row of a device: where the power goes and what to do about it. */
@@ -241,6 +248,56 @@ export function ModePanel({
           onChange={(blank_pen_only) => onChange({ blank_pen_only })}
           override={ov("blank_pen_only", onOff(v.blank_pen_only))}
         />
+        <SwitchRow
+          label="Pen menu"
+          tip="Hold the pen still on the screen to get a small menu: cut, copy, paste, select all, undo. Works on GNOME (Wayland) with the UScreen extension; never shown in drawing apps."
+          checked={v.pen_menu}
+          onChange={(pen_menu) => onChange({ pen_menu })}
+          override={ov("pen_menu", onOff(v.pen_menu))}
+        />
+        {v.pen_menu && (
+          <>
+            <SettingRow
+              label="Hold time for the menu"
+              tip="How long to hold the pen still before the menu appears."
+              override={ov("pen_menu_hold_ms", labelOf(PEN_MENU_HOLD, v.pen_menu_hold_ms))}
+            >
+              <Select
+                label="Hold time for the menu"
+                value={String(v.pen_menu_hold_ms)}
+                options={PEN_MENU_HOLD}
+                className="w-36"
+                onValueChange={(x) => onChange({ pen_menu_hold_ms: Number(x) })}
+              />
+            </SettingRow>
+            <SettingRow
+              label="Menu buttons"
+              tip="Show the menu buttons as text labels or as icons."
+              override={ov("pen_menu_style", labelOf(PEN_MENU_STYLE, v.pen_menu_style))}
+            >
+              <Select
+                label="Menu buttons"
+                value={v.pen_menu_style}
+                options={PEN_MENU_STYLE}
+                className="w-36"
+                onValueChange={(pen_menu_style) => onChange({ pen_menu_style })}
+              />
+            </SettingRow>
+          </>
+        )}
+        <SettingRow
+          label="Hide idle pen cursor"
+          tip="Hide the cursor when the pen has been completely out of range for this long. Never keeps it visible like a mouse cursor. Works on GNOME (Wayland)."
+          override={ov("stylus_idle_hide_timeout", labelOf(IDLE_HIDE, v.stylus_idle_hide_timeout))}
+        >
+          <Select
+            label="Hide idle pen cursor"
+            value={String(v.stylus_idle_hide_timeout)}
+            options={IDLE_HIDE}
+            className="w-36"
+            onValueChange={(x) => onChange({ stylus_idle_hide_timeout: Number(x) })}
+          />
+        </SettingRow>
       </Section>
       {stylusExtra}
     </Columns>
@@ -261,7 +318,7 @@ export function TabletPanel({
     <>
       {hint && <p className="px-1 pt-2 text-[11px] text-muted-foreground">{hint}</p>}
       <Columns>
-      <Section title="Tablet app">
+      <Section title="Android app">
         <SettingRow
           label="Orientation"
           tip="Landscape direction of the tablet app. Camera down is the usual way to hold it for drawing."

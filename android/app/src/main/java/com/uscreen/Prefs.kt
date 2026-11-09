@@ -234,4 +234,21 @@ class Prefs(context: Context) {
     var stylusButtonSecondary: String
         get() = sp.getString("stylus_button_secondary", HostConfig.PEN_BUTTON_MIDDLE) ?: HostConfig.PEN_BUTTON_MIDDLE
         set(v) = sp.edit().putString("stylus_button_secondary", v).apply()
+
+    /** The pen's long-press menu on the computer, synced with it. */
+    var penMenu: Boolean
+        get() = sp.getBoolean("pen_menu", true)
+        set(v) = sp.edit().putBoolean("pen_menu", v).apply()
+
+    var penMenuStyle: String
+        get() = sp.getString("pen_menu_style", "text") ?: "text"
+        set(v) = sp.edit().putString("pen_menu_style", v).apply()
+
+    var penMenuHoldMs: Int
+        get() = sp.getInt("pen_menu_hold_ms", 500)
+        set(v) = sp.edit().putInt("pen_menu_hold_ms", v).apply()
+
+    var stylusIdleHideTimeout: Int
+        get() = sp.getInt("stylus_idle_hide_timeout", 0)
+        set(v) = sp.edit().putInt("stylus_idle_hide_timeout", v).apply()
 }

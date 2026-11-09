@@ -334,6 +334,29 @@ fun SettingsSheet(
                                 )
                             }
                             SwitchRow(
+                                "Pen menu",
+                                "Hold the pen still on the computer's screen for a small menu: cut, copy, paste, select all, undo.",
+                                hostConfig.penMenu,
+                                { onSetting("pen_menu", it) }
+                            )
+                            if (hostConfig.penMenu) {
+                                ChipChoice(
+                                    "Hold time for the menu",
+                                    listOf("500" to "0.5 s", "800" to "0.8 s", "1000" to "1 s", "1500" to "1.5 s", "2000" to "2 s"),
+                                    hostConfig.penMenuHoldMs.toString(),
+                                ) { onSetting("pen_menu_hold_ms", it.toInt()) }
+                                ChipChoice(
+                                    "Menu buttons",
+                                    listOf("text" to "Text", "icons" to "Icons"),
+                                    hostConfig.penMenuStyle,
+                                ) { onSetting("pen_menu_style", it) }
+                            }
+                            ChipChoice(
+                                "Hide idle pen cursor",
+                                listOf("0" to "Never", "5" to "5 s", "15" to "15 s", "30" to "30 s", "60" to "1 min", "300" to "5 min"),
+                                hostConfig.stylusIdleHideTimeout.toString(),
+                            ) { onSetting("stylus_idle_hide_timeout", it.toInt()) }
+                            SwitchRow(
                                 "Black screen in stylus mode",
                                 "Nothing is streamed, so the screen goes black a few seconds after it starts.",
                                 hostConfig.blankPenOnly,

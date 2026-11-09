@@ -323,4 +323,25 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1400)).await;
         assert_eq!(sent.lock().unwrap().len(), 1);
     }
+
+    #[test]
+    fn the_pen_menu_settings_follow_the_device_override_and_reach_the_tablet() {
+        let cfg = FileConfig::default();
+        let p = TabletProfile {
+            pen_menu: Some(false),
+            pen_menu_hold_ms: Some(900),
+            pen_menu_style: Some("icons".into()),
+            stylus_idle_hide_timeout: Some(15),
+            ..TabletProfile::default()
+        };
+        let o = DeviceOptions::resolve(&cfg, Some(&p));
+        assert!(!o.pen_menu && o.pen_menu_hold_ms == 900 && o.pen_menu_style == "icons");
+        let m = o.config_update();
+        assert_eq!(m["pen_menu"], false);
+        assert_eq!(m["pen_menu_hold_ms"], 900);
+        assert_eq!(m["pen_menu_style"], "icons");
+        assert_eq!(m["stylus_idle_hide_timeout"], 15);
+        let g = DeviceOptions::resolve(&cfg, None);
+        assert!(g.pen_menu, "another device keeps the global value");
+    }
 }

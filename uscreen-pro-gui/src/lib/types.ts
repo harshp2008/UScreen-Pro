@@ -114,6 +114,10 @@ export interface TabletProfile {
   stylus_style?: string;
   stylus_button_primary?: string;
   stylus_button_secondary?: string;
+  pen_menu?: boolean;
+  pen_menu_style?: string;
+  pen_menu_hold_ms?: number;
+  stylus_idle_hide_timeout?: number;
   app_version?: string;
   preferred_transport?: string;
   /** false when the user skipped wireless setup in the wizard; absent on older profiles means configured. */
