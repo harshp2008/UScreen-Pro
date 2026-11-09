@@ -33,6 +33,7 @@ mod tests;
 pub(in crate::input) use crate::desktop::session_is_x11;
 pub(in crate::input) use background::{spawn_idle_task, start_focus_watcher};
 pub use control::{dump_file, dump_request_file, toggle_file};
+pub(in crate::input) use auto::Hold;
 pub(in crate::input) use pointer::apply_physical;
 pub(in crate::input) use route::route_to_pen;
 

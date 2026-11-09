@@ -100,6 +100,7 @@ pub(in crate::input) fn spawn_idle_task(
             };
             guard.auto_check_route(to_pen);
             guard.auto_flush_exit();
+            guard.auto_hold_check();
             if timeout != 0 && guard.ghost_idle_tick(timeout) {
                 info!("Pen out of range for {}s — cursor hidden", timeout);
             }

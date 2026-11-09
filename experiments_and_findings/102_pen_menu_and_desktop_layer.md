@@ -55,3 +55,19 @@ pen, shaky taps all unchanged.
 ## Also in this pass: removed the retired egui GUI (`gui-legacy/`), `scratch/`, `upstream_prep/`, `scripts/deploy_fixes.sh`; install, Makefile, release script, packaging and CI
 now name `uscreen-pro-gui` and `uscreen-menu`. The release/packaging/CI paths were already stale (they built a `gui/` folder that no longer existed) and the migrated
 steps (Tauri build in the Debian 12 container, PKGBUILD, spec) have **not been run**.
+
+## Follow-up: the menu now appears while the pen is held (and no longer clicks the selection)
+Reported: the menu only appeared after lifting (even after 30 s), and by then the lift had clicked the selected text and collapsed it.
+Cause: the menu was requested on the lift, and the left-button press went out at pen-down, so the lift was a click on the selection.
+
+Change (`ghost/auto.rs`, `menu/runner.rs`):
+* On the mouse route the left-button **press is held back** (`press_deferred`). It goes out: when the pen leaves the click slop (a drag; at the spot the tip landed),
+  at the lift (a tap: press and release together), or when a long press is declined.
+* A background tick (50 ms) notices a tip held still for 0.8 s and asks the runner (`Hold::Pending`). The runner decides and answers: **menu shown** (`Hold::Shown`: the rest
+  of the touch is swallowed, no click, no drag; the selection is never touched) or **declined** (nothing to offer, setting off, art app, no runner: the held-back press is delivered
+  and the hold carries on as an ordinary click/drag). A lift before the answer is clicked late only if declined.
+
+Results (Chrome probe, 12 characters selected, pen held 3 s on the selection): menu window up **1.05 s after the press, while the pen was still down**; the page saw no press
+(`pd=0 cl=0`) and `sel=12` afterwards. Regression unchanged: 12/12 drag-selects, 3 quick taps (`pd=3`), art-route stroke with pressure, focus flip mid-drag, resting pen silent 5.5 s,
+shaky taps 0/4 drags, and the full menu path with the real extension (Copy -> Ctrl+C). 192 host tests.
+Not verified: a real tap on a menu button with the pen; the delay to the menu is the 0.8 s hold plus ~0.2 s to place the window (the 0.8 s is `StillCfg::long_press`, not a setting yet).

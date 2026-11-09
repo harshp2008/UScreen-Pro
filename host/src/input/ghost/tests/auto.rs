@@ -118,9 +118,9 @@ fn auto_a_focus_change_in_mid_stroke_neither_cuts_nor_moves_the_stroke() {
     // Chrome (mouse) stroke, the focus flips to Krita and back while the button is down.
     let (mut d, pp, qp) = rig();
     auto(&mut d, 0, 10, false);
-    auto(&mut d, 2, 20, true);
-    auto(&mut d, 2, 30, false);
-    auto(&mut d, 2, 40, true);
+    auto(&mut d, 2, 5000, true); // out of the slop: the held-back press goes out
+    auto(&mut d, 2, 10000, false);
+    auto(&mut d, 2, 15000, true);
     d.auto_check_route(true);
     d.auto_flush_exit();
     assert_eq!(
@@ -128,7 +128,7 @@ fn auto_a_focus_change_in_mid_stroke_neither_cuts_nor_moves_the_stroke() {
         DevState::Down(0b1),
         "still held"
     );
-    auto(&mut d, 1, 40, true);
+    auto(&mut d, 1, 15000, true);
     let (pen, ptr) = (frames(&pp), frames(&qp));
     done(&[&pp, &qp]);
     assert_eq!(left_events(&ptr), vec![1, 0]);
@@ -193,11 +193,13 @@ fn auto_a_repeated_down_in_mid_drag_is_a_move_not_a_release_and_press() {
 fn auto_a_down_after_a_lost_up_closes_the_old_stroke_first() {
     let (mut d, pp, qp) = rig();
     auto(&mut d, 0, 10, false);
+    auto(&mut d, 2, 5000, false); // pressed (out of the slop) ...
     std::thread::sleep(AUTO_STALE_STROKE + Duration::from_millis(30));
-    auto(&mut d, 0, 90, false); // the UP in between never arrived
+    auto(&mut d, 0, 90, false); // ... and the UP in between never arrived
+    auto(&mut d, 1, 90, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
-    assert_eq!(left_events(&ptr), vec![1, 0, 1]);
+    assert_eq!(left_events(&ptr), vec![1, 0, 1, 0], "the old stroke is closed, the new tap clicks");
 }
 
 #[test]
@@ -205,9 +207,9 @@ fn auto_a_move_whose_down_was_lost_starts_the_stroke() {
     let (mut d, pp, qp) = rig();
     auto(&mut d, 3, 10, false);
     auto(&mut d, 2, 20, false); // no DOWN ever arrived
-    auto(&mut d, 2, 30, false);
+    auto(&mut d, 2, 5000, false);
     assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
-    auto(&mut d, 1, 30, false);
+    auto(&mut d, 1, 5000, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
     assert_eq!(left_events(&ptr), vec![1, 0]);
@@ -229,12 +231,13 @@ fn auto_a_straggler_move_right_after_the_lift_does_not_press_again() {
 fn auto_a_range_exit_inside_a_stroke_does_not_let_go() {
     let (mut d, pp, qp) = rig();
     auto(&mut d, 0, 10, false);
+    auto(&mut d, 2, 5000, false); // out of the slop: pressed
     auto(&mut d, 4, 0, false);
     std::thread::sleep(AUTO_EXIT_GRACE + Duration::from_millis(20));
     d.auto_flush_exit();
     assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
-    auto(&mut d, 2, 20, false);
-    auto(&mut d, 1, 20, false);
+    auto(&mut d, 2, 6000, false);
+    auto(&mut d, 1, 6000, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
     assert_eq!(left_events(&ptr), vec![1, 0]);
@@ -248,7 +251,9 @@ fn auto_range_exit_before_the_tip_keeps_a_held_barrel_button() {
     auto(&mut d, 4, 0, false);
     d.auto_flush_exit();
     auto(&mut d, 0, 10, false);
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b11));
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b10), "the barrel stays; the tip's press is held back");
+    auto(&mut d, 2, 5000, false);
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b11), "a right-drag once the pen moves");
     done(&[&pp, &qp]);
 }
 
@@ -417,7 +422,7 @@ fn auto_touching_down_works_from_a_parked_pen() {
     auto(&mut d, 3, 5001, false);
     auto(&mut d, 4, 0, false);
     auto(&mut d, 0, 5001, false);
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Idle, "the press waits for the lift or a move");
     auto(&mut d, 1, 5001, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
@@ -440,18 +445,82 @@ fn menu_rig() -> (
 }
 
 #[test]
-fn long_press_a_still_tip_held_long_enough_asks_for_the_menu_on_lift() {
+fn long_press_a_still_tip_asks_for_the_menu_while_it_is_down_and_never_clicks_when_it_is_shown() {
+    let (mut d, pp, qp, rx) = menu_rig();
+    auto(&mut d, 0, 5000, false);
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Idle, "the press is held back");
+    std::thread::sleep(Duration::from_millis(90));
+    auto(&mut d, 2, 5050, false); // wobble inside the slop
+    d.auto_hold_check();
+    assert!(rx.try_recv().is_ok(), "asked while the tip is still down");
+    assert!(d.hold_pending());
+    d.auto_menu_resolved(true);
+    auto(&mut d, 2, 9000, false); // the touch is swallowed now
+    auto(&mut d, 1, 9000, false);
+    let ptr = frames(&qp);
+    done(&[&pp, &qp]);
+    assert!(!left_events(&ptr).contains(&1), "no press: the selection stays");
+    assert!(!xs(&ptr).contains(&9000), "and the cursor stays put");
+}
+
+#[test]
+fn long_press_declined_delivers_the_held_back_press_and_the_hold_goes_on() {
     let (mut d, pp, qp, rx) = menu_rig();
     auto(&mut d, 0, 5000, false);
     std::thread::sleep(Duration::from_millis(90));
-    auto(&mut d, 2, 5050, false); // wobble inside the slop
-    assert!(
-        rx.try_recv().is_err(),
-        "nothing while the tip is still down"
-    );
-    auto(&mut d, 1, 5050, false);
-    assert!(rx.try_recv().is_ok(), "asked on the lift");
+    d.auto_hold_check();
+    assert!(rx.try_recv().is_ok());
+    d.auto_menu_resolved(false);
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1), "pressed, still held");
+    auto(&mut d, 2, 9000, false); // and it can still be dragged
+    auto(&mut d, 1, 9000, false);
+    let ptr = frames(&qp);
     done(&[&pp, &qp]);
+    assert_eq!(left_events(&ptr), vec![1, 0]);
+    assert!(xs(&ptr).contains(&9000));
+}
+
+#[test]
+fn long_press_a_lift_before_the_answer_is_clicked_late_only_if_declined() {
+    for (shown, pressed) in [(false, true), (true, false)] {
+        let (mut d, pp, qp, _rx) = menu_rig();
+        auto(&mut d, 0, 5000, false);
+        std::thread::sleep(Duration::from_millis(90));
+        d.auto_hold_check();
+        auto(&mut d, 1, 5000, false); // lifted while the runner is still deciding
+        assert!(!left_events(&frames(&qp)).contains(&1), "no press yet");
+        d.auto_menu_resolved(shown);
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert_eq!(left_events(&ptr).contains(&1), pressed, "shown = {shown}");
+    }
+}
+
+#[test]
+fn long_press_without_a_runner_just_clicks() {
+    let (mut d, pp, qp) = rig(); // no menu_tx
+    d.still_cfg.long_press = Duration::from_millis(60);
+    auto(&mut d, 0, 5000, false);
+    std::thread::sleep(Duration::from_millis(90));
+    d.auto_hold_check();
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
+    auto(&mut d, 1, 5000, false);
+    let ptr = frames(&qp);
+    done(&[&pp, &qp]);
+    assert_eq!(left_events(&ptr), vec![1, 0]);
+}
+
+#[test]
+fn a_tap_presses_and_releases_together_at_the_lift_where_it_landed() {
+    let (mut d, pp, qp) = rig();
+    auto(&mut d, 0, 5000, false);
+    auto(&mut d, 2, 5060, false); // wobble inside the slop
+    assert!(!left_events(&frames(&qp)).contains(&1));
+    auto(&mut d, 1, 5060, false);
+    let ptr = frames(&qp);
+    done(&[&pp, &qp]);
+    assert_eq!(left_events(&ptr), vec![1, 0]);
+    assert!(!xs(&ptr).contains(&5060), "released where the tip landed");
 }
 
 #[test]

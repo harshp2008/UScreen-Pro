@@ -1,10 +1,11 @@
 //! The background thread that turns a long-press request into a menu on screen and, if a button is
 //! chosen, the key combination in the focused app.
 //!
-//! Per request: check the setting and the desktop's abilities, skip art apps (holding still is
-//! normal while painting), ask the desktop what is under the pointer, let `decision` pick the
-//! buttons, remember the focused window, show `uscreen-menu` at the pointer, wait for its answer,
-//! give the window focus back, send the keys.
+//! Per request (the pen is still touching, its click held back): check the setting and the desktop's
+//! abilities, skip art apps (holding still is normal while painting), ask the desktop what is under
+//! the pointer, let `decision` pick the buttons, remember the focused window, show `uscreen-menu`
+//! at the pointer, tell the router the menu is up (or that none applies, so the click goes out), wait
+//! for the answer, give the window focus back, send the keys.
 
 use super::actions::MenuAction;
 use super::decision::{items, Rules};
@@ -55,18 +56,63 @@ fn run(uinput: Arc<Mutex<InjectDevices>>, rx: Receiver<()>) {
     while rx.recv().is_ok() {
         // Requests that piled up while a menu was open are stale.
         while rx.try_recv().is_ok() {}
-        if let Some(action) = show(desktop.as_mut()) {
-            debug!("Pen menu: {}", action.name());
-            if let Ok(mut g) = uinput.lock() {
-                g.tap_key_combo(&action.keys());
-            }
+        handle_request(desktop.as_mut(), &uinput);
+    }
+}
+
+/// Answer one long-press request. The pen is still touching the screen with its press held back, so
+/// this must tell the router what happened: no menu applies (the press goes out and the hold goes on
+/// as an ordinary click) or the menu is up (the rest of the touch is swallowed). The chosen action is
+/// carried out once the menu closes.
+fn handle_request(desktop: &mut dyn DesktopBackend, uinput: &Arc<Mutex<InjectDevices>>) {
+    let Some(plan) = plan(desktop) else {
+        resolve(uinput, false);
+        return;
+    };
+    // The pen may have moved on (a drag) while the desktop was being asked.
+    if !uinput.lock().is_ok_and(|g| g.hold_pending()) {
+        resolve(uinput, false);
+        return;
+    }
+    let _ = std::fs::remove_file(&plan.result);
+    let previous = desktop.focused_window();
+    let command = menu_command(&plan.buttons, &plan.style, &plan.result);
+    if !desktop.spawn_at_pointer(LIFT_PX, MENU_CLASS, &command) {
+        warn!("Pen menu: could not show the menu window ({:?})", command.first());
+        resolve(uinput, false);
+        return;
+    }
+    resolve(uinput, true);
+    let chosen = wait_for_choice(&plan.result);
+    if let Some(w) = previous {
+        desktop.focus_window(&w);
+        std::thread::sleep(FOCUS_SETTLE);
+    }
+    if let Some(action) = chosen {
+        debug!("Pen menu: {}", action.name());
+        if let Ok(mut g) = uinput.lock() {
+            g.tap_key_combo(&action.keys());
         }
     }
 }
 
-/// Show the menu if it should be shown; the chosen action, if any. The focused window gets focus
-/// back before this returns.
-fn show(desktop: &mut dyn DesktopBackend) -> Option<MenuAction> {
+/// Tell the router whether a menu is on screen (`true`) or not (`false`).
+fn resolve(uinput: &Arc<Mutex<InjectDevices>>, shown: bool) {
+    if let Ok(mut g) = uinput.lock() {
+        g.auto_menu_resolved(shown);
+    }
+}
+
+/// What to show: the buttons, their style and where the answer goes.
+struct Plan {
+    buttons: Vec<MenuAction>,
+    style: String,
+    result: std::path::PathBuf,
+}
+
+/// Decide whether a menu applies here: the setting, the desktop's abilities, an app that is not an
+/// art app, and `decision::items` on what the desktop says is under the pointer.
+fn plan(desktop: &mut dyn DesktopBackend) -> Option<Plan> {
     let cfg = crate::config::FileConfig::load();
     if !cfg.pen_menu {
         return None;
@@ -84,23 +130,7 @@ fn show(desktop: &mut dyn DesktopBackend) -> Option<MenuAction> {
     if buttons.is_empty() {
         return None;
     }
-    let result = data_file("menu_result")?;
-    let _ = std::fs::remove_file(&result);
-    let previous = desktop.focused_window();
-    let command = menu_command(&buttons, &cfg.pen_menu_style, &result);
-    if !desktop.spawn_at_pointer(LIFT_PX, MENU_CLASS, &command) {
-        warn!(
-            "Pen menu: could not show the menu window ({:?})",
-            command.first()
-        );
-        return None;
-    }
-    let chosen = wait_for_choice(&result);
-    if let Some(w) = previous {
-        desktop.focus_window(&w);
-        std::thread::sleep(FOCUS_SETTLE);
-    }
-    chosen
+    Some(Plan { buttons, style: cfg.pen_menu_style, result: data_file("menu_result")? })
 }
 
 /// The command line that shows the menu window with these buttons.

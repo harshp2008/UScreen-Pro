@@ -36,7 +36,7 @@ impl Default for StillCfg {
             park_after: Duration::from_millis(300),
             wake_radius_mm: 5.0,
             click_slop_mm: 2.0,
-            long_press: Duration::from_millis(600),
+            long_press: Duration::from_millis(800),
         }
     }
 }

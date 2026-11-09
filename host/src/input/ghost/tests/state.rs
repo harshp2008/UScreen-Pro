@@ -18,6 +18,8 @@ fn device_state_follows_what_the_device_holds() {
     auto(&mut d, 1, 10, true);
     assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
     auto(&mut d, 0, 20, false);
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Idle, "the press is held back");
+    auto(&mut d, 2, 5000, false);
     assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
     done(&[&pp, &qp]);
 }
@@ -27,6 +29,7 @@ fn force_release_all_lets_go_of_everything_a_device_holds() {
     let (mut d, pp, qp) = rig();
     auto(&mut d, 5, 0, false); // barrel -> right button on the pointer
     auto(&mut d, 0, 10, false);
+    auto(&mut d, 2, 5000, false);
     assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b11));
     d.force_release_all(Which::Pointer);
     assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);

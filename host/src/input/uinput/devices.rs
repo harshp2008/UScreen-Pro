@@ -84,6 +84,13 @@ pub(in crate::input) struct InjectDevices {
     pub(in crate::input) auto_last_at: Option<std::time::Instant>,
     /// Auto mode: when the last stroke was lifted.
     pub(in crate::input) auto_up_at: Option<std::time::Instant>,
+    /// Auto mode, mouse route: the left-button press of the open stroke has not been sent yet (it is
+    /// held back until the pen moves out of the click slop, lifts, or the menu question is answered).
+    pub(in crate::input) press_deferred: bool,
+    /// Auto mode: where the pen menu stands for the open stroke.
+    pub(in crate::input) hold: crate::input::ghost::Hold,
+    /// A tap that ended while the menu question was still open: delivered (or dropped) when it is answered.
+    pub(in crate::input) pending_click: Option<(i32, i32)>,
     /// Where long-press requests for the pen menu go (set when the menu runner starts).
     pub(in crate::input) menu_tx: Option<std::sync::mpsc::Sender<()>>,
     /// Auto mode, mouse route: where the tip landed, while the pointer is held there (click slop).
@@ -134,6 +141,9 @@ impl InjectDevices {
             auto_down_at: None,
             auto_last_at: None,
             auto_up_at: None,
+            press_deferred: false,
+            hold: Default::default(),
+            pending_click: None,
             menu_tx: None,
             slop_anchor: None,
             hover_filter: Default::default(),
@@ -451,6 +461,9 @@ impl InjectDevices {
             self.auto_down_at = None;
             self.auto_last_at = None;
             self.slop_anchor = None;
+            self.press_deferred = false;
+            self.hold = Default::default();
+            self.pending_click = None;
         }
     }
 

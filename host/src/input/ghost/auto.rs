@@ -1,6 +1,7 @@
 //! The Android "auto" pen style: one pen that is a mouse or a graphics tablet *per stroke*,
-//! depending on the focused app. Mouse route = pointer only with click slop; art route = tablet
-//! contact with real pressure; the route is latched at pen-down, and a resting pen is parked so it
+//! depending on the focused app. Mouse route = pointer only with click slop and a held-back press
+//! (so a long press can show the pen menu instead of clicking); art route = tablet contact with
+//! real pressure; the route is latched at pen-down, and a resting pen is parked so it
 //! stops taking the cursor from other devices.
 
 use super::*;
@@ -20,6 +21,22 @@ pub(super) const AUTO_STALE_STROKE: Duration = Duration::from_millis(500);
 /// DOWN: it must not press again.
 pub(super) const AUTO_LIFT_QUIET: Duration = Duration::from_millis(100);
 
+/// Where the pen menu stands for the open mouse-route stroke. The left-button press is held back
+/// (`press_deferred`) until it is known whether this is a click, a drag or a long press, so a long
+/// press never clicks the text it is meant to act on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(in crate::input) enum Hold {
+    /// Not held long enough yet.
+    #[default]
+    None,
+    /// Held long enough: the runner is deciding whether a menu applies here.
+    Pending,
+    /// The menu is on screen: the rest of this touch is swallowed (no click, no drag).
+    Shown,
+    /// No menu applies (or the pen moved on): the press went out and the stroke is an ordinary one.
+    Declined,
+}
+
 impl InjectDevices {
     /// **Auto mode** (Android pen, `stylus_style = "auto"`): the pen is a mouse or a graphics tablet,
     /// per stroke, depending on the focused app (`to_pen`).
@@ -27,7 +44,9 @@ impl InjectDevices {
     /// * The pointer follows every sample (X/Y first, then the button), so the cursor is always
     ///   visible and a click lands where the pen is.
     /// * **Mouse route** (not an art app, or unknown): the tip is `BTN_LEFT` on the pointer, held for
-    ///   the whole stroke; moves go to the pointer only. The tablet device gets nothing, the tool
+    ///   the whole stroke, but its press is *deferred*: sent when the pen leaves the click slop (a
+    ///   drag, the press goes out at the spot it landed), at the lift (a tap) or when a long press
+    ///   is declined. Moves go to the pointer only. The tablet device gets nothing, the tool
     ///   stays out of range (a tool in range next to a mouse button makes clients treat the stroke
     ///   as a pen's and drop the drag).
     /// * **Art route**: the tablet gets the tool, X/Y, tilt, `BTN_TOUCH` and the real pressure,
@@ -150,18 +169,17 @@ impl InjectDevices {
                 if !(open && self.slop_anchor.is_some()) {
                     self.ghost_place_pointer(s.x, s.y);
                 }
-                // A tip that stayed down, inside the click slop, for the long-press time is a long
-                // press: once the button is up, ask for the pen menu.
-                let long_press = open
-                    && self.tip == Tip::Pointer
-                    && self.slop_anchor.is_some()
-                    && self
-                        .auto_down_at
-                        .is_some_and(|t| t.elapsed() >= self.still_cfg.long_press);
-                self.auto_end_stroke(s);
-                if long_press {
-                    crate::input::menu::request(&self.menu_tx);
+                if open && self.tip == Tip::Pointer && self.press_deferred {
+                    match self.hold {
+                        // A long press with the menu up: no click, the selection stays.
+                        Hold::Shown => {}
+                        // The runner is still deciding: the tap is delivered or dropped when it answers.
+                        Hold::Pending => self.pending_click = self.slop_anchor,
+                        // A plain tap: the press goes out now and is released just below.
+                        _ => self.auto_press_now(),
+                    }
                 }
+                self.auto_end_stroke(s);
                 // Whatever the lift did not manage to let go of, let go of now (only what is held:
                 // the tablet device is not written to when it is idle).
                 self.auto_let_go_left();
@@ -213,8 +231,10 @@ impl InjectDevices {
             // Tool, X/Y, tilt, then BTN_TOUCH with the real pressure (see `inject_pen`).
             Tip::Pen => self.ghost_tablet(s, 0),
             Tip::Pointer => {
+                // The press itself waits (see `Hold`).
                 self.ghost_tool_away(s);
-                self.ghost_pointer_button(BTN_LEFT, 1, true);
+                self.press_deferred = true;
+                self.hold = Hold::None;
             }
             Tip::None => self.ghost_tool_away(s),
         }
@@ -225,6 +245,10 @@ impl InjectDevices {
     /// inside the click slop, following normally from the moment it leaves it (and never held
     /// again for this stroke).
     fn auto_stroke_pointer(&mut self, s: &PenSample) {
+        // The menu is up: this touch is over as far as the app is concerned.
+        if self.hold == Hold::Shown {
+            return;
+        }
         if let Some(anchor) = self.slop_anchor {
             let inside = super::stillness::dist_mm(anchor, (s.x, s.y), self.tablet_mm)
                 <= self.still_cfg.click_slop_mm;
@@ -232,8 +256,65 @@ impl InjectDevices {
                 return;
             }
             self.slop_anchor = None;
+            // A drag: the held-back press goes out where the tip landed, then the pointer follows.
+            if self.hold == Hold::Pending {
+                self.hold = Hold::Declined;
+            }
+            self.auto_press_now();
         }
         self.ghost_place_pointer(s.x, s.y);
+    }
+
+    /// Send the left-button press that was held back, if it still is. The pointer is at the spot the
+    /// tip landed (it was held there), so the press goes out where the user touched.
+    fn auto_press_now(&mut self) {
+        if self.press_deferred {
+            self.press_deferred = false;
+            self.ghost_pointer_button(BTN_LEFT, 1, true);
+        }
+    }
+
+    /// Called from the ticker: a tip held still, inside the click slop, for the long-press time asks
+    /// the menu runner whether a menu applies here. Without a runner the press is simply delivered.
+    pub(in crate::input) fn auto_hold_check(&mut self) {
+        if self.tip == Tip::Pointer
+            && self.press_deferred
+            && self.hold == Hold::None
+            && self
+                .auto_down_at
+                .is_some_and(|t| t.elapsed() >= self.still_cfg.long_press)
+        {
+            self.hold = Hold::Pending;
+            if !crate::input::menu::request(&self.menu_tx) {
+                self.auto_menu_resolved(false);
+            }
+        }
+    }
+
+    /// Whether a menu question is open for the current stroke.
+    pub(in crate::input) fn hold_pending(&self) -> bool {
+        self.hold == Hold::Pending && self.auto_down_at.is_some()
+    }
+
+    /// The runner's answer: `shown` = a menu is on screen. Shown swallows the rest of the touch;
+    /// declined delivers the press that was held back (late, if the pen has already lifted).
+    pub(in crate::input) fn auto_menu_resolved(&mut self, shown: bool) {
+        if let Some(p) = self.pending_click.take() {
+            if !shown {
+                self.ghost_place_pointer(p.0, p.1);
+                self.ghost_pointer_button(BTN_LEFT, 1, true);
+                self.ghost_pointer_button(BTN_LEFT, 1, false);
+            }
+            return;
+        }
+        if self.hold_pending() {
+            if shown {
+                self.hold = Hold::Shown;
+            } else {
+                self.hold = Hold::Declined;
+                self.auto_press_now();
+            }
+        }
     }
 
     /// One more sample of the open stroke, on the route it started on.
@@ -273,6 +354,8 @@ impl InjectDevices {
         self.auto_down_at = None;
         self.auto_last_at = None;
         self.slop_anchor = None;
+        self.press_deferred = false;
+        self.hold = Hold::None;
     }
 
     /// Called from the ticker: the focus can change while the pen holds still (no samples). With no
