@@ -44,10 +44,14 @@ pen, shaky taps all unchanged.
 | Menu look | dark rounded pill with five text buttons, seen in a crop of the menu's own area |
 
 ## Not verified
-* **The extension probe in the real Shell.** The installed extension is still v3 until you log out and in; the test used a script that answers
-  `context_request` the way the extension would. The probe's JavaScript is syntax-checked only.
+* **Extension probe: verified after the re-login** (extension v4). With text selected on a Chrome probe page it reported `selection_len: 12`, `zone: window`, the window frame and
+  `app_id: google-chrome.desktop`; a 0.9 s long press then showed the real menu (Cut, Copy, Select all, Undo; no Paste, the clipboard was empty), and choosing Copy sent Ctrl+C.
 * A real **tap on a menu button with the pen** (the test wrote the choice file); the buttons are ordinary GTK buttons.
 * The menu in Krita/art apps is deliberately off. Terminals need Ctrl+Shift+C/V (not handled). AT-SPI (Tier 2: "is this an editable field?")
   is not built; over blank page space with something on the clipboard the menu still offers Paste.
 * The transparent margin around the pill shows a faint lighter rectangle in the capture.
 * GNOME 46 / Ubuntu 24.04 only. Release packaging (deb/rpm/PKGBUILD, `build-release.sh`) was not updated for `uscreen-menu`.
+
+## Also in this pass: removed the retired egui GUI (`gui-legacy/`), `scratch/`, `upstream_prep/`, `scripts/deploy_fixes.sh`; install, Makefile, release script, packaging and CI
+now name `uscreen-pro-gui` and `uscreen-menu`. The release/packaging/CI paths were already stale (they built a `gui/` folder that no longer existed) and the migrated
+steps (Tauri build in the Debian 12 container, PKGBUILD, spec) have **not been run**.
