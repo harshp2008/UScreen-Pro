@@ -64,7 +64,11 @@ fn run(uinput: Arc<Mutex<InjectDevices>>, rx: Receiver<()>, instance: u32) {
 /// this must tell the router what happened: no menu applies (the press goes out and the hold goes on
 /// as an ordinary click) or the menu is up (the rest of the touch is swallowed). The chosen action is
 /// carried out once the menu closes.
-fn handle_request(desktop: &mut dyn DesktopBackend, uinput: &Arc<Mutex<InjectDevices>>, instance: u32) {
+fn handle_request(
+    desktop: &mut dyn DesktopBackend,
+    uinput: &Arc<Mutex<InjectDevices>>,
+    instance: u32,
+) {
     let Some(plan) = plan(desktop, instance) else {
         resolve(uinput, false);
         return;

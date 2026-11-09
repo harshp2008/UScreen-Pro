@@ -57,6 +57,33 @@ These look unused but are files, so they are left alone until you decide.
 | `android/app/src/main/java/com/uscreen/ui/MorphButton.kt` | the `MorphButton` composable and `PillToSquareShape` are not used by any screen |
 | `scripts/test-gen-edid.py` | not run by CI or the `Makefile`; only mentioned by an experiment record |
 
+## Splits and kept files (phase 3)
+
+Rule: split where a file holds several responsibilities; keep a cohesive unit (one state machine whose
+parts share private state) even when it is long. Every split was compiled, linted and tested; nothing
+was moved without the build and tests staying green.
+
+| File (lines before) | Decision | Why |
+|---|---|---|
+| `host/evdi/evdi_helper.c` (1904) | **split** into `evdi_helper.c` (device discovery, `main`) and `helper_state.h`, `helper_signals.h`, `helper_boundary.h`, `helper_timing.h`, `helper_convert.h`, `helper_writer.h`, `helper_events.h` | seven responsibilities (shared state, signals, X11 boundary sync, timing ring, NV12 conversion, frame writer, EVDI events). The parts are `#include`d by `evdi_helper.c`, so the helper is still one translation unit: the hot conversion loops still inline and no `static` becomes global. The preprocessed output of the new tree equals the old one line for line (`gcc -E -P`, blank lines removed, sorted). The Makefile and `scripts/build-release.sh` compile the same file with the same flags, so they need no change beyond a comment |
+| `android/.../ui/ConnectionScreen.kt` (715) | **split** into `ConnectionScreen.kt` (`UScreenMain`), `ActiveScreens.kt` (graphics-tablet and touchpad screens), `HostOverlays.kt` (unpaired banner, host notice) | three unrelated groups of composables |
+| `android/.../ui/SettingsSheet.kt` (668) | **split**: building blocks to `SettingsParts.kt` | layout helpers (section, switch row, chip choice, curve labels) are separate from the settings themselves |
+| `android/.../TouchCapture.kt` (1350) | **kept** (only `HostNotice` moved to `HostLink.kt`, next to `HostConfig`) | one class: the socket, the pen path, the touch path and the touchpad feed share the WebSocket, the sequence counter and the display geometry. Splitting it needs a shared-state object and cannot be checked without a tablet |
+| `android/.../VideoReceiver.kt` (865) | **kept** | one decoder pipeline: socket loop, codec tiers and the arrival ring share state |
+| `android/.../MainActivity.kt` (802) | **kept** | an Activity whose lifecycle callbacks share the connection objects; no part stands alone |
+| `uscreen-pro-gui/src/components/AddDeviceWizard.tsx` (1275) | **kept** | one multi-step dialog with 34 pieces of state used across its steps (a single state machine). Pulling the steps apart would mean passing about 40 props to each and cannot be checked visually here |
+| `host/src/daemon/session/monitor.rs` (716) | **kept** | one supervising loop (`adb_monitor`) with local state; no independent parts |
+| `host/src/config/mod.rs` (685) | **split**: `FileConfig::sanitize` moved to `config/sanitize.rs` | validation is separate from the shape of the config; the model, defaults and load/save stay together; tests stay next to the model |
+| `uscreen-pro-gui/src-tauri/src/adb.rs` (682) | **split** into `adb/` (`mod.rs` types and the process wrapper, `devices.rs`, `install.rs`, `intents.rs`) | listing, installing and device intents are separate; every public name is re-exported, so callers and the Tauri command registration are unchanged |
+| `host/src/net/adb.rs` (637) | **split** into `net/adb/` (`mod.rs` types and serial classification, `discovery.rs`, `forwarding.rs`, `wifi.rs`, `app.rs`) | discovery, tunnels, wireless setup and app supervision are separate; every public name is re-exported |
+| `host/src/input/uinput/devices.rs` (597) | **kept** | one aggregate, `InjectDevices`, whose methods work on the same device fields |
+| `host/src/input/ghost/auto.rs` (470) | **kept** | the Dynamic pen state machine; its states share private fields |
+| `extensions/uscreen-app-lock/extension.js` (627) | decided with the layout in phase 5 | the version-compatibility layer is introduced there |
+
+The test in `host/src/net/adb/mod.rs` named `physical_device_deduplication_prefers_usb` re-implements the
+merge inline instead of calling production code. It is left as it is; a real test of `scan_adb_devices`
+needs a fake `adb`.
+
 ## Comments (phase 1)
 
 - The comment rules are in [comment-style.md](comment-style.md).

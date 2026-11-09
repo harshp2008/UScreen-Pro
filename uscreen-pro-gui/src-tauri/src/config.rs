@@ -263,8 +263,18 @@ impl Default for AppConfig {
             stylus_button_secondary: "middle".into(),
             stylus_idle_hide_timeout: 0,
             stylus_art_apps: [
-                "krita", "gimp", "inkscape", "blender", "xournalpp", "rnote", "mypaint", "aseprite",
-                "pinta", "darktable", "freecad", "onlyoffice",
+                "krita",
+                "gimp",
+                "inkscape",
+                "blender",
+                "xournalpp",
+                "rnote",
+                "mypaint",
+                "aseprite",
+                "pinta",
+                "darktable",
+                "freecad",
+                "onlyoffice",
             ]
             .iter()
             .map(|s| s.to_string())
@@ -421,9 +431,10 @@ const DEVICE_OWN_KEYS: &[&str] = &[
 ///   every device (a tablet pins a value to itself only by changing it afterwards).
 fn apply_global_change(previous: &AppConfig, mut config: AppConfig) -> Result<AppConfig, String> {
     config.tablets = previous.tablets.clone();
-    let (Ok(serde_json::Value::Object(old)), Ok(serde_json::Value::Object(new))) =
-        (serde_json::to_value(previous), serde_json::to_value(&config))
-    else {
+    let (Ok(serde_json::Value::Object(old)), Ok(serde_json::Value::Object(new))) = (
+        serde_json::to_value(previous),
+        serde_json::to_value(&config),
+    ) else {
         return Ok(config);
     };
     let changed: Vec<&String> = new
@@ -516,7 +527,10 @@ mod last_change_wins_tests {
         edited.show_stats = !previous.show_stats;
         let out = apply_global_change(&previous, edited).unwrap();
         let p = &out.tablets["A"];
-        assert_eq!(p.show_stats, None, "the changed setting follows the global value again");
+        assert_eq!(
+            p.show_stats, None,
+            "the changed setting follows the global value again"
+        );
         assert_eq!(p.fps, Some(60), "untouched pins stay");
         assert_eq!(p.label, "Tab", "device identity is never cleared");
     }
@@ -528,12 +542,16 @@ mod last_change_wins_tests {
         previous.tablets.insert(
             "A".into(),
             profile(|p| {
-                p.extra.insert("pen_menu".into(), toml::Value::Boolean(false));
+                p.extra
+                    .insert("pen_menu".into(), toml::Value::Boolean(false));
             }),
         );
         let mut stale = AppConfig::default();
         stale.tablets.insert("A".into(), profile(|_| {}));
         let out = apply_global_change(&previous, stale).unwrap();
-        assert_eq!(out.tablets["A"].extra.get("pen_menu"), Some(&toml::Value::Boolean(false)));
+        assert_eq!(
+            out.tablets["A"].extra.get("pen_menu"),
+            Some(&toml::Value::Boolean(false))
+        );
     }
 }

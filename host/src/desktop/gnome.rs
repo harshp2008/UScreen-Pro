@@ -103,8 +103,8 @@ impl DesktopBackend for GnomeDesktop {
     }
 
     /// Waits for the extension to write the menu's result (`menu_result`) for this request and returns the chosen action name.
-/// `None` when the result is `none` (dismissed) or nothing arrives within the request timeout plus 2 s.
-/// When `close_now` turns true it asks the extension to close the menu by writing `menu_close`.
+    /// `None` when the result is `none` (dismissed) or nothing arrives within the request timeout plus 2 s.
+    /// When `close_now` turns true it asks the extension to close the menu by writing `menu_close`.
     fn wait_menu_choice(
         &mut self,
         req: &MenuRequest,

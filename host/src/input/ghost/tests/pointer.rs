@@ -322,12 +322,22 @@ fn the_pointer_only_ever_lands_on_whole_pixels_when_the_screen_size_is_known() {
         (c - c.round()).abs()
     };
     let abs_vals = |code: u16| -> Vec<i32> {
-        ptr.iter().flatten().filter(|e| e.0 == EV_ABS && e.1 == code).map(|e| e.2).collect()
+        ptr.iter()
+            .flatten()
+            .filter(|e| e.0 == EV_ABS && e.1 == code)
+            .map(|e| e.2)
+            .collect()
     };
     let (xs_, ys_) = (abs_vals(ABS_X), abs_vals(ABS_Y));
     assert!(!xs_.is_empty());
-    assert!(xs_.iter().all(|&v| px(v, 1920.0) < 0.02), "x lands between pixels");
-    assert!(ys_.iter().all(|&v| px(v, 1080.0) < 0.02), "y lands between pixels");
+    assert!(
+        xs_.iter().all(|&v| px(v, 1920.0) < 0.02),
+        "x lands between pixels"
+    );
+    assert!(
+        ys_.iter().all(|&v| px(v, 1080.0) < 0.02),
+        "y lands between pixels"
+    );
 }
 
 /// Without a known screen size the positions are written unchanged.
