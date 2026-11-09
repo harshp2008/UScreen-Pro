@@ -22,6 +22,9 @@ extension and `bash -n` on every shell script.
 | `./gradlew assembleDebug testDebugUnitTest` | passes | passes |
 | `node --check extensions/uscreen-app-lock/extension.js` | ok | ok |
 | `bash -n` on every `*.sh` | ok | ok |
+| `scripts/tests/in-containers.sh` | not run | 60 passed in each of Ubuntu 24.04, Ubuntu 22.04, Debian 12 and Arch (Fedora and openSUSE images were not available locally and were not pulled) |
+| `cargo fmt --check`, `cargo clippy --workspace --all-targets`, `cargo doc` with warnings as errors | clean | clean |
+| `cd website && npm run build` (includes the site check) | n/a | 159 pages, check ok |
 
 ## Removed (phase 2)
 
