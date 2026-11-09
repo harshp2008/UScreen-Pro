@@ -2,7 +2,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow } from "../components/ui/layout";
-import { ENCODERS, FPS, IDLE_HIDE, POSITIONS, STREAM_DETAIL } from "../lib/options";
+import { ENCODERS, FPS, IDLE_HIDE, PEN_MENU_HOLD, PEN_MENU_STYLE, POSITIONS, STREAM_DETAIL } from "../lib/options";
 import { PowerSettings } from "../components/PowerSettings";
 import type { AppConfig, CurvePreset } from "../lib/types";
 
@@ -154,6 +154,37 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           checked={c.physical_tablet_support}
           onChange={(physical_tablet_support) => onChange({ physical_tablet_support })}
         />
+        <SwitchRow
+          label="Pen menu"
+          tip="Hold the pen still on the screen to get a small menu: cut, copy, paste, select all, undo. Works on GNOME (Wayland) with the UScreen extension; never shown in drawing apps."
+          checked={c.pen_menu}
+          onChange={(pen_menu) => onChange({ pen_menu })}
+        />
+        {c.pen_menu && (
+          <>
+            <SettingRow
+              label="Hold time for the menu"
+              tip="How long to hold the pen still before the menu appears."
+            >
+              <Select
+                label="Hold time for the menu"
+                value={String(c.pen_menu_hold_ms)}
+                options={PEN_MENU_HOLD}
+                className="w-36"
+                onValueChange={(v) => onChange({ pen_menu_hold_ms: Number(v) })}
+              />
+            </SettingRow>
+            <SettingRow label="Menu buttons" tip="Show the menu buttons as text labels or as icons.">
+              <Select
+                label="Menu buttons"
+                value={c.pen_menu_style}
+                options={PEN_MENU_STYLE}
+                className="w-36"
+                onValueChange={(v) => onChange({ pen_menu_style: v })}
+              />
+            </SettingRow>
+          </>
+        )}
         <SettingRow
           label="Hide idle pen cursor"
           tip="Hide the cursor when the pen has been completely out of range for this long. Never keeps it visible like a mouse cursor. Works on GNOME (Wayland)."

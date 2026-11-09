@@ -196,7 +196,7 @@ install_files() {
     systemctl --user daemon-reload 2>/dev/null || true
 
     mkdir -p "${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app"
-    cp "$PROJECT_DIR/extensions/uscreen-app-lock/metadata.json" "$PROJECT_DIR/extensions/uscreen-app-lock/extension.js" "${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/" 2>/dev/null || true
+    cp "$PROJECT_DIR/extensions/uscreen-app-lock/metadata.json" "$PROJECT_DIR/extensions/uscreen-app-lock/extension.js" "$PROJECT_DIR/extensions/uscreen-app-lock/stylesheet.css" "${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/" 2>/dev/null || true
     mkdir -p "${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/schemas"
     cp "$PROJECT_DIR"/extensions/uscreen-app-lock/schemas/*.gschema.xml "${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/schemas/" 2>/dev/null || true
     glib-compile-schemas "${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/schemas" 2>/dev/null || true

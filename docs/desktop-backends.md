@@ -11,7 +11,8 @@ feature that needs the desktop checks the capability and quietly does nothing wh
 |---|---|---|
 | `focus` | `poll_focus()` | The pen's Auto style: Krita/GIMP get the pressure tablet, everything else a mouse |
 | `context` | `context_at_pointer(timeout)` | The pen menu: surface under the pointer (app window, shell UI, desktop), window frame, size of the selection and clipboard |
-| `placement` | `focused_window()`, `focus_window(w)`, `spawn_at_pointer(lift, class, command)` | The pen menu: show a window at the cursor and hand focus back to the previous app |
+| `menu` | `show_menu(req)`, `wait_menu_choice(req)` | The pen menu, preferred: the desktop draws it itself (no window, nothing in the taskbar, no focus change) |
+| `placement` | `focused_window()`, `focus_window(w)`, `spawn_at_pointer(lift, class, command)` | The pen menu, fallback: show the `uscreen-menu` window at the cursor and hand focus back to the previous app |
 
 Key presses (Ctrl+C, ...) are sent through uinput and need no backend.
 
@@ -41,7 +42,7 @@ Key presses (Ctrl+C, ...) are sent through uinput and need no backend.
 
 | Desktop | Backend | Focus | Context | Placement | Verified |
 |---|---|---|---|---|---|
-| GNOME Shell (Wayland) | `gnome.rs` | extension (`focus.json`) | extension probe | `spawn-at` | Ubuntu 24.04, GNOME 46 only |
+| GNOME Shell (Wayland) | `gnome.rs` | extension (`focus.json`) | extension probe | extension draws the menu; `spawn-at` window as fallback | Ubuntu 24.04, GNOME 46 only |
 | Any X11 session | `x11.rs` | `_NET_ACTIVE_WINDOW` | no | no | focus only; not re-tested since the desktop layer was introduced |
 | KDE, Sway, Hyprland, others | `generic.rs` | `focus.json` if a helper writes it | no | no | the pen stays on the mouse route; flip it with `uscreen toggle-tablet` |
 
@@ -51,7 +52,8 @@ Key presses (Ctrl+C, ...) are sent through uinput and need no backend.
 * **Context:** the daemon writes `~/.local/share/uscreen/context_request`; the extension answers in
   `context.json` (pointer, zone, window frame, `selection_len`, `clipboard_len`, timestamp). The
   daemon accepts the answer only if its timestamp is newer than the request.
-* **Placement:** `spawn-at spawn --class <app id> --anchor cursor --pivot center --offset 0 -<lift>
+* **Menu (preferred):** the daemon writes `menu_request.json` (`id`, `items`, `style`, `timeout_ms`); the extension draws the menu as Shell chrome at the pointer, writes the id to `menu_shown`, then `{id, action}` to `menu_result`. If the extension does not confirm within 400 ms (an older extension) the daemon falls back to the window below.
+* **Placement (fallback):** `spawn-at spawn --class <app id> --anchor cursor --pivot center --offset 0 -<lift>
   -- <command>`. The class is required: without it spawn-at does not place a GTK 4 window (measured).
   `spawn-at query windows` and `spawn-at focus --id` give and restore focus.
 * The extension only changes after the user logs out and back in on Wayland.

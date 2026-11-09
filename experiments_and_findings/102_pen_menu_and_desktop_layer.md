@@ -71,3 +71,17 @@ Results (Chrome probe, 12 characters selected, pen held 3 s on the selection): m
 (`pd=0 cl=0`) and `sel=12` afterwards. Regression unchanged: 12/12 drag-selects, 3 quick taps (`pd=3`), art-route stroke with pressure, focus flip mid-drag, resting pen silent 5.5 s,
 shaky taps 0/4 drags, and the full menu path with the real extension (Copy -> Ctrl+C). 192 host tests.
 Not verified: a real tap on a menu button with the pen; the delay to the menu is the 0.8 s hold plus ~0.2 s to place the window (the 0.8 s is `StillCfg::long_press`, not a setting yet).
+
+## Follow-up: no dock icon, no shadow rectangle, hold time setting
+Reported after trying it: the menu showed up in the dock (a generic gear icon) and a rectangular edge/shadow showed around the pill.
+* **Dock icon**: GNOME lists every running window's app. A hidden desktop entry (`NoDisplay=true`) did not remove it (tried, reverted). Wayland has no skip-taskbar hint. So on GNOME the
+  **extension now draws the menu itself** (St widgets as Shell chrome, `stylesheet.css`): no window, nothing in the dock, no focus change, no process to start. New trait capability `menu`
+  (`show_menu` / `wait_menu_choice`); the runner uses it first and falls back to the `uscreen-menu` window when the desktop has no `menu` or does not confirm within 400 ms (an older extension).
+* **Shadow rectangle** (window fallback): the pill's blurred shadow was clipped by the transparent window margin. The GTK pill now has no blur shadow, a 1 px border and a 2 px margin; the Shell-drawn
+  menu uses a normal Shell shadow.
+* **Hold time**: `pen_menu_hold_ms` (default 800, clamp 300..3000) is live (read by the ticker like the other options). `pen_menu = false` restores plain immediate clicks (the press is no longer held back).
+  The desktop app has a "Pen menu" switch, "Hold time for the menu" and "Menu buttons" (text / icons) under Pen and drawing tablets.
+
+Verified: host tests (192); the window fallback with the old extension (menu up 1.5 s after the press: 0.8 s hold + 0.4 s waiting for the missing menu code + 0.2 s placement); the Shell path with a stand-in for the extension's
+menu code (request written with items/style/timeout, ack, result, Ctrl+V sent, no window). **Not verified: the extension's menu code in the real Shell** (extension v5, needs the files copied and a re-login), its look, and the
+settings controls in the desktop app.

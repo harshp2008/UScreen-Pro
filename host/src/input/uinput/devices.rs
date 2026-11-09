@@ -84,6 +84,8 @@ pub(in crate::input) struct InjectDevices {
     pub(in crate::input) auto_last_at: Option<std::time::Instant>,
     /// Auto mode: when the last stroke was lifted.
     pub(in crate::input) auto_up_at: Option<std::time::Instant>,
+    /// The pen menu is switched on (config `pen_menu`); off restores plain, immediate clicks.
+    pub(in crate::input) menu_enabled: bool,
     /// Auto mode, mouse route: the left-button press of the open stroke has not been sent yet (it is
     /// held back until the pen moves out of the click slop, lifts, or the menu question is answered).
     pub(in crate::input) press_deferred: bool,
@@ -141,6 +143,7 @@ impl InjectDevices {
             auto_down_at: None,
             auto_last_at: None,
             auto_up_at: None,
+            menu_enabled: true,
             press_deferred: false,
             hold: Default::default(),
             pending_click: None,

@@ -116,6 +116,21 @@ export const STYLUS_STYLES: Option[] = [
   { value: "tablet", label: "Graphics tablet" },
 ];
 
+/** How long the pen is held still before the long-press menu appears. */
+export const PEN_MENU_HOLD: Option[] = [
+  { value: "500", label: "0.5 seconds" },
+  { value: "800", label: "0.8 seconds" },
+  { value: "1000", label: "1 second" },
+  { value: "1500", label: "1.5 seconds" },
+  { value: "2000", label: "2 seconds" },
+];
+
+/** How the pen menu's buttons look. */
+export const PEN_MENU_STYLE: Option[] = [
+  { value: "text", label: "Text" },
+  { value: "icons", label: "Icons" },
+];
+
 /** How long the pen must be out of range before the desktop cursor hides (ghost tracking). */
 export const IDLE_HIDE: Option[] = [
   { value: "0", label: "Never" },

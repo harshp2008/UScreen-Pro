@@ -9,7 +9,7 @@
 
 use super::actions::MenuAction;
 use super::decision::{items, Rules};
-use crate::desktop::{data_file, DesktopBackend};
+use crate::desktop::{data_file, DesktopBackend, MenuRequest};
 use crate::input::ghost::route_to_pen;
 use crate::input::uinput::InjectDevices;
 use std::sync::mpsc::{channel, Receiver};
@@ -74,6 +74,31 @@ fn handle_request(desktop: &mut dyn DesktopBackend, uinput: &Arc<Mutex<InjectDev
         resolve(uinput, false);
         return;
     }
+    // Preferred: the desktop draws the menu itself (no window, no focus change).
+    if desktop.capabilities().menu {
+        let req = MenuRequest {
+            id: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(1),
+            items: plan.buttons.iter().map(|a| a.name().to_string()).collect(),
+            style: plan.style.clone(),
+            timeout: MENU_TIMEOUT,
+        };
+        if desktop.show_menu(&req) {
+            resolve(uinput, true);
+            let chosen = desktop
+                .wait_menu_choice(&req)
+                .and_then(|n| MenuAction::from_name(&n));
+            send_keys(uinput, chosen);
+            return;
+        }
+        debug!("Pen menu: the shell did not draw it, falling back to a window");
+    }
+    if !desktop.capabilities().placement {
+        resolve(uinput, false);
+        return;
+    }
     let _ = std::fs::remove_file(&plan.result);
     let previous = desktop.focused_window();
     let command = menu_command(&plan.buttons, &plan.style, &plan.result);
@@ -88,6 +113,11 @@ fn handle_request(desktop: &mut dyn DesktopBackend, uinput: &Arc<Mutex<InjectDev
         desktop.focus_window(&w);
         std::thread::sleep(FOCUS_SETTLE);
     }
+    send_keys(uinput, chosen);
+}
+
+/// Carry out the chosen action: its key combination, through the virtual keyboard.
+fn send_keys(uinput: &Arc<Mutex<InjectDevices>>, chosen: Option<MenuAction>) {
     if let Some(action) = chosen {
         debug!("Pen menu: {}", action.name());
         if let Ok(mut g) = uinput.lock() {
@@ -118,7 +148,7 @@ fn plan(desktop: &mut dyn DesktopBackend) -> Option<Plan> {
         return None;
     }
     let caps = desktop.capabilities();
-    if !(caps.context && caps.placement) {
+    if !(caps.context && (caps.menu || caps.placement)) {
         debug!("Pen menu: not available on {}", desktop.name());
         return None;
     }

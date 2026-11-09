@@ -100,6 +100,8 @@ pub(in crate::input) fn spawn_idle_task(
             };
             guard.auto_check_route(to_pen);
             guard.auto_flush_exit();
+            guard.menu_enabled = opts.pen_menu;
+            guard.still_cfg.long_press = Duration::from_millis(opts.pen_menu_hold_ms as u64);
             guard.auto_hold_check();
             if timeout != 0 && guard.ghost_idle_tick(timeout) {
                 info!("Pen out of range for {}s — cursor hidden", timeout);

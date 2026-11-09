@@ -207,6 +207,8 @@ pub struct FileConfig {
     pub pen_menu: bool,
     /// How the pen menu's buttons look: `text` (labels) or `icons`.
     pub pen_menu_style: String,
+    /// How long (milliseconds) the pen must be held still before the menu appears.
+    pub pen_menu_hold_ms: u32,
     /// Apps (app id, desktop file or window class, case-insensitive substring) whose pen strokes go
     /// to the pressure-sensitive `UScreen Pen`; everywhere else the tip is a mouse click.
     pub stylus_art_apps: Vec<String>,
@@ -288,6 +290,7 @@ impl Default for FileConfig {
             stylus_idle_hide_timeout: 0,
             pen_menu: true,
             pen_menu_style: "text".into(),
+            pen_menu_hold_ms: 800,
             stylus_art_apps: default_art_apps(),
             physical_tablet_support: false,
             physical_tablet_device: String::new(),
@@ -387,6 +390,7 @@ impl FileConfig {
         self.stylus_button_secondary = clean_pen_button(&self.stylus_button_secondary, "middle");
         self.stylus_idle_hide_timeout = self.stylus_idle_hide_timeout.min(3600);
         self.pen_menu_style = clean_menu_style(&self.pen_menu_style);
+        self.pen_menu_hold_ms = self.pen_menu_hold_ms.clamp(300, 3000);
         self.stylus_art_apps = self
             .stylus_art_apps
             .iter()

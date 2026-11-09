@@ -28,9 +28,9 @@ window.uscreen-menu { background: transparent; }
 .pill {
     background: rgba(34, 34, 38, 0.97);
     border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
     padding: 4px;
-    margin: 12px;
-    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+    margin: 2px;
 }
 .pill button {
     background: transparent;

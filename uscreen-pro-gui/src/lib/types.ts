@@ -185,6 +185,12 @@ export interface AppConfig {
   stylus_button_secondary: string;
   /** Seconds with the pen out of range before the cursor hides; 0 = never. */
   stylus_idle_hide_timeout: number;
+  /** The pen's long-press menu (cut, copy, paste, ...). */
+  pen_menu: boolean;
+  /** `text` or `icons`. */
+  pen_menu_style: string;
+  /** Milliseconds the pen is held still before the menu appears. */
+  pen_menu_hold_ms: number;
   /** Apps (id, desktop file or window class) that get the pressure pen under `auto`. */
   stylus_art_apps: string[];
   /** Read a plugged-in drawing tablet through the daemon. */

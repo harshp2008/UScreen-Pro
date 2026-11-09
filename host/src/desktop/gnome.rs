@@ -5,7 +5,8 @@
 
 use super::focus_file::FocusFile;
 use super::{
-    data_file, spawn_at, Capabilities, DesktopBackend, FocusUpdate, PointerContext, WindowRef,
+    data_file, spawn_at, Capabilities, DesktopBackend, FocusUpdate, MenuRequest, PointerContext,
+    WindowRef,
 };
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -33,6 +34,7 @@ impl DesktopBackend for GnomeDesktop {
             focus: true,
             context: true,
             placement: spawn_at::installed(),
+            menu: true,
         }
     }
 
@@ -61,6 +63,59 @@ impl DesktopBackend for GnomeDesktop {
                 }
             }
             std::thread::sleep(Duration::from_millis(5));
+        }
+        None
+    }
+
+    /// Ask the Shell extension to draw the menu: `menu_request.json` in, `menu_shown` (the request id)
+    /// back as soon as it is on screen. An extension without the menu code never answers, and the
+    /// caller falls back to a window.
+    fn show_menu(&mut self, req: &MenuRequest) -> bool {
+        let (Some(request), Some(shown), Some(result)) = (
+            data_file("menu_request.json"),
+            data_file("menu_shown"),
+            data_file("menu_result"),
+        ) else {
+            return false;
+        };
+        let _ = std::fs::remove_file(&shown);
+        let _ = std::fs::remove_file(&result);
+        let body = serde_json::json!({
+            "id": req.id,
+            "items": req.items,
+            "style": req.style,
+            "timeout_ms": req.timeout.as_millis() as u64,
+        });
+        if std::fs::write(&request, body.to_string()).is_err() {
+            return false;
+        }
+        let deadline = Instant::now() + Duration::from_millis(400);
+        while Instant::now() < deadline {
+            if std::fs::read_to_string(&shown).is_ok_and(|t| t.trim() == req.id.to_string()) {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        false
+    }
+
+    fn wait_menu_choice(&mut self, req: &MenuRequest) -> Option<String> {
+        let result = data_file("menu_result")?;
+        let deadline = Instant::now() + req.timeout + Duration::from_secs(2);
+        while Instant::now() < deadline {
+            if let Some(v) = std::fs::read_to_string(&result)
+                .ok()
+                .and_then(|t| serde_json::from_str::<serde_json::Value>(t.trim()).ok())
+            {
+                if v.get("id").and_then(|i| i.as_u64()) == Some(req.id) {
+                    return v
+                        .get("action")
+                        .and_then(|a| a.as_str())
+                        .filter(|a| *a != "none")
+                        .map(String::from);
+                }
+            }
+            std::thread::sleep(Duration::from_millis(30));
         }
         None
     }

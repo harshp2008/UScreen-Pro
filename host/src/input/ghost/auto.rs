@@ -231,10 +231,13 @@ impl InjectDevices {
             // Tool, X/Y, tilt, then BTN_TOUCH with the real pressure (see `inject_pen`).
             Tip::Pen => self.ghost_tablet(s, 0),
             Tip::Pointer => {
-                // The press itself waits (see `Hold`).
+                // The press itself waits (see `Hold`), unless the menu is switched off.
                 self.ghost_tool_away(s);
-                self.press_deferred = true;
+                self.press_deferred = self.menu_enabled;
                 self.hold = Hold::None;
+                if !self.menu_enabled {
+                    self.ghost_pointer_button(BTN_LEFT, 1, true);
+                }
             }
             Tip::None => self.ghost_tool_away(s),
         }

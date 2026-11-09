@@ -7,6 +7,9 @@
  *      (toggle_request), so the pen can be a graphics tablet in Krita and a mouse in Chrome.
  *   3. Context probe: on request (context_request) report where the pointer is and how much text
  *      is selected / on the clipboard (context.json), for the pen's long-press menu.
+ *   4. Pen menu: draw the long-press menu (cut / copy / paste / ...) inside the Shell on request
+ *      (menu_request.json), so it is not a window: nothing in the dock, no focus change. The
+ *      answer goes to menu_shown (on screen) and menu_result (the choice).
  * All files live in ~/.local/share/uscreen/.
  */
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
@@ -33,10 +36,12 @@ export default class UScreenAppLockExtension extends Extension {
         this._connectWindowSignals();
         this._setupPenRouting();
         this._setupContextProbe();
+        this._setupPenMenu();
         console.log('[uscreen-app-lock] Extension enabled');
     }
 
     disable() {
+        this._teardownPenMenu();
         this._teardownContextProbe();
         this._teardownPenRouting();
         if (this._windowCreatedId) {
@@ -235,6 +240,130 @@ export default class UScreenAppLockExtension extends Extension {
         }
         // A clipboard owner that never answers must not leave the host waiting.
         this._ctxTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { this._ctxTimeout = null; finish(); return GLib.SOURCE_REMOVE; });
+    }
+
+    // --- Pen menu -----------------------------------------------------------------------------
+    // The host writes ~/.local/share/uscreen/menu_request.json ({id, items, style, timeout_ms}); the menu
+    // is drawn here as Shell chrome at the pointer, `menu_shown` gets the id as soon as it is up, and
+    // `menu_result` gets {id, action} when a button is tapped ("none" if dismissed or timed out).
+    _setupPenMenu() {
+        this._menuBox = null;
+        this._menuId = null;
+        this._menuCapture = null;
+        this._menuTimeout = null;
+        try {
+            let file = this._dataFile('menu_request.json');
+            this._menuMonitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null);
+            this._menuMonitorId = this._menuMonitor.connect('changed', (mon, f, other, ev) => {
+                if (ev === Gio.FileMonitorEvent.CHANGES_DONE_HINT || ev === Gio.FileMonitorEvent.CREATED)
+                    this._onMenuRequest();
+            });
+        } catch (e) {
+            console.error(`[uscreen-app-lock] pen menu unavailable: ${e}`);
+        }
+    }
+
+    _teardownPenMenu() {
+        this._removeMenu();
+        if (this._menuMonitor) {
+            try { this._menuMonitor.disconnect(this._menuMonitorId); } catch (e) {}
+            this._menuMonitor.cancel();
+            this._menuMonitor = null;
+        }
+    }
+
+    _onMenuRequest() {
+        let req;
+        try {
+            let [ok, bytes] = this._dataFile('menu_request.json').load_contents(null);
+            req = JSON.parse(new TextDecoder().decode(bytes));
+        } catch (e) {
+            return;
+        }
+        if (!req || !Array.isArray(req.items) || req.items.length === 0 || req.id === this._menuId)
+            return;
+        try {
+            this._removeMenu();
+            this._showMenu(req);
+        } catch (e) {
+            console.error(`[uscreen-app-lock] cannot show the pen menu: ${e}`);
+            this._removeMenu();
+        }
+    }
+
+    _showMenu(req) {
+        const LABELS = {'cut': 'Cut', 'copy': 'Copy', 'paste': 'Paste', 'select-all': 'Select all', 'undo': 'Undo'};
+        const ICONS = {
+            'cut': 'edit-cut-symbolic', 'copy': 'edit-copy-symbolic', 'paste': 'edit-paste-symbolic',
+            'select-all': 'edit-select-all-symbolic', 'undo': 'edit-undo-symbolic',
+        };
+        let box = new St.BoxLayout({style_class: 'uscreen-menu', reactive: true});
+        for (let name of req.items) {
+            let button = new St.Button({style_class: 'uscreen-menu-button', reactive: true, can_focus: false, track_hover: true});
+            if (req.style === 'icons')
+                button.child = new St.Icon({icon_name: ICONS[name] || 'dialog-question-symbolic', style_class: 'uscreen-menu-icon'});
+            else
+                button.label = LABELS[name] || name;
+            button.connect('clicked', () => this._finishMenu(req.id, name));
+            box.add_child(button);
+        }
+        Main.layoutManager.addTopChrome(box);
+        this._menuBox = box;
+        this._menuId = req.id;
+
+        // Centred above the pointer, kept inside the work area; below it when there is no room above.
+        let [px, py] = global.get_pointer();
+        let [, w] = box.get_preferred_width(-1);
+        let [, h] = box.get_preferred_height(w);
+        let area = Main.layoutManager.getWorkAreaForMonitor(global.display.get_current_monitor());
+        let x = Math.max(area.x + 8, Math.min(px - w / 2, area.x + area.width - w - 8));
+        let y = py - 64 - h;
+        if (y < area.y + 8) y = py + 28;
+        box.set_position(Math.round(x), Math.round(y));
+
+        // A tap anywhere else dismisses it.
+        this._menuCapture = global.stage.connect('captured-event', (stage, event) => {
+            let type = event.type();
+            if (type === Clutter.EventType.BUTTON_PRESS || type === Clutter.EventType.TOUCH_BEGIN) {
+                let [ex, ey] = event.get_coords();
+                let [bx, by] = box.get_transformed_position();
+                let [bw, bh] = box.get_size();
+                if (ex < bx || ex > bx + bw || ey < by || ey > by + bh)
+                    this._finishMenu(req.id, 'none');
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+        this._menuTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, req.timeout_ms || 8000, () => {
+            this._menuTimeout = null;
+            this._finishMenu(req.id, 'none');
+            return GLib.SOURCE_REMOVE;
+        });
+        this._writeFile('menu_shown', `${req.id}`);
+    }
+
+    _finishMenu(id, action) {
+        if (!this._menuBox || this._menuId !== id) return;
+        this._removeMenu();
+        this._writeFile('menu_result', JSON.stringify({id, action}) + '\n');
+    }
+
+    _removeMenu() {
+        if (this._menuTimeout) { GLib.source_remove(this._menuTimeout); this._menuTimeout = null; }
+        if (this._menuCapture) { global.stage.disconnect(this._menuCapture); this._menuCapture = null; }
+        if (this._menuBox) {
+            Main.layoutManager.removeChrome(this._menuBox);
+            this._menuBox.destroy();
+            this._menuBox = null;
+        }
+    }
+
+    _writeFile(name, text) {
+        try {
+            this._dataFile(name).replace_contents(
+                new TextEncoder().encode(text), null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null);
+        } catch (e) {
+            console.error(`[uscreen-app-lock] cannot write ${name}: ${e}`);
+        }
     }
 
     _setupConfigMonitor() {

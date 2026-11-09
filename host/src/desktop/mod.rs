@@ -36,6 +36,9 @@ pub struct Capabilities {
     pub context: bool,
     /// Can show a window exactly at the pointer and hand focus back to the previous window.
     pub placement: bool,
+    /// Can draw the pen menu itself, inside the desktop shell: no window, nothing in the taskbar,
+    /// no focus change (preferred over `placement` when available).
+    pub menu: bool,
 }
 
 /// What a focus poll found.
@@ -47,6 +50,19 @@ pub enum FocusUpdate {
     Known(AppIdentity),
     /// No app has focus, or the desktop cannot say.
     Unknown,
+}
+
+/// A pen menu to draw: which buttons, in which style, and how long it may stay up unanswered.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MenuRequest {
+    /// Matches the answer to the request.
+    pub id: u64,
+    /// Button names in display order (`cut`, `copy`, `paste`, `select-all`, `undo`).
+    pub items: Vec<String>,
+    /// `text` or `icons`.
+    pub style: String,
+    /// The menu closes itself after this long.
+    pub timeout: Duration,
 }
 
 /// One desktop environment's answers to the questions the host asks.
@@ -72,6 +88,18 @@ pub trait DesktopBackend: Send {
     /// Give focus to `window`. True on success.
     fn focus_window(&mut self, _window: &WindowRef) -> bool {
         false
+    }
+
+    /// Draw the pen menu at the pointer, inside the desktop shell. True once it is on screen; false
+    /// when unsupported ([`Capabilities::menu`]) or the shell did not confirm in time.
+    fn show_menu(&mut self, _req: &MenuRequest) -> bool {
+        false
+    }
+
+    /// Wait for the choice made in the menu shown for `req`: the button's name, `None` if it was
+    /// dismissed or timed out.
+    fn wait_menu_choice(&mut self, _req: &MenuRequest) -> Option<String> {
+        None
     }
 
     /// Start `command` with its window centred on the pointer, `lift` pixels above it; returns once
