@@ -111,7 +111,7 @@ export const RIGHT_CLICK_METHODS: Option[] = [
 
 /** What the pen does in Stylus mode. */
 export const STYLUS_STYLES: Option[] = [
-  { value: "auto", label: "Auto" },
+  { value: "auto", label: "Dynamic (experimental)" },
   { value: "mouse", label: "Mouse" },
   { value: "tablet", label: "Graphics tablet" },
 ];

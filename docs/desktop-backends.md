@@ -9,7 +9,7 @@ feature that needs the desktop checks the capability and quietly does nothing wh
 
 | Capability | Trait methods | Used by |
 |---|---|---|
-| `focus` | `poll_focus()` | The pen's Auto style: Krita/GIMP get the pressure tablet, everything else a mouse |
+| `focus` | `poll_focus()` | The pen's Dynamic style (experimental, GNOME only; stored as `auto`): Krita/GIMP get the pressure tablet, everything else a mouse |
 | `context` | `context_at_pointer(timeout)` | The pen menu: surface under the pointer (app window, shell UI, desktop), window frame, size of the selection and clipboard |
 | `menu` | `show_menu(req)`, `wait_menu_choice(req)` | The pen menu, preferred: the desktop draws it itself (no window, nothing in the taskbar, no focus change) |
 | `placement` | `focused_window()`, `focus_window(w)`, `spawn_at_pointer(lift, class, command)` | The pen menu, fallback: show the `uscreen-menu` window at the cursor and hand focus back to the previous app |

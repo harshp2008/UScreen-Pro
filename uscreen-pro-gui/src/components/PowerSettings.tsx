@@ -202,7 +202,7 @@ export function ModePanel({
         <>
             <SettingRow
               label="Pen acts as"
-              tip="Auto: a visible cursor follows the pen everywhere and text selection works; drawing programs (Krita, GIMP, ...) get pressure and tilt, other apps get a mouse click. Ctrl+Alt+P flips the choice for the focused app. Mouse: the pen is a pointer. The tip is the left button and stays down while you drag, so you can select text and move windows; hovering moves a visible cursor. Graphics tablet: a pressure and tilt pen for drawing programs."
+              tip="Dynamic (experimental, tested only on GNOME / Ubuntu): a visible cursor follows the pen everywhere and text selection works; drawing programs (Krita, GIMP, ...) get pressure and tilt, other apps get a mouse click. Ctrl+Alt+P flips the choice for the focused app. Mouse: the pen is a pointer. The tip is the left button and stays down while you drag, so you can select text and move windows; hovering moves a visible cursor. Graphics tablet: a pressure and tilt pen for drawing programs."
               override={ov("stylus_style", labelOf(STYLUS_STYLES, v.stylus_style))}
             >
               <Segmented

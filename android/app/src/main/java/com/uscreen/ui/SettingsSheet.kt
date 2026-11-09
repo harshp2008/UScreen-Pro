@@ -308,12 +308,19 @@ fun SettingsSheet(
                             ChipChoice(
                                 "Pen acts as",
                                 listOf(
-                                    HostConfig.STYLUS_AUTO to "Auto",
+                                    HostConfig.STYLUS_AUTO to "Dynamic (experimental)",
                                     HostConfig.STYLUS_MOUSE to "Mouse",
                                     HostConfig.STYLUS_TABLET to "Graphics tablet",
                                 ),
                                 hostConfig.stylusStyle,
                             ) { onSetting("stylus_style", it) }
+                            if (hostConfig.stylusStyle == HostConfig.STYLUS_AUTO) {
+                                Text(
+                                    "Experimental: tested only on GNOME (Ubuntu). On other desktops choose Mouse or Graphics tablet.",
+                                    fontSize = 11.sp,
+                                    color = Muted
+                                )
+                            }
                             if (hostConfig.stylusStyle == HostConfig.STYLUS_MOUSE || hostConfig.stylusStyle == HostConfig.STYLUS_AUTO) {
                                 val penButtons = listOf(
                                     HostConfig.PEN_BUTTON_RIGHT to "Right click",
