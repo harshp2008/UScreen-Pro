@@ -49,6 +49,7 @@ struct UScreenTray {
 }
 
 impl UScreenTray {
+    /// The icon for the current mode (tablet or screen).
     fn current_pixmap(&self) -> ksni::Icon {
         pixmap(if self.pen_only {
             PIXMAP_TABLET
@@ -57,6 +58,7 @@ impl UScreenTray {
         })
     }
 
+    /// One line saying what the tray's tablet is doing.
     fn state_line(&self) -> String {
         if !self.tablet_present {
             "No tablet connected".to_string()
@@ -172,6 +174,7 @@ impl Tray for UScreenTray {
     }
 }
 
+/// Open the releases page in the default browser.
 fn open_release_page() {
     match std::process::Command::new("xdg-open")
         .arg(crate::daemon::update::RELEASES_PAGE)

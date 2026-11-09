@@ -1,3 +1,6 @@
+/*
+ * The short vibration that confirms a touchpad click.
+ */
 package com.uscreen
 
 import android.content.Context

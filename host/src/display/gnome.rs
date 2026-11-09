@@ -17,6 +17,7 @@
 
 use tracing::{info, warn};
 
+/// Whether a file called `name` exists in any directory of `$PATH`.
 fn command_exists(name: &str) -> bool {
     std::env::var("PATH")
         .unwrap_or_default()
@@ -34,6 +35,7 @@ pub fn active() -> bool {
     desktop.contains("GNOME") && wayland && command_exists("gsettings") && command_exists("busctl")
 }
 
+/// Run `program` and return its stdout, or `None` if it could not be run.
 async fn output_of(program: &str, args: &[&str]) -> Option<String> {
     let out = tokio::process::Command::new(program)
         .args(args)
@@ -59,6 +61,7 @@ fn parse_monitors(json: &str) -> Option<Vec<[String; 4]>> {
     Some(out)
 }
 
+/// The monitors Mutter reports (four strings each), or `None`.
 async fn monitors() -> Option<Vec<[String; 4]>> {
     monitors_from(
         "org.gnome.Mutter.DisplayConfig",

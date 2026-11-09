@@ -11,6 +11,7 @@ pub(super) struct X11Desktop {
 }
 
 impl X11Desktop {
+    /// Connect to the X server, or `None` if there is none.
     pub(super) fn connect() -> Option<Self> {
         use x11rb::connection::Connection;
         use x11rb::protocol::xproto::ConnectionExt;
@@ -29,6 +30,7 @@ impl X11Desktop {
         })
     }
 
+    /// The focused window's `WM_CLASS` as an app identity, `None` if no window has focus.
     fn active(&mut self) -> Option<AppIdentity> {
         use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
         let win = self

@@ -16,6 +16,8 @@ pub fn spawn_idle_task(instance: u32) {
     }));
 }
 
+/// The idle-dim loop of one tablet: dims after the idle timeout, undims on activity, and follows
+/// option changes.
 pub(super) async fn idle_loop(
     mut opts_rx: watch::Receiver<DeviceOptions>,
     mut pointer_rx: watch::Receiver<bool>,

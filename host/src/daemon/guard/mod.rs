@@ -134,6 +134,7 @@ impl Guard {
         }
     }
 
+    /// Record a new run state and persist it.
     fn set_state(&mut self, state: RunState) {
         self.record.state = state;
         self.record.since_unix = now_unix();

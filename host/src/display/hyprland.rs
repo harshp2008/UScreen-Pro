@@ -52,6 +52,7 @@ pub fn active() -> bool {
     instance().is_some()
 }
 
+/// Run `hyprctl` against the running Hyprland instance; its stdout, or `None`.
 async fn hyprctl(args: &[&str]) -> Option<String> {
     let sig = instance()?;
     let out = tokio::process::Command::new("hyprctl")
@@ -115,6 +116,7 @@ pub async fn monitors() -> Option<Vec<Monitor>> {
     parse_monitors(&hyprctl(&["-j", "monitors", "all"]).await?)
 }
 
+/// Parse the JSON of `hyprctl monitors -j`.
 fn parse_monitors(json: &str) -> Option<Vec<Monitor>> {
     let v: serde_json::Value = serde_json::from_str(json).ok()?;
     let f = |m: &serde_json::Value, k: &str| m.get(k).and_then(|v| v.as_f64()).unwrap_or(0.0);

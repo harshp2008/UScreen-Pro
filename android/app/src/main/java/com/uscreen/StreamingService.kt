@@ -1,3 +1,7 @@
+/*
+ * Foreground service that keeps the app's process (and with it the video and input sockets) alive
+ * while the activity is in the background.
+ */
 package com.uscreen
 
 import android.app.Notification

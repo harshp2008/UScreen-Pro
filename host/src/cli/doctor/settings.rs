@@ -2,6 +2,8 @@
 
 use super::*;
 
+/// Doctor check: the running version against the latest release (skipped when update checks are
+/// off).
 pub(super) async fn check_version(r: &mut Report, cfg: &FileConfig) {
     if !cfg.check_updates {
         r.line(
@@ -39,6 +41,8 @@ pub(super) async fn check_version(r: &mut Report, cfg: &FileConfig) {
     }
 }
 
+/// Doctor check: config.toml values are in range, including stale out-of-range values still on
+/// disk.
 pub(super) fn check_config(r: &mut Report, cfg: &FileConfig) {
     let path = config::config_path();
     // `cfg` has already been clamped, so compare against the raw file too: a

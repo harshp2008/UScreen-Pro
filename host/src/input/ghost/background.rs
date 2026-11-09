@@ -89,7 +89,7 @@ pub(in crate::input) fn spawn_idle_task(
             // The idle hide is checked a few times a second, reading the timeout live (before the
             // device lock is taken, as the event path does).
             let opts = crate::config::options::current_options(instance);
-            let timeout = if n % 5 == 0 {
+            let timeout = if n.is_multiple_of(5) {
                 opts.stylus_idle_hide_timeout
             } else {
                 0

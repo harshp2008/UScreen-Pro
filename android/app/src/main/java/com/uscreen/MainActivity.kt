@@ -1,3 +1,7 @@
+/*
+ * The app's single activity: lifecycle, video rendering, input dispatch, refresh-rate and
+ * immersive-mode handling, and hosting the Compose UI.
+ */
 package com.uscreen
 
 import android.app.KeyguardManager

@@ -280,6 +280,7 @@ fn latest_connection() -> &'static std::sync::Mutex<std::collections::HashMap<u3
     LATEST.get_or_init(Default::default)
 }
 
+/// Give a new connection the next id and make it the newest of its instance.
 fn register_connection(instance: u32) -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
@@ -287,6 +288,7 @@ fn register_connection(instance: u32) -> u64 {
     id
 }
 
+/// Whether `id` is still the newest connection of `instance`.
 fn is_latest_connection(instance: u32, id: u64) -> bool {
     latest_connection()
         .lock()
@@ -295,6 +297,8 @@ fn is_latest_connection(instance: u32, id: u64) -> bool {
         .is_none_or(|latest| *latest == id)
 }
 
+/// Serve one tablet connection: authenticate it, answer the handshake, then dispatch its messages
+/// until it closes.
 #[allow(clippy::too_many_arguments)]
 pub(super) async fn handle_connection(
     raw_stream: tokio::net::TcpStream,

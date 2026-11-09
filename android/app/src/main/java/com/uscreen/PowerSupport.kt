@@ -1,3 +1,7 @@
+/*
+ * Power-related helpers: fading the window's own brightness (`ScreenDimmer`), charging state, and
+ * locking the screen through device admin.
+ */
 package com.uscreen
 
 import android.animation.ValueAnimator

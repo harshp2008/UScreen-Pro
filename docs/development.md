@@ -39,28 +39,36 @@ second pipeline without a second device.
 ## Project layout
 
 ```
-host/              Rust daemon
-  src/main.rs        CLI, orchestration, adb monitor, per-tablet sessions
-  src/capture.rs     EVDI helper + encoder management, display placement
-  src/encoder.rs     optional in-process libavcodec encoder
-  src/stream.rs      TCP video server, session token, IDR-aware backlog skipping
-  src/input.rs       WebSocket input server, uinput devices, KWin mapping
-  src/config.rs      ~/.config/uscreen/config.toml
-  src/runtime.rs     per-user runtime dir: FIFO, session token
-  src/latency.rs     end-to-end latency measurement
-  src/tray.rs        StatusNotifierItem tray icon
-  src/update.rs      release check (report only)
-  src/doctor.rs      `uscreen doctor`
-  src/osk.rs         KDE on-screen keyboard suppression over D-Bus
-  src/kwin.rs        KWin D-Bus calls, through busctl or qdbus
-  src/vdisplay.rs    EVDI discovery via sysfs
-  src/edid.rs        EDID generation for the virtual display
-  evdi/              C helper: EVDI framebuffer capture → NV12 → FIFO
-gui/               egui desktop app: status, settings, start/stop
-android/           Kotlin/Compose app: MediaCodec decoder, touch/pen capture
-packaging/         deb control/postinst, rpm spec, PKGBUILD, udev/modprobe files
-scripts/           install.sh, release build, fake tablet
-docs/              this documentation and the GitHub Pages site
+host/                   Rust daemon (binary `uscreen`)
+  src/main.rs             entry point: parses the CLI and runs the chosen command
+  src/cli/                command line: `mod.rs` (clap), `commands.rs` (stop/status/...),
+                          `doctor/` (`uscreen doctor`, split into system/tablet/display/settings/latency)
+  src/config/             config.toml: `mod.rs` (FileConfig), `profile.rs` (per-tablet profile),
+                          `modes.rs`, `limits.rs`, `curves.rs`, `clean.rs`; `handler.rs` (daemon control
+                          socket, PID file); `options/` (live per-tablet options and the idle-dim loop)
+  src/daemon/             the running daemon: `mod.rs` (startup/shutdown), `session/` (tablet sessions and
+                          the adb monitor), `guard/` (compositor-freeze safety), `runtime.rs`, `tray.rs`,
+                          `update.rs`, `osk.rs`
+  src/capture/            EVDI helper + encoders: frames in, H.264/HEVC packets out (`packetizer.rs`,
+                          `encoders.rs`, `latency.rs`, `timing.rs`)
+  src/display/            virtual display creation per desktop (gnome, kwin, hyprland, cosmic, x11, edid)
+  src/desktop/            the desktop layer: one backend per environment (gnome, x11, generic) behind
+                          the `DesktopBackend` trait; see docs/desktop-backends.md
+  src/input/              input path: `server.rs` (WebSocket), `protocol/` (wire types, sequence filter),
+                          `events/` (one handler per message kind), `ghost/` (pen routing: mouse vs
+                          tablet, auto style, click slop), `uinput/` (virtual devices), `stillness.rs`
+                          (resting-pen filter), `recorder.rs` (pen flight recorder), `physical.rs`
+                          (real drawing tablets), `mapping.rs` (binding devices to outputs)
+  src/net/                adb (`adb.rs`, `pairing.rs`, `installer.rs`), video server (`stream.rs`), notices
+  evdi/                   C helper: EVDI framebuffer capture -> NV12 -> FIFO
+uscreen-pro-gui/        Tauri + React desktop app (settings, pairing, status)
+gui-legacy/             retired egui app, excluded from the workspace (still referenced by packaging)
+android/                Kotlin/Compose app: MediaCodec decoder, touch/pen capture, touchpad engine
+extensions/             GNOME Shell extension: focus reporting, route hotkey, context probe
+packaging/              deb control/postinst, rpm spec, PKGBUILD, udev/modprobe files
+scripts/                install.sh, release build, test tools (fake tablet, tablet_inject.py)
+experiments_and_findings/  numbered write-ups of what was measured and decided
+docs/                   this documentation and the GitHub Pages site
 ```
 
 ## Command line

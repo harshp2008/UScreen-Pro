@@ -1,3 +1,7 @@
+/*
+ * The main screens shown while connected or waiting: graphics-tablet screen, touchpad screen,
+ * unpaired banner, host notices, and the top-level `UScreenMain` composable.
+ */
 package com.uscreen.ui
 
 import android.content.Intent

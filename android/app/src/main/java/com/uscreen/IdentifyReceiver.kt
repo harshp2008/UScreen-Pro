@@ -1,3 +1,7 @@
+/*
+ * Broadcast receiver behind the desktop's "Identify" button: posts a high-priority notification
+ * naming this device so the user can tell which tablet is which.
+ */
 package com.uscreen
 
 import android.app.Activity

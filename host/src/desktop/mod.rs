@@ -93,6 +93,7 @@ pub struct AppIdentity {
 }
 
 impl AppIdentity {
+    /// The app's non-empty names, lower-cased and without `.desktop`.
     fn names(&self) -> impl Iterator<Item = String> + '_ {
         [&self.app_id, &self.wm_class, &self.gtk_id]
             .into_iter()

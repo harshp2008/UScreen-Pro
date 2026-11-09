@@ -16,11 +16,13 @@ pub(super) struct Slot {
     pub(super) idle_task: bool,
 }
 
+/// The registry of per-tablet slots, by instance number.
 pub(super) fn slots() -> &'static Mutex<HashMap<u32, Slot>> {
     static SLOTS: OnceLock<Mutex<HashMap<u32, Slot>>> = OnceLock::new();
     SLOTS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Run `f` on the slot of `instance`, creating it from the global defaults on first use.
 pub(super) fn with_slot<R>(instance: u32, f: impl FnOnce(&mut Slot) -> R) -> R {
     let mut map = slots().lock().unwrap_or_else(|e| e.into_inner());
     let slot = map.entry(instance).or_insert_with(|| {
@@ -57,10 +59,12 @@ pub fn current_mode(instance: u32) -> InputMode {
     with_slot(instance, |s| s.tx.borrow().input_mode)
 }
 
+/// The profile in `cfg` of the first of `keys` that has one.
 pub(super) fn profile_of<'a>(cfg: &'a FileConfig, keys: &[String]) -> Option<&'a TabletProfile> {
     keys.iter().find_map(|k| cfg.tablets.get(k))
 }
 
+/// Recompute the slot's options from `cfg` and notify the watchers if they changed.
 pub(super) fn publish(slot: &mut Slot, cfg: &FileConfig) {
     let next = DeviceOptions::resolve(cfg, profile_of(cfg, &slot.keys));
     let stylus = next.input_mode == InputMode::Stylus;

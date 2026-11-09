@@ -1,3 +1,6 @@
+/*
+ * The app's colour palette (light and dark) and Material theme, matching the desktop GUI.
+ */
 package com.uscreen.ui
 
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi

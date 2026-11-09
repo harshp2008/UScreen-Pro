@@ -58,10 +58,12 @@ fn render_drivers() -> Vec<(u32, String)> {
         .collect()
 }
 
+/// The DRM render nodes of this machine, in the order VAAPI should try them.
 fn render_nodes() -> Vec<String> {
     order_nodes(render_drivers())
 }
 
+/// Whether any of the (index, driver) render nodes is driven by the NVIDIA driver.
 fn has_nvidia(found: &[(u32, String)]) -> bool {
     found.iter().any(|(_, driver)| driver == "nvidia")
 }
@@ -201,6 +203,7 @@ pub async fn has_option(encoder: &str, option: &str) -> bool {
     }
 }
 
+/// Whether an ffmpeg help listing offers `-option` as one of its options.
 fn help_lists_option(help: &str, option: &str) -> bool {
     let flag = format!("-{}", option);
     help.lines()

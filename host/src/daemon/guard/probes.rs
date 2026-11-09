@@ -2,6 +2,7 @@
 
 use super::*;
 
+/// Whether `XDG_CURRENT_DESKTOP` says GNOME.
 pub(super) fn is_gnome_wayland() -> bool {
     std::env::var("XDG_CURRENT_DESKTOP")
         .unwrap_or_default()
@@ -26,6 +27,7 @@ pub(super) async fn probe_main_loop(conn: &zbus::Connection) -> Sample {
     }
 }
 
+/// GNOME Shell's uptime according to the session bus, `None` if it is not running.
 pub(super) async fn shell_uptime(conn: &zbus::Connection) -> Option<Duration> {
     let dbus = zbus::fdo::DBusProxy::new(conn).await.ok()?;
     let name: zbus::names::BusName = "org.gnome.Shell".try_into().ok()?;
@@ -49,6 +51,7 @@ pub(super) async fn shell_uptime(conn: &zbus::Connection) -> Option<Duration> {
     ))
 }
 
+/// Whether the GNOME session manager reports the session as running.
 pub(super) async fn session_running(conn: &zbus::Connection) -> Option<bool> {
     // A method, not a property, on org.gnome.SessionManager (verified with
     // busctl introspect on GNOME 46).

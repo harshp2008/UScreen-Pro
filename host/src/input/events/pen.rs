@@ -11,6 +11,7 @@ use crate::input::ghost::{route_to_pen, session_is_x11};
 static PEN_ACTIONS: std::sync::Mutex<[u32; 8]> = std::sync::Mutex::new([0; 8]);
 static PEN_LOG_AT: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
 
+/// Count one pen action and, at most every three seconds, log the counts.
 pub(in crate::input) fn note_pen_action(action: u8) {
     if let Ok(mut c) = PEN_ACTIONS.lock() {
         c[(action as usize).min(7)] += 1;

@@ -1,3 +1,7 @@
+/*
+ * The settings page: sections and rows for input mode, pen style, touchpad, power and display
+ * options, shown full screen in a dialog.
+ */
 package com.uscreen.ui
 
 import androidx.compose.animation.AnimatedVisibility

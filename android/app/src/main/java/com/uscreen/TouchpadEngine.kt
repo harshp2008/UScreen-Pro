@@ -1,3 +1,7 @@
+/*
+ * Touchpad gesture engine: finger frames in, mouse actions (move, scroll, pinch, swipes, clicks)
+ * out. Pure Kotlin, no Android dependencies, so it is unit-tested on the JVM.
+ */
 package com.uscreen
 
 import kotlin.math.abs

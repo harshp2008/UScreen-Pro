@@ -42,6 +42,7 @@ pub struct SeqFilter {
 }
 
 impl SeqFilter {
+    /// Whether to let this message through (see the rules above); counts what it drops.
     pub fn accept(&mut self, msg: Option<(u64, SeqKind)>) -> bool {
         let Some((seq, kind)) = msg else { return true };
         if kind == SeqKind::Move {

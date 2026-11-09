@@ -1,3 +1,7 @@
+/*
+ * First-run onboarding: checks whether Developer Options, USB debugging and wireless debugging are
+ * on, and the waiting screen that guides the user through connecting.
+ */
 package com.uscreen.ui
 
 import android.content.Context

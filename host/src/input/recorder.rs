@@ -31,6 +31,7 @@ struct Ring {
     skips: u64,
 }
 
+/// The process-wide ring buffer.
 fn ring() -> &'static Mutex<Ring> {
     static R: OnceLock<Mutex<Ring>> = OnceLock::new();
     R.get_or_init(|| {

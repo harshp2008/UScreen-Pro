@@ -1,3 +1,7 @@
+/*
+ * The step-by-step guide for pairing the tablet with the computer over wireless debugging, with
+ * its own high-contrast button colours.
+ */
 package com.uscreen.ui
 
 import android.content.ClipData

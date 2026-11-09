@@ -5,6 +5,8 @@
 use super::*;
 
 impl UInputDevice {
+    /// Write one touch sample (`action` 0 down, 1 up, 2 move) on multi-touch `slot` to the
+    /// touchscreen.
     pub(in crate::input) fn inject_touch(
         &mut self,
         x: i32,
@@ -53,6 +55,8 @@ impl UInputDevice {
         Ok(())
     }
 
+    /// Write one pen sample (`action`: 0 down, 1 up, 2 move, 3 hover, 4 range exit) to the tablet
+    /// pen, in the frame order libinput needs.
     #[allow(clippy::too_many_arguments)]
     pub(in crate::input) fn inject_pen(
         &mut self,

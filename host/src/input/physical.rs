@@ -65,6 +65,7 @@ pub(super) struct PhysState {
 }
 
 impl PhysState {
+    /// A state machine for a tablet with this axis range.
     pub fn new(range: AbsRange) -> Self {
         Self { range, ..Self::default() }
     }
@@ -109,6 +110,8 @@ impl PhysState {
         Vec::new()
     }
 
+    /// Build the pen sample for `action` from the current axis values, scaled to the injector's
+    /// units.
     fn sample(&self, action: u8) -> PenSample {
         let r = &self.range;
         let scale = |v: i32, max: i32, to: i32| {
@@ -126,6 +129,7 @@ impl PhysState {
         }
     }
 
+    /// Turn the current state into the samples one `SYN_REPORT` produces.
     fn report(&mut self) -> Vec<PenSample> {
         let mut out = Vec::new();
         if self.prox {
@@ -194,6 +198,8 @@ pub(super) fn parse_vid_pid(s: &str) -> Option<(u16, u16)> {
     Some((u16::from_str_radix(v, 16).ok()?, u16::from_str_radix(p, 16).ok()?))
 }
 
+/// The first evdev device that looks like a pen tablet (matching `want` as vendor:product when
+/// given).
 fn find_pen(want: &str) -> Option<(std::path::PathBuf, Device)> {
     let want = parse_vid_pid(want);
     evdev::enumerate().find_map(|(path, dev)| {
@@ -217,6 +223,7 @@ pub fn detect_tablet() -> Option<(u16, u16)> {
     find_pen("").map(|(_, d)| (d.input_id().vendor(), d.input_id().product()))
 }
 
+/// Read the tablet's axis ranges.
 fn read_range(dev: &Device) -> AbsRange {
     let mut r = AbsRange::default();
     if let Ok(info) = dev.get_absinfo() {
@@ -294,6 +301,7 @@ pub(super) fn spawn(uinput: Arc<std::sync::Mutex<InjectDevices>>, instance: u32,
     }
 }
 
+/// Read the tablet's events until `running` is cleared, feeding its samples to the injector.
 fn read_loop(
     dev: &mut Device,
     uinput: &Arc<std::sync::Mutex<InjectDevices>>,

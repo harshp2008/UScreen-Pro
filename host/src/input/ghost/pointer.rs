@@ -35,6 +35,7 @@ impl InjectDevices {
         }
     }
 
+    /// Press or release a pointer button and keep the pen's held-button bookkeeping.
     pub(super) fn ghost_pointer_button(&mut self, code: u16, bit: u8, down: bool) {
         if let Some(ref mut dev) = self.pointer {
             let _ = dev.emit(EV_KEY, code, down as i32);

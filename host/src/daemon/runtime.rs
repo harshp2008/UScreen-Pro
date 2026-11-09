@@ -55,6 +55,7 @@ pub fn timing_path_for(instance: u32) -> PathBuf {
     PathBuf::from(format!("/dev/shm/uscreen_timing_{}", instance))
 }
 
+/// Path of the session token file.
 fn token_path() -> PathBuf {
     runtime_dir().join("token")
 }

@@ -5,6 +5,7 @@
 use anyhow::{Context, Result};
 use std::path::PathBuf;
 
+/// Pack a three-letter PnP manufacturer id into the two EDID bytes.
 fn encode_manufacturer_id(s: &[u8; 3]) -> (u8, u8) {
     let c1 = (s[0] - b'A' + 1) as u16;
     let c2 = (s[1] - b'A' + 1) as u16;

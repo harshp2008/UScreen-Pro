@@ -1,3 +1,7 @@
+/*
+ * Small platform helpers: the device's Wi-Fi address and whether touch on the lock screen is
+ * supported.
+ */
 package com.uscreen
 
 import android.content.Context

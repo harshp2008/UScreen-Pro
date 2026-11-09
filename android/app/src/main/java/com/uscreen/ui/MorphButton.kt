@@ -1,3 +1,7 @@
+/*
+ * A button shape that morphs between a pill and a rounded square while pressed
+ * (androidx.graphics.shapes).
+ */
 package com.uscreen.ui
 
 import androidx.compose.animation.core.animateFloatAsState

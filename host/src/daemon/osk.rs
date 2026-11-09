@@ -23,17 +23,20 @@ const IFACE: &str = "org.kde.kwin.VirtualKeyboard";
 /// Only when explicitly asked for, rather than on touch input.
 const MODE_MANUAL: &str = "0";
 
+/// Where the previous on-screen-keyboard setting is saved so it can be restored.
 fn state_path() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_default();
     PathBuf::from(home).join(".local/share/uscreen/osk-restore")
 }
 
+/// KWin's current on-screen-keyboard mode, if it can be read.
 async fn get_mode() -> Option<String> {
     let raw = crate::display::kwin::get_property(OBJECT, IFACE, "mode").await?;
     let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
     (!digits.is_empty()).then_some(digits)
 }
 
+/// Set KWin's on-screen-keyboard mode; true on success.
 async fn set_mode(mode: &str) -> bool {
     // `mode` is a D-Bus int32; busctl needs to be told so.
     crate::display::kwin::set_property(OBJECT, IFACE, "mode", "i", mode).await

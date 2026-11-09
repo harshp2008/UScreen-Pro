@@ -1,3 +1,7 @@
+/*
+ * The host-to-app settings model: `HostConfig` (what the host pushes), the reconnect policy, and
+ * the dim/undim fade curves.
+ */
 package com.uscreen
 
 import android.view.animation.AccelerateDecelerateInterpolator

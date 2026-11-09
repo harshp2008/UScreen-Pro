@@ -37,6 +37,7 @@ struct Recent {
     host_us: Option<u32>,
 }
 
+/// The shared rolling list of recently acknowledged frames.
 fn recent() -> &'static Mutex<VecDeque<Recent>> {
     static R: std::sync::OnceLock<Mutex<VecDeque<Recent>>> = std::sync::OnceLock::new();
     R.get_or_init(|| Mutex::new(VecDeque::new()))

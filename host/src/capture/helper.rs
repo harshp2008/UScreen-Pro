@@ -5,6 +5,8 @@
 use super::*;
 
 impl CaptureManager {
+    /// Start the EVDI helper process that writes the virtual display's frames into the FIFO, after
+    /// killing any stray helper left from a previous run.
     pub(super) async fn start_helper(&mut self) -> Result<()> {
         let fifo = fifo_path_for(self.config.instance);
         Self::ensure_fifo(&fifo)?;

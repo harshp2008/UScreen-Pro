@@ -18,6 +18,7 @@ pub fn active() -> bool {
     desktop.to_uppercase().contains("COSMIC") && tool_exists()
 }
 
+/// Whether `cosmic-randr` is on `$PATH`.
 fn tool_exists() -> bool {
     std::env::var("PATH")
         .unwrap_or_default()
@@ -25,6 +26,7 @@ fn tool_exists() -> bool {
         .any(|d| std::path::Path::new(d).join("cosmic-randr").exists())
 }
 
+/// Run `cosmic-randr` with `args`: (success, output), or `None` if it could not be run.
 async fn randr(args: &[&str]) -> Option<(bool, String)> {
     let out = tokio::process::Command::new("cosmic-randr")
         .args(args)

@@ -44,6 +44,7 @@ struct Report {
 }
 
 impl Report {
+    /// A report with no warnings or failures yet.
     fn new() -> Self {
         Self {
             warnings: 0,
@@ -51,6 +52,7 @@ impl Report {
         }
     }
 
+    /// Print one result line (`ok`, `warn` or `FAIL`) and count it.
     fn line(&mut self, level: Level, label: &str, detail: &str) {
         let mark = match level {
             Level::Ok => "  ok  ",
@@ -75,11 +77,13 @@ impl Report {
     }
 }
 
+/// Print a section heading.
 fn section(title: &str) {
     println!("\n{}", title);
     println!("{}", "-".repeat(title.len()));
 }
 
+/// Run `program` and return its stdout, or `None` if it could not be run.
 async fn output_of(program: &str, args: &[&str]) -> Option<String> {
     let out = tokio::process::Command::new(program)
         .args(args)
@@ -89,6 +93,7 @@ async fn output_of(program: &str, args: &[&str]) -> Option<String> {
     Some(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
+/// Whether a file called `name` exists in any directory of `$PATH`.
 fn command_exists(name: &str) -> bool {
     std::env::var("PATH")
         .unwrap_or_default()
@@ -106,6 +111,7 @@ async fn pids_full(pattern: &str) -> Vec<u32> {
     parse_pids(output_of("pgrep", &["-f", pattern]).await)
 }
 
+/// Turn `pidof`/`pgrep` output (one pid per line) into pids.
 fn parse_pids(out: Option<String>) -> Vec<u32> {
     out.unwrap_or_default()
         .lines()

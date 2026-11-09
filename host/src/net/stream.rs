@@ -134,6 +134,7 @@ impl StreamServer {
         Ok(())
     }
 
+    /// Serve one video client: authenticate it, send the codec config, then stream packets.
     async fn handle_client(
         mut socket: TcpStream,
         mut rx: broadcast::Receiver<VideoPacket>,
@@ -336,6 +337,7 @@ impl StreamServer {
         }
     }
 
+    /// Write one length-prefixed packet (a type byte plus the payload).
     async fn write_packet(socket: &mut TcpStream, packet_type: u8, payload: &[u8]) -> Result<()> {
         let packet_len = payload.len() + 1;
         let len_buf = (packet_len as u32).to_be_bytes();

@@ -2,6 +2,8 @@
 
 use super::*;
 
+/// Doctor check: the required and optional external tools are installed (ffmpeg, adb,
+/// kscreen-doctor, ...).
 pub(super) async fn check_tools(r: &mut Report, cfg: &FileConfig) {
     for (tool, fatal) in [("ffmpeg", true), ("adb", true), ("kscreen-doctor", false)] {
         if command_exists(tool) {
@@ -68,6 +70,7 @@ pub(super) async fn check_tools(r: &mut Report, cfg: &FileConfig) {
     }
 }
 
+/// Doctor check: the evdi kernel module is loaded and exposes devices.
 pub(super) fn check_modules(r: &mut Report) {
     match std::fs::read_to_string("/sys/devices/evdi/count") {
         Ok(text) => {

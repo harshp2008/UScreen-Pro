@@ -4,6 +4,7 @@ use super::*;
 
 /// Store one setting pushed by the tablet as the device's override. `Ok(true)` when it changed.
 pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Result<bool, ()> {
+    /// Store `new` in `slot`; true if that changed it.
     fn set<T: PartialEq>(slot: &mut Option<T>, new: T) -> bool {
         if slot.as_ref() == Some(&new) {
             false

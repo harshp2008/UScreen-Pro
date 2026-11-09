@@ -1,3 +1,7 @@
+/*
+ * The tablet app's persisted settings (SharedPreferences): input mode, pen style, touchpad
+ * options, connection hints.
+ */
 package com.uscreen
 
 import android.content.Context

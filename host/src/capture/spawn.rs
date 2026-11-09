@@ -12,6 +12,8 @@ impl CaptureManager {
         Ok(())
     }
 
+    /// Start the ffmpeg child process for `encoder` (raw frames from the FIFO in, the encoded
+    /// stream on stdout). Rejects unknown encoder names.
     #[cfg(not(feature = "inproc-encoder"))]
     pub(super) async fn spawn_encoder_child(&self, encoder: &str) -> Result<Child> {
         let res: Result<()> = match encoder {
@@ -247,6 +249,8 @@ impl CaptureManager {
         cmd.spawn().context("Failed to spawn ffmpeg encoder")
     }
 
+    /// Start the encoder for the configured name (the old gstreamer-style `vaapih264enc` is
+    /// accepted as an alias of `h264_vaapi`).
     #[cfg(not(feature = "inproc-encoder"))]
     pub(super) async fn start_encoder(&mut self) -> Result<()> {
         // Accept the old gstreamer-style name as an alias

@@ -47,6 +47,7 @@ pub(super) async fn primary_non_evdi_output() -> Option<String> {
     best.map(|(_, n)| n).or(fallback)
 }
 
+/// Read one property of a KWin input device by its sysname.
 pub(super) async fn kwin_device_property(sysname: &str, property: &str) -> Option<String> {
     crate::display::kwin::get_property(
         &format!("/org/kde/KWin/InputDevice/{}", sysname),

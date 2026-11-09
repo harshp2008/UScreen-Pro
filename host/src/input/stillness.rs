@@ -60,6 +60,7 @@ pub(super) struct HoverFilter {
 /// Position range of the normalised pen coordinates.
 const SPAN: f64 = 65536.0;
 
+/// Distance in millimetres between two normalised positions on a tablet of physical size `mm`.
 pub(super) fn dist_mm(a: (i32, i32), b: (i32, i32), mm: (f64, f64)) -> f64 {
     let dx = (a.0 - b.0) as f64 * mm.0 / SPAN;
     let dy = (a.1 - b.1) as f64 * mm.1 / SPAN;
@@ -67,6 +68,7 @@ pub(super) fn dist_mm(a: (i32, i32), b: (i32, i32), mm: (f64, f64)) -> f64 {
 }
 
 impl HoverFilter {
+    /// Whether the pen is currently parked.
     #[cfg(test)]
     pub fn is_parked(&self) -> bool {
         self.parked

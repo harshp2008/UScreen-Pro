@@ -148,6 +148,7 @@ impl Encoder {
         self.drain()
     }
 
+    /// Collect every packet the encoder has ready, with whether each is a key frame (IDR).
     fn drain(&mut self) -> Result<Vec<(Bytes, bool)>> {
         let mut out = Vec::new();
         let mut packet = ffmpeg_next::Packet::empty();
@@ -161,6 +162,8 @@ impl Encoder {
     }
 }
 
+/// Copy `rows` rows of `row_bytes` into a destination plane that has its own `stride`, clipping
+/// instead of overrunning.
 fn copy_plane(dst: &mut [u8], stride: usize, src: &[u8], row_bytes: usize, rows: usize) {
     for y in 0..rows {
         let d = y * stride;

@@ -44,6 +44,7 @@ impl Backend {
 
 static BACKEND: OnceCell<Option<Backend>> = OnceCell::const_new();
 
+/// Run `cmd`; its stdout, or `None` if it could not be run.
 async fn output_of(cmd: &str, args: &[&str]) -> Option<String> {
     let out = tokio::process::Command::new(cmd)
         .args(args)

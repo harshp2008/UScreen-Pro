@@ -41,6 +41,7 @@ pub(in crate::input) struct PadState {
 }
 
 impl PadState {
+    /// A pad with no fingers on it.
     pub(in crate::input) fn new() -> Self {
         Self {
             slots: [None; PAD_SLOTS],
@@ -48,6 +49,7 @@ impl PadState {
             tool: None,
         }
     }
+    /// How many fingers are on the pad.
     pub(in crate::input) fn count(&self) -> usize {
         self.slots.iter().flatten().count()
     }

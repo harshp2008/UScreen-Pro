@@ -49,6 +49,7 @@ pub(super) struct H264AnnexBPacketizer {
 }
 
 impl H264AnnexBPacketizer {
+    /// A packetizer for `codec`'s byte stream, with nothing buffered yet.
     pub(super) fn new(codec: Codec) -> Self {
         Self {
             buffer: Vec::new(),
@@ -63,6 +64,7 @@ impl H264AnnexBPacketizer {
         }
     }
 
+    /// Feed encoder output; returns the complete access units found so far.
     pub(super) fn push(&mut self, data: &[u8]) -> Vec<VideoPacket> {
         self.buffer.extend_from_slice(data);
         self.process_complete_nals(false)
@@ -76,6 +78,7 @@ impl H264AnnexBPacketizer {
         out
     }
 
+    /// Flush at the end of the stream: whatever is buffered becomes the last packets.
     pub(super) fn finish(&mut self) -> Vec<VideoPacket> {
         let mut out = self.process_complete_nals(true);
         if let Some(access_unit) = self.take_pending_access_unit() {
@@ -84,6 +87,8 @@ impl H264AnnexBPacketizer {
         out
     }
 
+    /// The parameter sets (SPS/PPS, plus VPS for HEVC) a new client needs first; `None` until all
+    /// have been seen.
     pub(super) fn codec_config(&self) -> Option<Bytes> {
         if self.has_sps && self.has_pps {
             Some(Bytes::copy_from_slice(&self.config))
@@ -92,6 +97,8 @@ impl H264AnnexBPacketizer {
         }
     }
 
+    /// Split the buffer at start codes and handle every NAL that is complete (all of them when
+    /// `flush`).
     fn process_complete_nals(&mut self, flush: bool) -> Vec<VideoPacket> {
         let mut out = Vec::new();
         let starts = find_start_codes(&self.buffer);
@@ -134,6 +141,8 @@ impl H264AnnexBPacketizer {
         out
     }
 
+    /// Classify one NAL (parameter set, slice, delimiter) and add it to the access unit being
+    /// built, emitting the previous unit when a new frame starts.
     fn process_nal(&mut self, nal: &[u8], out: &mut Vec<VideoPacket>) {
         let Some(header_offset) = nal_header_offset(nal, 0) else {
             return;
@@ -216,6 +225,7 @@ impl H264AnnexBPacketizer {
         }
     }
 
+    /// Take the access unit being built as a packet, or `None` if it holds no picture data.
     fn take_pending_access_unit(&mut self) -> Option<VideoPacket> {
         if !self.pending_has_vcl || self.pending_access_unit.is_empty() {
             self.pending_access_unit.clear();
@@ -249,6 +259,8 @@ impl H264AnnexBPacketizer {
         })
     }
 
+    /// The `first_mb_in_slice` field of an H.264 slice header (0 means the slice starts a new
+    /// frame).
     fn first_mb_in_slice(nal: &[u8], header_offset: usize) -> Option<u32> {
         let payload = nal.get(header_offset + 1..)?;
         ExpGolombReader::new(payload).read_ue()
@@ -262,6 +274,7 @@ struct ExpGolombReader<'a> {
 }
 
 impl<'a> ExpGolombReader<'a> {
+    /// A bit reader over `data`.
     pub(super) fn new(data: &'a [u8]) -> Self {
         Self {
             data,
@@ -270,6 +283,7 @@ impl<'a> ExpGolombReader<'a> {
         }
     }
 
+    /// Read one unsigned Exp-Golomb value, or `None` if it is malformed or runs past the data.
     fn read_ue(mut self) -> Option<u32> {
         let mut leading_zero_bits = 0u32;
         while self.read_bit()? == 0 {
@@ -286,6 +300,7 @@ impl<'a> ExpGolombReader<'a> {
         Some(value - 1)
     }
 
+    /// The next bit, most significant first.
     fn read_bit(&mut self) -> Option<u8> {
         let byte = *self.data.get(self.byte)?;
         let value = (byte >> (7 - self.bit)) & 1;
@@ -324,6 +339,7 @@ pub(super) fn find_start_codes(data: &[u8]) -> Vec<usize> {
     starts
 }
 
+/// Offset of the NAL header byte after the 3- or 4-byte start code at `start`, or `None`.
 pub(super) fn nal_header_offset(data: &[u8], start: usize) -> Option<usize> {
     if start + 4 < data.len()
         && data[start] == 0

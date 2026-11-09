@@ -51,6 +51,7 @@ fn evdi_setup_problem_in(dir: &std::path::Path) -> Option<String> {
 }
 
 impl CaptureManager {
+    /// Create a fresh capture FIFO at `path`, replacing whatever is there.
     pub(super) fn ensure_fifo(path: &str) -> Result<()> {
         // Anything already there is replaced, whatever it is: a stale FIFO
         // may carry old permissions, and a regular file or symlink in this

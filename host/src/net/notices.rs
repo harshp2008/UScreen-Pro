@@ -23,11 +23,13 @@ struct Slot {
     sticky: Option<String>,
 }
 
+/// The per-tablet notice channels.
 fn slots() -> &'static Mutex<HashMap<u32, Slot>> {
     static SLOTS: OnceLock<Mutex<HashMap<u32, Slot>>> = OnceLock::new();
     SLOTS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// The slot of `instance`, created on first use.
 fn slot_entry(map: &mut HashMap<u32, Slot>, instance: u32) -> &mut Slot {
     map.entry(instance).or_insert_with(|| Slot {
         tx: broadcast::channel(16).0,
@@ -109,6 +111,7 @@ const MAX_SLOTS: usize = 8;
 static GENERATION: [AtomicU64; MAX_SLOTS] = [const { AtomicU64::new(0) }; MAX_SLOTS];
 static FRAMES: [AtomicU64; MAX_SLOTS] = [const { AtomicU64::new(0) }; MAX_SLOTS];
 
+/// Array index for an instance number (clamped to the last slot).
 fn idx(instance: u32) -> usize {
     (instance as usize).min(MAX_SLOTS - 1)
 }

@@ -46,10 +46,12 @@ pub(super) fn clean_right_click(v: &str) -> String {
     }
 }
 
+/// Serde default for boolean settings that are on unless the file says otherwise.
 pub(super) fn default_true() -> bool {
     true
 }
 
+/// Serde default for the config's version field: this build's version.
 pub(super) fn default_version() -> String {
     env!("CARGO_PKG_VERSION").to_string()
 }

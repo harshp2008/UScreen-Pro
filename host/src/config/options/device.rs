@@ -173,10 +173,14 @@ impl DeviceOptions {
             )
     }
 
+    /// The message that tells the tablet app to dim its screen, with the configured duration and
+    /// curve.
     pub(super) fn dim_message(&self) -> Value {
         json!({ "type": "dim_screen", "duration": self.dim_duration_ms, "curve": self.dim_curve })
     }
 
+    /// The message that tells the tablet app to undim its screen, with the configured duration and
+    /// curve.
     pub(super) fn undim_message(&self) -> Value {
         json!({ "type": "undim_screen", "duration": self.undim_duration_ms, "curve": self.undim_curve })
     }

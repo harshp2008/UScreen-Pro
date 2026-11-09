@@ -2,6 +2,7 @@
 
 use super::*;
 
+/// Doctor check of the tablet(s) visible over adb.
 pub(super) async fn check_tablet(r: &mut Report, cfg: &FileConfig) {
     // `adb get-state` errors out when more than one device is attached, so
     // enumerate instead — that failure mode is silent otherwise.

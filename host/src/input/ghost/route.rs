@@ -15,6 +15,7 @@ struct FocusState {
     unknown_override: Option<bool>,
 }
 
+/// The process-wide focus state.
 fn focus() -> &'static Mutex<FocusState> {
     static F: OnceLock<Mutex<FocusState>> = OnceLock::new();
     F.get_or_init(|| Mutex::new(FocusState::default()))
@@ -26,6 +27,8 @@ pub(in crate::input) fn route_to_pen(art_apps: &[String]) -> bool {
     decide(f.app.as_ref(), &f.overrides, f.unknown_override, art_apps)
 }
 
+/// The route for `app`: its override if it has one, else whether it is an art app; unknown focus
+/// uses the unknown-app override (default: mouse).
 pub(super) fn decide(
     app: Option<&AppIdentity>,
     overrides: &HashMap<String, bool>,
@@ -56,6 +59,7 @@ pub(in crate::input) fn toggle_route(art_apps: &[String]) -> bool {
     !now
 }
 
+/// Record the app the desktop backend reported as focused (`None` when unknown).
 pub(in crate::input) fn set_focus(app: Option<AppIdentity>) {
     focus().lock().unwrap_or_else(|e| e.into_inner()).app = app;
 }

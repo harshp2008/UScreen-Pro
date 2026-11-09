@@ -25,6 +25,7 @@ use cli::commands::{list_displays, show_status, stop_daemon};
 use config::handler::client_control_cmd;
 use daemon::run_daemon;
 
+/// Parse the command line and run the chosen command (the default is to start the daemon).
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -150,6 +151,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Start logging; `RUST_LOG` overrides the default `uscreen=info`.
 fn setup_logging() {
     tracing_subscriber::fmt()
         .with_env_filter(

@@ -106,6 +106,7 @@ pub(in crate::input) enum DevState {
 }
 
 impl UInputDevice {
+    /// Open `/dev/uinput` for writing.
     pub(in crate::input) fn open_uinput() -> Result<File> {
         OpenOptions::new()
             .write(true)
@@ -408,6 +409,7 @@ impl UInputDevice {
         self.syn()
     }
 
+    /// Declare one absolute axis (range and resolution) on a device being created.
     unsafe fn abs_setup(fd: i32, code: u16, min: i32, max: i32, resolution: i32) -> Result<()> {
         let setup = UinputAbsSetup {
             code,
@@ -432,6 +434,7 @@ impl UInputDevice {
         Ok(())
     }
 
+    /// Give the device its name, bus, vendor and product ids, and create it.
     unsafe fn dev_setup_and_create(fd: i32, name: &str, product: u16) -> Result<()> {
         let mut setup = UinputSetup {
             bustype: BUS_VIRTUAL,
@@ -454,6 +457,7 @@ impl UInputDevice {
         Ok(())
     }
 
+    /// An ioctl with an integer argument, turned into an error on failure.
     unsafe fn ioctl_val(fd: i32, request: libc::c_ulong, value: i32) -> Result<()> {
         if libc::ioctl(fd, request as libc::c_ulong, value) < 0 {
             anyhow::bail!(
@@ -466,6 +470,7 @@ impl UInputDevice {
         Ok(())
     }
 
+    /// Queue one evdev event, keeping track of which keys the device is holding (see `held`).
     pub(in crate::input) fn emit(&mut self, type_: u16, code: u16, value: i32) -> Result<()> {
         if type_ == EV_KEY {
             if let Some(bit) = key_bit(code) {
@@ -510,6 +515,7 @@ impl UInputDevice {
         true
     }
 
+    /// Write one event to the device file.
     fn write_raw(&mut self, type_: u16, code: u16, value: i32) -> Result<()> {
         let ev = LinuxInputEvent {
             tv_sec: 0,
@@ -528,6 +534,7 @@ impl UInputDevice {
         Ok(())
     }
 
+    /// End the frame with `SYN_REPORT` and flush it to the device.
     pub(in crate::input) fn syn(&mut self) -> Result<()> {
         self.emit(EV_SYN, SYN_REPORT, 0)?;
         self.file.flush()?;

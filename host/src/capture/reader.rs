@@ -7,6 +7,8 @@ use super::packetizer::H264AnnexBPacketizer;
 use super::*;
 
 impl CaptureManager {
+    /// Read the encoder's output, cut it into packets, remember the codec config and broadcast
+    /// every packet to the connected clients.
     pub(super) async fn read_loop(
         mut stdout: impl tokio::io::AsyncRead + Unpin,
         tx: broadcast::Sender<VideoPacket>,

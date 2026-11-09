@@ -56,6 +56,7 @@ impl DeviceIdentity {
             device_count: 3,
         }
     }
+    /// Whether `name` is one of this tablet's touch, pen or pointer devices.
     pub(in crate::input) fn owns(&self, name: &str) -> bool {
         name == self.touch || name == self.pen || name == self.pointer
     }

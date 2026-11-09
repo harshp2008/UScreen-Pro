@@ -1,3 +1,7 @@
+/*
+ * Video path from the host: receives the stream over loopback TCP, decodes it with MediaCodec onto
+ * a SurfaceView, and reconnects when the link or surface changes.
+ */
 package com.uscreen
 
 import android.media.MediaCodec

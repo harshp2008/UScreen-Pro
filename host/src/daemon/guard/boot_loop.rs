@@ -64,12 +64,14 @@ pub fn state_path() -> PathBuf {
     base.join("uscreen").join("guard.json")
 }
 
+/// The kernel's boot id, which changes on every boot (empty if unreadable).
 pub(super) fn boot_id() -> String {
     std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
 }
 
+/// Seconds since the Unix epoch.
 pub(super) fn now_unix() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -77,6 +79,7 @@ pub(super) fn now_unix() -> u64 {
         .unwrap_or(0)
 }
 
+/// The saved guard record, `None` if it is missing or unreadable.
 pub(super) fn load_record() -> Option<GuardRecord> {
     serde_json::from_str(&std::fs::read_to_string(state_path()).ok()?).ok()
 }

@@ -69,6 +69,7 @@ pub fn output_changes() -> Option<tokio::sync::watch::Receiver<()>> {
         .clone()
 }
 
+/// Whether a file called `name` exists in any directory of `$PATH`.
 fn command_exists(name: &str) -> bool {
     std::env::var("PATH")
         .unwrap_or_default()
@@ -89,6 +90,7 @@ pub fn active() -> bool {
         && command_exists("xinput")
 }
 
+/// Run `program`: (success, output), or `None` if it could not be started.
 async fn run(program: &str, args: &[&str]) -> Option<(bool, String)> {
     let out = tokio::process::Command::new(program)
         .args(args)
@@ -121,6 +123,7 @@ struct Target {
     edid: Vec<u8>,
 }
 
+/// The xrandr outputs that belong to the named EVDI connectors.
 fn targets_for(names: &[String]) -> Vec<Target> {
     crate::display::vdisplay::evdi_connectors()
         .into_iter()
@@ -166,6 +169,7 @@ fn parse_geometry(token: &str) -> Option<(i64, i64, i64, i64)> {
     ))
 }
 
+/// Decode a hex string; `None` if it is empty, odd-length or not hex.
 fn hex_bytes(s: &str) -> Option<Vec<u8>> {
     if s.is_empty() || !s.len().is_multiple_of(2) || !s.bytes().all(|c| c.is_ascii_hexdigit()) {
         return None;
@@ -176,6 +180,7 @@ fn hex_bytes(s: &str) -> Option<Vec<u8>> {
         .collect()
 }
 
+/// Parse `xrandr --prop` output into outputs with their EDID.
 fn parse_outputs(text: &str) -> Vec<Output> {
     let mut outs: Vec<Output> = Vec::new();
     let mut in_edid = false;
@@ -216,6 +221,7 @@ fn parse_outputs(text: &str) -> Vec<Output> {
     outs
 }
 
+/// The current xrandr outputs, `None` if xrandr failed.
 async fn outputs() -> Option<Vec<Output>> {
     let (ok, text) = run("xrandr", &["--prop"]).await?;
     ok.then(|| parse_outputs(&text))

@@ -39,6 +39,7 @@ pub enum State {
 }
 
 impl State {
+    /// The state's name in status output.
     fn label(&self) -> &'static str {
         match self {
             State::Queued => "queued",
@@ -56,11 +57,13 @@ struct Job {
     since: Instant,
 }
 
+/// The install jobs, by device.
 fn jobs() -> &'static Mutex<HashMap<String, Job>> {
     static JOBS: OnceLock<Mutex<HashMap<String, Job>>> = OnceLock::new();
     JOBS.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Limits how many installs run at once.
 fn semaphore() -> &'static Semaphore {
     static SEM: OnceLock<Semaphore> = OnceLock::new();
     SEM.get_or_init(|| Semaphore::new(MAX_CONCURRENT))
@@ -68,6 +71,7 @@ fn semaphore() -> &'static Semaphore {
 
 static RUNNING: AtomicUsize = AtomicUsize::new(0);
 
+/// Record the state of a device's install job.
 fn set_state(key: &str, state: State, detail: impl Into<String>) {
     let mut map = jobs().lock().unwrap_or_else(|e| e.into_inner());
     map.insert(
@@ -80,6 +84,7 @@ fn set_state(key: &str, state: State, detail: impl Into<String>) {
     );
 }
 
+/// Whether the device's install is queued or running.
 fn is_active(key: &str) -> bool {
     let map = jobs().lock().unwrap_or_else(|e| e.into_inner());
     map.get(key)
@@ -187,6 +192,7 @@ pub async fn installed_version(serial: &str) -> Option<String> {
     parse_version_name(&String::from_utf8_lossy(&out.stdout))
 }
 
+/// The `versionName=` value in `dumpsys package` output.
 fn parse_version_name(dumpsys: &str) -> Option<String> {
     dumpsys
         .lines()
@@ -200,6 +206,7 @@ pub fn host_version() -> &'static str {
     env!("GIT_VERSION_STRING")
 }
 
+/// `adb install -r`, retried with `-d` (allow downgrade) if needed; the adb error text on failure.
 async fn adb_install(serial: &str, apk: &std::path::Path) -> Result<(), String> {
     for downgrade in [false, true] {
         let mut args = vec!["-s", serial, "install", "-r"];
@@ -291,6 +298,7 @@ pub fn enqueue(req: Request) -> bool {
     })
 }
 
+/// When each device was last installed to automatically, to avoid retry loops.
 fn last_auto() -> &'static Mutex<HashMap<String, Instant>> {
     static LAST: OnceLock<Mutex<HashMap<String, Instant>>> = OnceLock::new();
     LAST.get_or_init(|| Mutex::new(HashMap::new()))

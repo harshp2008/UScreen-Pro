@@ -2,6 +2,7 @@
 
 use super::*;
 
+/// Doctor check of the EVDI virtual display: its connector, mode and placement.
 pub(super) async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
     let connectors = vdisplay::evdi_connectors();
     if connectors.is_empty() {
