@@ -1,4 +1,4 @@
-import { Info, RotateCcw } from "lucide-react";
+import { ChevronRight, Info, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -27,18 +27,86 @@ export function InfoTip({ text }: { text: string }) {
   );
 }
 
-/** A titled group of rows. The card is the only container; rows are separated by hairlines. */
-export function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+/**
+ * A titled group of rows. The card is the only container; rows are separated by hairlines.
+ * `collapsible` turns the title into a toggle (closed unless `defaultOpen`), for settings that are set once.
+ */
+export function Section({
+  title,
+  hint,
+  collapsible,
+  defaultOpen,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const card = <div className="divide-y divide-border rounded-lg border border-border bg-card">{children}</div>;
+  if (collapsible) {
+    return (
+      <details className="group space-y-2" open={defaultOpen}>
+        <summary className="flex cursor-pointer list-none items-center justify-between px-1 pt-2 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-1 text-xs font-semibold tracking-wide text-primary">
+            <ChevronRight className="size-3.5 transition-transform group-open:rotate-90" />
+            {title}
+          </span>
+          {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
+        </summary>
+        {card}
+      </details>
+    );
+  }
   return (
     <section className="space-y-2">
       <div className="flex items-baseline justify-between px-1 pt-2">
         <h3 className="text-xs font-semibold tracking-wide text-primary">{title}</h3>
         {hint && <span className="text-[11px] text-muted-foreground">{hint}</span>}
       </div>
-      <div className="divide-y divide-border rounded-lg border border-border bg-card">
-        {children}
-      </div>
+      {card}
     </section>
+  );
+}
+
+/** Two cards side by side on a wide window, stacked on a narrow one. */
+export function Columns({ children }: { children: ReactNode }) {
+  return <div className="grid items-start gap-x-4 lg:grid-cols-2">{children}</div>;
+}
+
+/** Underlined tab strip. Only switches what is shown; it never changes a setting. */
+export function Tabs({
+  value,
+  onChange,
+  tabs,
+  label,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  tabs: { value: string; label: string }[];
+  label: string;
+}) {
+  return (
+    <div role="tablist" aria-label={label} className="flex gap-1 border-b border-border px-1 pt-3">
+      {tabs.map((t) => (
+        <button
+          key={t.value}
+          type="button"
+          role="tab"
+          aria-selected={value === t.value}
+          onClick={() => onChange(t.value)}
+          className={cn(
+            "-mb-px border-b-2 px-3 py-2 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+            value === t.value
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

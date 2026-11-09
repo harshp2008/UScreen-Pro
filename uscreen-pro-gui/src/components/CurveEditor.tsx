@@ -89,14 +89,14 @@ export function CurveEditor({ label, tip, value, onChange, presets, onPresetsCha
       override={override}
       summary={options.find((o) => o.value === current)?.label}
     >
-      <div className="flex items-start gap-4">
+      <div className="flex flex-wrap items-start gap-4">
         <CurvePreview fn={curveFn(value, presets)} />
         <div className="min-w-0 flex-1 space-y-2">
           <Select
             label={label}
             value={current}
             options={options}
-            className="w-56"
+            className="w-full max-w-56"
             onValueChange={(v) => {
               if (v === MISSING) return;
               setSaving(false);

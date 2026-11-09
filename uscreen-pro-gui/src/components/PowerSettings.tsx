@@ -1,6 +1,7 @@
+import type { ReactNode } from "react";
 import { CurveEditor } from "./CurveEditor";
 import { NumberInput, Segmented } from "./ui/controls";
-import { Section, SettingRow, SliderRow, SwitchRow, type Override } from "./ui/layout";
+import { Columns, Section, SettingRow, SliderRow, SwitchRow, type Override } from "./ui/layout";
 import {
   CURVES,
   FADE_MAX_MS,
@@ -55,168 +56,87 @@ export const POWER_TIP =
 
 const onOff = (v: boolean) => (v ? "On" : "Off");
 
-interface Props {
+interface Common {
   /** Effective values: the global ones on the Settings page, override-or-global on a device page. */
   values: PowerValues;
   onChange: (patch: Partial<PowerValues>) => void;
   /** Present on a device page: builds the "override the global value" switch of a row. */
   override?: (key: keyof PowerValues, inherited: string) => Override;
-  /** Tooltip for the Input mode row (device page). */
-  modeTip?: string;
-  presets: CurvePreset[];
-  onPresetsChange: (presets: CurvePreset[]) => void;
 }
 
-/**
- * Input mode, tablet-app, power and idle-dimming sections, shared by the global Settings page and the
- * device page so both always offer the same rows in the same order. Everything the Android settings page
- * has is here too.
- */
-export function PowerSettings({ values: v, onChange, override, modeTip, presets, onPresetsChange }: Props) {
-  const ov = (key: keyof PowerValues, inherited: string) => override?.(key, inherited);
-  const hint = override ? "Click a grey value to override it for this device" : undefined;
+const overrideOf = (c: Common) => (key: keyof PowerValues, inherited: string) => c.override?.(key, inherited);
+
+/** The input-mode row with its one-line help. Global: the default mode for new devices. Device: its live mode. */
+export function ModeSection({ values: v, onChange, override, modeTip, title, label }: Common & {
+  modeTip?: string;
+  title: string;
+  label: string;
+}) {
+  const ov = overrideOf({ values: v, onChange, override });
   return (
-    <>
-      <Section title="Input mode" hint={hint}>
-        <SettingRow
-          label="Mode"
-          tip={
-            modeTip ??
-            "Exactly one is active: a second screen, a laptop touchpad (no video, saves battery) or a graphics tablet (no video)."
-          }
-          override={ov("input_mode", labelOf(INPUT_MODES, v.input_mode))}
-        >
-          <Segmented
-            label="Input mode"
-            value={v.input_mode}
-            options={INPUT_MODES}
-            onValueChange={(input_mode) => onChange({ input_mode: input_mode as InputMode })}
-          />
-        </SettingRow>
-        <p className="px-3 pb-2 text-[11px] text-muted-foreground">{INPUT_MODE_HELP[v.input_mode]}</p>
-      </Section>
+    <Section title={title} hint={override ? "Click a grey value to override it for this device" : undefined}>
+      <SettingRow
+        label={label}
+        tip={
+          modeTip ??
+          "The mode new devices start in. Exactly one is active per device: a second screen, a laptop touchpad (no video, saves battery) or a graphics tablet (no video)."
+        }
+        override={ov("input_mode", labelOf(INPUT_MODES, v.input_mode))}
+      >
+        <Segmented
+          label="Input mode"
+          value={v.input_mode}
+          options={INPUT_MODES}
+          onValueChange={(input_mode) => onChange({ input_mode: input_mode as InputMode })}
+        />
+      </SettingRow>
+      <p className="px-3 pb-2 text-[11px] text-muted-foreground">{INPUT_MODE_HELP[v.input_mode]}</p>
+    </Section>
+  );
+}
 
-      <Section title="Tablet app" hint={hint}>
-        {v.input_mode !== "touchpad" && (
-          <SwitchRow
-            label="Touch input"
-            tip="Off sends only the pen, so a resting hand does nothing."
-            checked={v.touch_input}
-            onChange={(touch_input) => onChange({ touch_input })}
-            override={ov("touch_input", onOff(v.touch_input))}
-          />
-        )}
-        {v.input_mode === "stylus" && (
-          <>
-            <SettingRow
-              label="Pen acts as"
-              tip="Auto: a visible cursor follows the pen everywhere and text selection works; drawing programs (Krita, GIMP, ...) get pressure and tilt, other apps get a mouse click. Ctrl+Alt+P flips the choice for the focused app. Mouse: the pen is a pointer. The tip is the left button and stays down while you drag, so you can select text and move windows; hovering moves a visible cursor. Graphics tablet: a pressure and tilt pen for drawing programs."
-              override={ov("stylus_style", labelOf(STYLUS_STYLES, v.stylus_style))}
-            >
-              <Segmented
-                label="Pen acts as"
-                value={v.stylus_style}
-                options={STYLUS_STYLES}
-                onValueChange={(stylus_style) => onChange({ stylus_style })}
-              />
-            </SettingRow>
-            {(v.stylus_style === "mouse" || v.stylus_style === "auto") && (
-              <>
-                <SettingRow
-                  label="Pen button"
-                  tip="What the pen's side button does while the pen acts as a mouse."
-                  override={ov("stylus_button_primary", labelOf(PEN_BUTTONS, v.stylus_button_primary))}
-                >
-                  <Segmented
-                    label="Pen button"
-                    value={v.stylus_button_primary}
-                    options={PEN_BUTTONS}
-                    onValueChange={(stylus_button_primary) => onChange({ stylus_button_primary })}
-                  />
-                </SettingRow>
-                <SettingRow
-                  label="Second pen button"
-                  tip="For pens with a second side button."
-                  override={ov("stylus_button_secondary", labelOf(PEN_BUTTONS, v.stylus_button_secondary))}
-                >
-                  <Segmented
-                    label="Second pen button"
-                    value={v.stylus_button_secondary}
-                    options={PEN_BUTTONS}
-                    onValueChange={(stylus_button_secondary) => onChange({ stylus_button_secondary })}
-                  />
-                </SettingRow>
-              </>
-            )}
-          </>
-        )}
-        {v.input_mode === "stylus" && (
-          <SwitchRow
-            label="Black screen in stylus mode"
-            tip="Nothing is streamed, so the tablet's screen goes black a few seconds after stylus mode starts (spares OLED panels)."
-            checked={v.blank_pen_only}
-            onChange={(blank_pen_only) => onChange({ blank_pen_only })}
-            override={ov("blank_pen_only", onOff(v.blank_pen_only))}
-          />
-        )}
+/** The settings of one input mode. Only the mode being shown is rendered. */
+export function ModePanel({
+  values: v,
+  onChange,
+  override,
+  mode,
+  displayExtra,
+  stylusExtra,
+}: Common & {
+  mode: InputMode;
+  /** Extended Display video and layout sections (global and device pages build their own). */
+  displayExtra?: ReactNode;
+  /** Drawing-tablet and pen-menu sections (global only). */
+  stylusExtra?: ReactNode;
+}) {
+  const ov = overrideOf({ values: v, onChange, override });
+  if (mode === "display") {
+    return (
+      <Columns>
+        {displayExtra}
+        <Section title="Tablet screen">
         <SwitchRow
-          label="Immersive mode"
-          tip="Hide the settings button on the tablet and draw under the camera cutout. The Back button opens settings."
-          checked={v.immersive_mode}
-          onChange={(immersive_mode) => onChange({ immersive_mode })}
-          override={ov("immersive_mode", onOff(v.immersive_mode))}
-        />
-        {v.input_mode === "display" && (
-          <SwitchRow
-            label="Show stats overlay"
-            tip="FPS and bandwidth in the corner of the tablet's screen. Only Extended Display mode has a video stream to measure."
-            checked={v.show_stats}
-            onChange={(show_stats) => onChange({ show_stats })}
-            override={ov("show_stats", onOff(v.show_stats))}
-          />
-        )}
-        <SettingRow
-          label="Orientation"
-          tip="Landscape direction of the tablet app. Camera down is the usual way to hold it for drawing."
-          override={ov("orientation", labelOf(ORIENTATIONS, v.orientation))}
-        >
-          <Segmented
-            label="Orientation"
-            value={v.orientation}
-            options={ORIENTATIONS}
-            onValueChange={(orientation) => onChange({ orientation })}
-          />
-        </SettingRow>
-        <SettingRow
-          label="Theme"
-          tip="Light, dark or the tablet's own system setting for the tablet app."
-          override={ov("theme_mode", labelOf(THEME_MODES, v.theme_mode))}
-        >
-          <Segmented
-            label="Theme"
-            value={v.theme_mode}
-            options={THEME_MODES}
-            onValueChange={(theme_mode) => onChange({ theme_mode })}
-          />
-        </SettingRow>
-        <SwitchRow
-          label="Keep display alive when locked"
-          tip="Hold a wake lock and keep the tablet app on screen over the tablet's lock screen."
-          checked={v.keep_display_alive_when_locked}
-          onChange={(keep_display_alive_when_locked) => onChange({ keep_display_alive_when_locked })}
-          override={ov("keep_display_alive_when_locked", onOff(v.keep_display_alive_when_locked))}
+          label="Touch input"
+          tip="Off sends only the pen, so a resting hand does nothing."
+          checked={v.touch_input}
+          onChange={(touch_input) => onChange({ touch_input })}
+          override={ov("touch_input", onOff(v.touch_input))}
         />
         <SwitchRow
-          label="Touch on lock screen"
-          tip="Off: a locked tablet shows a cover and sends no touch. On: touch keeps working while it is locked."
-          checked={v.touch_on_lock_screen}
-          onChange={(touch_on_lock_screen) => onChange({ touch_on_lock_screen })}
-          override={ov("touch_on_lock_screen", onOff(v.touch_on_lock_screen))}
+          label="Show stats overlay"
+          tip="FPS and bandwidth in the corner of the tablet's screen, measured on the video stream."
+          checked={v.show_stats}
+          onChange={(show_stats) => onChange({ show_stats })}
+          override={ov("show_stats", onOff(v.show_stats))}
         />
       </Section>
-
-      {v.input_mode === "touchpad" && (
-        <Section title="Touchpad" hint={hint}>
+      </Columns>
+    );
+  }
+  if (mode === "touchpad") {
+    return (
+      <Section title="Touchpad">
           <SliderRow
             label="Sensitivity"
             tip="How far the pointer and swipes travel per finger movement on the tablet (100% is the finger's real distance on the tablet). Applies with native gestures. Pointer acceleration on top of it is your desktop's touchpad speed setting."
@@ -267,9 +187,115 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
             />
           </SettingRow>
         </Section>
-      )}
+    );
+  }
+  return (
+    <Columns>
+      <Section title="Stylus">
+        <>
+            <SettingRow
+              label="Pen acts as"
+              tip="Auto: a visible cursor follows the pen everywhere and text selection works; drawing programs (Krita, GIMP, ...) get pressure and tilt, other apps get a mouse click. Ctrl+Alt+P flips the choice for the focused app. Mouse: the pen is a pointer. The tip is the left button and stays down while you drag, so you can select text and move windows; hovering moves a visible cursor. Graphics tablet: a pressure and tilt pen for drawing programs."
+              override={ov("stylus_style", labelOf(STYLUS_STYLES, v.stylus_style))}
+            >
+              <Segmented
+                label="Pen acts as"
+                value={v.stylus_style}
+                options={STYLUS_STYLES}
+                onValueChange={(stylus_style) => onChange({ stylus_style })}
+              />
+            </SettingRow>
+            {(v.stylus_style === "mouse" || v.stylus_style === "auto") && (
+              <>
+                <SettingRow
+                  label="Pen button"
+                  tip="What the pen's side button does while the pen acts as a mouse."
+                  override={ov("stylus_button_primary", labelOf(PEN_BUTTONS, v.stylus_button_primary))}
+                >
+                  <Segmented
+                    label="Pen button"
+                    value={v.stylus_button_primary}
+                    options={PEN_BUTTONS}
+                    onValueChange={(stylus_button_primary) => onChange({ stylus_button_primary })}
+                  />
+                </SettingRow>
+                <SettingRow
+                  label="Second pen button"
+                  tip="For pens with a second side button."
+                  override={ov("stylus_button_secondary", labelOf(PEN_BUTTONS, v.stylus_button_secondary))}
+                >
+                  <Segmented
+                    label="Second pen button"
+                    value={v.stylus_button_secondary}
+                    options={PEN_BUTTONS}
+                    onValueChange={(stylus_button_secondary) => onChange({ stylus_button_secondary })}
+                  />
+                </SettingRow>
+              </>
+            )}
+        </>
+        <SwitchRow
+          label="Black screen in stylus mode"
+          tip="Nothing is streamed, so the tablet's screen goes black a few seconds after stylus mode starts (spares OLED panels)."
+          checked={v.blank_pen_only}
+          onChange={(blank_pen_only) => onChange({ blank_pen_only })}
+          override={ov("blank_pen_only", onOff(v.blank_pen_only))}
+        />
+      </Section>
+      {stylusExtra}
+    </Columns>
+  );
+}
 
-      <Section title="Power & Battery" hint={hint}>
+/** Tablet-app, power and idle-dimming settings; the same for every mode. */
+export function TabletPanel({
+  values: v,
+  onChange,
+  override,
+  presets,
+  onPresetsChange,
+}: Common & { presets: CurvePreset[]; onPresetsChange: (presets: CurvePreset[]) => void }) {
+  const hint = override ? "Click a grey value to override it for this device" : undefined;
+  const ov = overrideOf({ values: v, onChange, override });
+  return (
+    <>
+      {hint && <p className="px-1 pt-2 text-[11px] text-muted-foreground">{hint}</p>}
+      <Columns>
+      <Section title="Tablet app">
+        <SettingRow
+          label="Orientation"
+          tip="Landscape direction of the tablet app. Camera down is the usual way to hold it for drawing."
+          override={ov("orientation", labelOf(ORIENTATIONS, v.orientation))}
+        >
+          <Segmented
+            label="Orientation"
+            value={v.orientation}
+            options={ORIENTATIONS}
+            onValueChange={(orientation) => onChange({ orientation })}
+          />
+        </SettingRow>
+        <SettingRow
+          label="Theme"
+          tip="Light, dark or the tablet's own system setting for the tablet app."
+          override={ov("theme_mode", labelOf(THEME_MODES, v.theme_mode))}
+        >
+          <Segmented
+            label="Theme"
+            value={v.theme_mode}
+            options={THEME_MODES}
+            onValueChange={(theme_mode) => onChange({ theme_mode })}
+          />
+        </SettingRow>
+        <SwitchRow
+          label="Immersive mode"
+          tip="Hide the settings button on the tablet and draw under the camera cutout. The Back button opens settings."
+          checked={v.immersive_mode}
+          onChange={(immersive_mode) => onChange({ immersive_mode })}
+          override={ov("immersive_mode", onOff(v.immersive_mode))}
+        />
+      </Section>
+
+      <Section title="Power & battery" hint={hint}>
         <SwitchRow
           label="Battery saver on disconnect"
           tip="If the tablet cannot reach this computer for 2 minutes it stops retrying and dims to 10%. The user taps Retry to reconnect."
@@ -291,9 +317,25 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
           onChange={(keep_connected_in_background) => onChange({ keep_connected_in_background })}
           override={ov("keep_connected_in_background", onOff(v.keep_connected_in_background))}
         />
+        <SwitchRow
+          label="Keep display alive when locked"
+          tip="Hold a wake lock and keep the tablet app on screen over the tablet's lock screen."
+          checked={v.keep_display_alive_when_locked}
+          onChange={(keep_display_alive_when_locked) => onChange({ keep_display_alive_when_locked })}
+          override={ov("keep_display_alive_when_locked", onOff(v.keep_display_alive_when_locked))}
+        />
+        <SwitchRow
+          label="Touch on lock screen"
+          tip="Off: a locked tablet shows a cover and sends no touch. On: touch keeps working while it is locked."
+          checked={v.touch_on_lock_screen}
+          onChange={(touch_on_lock_screen) => onChange({ touch_on_lock_screen })}
+          override={ov("touch_on_lock_screen", onOff(v.touch_on_lock_screen))}
+        />
       </Section>
 
-      <Section title="Idle Power Saving" hint="Dims the tablet while the pointer is elsewhere">
+      </Columns>
+      <Columns>
+        <Section title="Dim when idle" hint="Dims the tablet while the pointer is elsewhere">
         <SwitchRow
           label="Dim when idle"
           tip="Fade the tablet's screen down once the pointer has left it and the tablet has gone unused for the timeout. Touching the tablet or moving the pointer back fades it up again."
@@ -339,6 +381,8 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
             onCommit={(dim_duration_ms) => onChange({ dim_duration_ms })}
           />
         </SettingRow>
+        </Section>
+        <Section title="Wake up">
         <CurveEditor
           label="Undim curve"
           tip="Shape of the fade back up to full brightness."
@@ -363,7 +407,8 @@ export function PowerSettings({ values: v, onChange, override, modeTip, presets,
             onCommit={(undim_duration_ms) => onChange({ undim_duration_ms })}
           />
         </SettingRow>
-      </Section>
+        </Section>
+      </Columns>
     </>
   );
 }

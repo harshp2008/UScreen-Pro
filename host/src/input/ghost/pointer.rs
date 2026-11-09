@@ -253,6 +253,9 @@ impl InjectDevices {
             let _ = dev.emit(EV_ABS, ABS_X, x);
             let _ = dev.emit(EV_ABS, ABS_Y, y);
             let _ = dev.syn();
+            // Apart, so the shell handles "in" and "out" as two events: back to back, the tool's own
+            // cursor can stay on screen at this spot as a second, stale pointer.
+            std::thread::sleep(Duration::from_millis(40));
             let _ = dev.emit(EV_KEY, BTN_TOOL_PEN, 0);
             let _ = dev.syn();
         }
