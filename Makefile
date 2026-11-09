@@ -28,6 +28,7 @@ all: build android
 	@echo "✓ Synchronized unified build complete: v$(GIT_VERSION_STRING)"
 
 ## build-helper: Compile C EVDI helper with O3 optimization and link with libevdi/X11
+## (host/evdi/evdi_helper.c #includes host/evdi/helper_*.h, so it is still one translation unit)
 build-helper:
 	$(CC) -O3 -o host/evdi/evdi_helper host/evdi/evdi_helper.c /lib/libevdi.so.1 -lpthread -lX11 -lXrandr -Ihost/evdi
 	mkdir -p target/release target/debug $(BIN_DIR)
