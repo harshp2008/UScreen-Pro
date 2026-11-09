@@ -295,8 +295,17 @@ pub(super) async fn map_and_note_area(
         Some(o) => output_area_on_desktop(o).await,
         None => None,
     };
+    let snap_grid = if crate::display::gnome::active() {
+        crate::display::gnome::desktop_pixels().await
+    } else {
+        None
+    };
     if let Ok(mut guard) = devices.lock() {
         guard.pointer_area = area;
+        guard.snap_grid = snap_grid;
+    }
+    if let Some((w, h)) = snap_grid {
+        info!("Pointer snapped to whole pixels of a {}x{} desktop", w, h);
     }
     if let Some((x, y, w, h)) = area {
         info!(

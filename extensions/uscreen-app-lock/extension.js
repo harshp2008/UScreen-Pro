@@ -37,13 +37,11 @@ export default class UScreenAppLockExtension extends Extension {
         this._setupPenRouting();
         this._setupContextProbe();
         this._setupPenMenu();
-        this._setupCursorRepaint();
         console.log('[uscreen-app-lock] Extension enabled');
     }
 
     disable() {
         this._teardownPenMenu();
-        this._teardownCursorRepaint();
         this._teardownContextProbe();
         this._teardownPenRouting();
         if (this._windowCreatedId) {
@@ -242,30 +240,6 @@ export default class UScreenAppLockExtension extends Extension {
         }
         // A clipboard owner that never answers must not leave the host waiting.
         this._ctxTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { this._ctxTimeout = null; finish(); return GLib.SOURCE_REMOVE; });
-    }
-
-    // --- Stale cursor repaint ------------------------------------------------------------------
-    // With software cursors the old cursor image can stay on screen after the pointer moves on (a
-    // "second cursor"). Once the pointer has stopped, repaint the whole stage once: that clears it.
-    _setupCursorRepaint() {
-        this._cursorPos = null;
-        this._cursorMoved = false;
-        this._cursorTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
-            let [x, y] = global.get_pointer();
-            let last = this._cursorPos;
-            if (last && (last[0] !== x || last[1] !== y)) {
-                this._cursorMoved = true;
-            } else if (this._cursorMoved) {
-                this._cursorMoved = false;
-                global.stage.queue_redraw();
-            }
-            this._cursorPos = [x, y];
-            return GLib.SOURCE_CONTINUE;
-        });
-    }
-
-    _teardownCursorRepaint() {
-        if (this._cursorTimer) { GLib.source_remove(this._cursorTimer); this._cursorTimer = null; }
     }
 
     // --- Pen menu -----------------------------------------------------------------------------

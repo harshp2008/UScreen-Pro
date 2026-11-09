@@ -154,6 +154,57 @@ pub async fn output_area(connector: &str) -> Option<(f64, f64, f64, f64)> {
     (max_x > 0.0 && max_y > 0.0).then(|| (x / max_x, y / max_y, w / max_x, h / max_y))
 }
 
+/// The whole desktop in physical pixels `(width, height)`: the bounding box of the logical monitors
+/// times the largest scale. The pointer is snapped to this grid (see `InjectDevices::snap_grid`).
+pub async fn desktop_pixels() -> Option<(f64, f64)> {
+    let json = output_of(
+        "busctl",
+        &[
+            "--user",
+            "--json=short",
+            "call",
+            "org.gnome.Mutter.DisplayConfig",
+            "/org/gnome/Mutter/DisplayConfig",
+            "org.gnome.Mutter.DisplayConfig",
+            "GetCurrentState",
+        ],
+    )
+    .await?;
+    let v: serde_json::Value = serde_json::from_str(&json).ok()?;
+    let data = v.get("data")?.as_array()?;
+    let monitors_arr = data.get(1)?.as_array()?;
+    let logical_arr = data.get(2)?.as_array()?;
+    let mut phys = std::collections::HashMap::new();
+    for m in monitors_arr {
+        let conn = m.get(0)?.get(0)?.as_str()?;
+        for mode in m.get(1)?.as_array()? {
+            let a = mode.as_array()?;
+            let cur = a
+                .get(6)
+                .and_then(|p| p.get("is-current"))
+                .and_then(|c| c.get("data").or(Some(c)))
+                .and_then(|b| b.as_bool())
+                .unwrap_or(false);
+            if cur {
+                phys.insert(conn, (a.get(1)?.as_f64()?, a.get(2)?.as_f64()?));
+                break;
+            }
+        }
+    }
+    let (mut max_x, mut max_y, mut max_scale) = (0.0f64, 0.0f64, 1.0f64);
+    for lm in logical_arr {
+        let a = lm.as_array()?;
+        let (x, y) = (a.first()?.as_f64()?, a.get(1)?.as_f64()?);
+        let scale = a.get(2)?.as_f64().unwrap_or(1.0).max(0.01);
+        let conn = a.get(5)?.get(0)?.get(0)?.as_str()?;
+        let (pw, ph) = phys.get(conn).copied()?;
+        max_x = max_x.max(x + pw / scale);
+        max_y = max_y.max(y + ph / scale);
+        max_scale = max_scale.max(scale);
+    }
+    (max_x > 0.0 && max_y > 0.0).then(|| ((max_x * max_scale).round(), (max_y * max_scale).round()))
+}
+
 #[derive(Clone, Copy)]
 enum Kind {
     Tablet,

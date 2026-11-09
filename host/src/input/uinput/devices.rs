@@ -58,6 +58,9 @@ pub(in crate::input) struct InjectDevices {
     /// somewhere else entirely, further left and lower the larger the rest
     /// of the desktop was (#18). Converting here puts it where the pen was.
     pub(in crate::input) pointer_area: Option<(f64, f64, f64, f64)>,
+    /// The desktop in physical pixels: the absolute pointer is snapped to whole pixels of this grid,
+    /// because fractional positions leave stale "ghost" cursor images behind with software cursors.
+    pub(in crate::input) snap_grid: Option<(f64, f64)>,
     /// Bitmask of MT slots that currently have an active tracking ID
     /// (DOWN received, no matching UP yet). Bit N → slot N, up to slot 15.
     pub(in crate::input) active_slots: u16,
@@ -140,6 +143,7 @@ impl InjectDevices {
             rel_rest: (0.0, 0.0),
             last_pen_pos: (0, 0),
             pointer_area: None,
+            snap_grid: None,
             active_slots: 0,
             pen_proximity: false,
             pen_button: false,
@@ -356,7 +360,17 @@ impl InjectDevices {
             }
             None => (px, py),
         };
-        (px.clamp(0, COORD_MAX), py.clamp(0, COORD_MAX))
+        let (px, py) = (px.clamp(0, COORD_MAX), py.clamp(0, COORD_MAX));
+        match self.snap_grid {
+            Some((gw, gh)) if gw > 1.0 && gh > 1.0 => {
+                let snap = |v: i32, n: f64| {
+                    let c = COORD_MAX as f64;
+                    (((v as f64 / c) * (n - 1.0)).round() / (n - 1.0) * c).round() as i32
+                };
+                (snap(px, gw), snap(py, gh))
+            }
+            _ => (px, py),
+        }
     }
 
     /// Put the absolute pointer where the pen last was, so it can click there.
