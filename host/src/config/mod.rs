@@ -3,6 +3,24 @@
 //!
 //! Loading clamps every numeric setting to a sane range because values arrive from the tablet
 //! and the GUI and, once saved, would otherwise persist a bad number forever.
+//!
+//! Layout:
+//! * `limits` - the allowed ranges of bitrate, fps, quality, idle timeout and fade time
+//! * `curves` - the dim/undim easing curves: named presets and cubic-bezier parsing
+//! * `modes` - the input mode (display / touchpad / stylus) and the tablet's position next to the screen
+//! * `profile` - `TabletProfile`: the per-device section of config.toml and its helpers
+//! * `clean` - normalisers for free-text config values and the serde default helpers
+
+mod limits;
+mod curves;
+mod modes;
+mod profile;
+mod clean;
+pub use limits::*;
+pub use curves::*;
+pub use modes::*;
+pub use profile::*;
+pub use clean::*;
 
 pub mod handler;
 pub mod options;
@@ -10,295 +28,6 @@ pub mod options;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-
-/// Highest bitrate the USB transport actually sustains. Beyond this the encoder
-/// outruns the link, frames pile up in every queue along the way and latency
-/// grows without bound — the stream does not get sharper, only later.
-///
-/// This is a hard ceiling rather than a hint because the value is persisted:
-/// a bad number pushed once from the tablet stays in the config file and keeps
-/// poisoning every subsequent run.
-pub const MAX_BITRATE_KBPS: u32 = 60_000;
-/// Lowest bitrate accepted; below this the picture is unusable and rate control misbehaves.
-pub const MIN_BITRATE_KBPS: u32 = 1_000;
-
-/// The generated EDID caps the virtual mode at 90 Hz (EDID 1.4 stores the pixel
-/// clock in 16 bits, and 2960x1848@120 overflows it), so anything above 90
-/// would only ever produce duplicate frames.
-pub const MAX_FPS: u32 = 90;
-/// Lowest frame rate accepted.
-pub const MIN_FPS: u32 = 10;
-
-/// Constant-quality target for the encoder (lower = sharper, more bits).
-///
-/// 18 rather than a more conservative value because bandwidth stopped being the
-/// constraint: in constant-quality mode a desktop streams at a few Mbps against
-/// a ceiling tens of times higher, so spending bits on crisp text is close to
-/// free. Text sharpness is ultimately limited by 4:2:0 chroma subsampling, not
-/// by this number — below roughly 16 there is nothing left to gain.
-pub const DEFAULT_QUALITY: u32 = 18;
-/// Sharpest constant-quality value accepted; lower numbers only burn bandwidth.
-pub const MIN_QUALITY: u32 = 12;
-/// Blurriest constant-quality value accepted.
-pub const MAX_QUALITY: u32 = 32;
-
-/// Fade curves the tablet app knows how to animate; anything else falls back to the default.
-pub const CURVES: [&str; 5] = [
-    "linear",
-    "ease_in",
-    "ease_out",
-    "ease_in_out",
-    "exponential",
-];
-/// Highest and lowest control-point y of a custom Bezier fade (x is limited to 0..1).
-pub const BEZIER_Y_MIN: f64 = -2.0;
-pub const BEZIER_Y_MAX: f64 = 3.0;
-
-/// How the tablet is used. Exactly one is active per device.
-#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default)]
-#[serde(rename_all = "lowercase")]
-pub enum InputMode {
-    /// Extended display: video is streamed and touch is absolute.
-    #[default]
-    Display,
-    /// Laptop touchpad: no video, finger motion moves the pointer.
-    Touchpad,
-    /// Graphics tablet: no video, the pen drives the computer's own screen.
-    Stylus,
-}
-
-impl InputMode {
-    /// Whether this mode runs the capture and encoding pipeline.
-    pub fn streams_video(self) -> bool {
-        self == InputMode::Display
-    }
-
-    /// Wire / config name.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            InputMode::Display => "display",
-            InputMode::Touchpad => "touchpad",
-            InputMode::Stylus => "stylus",
-        }
-    }
-}
-
-/// A fade curve the user saved in the GUI: a CSS-style cubic Bezier through (0,0) and (1,1).
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
-pub struct CurvePreset {
-    pub name: String,
-    pub x1: f64,
-    pub y1: f64,
-    pub x2: f64,
-    pub y2: f64,
-}
-
-/// Parse `bezier:x1,y1,x2,y2` into clamped control points.
-fn parse_bezier(text: &str) -> Option<(f64, f64, f64, f64)> {
-    let rest = text.strip_prefix("bezier:")?;
-    let v: Vec<f64> = rest
-        .split(',')
-        .map(|p| p.trim().parse::<f64>())
-        .collect::<Result<_, _>>()
-        .ok()?;
-    if v.len() != 4 || v.iter().any(|n| !n.is_finite()) {
-        return None;
-    }
-    let x = |n: f64| n.clamp(0.0, 1.0);
-    let y = |n: f64| n.clamp(BEZIER_Y_MIN, BEZIER_Y_MAX);
-    Some((x(v[0]), y(v[1]), x(v[2]), y(v[3])))
-}
-
-/// The wire form the tablet understands for a stored curve: a preset name, or
-/// `bezier:x1,y1,x2,y2` for a custom or saved one (`preset:<name>` is looked up in `presets`).
-/// Anything unusable becomes `fallback`.
-pub fn resolve_curve(curve: &str, presets: &[CurvePreset], fallback: &str) -> String {
-    let c = curve.trim();
-    if let Some(name) = c.strip_prefix("preset:") {
-        return presets
-            .iter()
-            .find(|p| p.name == name)
-            .and_then(|p| parse_bezier(&format!("bezier:{},{},{},{}", p.x1, p.y1, p.x2, p.y2)))
-            .map(|b| format!("bezier:{},{},{},{}", b.0, b.1, b.2, b.3))
-            .unwrap_or_else(|| fallback.to_string());
-    }
-    if let Some(b) = parse_bezier(c) {
-        return format!("bezier:{},{},{},{}", b.0, b.1, b.2, b.3);
-    }
-    let lower = c.to_ascii_lowercase();
-    if CURVES.contains(&lower.as_str()) {
-        lower
-    } else {
-        fallback.to_string()
-    }
-}
-
-/// Shortest and longest idle timeout (seconds) before the tablet is dimmed.
-pub const MIN_IDLE_TIMEOUT_SECS: u32 = 10;
-pub const MAX_IDLE_TIMEOUT_SECS: u32 = 300;
-/// Shortest and longest fade (milliseconds) of the idle dim / undim animation.
-pub const MIN_FADE_MS: u32 = 100;
-pub const MAX_FADE_MS: u32 = 30_000;
-
-/// What one device reported about itself, and anything set specifically for
-/// it, keyed in the config by its adb serial.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
-#[serde(default)]
-pub struct TabletProfile {
-    /// Inferred model name (e.g. from ro.product.model).
-    pub label: String,
-    /// User-customized nickname for the device.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub nickname: Option<String>,
-    pub width: u32,
-    pub height: u32,
-    /// Panel size in millimetres; feeds the EDID and so the desktop's scale.
-    pub width_mm: u32,
-    pub height_mm: u32,
-    /// Set only where this device should differ from the global settings.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub fps: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub bitrate: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub quality: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stream_scale: Option<u32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub position: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encoder: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ten_bit: Option<bool>,
-    /// Wi-Fi connection endpoint (IP:port) for wireless streaming.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub wifi_address: Option<String>,
-    /// Keep virtual display active when tablet disconnects (throttled to 1 FPS).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub keep_alive: Option<bool>,
-    /// Application window locking: allowed apps on this monitor.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub locked_apps: Option<Vec<String>>,
-    /// Input mode of this device (`display`, `touchpad`, `stylus`); unset inherits the global one.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub input_mode: Option<InputMode>,
-    /// Legacy override, read once to migrate to `input_mode`; never written.
-    #[serde(skip_serializing)]
-    pub touchpad_mode: Option<bool>,
-    /// Hide the settings handle and draw under the cutout on the tablet. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub immersive_mode: Option<bool>,
-    /// Show the fps / Mbps overlay on the tablet. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub show_stats: Option<bool>,
-    /// Send finger touches to the computer (the pen always works). Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub touch_input: Option<bool>,
-    /// Forward touches while the tablet is locked. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub touch_on_lock_screen: Option<bool>,
-    /// Keep the app on screen over the tablet's lock screen. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub keep_display_alive_when_locked: Option<bool>,
-    /// Keep the sockets open when the app is in the background. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub keep_connected_in_background: Option<bool>,
-    /// Black out the tablet screen a few seconds after Stylus mode starts. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub blank_pen_only: Option<bool>,
-    /// Landscape direction on the tablet: auto, camera_up or camera_down. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub orientation: Option<String>,
-    /// Tablet app theme: system, light or dark. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub theme_mode: Option<String>,
-    /// After the host has been unreachable for two minutes: stop retrying and dim to 10%. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub battery_saver_on_disconnect: Option<bool>,
-    /// Battery saver also locks the tablet (needs the Device Admin permission). Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub battery_saver_lock: Option<bool>,
-    /// Dim the tablet while the pointer is away from it. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub idle_dim_enabled: Option<bool>,
-    /// Seconds of idleness before the tablet dims. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub idle_dim_timeout_secs: Option<u32>,
-    /// Dim fade curve: a preset name, `bezier:x1,y1,x2,y2` or `preset:<name>`. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dim_curve: Option<String>,
-    /// Undim fade curve (same forms as `dim_curve`). Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub undim_curve: Option<String>,
-    /// Length of the dim fade in milliseconds. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dim_duration_ms: Option<u32>,
-    /// Length of the undim fade in milliseconds. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub undim_duration_ms: Option<u32>,
-    /// Light vibration on touchpad clicks. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub touchpad_haptics: Option<bool>,
-    /// Touchpad mode replays the tablet's fingers on a virtual multi-touch touchpad so the desktop
-    /// recognises swipes and pinches itself. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub native_gestures: Option<bool>,
-    /// Touchpad pointer and swipe sensitivity in percent (50-200). Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub touchpad_sensitivity: Option<u32>,
-    /// How a touchpad right click is made: `bottom_right_zone` or `two_finger_tap`. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub right_click_method: Option<String>,
-    /// Which part of the tablet acts as the touchpad: `full_screen`, `standard_rectangle` or `wide_rectangle`. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub touchpad_shape: Option<String>,
-    /// What the pen does in Stylus mode: `mouse` (a pointer that clicks and drag-selects) or `tablet` (a pressure and tilt pen). Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stylus_style: Option<String>,
-    /// What the pen's first side button does in `mouse` style: `right`, `middle` or `none`. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stylus_button_primary: Option<String>,
-    /// What the pen's second side button does in `mouse` style: `right`, `middle` or `none`. Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stylus_button_secondary: Option<String>,
-    /// Firmware/APK version reported by the connected Android client.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub app_version: Option<String>,
-    /// Dynamically discovered secure TLS connect port for Android 11+
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub secure_port: Option<u16>,
-    /// Preferred transport ("auto", "usb", "wifi") requested by the user or APK
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub preferred_transport: Option<String>,
-    /// `Some(false)` when wireless setup was skipped in the GUI wizard; `None` counts as configured.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub wireless_configured: Option<bool>,
-    /// Android API level (SDK int, e.g. 36)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub api_level: Option<u32>,
-}
-
-impl TabletProfile {
-    /// Friendly display name: nickname if provided, else model label, else fallback.
-    pub fn display_name<'a>(&'a self, fallback: &'a str) -> &'a str {
-        if let Some(ref n) = self.nickname {
-            let trimmed = n.trim();
-            if !trimmed.is_empty() {
-                return trimmed;
-            }
-        }
-        if !self.label.trim().is_empty() {
-            return self.label.trim();
-        }
-        fallback
-    }
-
-    /// Whether this device's own dimensions are known.
-    pub fn has_display(&self) -> bool {
-        self.width > 0 && self.height > 0
-    }
-}
 
 /// Persistent settings, shared by the CLI daemon, the GUI and the tablet app
 /// (which pushes changes over the input WebSocket).
@@ -492,59 +221,6 @@ pub struct FileConfig {
     pub version: String,
 }
 
-/// `full_screen` (default), `standard_rectangle` or `wide_rectangle`; anything else falls back to the default.
-pub fn clean_shape(v: &str) -> String {
-    match v.trim().to_ascii_lowercase().as_str() {
-        s @ ("standard_rectangle" | "wide_rectangle") => s.to_string(),
-        _ => "full_screen".into(),
-    }
-}
-
-/// `mouse`, `tablet` or `auto` (ghost tracking: both devices follow the pen, the click goes to the
-/// one the focused app wants); anything else is `mouse`.
-pub fn clean_stylus_style(v: &str) -> String {
-    match v.trim().to_ascii_lowercase().as_str() {
-        "tablet" => "tablet".into(),
-        "auto" => "auto".into(),
-        _ => "mouse".into(),
-    }
-}
-
-/// Drawing programs that want the pressure-sensitive pen by default.
-pub fn default_art_apps() -> Vec<String> {
-    [
-        "krita", "gimp", "inkscape", "blender", "xournalpp", "rnote", "mypaint", "aseprite",
-        "pinta", "darktable", "freecad", "onlyoffice",
-    ]
-    .iter()
-    .map(|s| s.to_string())
-    .collect()
-}
-
-/// `right`, `middle` or `none`; anything else falls back to [default].
-pub fn clean_pen_button(v: &str, default: &str) -> String {
-    match v.trim().to_ascii_lowercase().as_str() {
-        b @ ("right" | "middle" | "none") => b.to_string(),
-        _ => default.to_string(),
-    }
-}
-
-/// `bottom_right_zone` (default) or `two_finger_tap`; anything else falls back to the default.
-fn clean_right_click(v: &str) -> String {
-    match v.trim().to_ascii_lowercase().as_str() {
-        "two_finger_tap" => "two_finger_tap".into(),
-        _ => "bottom_right_zone".into(),
-    }
-}
-
-fn default_true() -> bool {
-    true
-}
-
-fn default_version() -> String {
-    env!("CARGO_PKG_VERSION").to_string()
-}
-
 impl Default for FileConfig {
     fn default() -> Self {
         Self {
@@ -612,34 +288,6 @@ impl Default for FileConfig {
             physical_tablet_grab: true,
             curve_presets: Vec::new(),
         }
-    }
-}
-
-/// Where the virtual screen goes relative to everything already on the desktop.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Position {
-    Right,
-    Left,
-    Above,
-    Below,
-}
-
-impl Position {
-    /// Parse a position name case-insensitively; `top`/`bottom` are accepted as aliases of `above`/`below`.
-    pub fn parse(s: &str) -> Option<Self> {
-        match s.trim().to_ascii_lowercase().as_str() {
-            "right" => Some(Position::Right),
-            "left" => Some(Position::Left),
-            "above" | "top" => Some(Position::Above),
-            "below" | "bottom" => Some(Position::Below),
-            _ => None,
-        }
-    }
-
-    /// Unknown values are a typo in a config file, not a reason to refuse to
-    /// bring the screen up at all.
-    pub fn parse_or_default(s: &str) -> Self {
-        Self::parse(s).unwrap_or(Position::Right)
     }
 }
 
