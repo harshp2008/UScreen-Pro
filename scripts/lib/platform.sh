@@ -8,6 +8,27 @@
 #   XDG_SESSION_TYPE      wayland | x11
 #   US_OSTREE             1 when the system is image based (rpm-ostree); default: /run/ostree-booted exists
 # Nothing in this file changes the system.
+#
+# Everything that differs between distribution families lives in distros/<family>.sh (one file each, all
+# functions prefixed with the family name). This file finds the family and calls its functions.
+
+US_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Files starting with `_` (the template) are not families.
+for _us_family_file in "$US_LIB_DIR"/distros/[a-z]*.sh; do
+    # shellcheck disable=SC1090
+    . "$_us_family_file"
+done
+unset _us_family_file
+
+# The family names, in the order they are tried against os-release (each file's <family>_order, then its name).
+us_distro_families() {
+    local f fam
+    for f in "$US_LIB_DIR"/distros/[a-z]*.sh; do
+        fam="$(basename "$f" .sh)"
+        [ "$fam" = unknown ] && continue
+        printf '%s %s\n' "$("${fam}_order")" "$fam"
+    done | sort -n -k1,1 -k2,2 | cut -d' ' -f2
+}
 
 # Read one KEY from the os-release file ("" when missing).
 us_os_value() {
@@ -17,18 +38,17 @@ us_os_value() {
     (. "$file" 2>/dev/null; eval "printf '%s' \"\${$key:-}\"")
 }
 
-# debian | fedora | arch | suse | unknown  (ID first, then ID_LIKE)
+# The family of this system: the name of a file in distros/, or `unknown`. os-release ID first, then ID_LIKE.
 us_distro_family() {
-    local id like
+    local id like fam tok
     id="$(us_os_value ID)"
     like="$(us_os_value ID_LIKE)"
-    case " $id $like " in
-        *" ubuntu "*|*" debian "*|*" linuxmint "*|*" pop "*|*" raspbian "*) echo debian ;;
-        *" fedora "*|*" rhel "*|*" centos "*|*" rocky "*|*" almalinux "*|*" nobara "*|*" bazzite "*) echo fedora ;;
-        *" arch "*|*" manjaro "*|*" endeavouros "*|*" cachyos "*) echo arch ;;
-        *" suse "*|*" opensuse "*|*" opensuse-leap "*|*" opensuse-tumbleweed "*|*" sles "*) echo suse ;;
-        *) echo unknown ;;
-    esac
+    for fam in $(us_distro_families); do
+        for tok in $("${fam}_ids"); do
+            case " $id $like " in *" $tok "*) echo "$fam"; return ;; esac
+        done
+    done
+    echo unknown
 }
 
 # 0 (true) when the root file system is image based, so packages are layered and need a reboot.
@@ -75,15 +95,7 @@ us_kernel_flavour() {
 
 # The packages the daemon needs, per family (names checked against real images; see docs/installer.md).
 # Echoes space separated names. `adb` is `android-tools` on everything but Debian-likes.
-us_core_packages() {
-    case "$(us_distro_family)" in
-        debian) echo "ffmpeg adb libevdi1 libevdi-dev" ;;
-        fedora) echo "ffmpeg android-tools" ;;
-        arch)   echo "ffmpeg android-tools" ;;
-        suse)   echo "ffmpeg android-tools" ;;
-        *)      echo "" ;;
-    esac
-}
+us_core_packages() { "$(us_distro_family)_core_packages"; }
 
 # How a missing EVDI kernel module is obtained on this family:
 #   prebuilt  the distro ships a signed module for its kernel (Ubuntu)
@@ -91,30 +103,7 @@ us_core_packages() {
 #   package   a plain kernel-module package (openSUSE)
 #   source    nothing is packaged: build upstream (Fedora)
 #   bundled   the image already has it (Bazzite, Nobara)
-us_evdi_strategy() {
-    local id
-    id="$(us_os_value ID)"
-    case "$id" in
-        bazzite|nobara) echo bundled; return ;;
-    esac
-    case "$(us_distro_family)" in
-        debian) [ "$id" = ubuntu ] && echo prebuilt || echo dkms ;;
-        fedora) echo source ;;
-        arch)   echo dkms ;;
-        suse)   echo package ;;
-        *)      echo source ;;
-    esac
-}
-
-# Package names to try, in order, for a prebuilt EVDI module on Ubuntu for the running kernel.
-us_ubuntu_evdi_candidates() {
-    local k="${UNAME_R:-$(uname -r)}" v
-    v="$(us_os_value VERSION_ID)"
-    echo "linux-main-modules-evdi-$k"
-    echo "linux-modules-evdi-$k"
-    echo "linux-modules-evdi-$(us_kernel_flavour)-hwe-$v"
-    echo "linux-modules-evdi-$(us_kernel_flavour)"
-}
+us_evdi_strategy() { "$(us_distro_family)_evdi_strategy"; }
 
 # What the user has to do after the install. Reads these flags (set by the install steps):
 #   US_EXT_CHANGED=1       the GNOME Shell extension (or spawn-at's) was installed or updated

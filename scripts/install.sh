@@ -100,48 +100,7 @@ has_part() { case " $PARTS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 # Package names verified against real systems, not from memory: an Arch container, a Debian
 # container and a Fedora container, each asked what it actually has.
-install_deps() {
-    local family
-    family="$(us_distro_family)"
-    case "$family" in
-        fedora)
-            if us_immutable && command -v rpm-ostree >/dev/null 2>&1; then
-                info "Image-based Fedora detected: layering packages (needs a reboot afterwards)"
-                run $SUDO rpm-ostree install --idempotent --allow-inactive ffmpeg android-tools \
-                    && US_PKG_LAYERED=1 || warn "Layering failed — check the names against your image"
-            else
-                # ffmpeg on Fedora needs RPM Fusion; the stock repositories only carry ffmpeg-free.
-                if ! dnf -q info ffmpeg >/dev/null 2>&1; then
-                    info "Enabling RPM Fusion (ffmpeg is not in the stock repositories)"
-                    run $SUDO dnf install -y \
-                        "https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
-                        || warn "Could not enable RPM Fusion"
-                fi
-                # --allowerasing: Fedora preinstalls ffmpeg-free, which RPM Fusion's build replaces.
-                run $SUDO dnf install -y --allowerasing ffmpeg android-tools \
-                    || warn "Install ffmpeg and android-tools manually"
-            fi
-            ;;
-        debian)
-            run $SUDO apt-get update || warn "apt-get update failed — continuing with the cached lists"
-            # Userspace first: a failing kernel-module build must not stop ffmpeg and adb.
-            # shellcheck disable=SC2046
-            run $SUDO apt-get install -y ffmpeg adb libevdi1 libevdi-dev \
-                || run $SUDO apt-get install -y ffmpeg android-tools-adb libevdi1 \
-                || warn "Check the package names for your release"
-            ;;
-        arch)
-            run $SUDO pacman -S --needed --noconfirm ffmpeg android-tools
-            ;;
-        suse)
-            run $SUDO zypper --non-interactive install --no-recommends ffmpeg android-tools \
-                || warn "Install ffmpeg and android-tools manually"
-            ;;
-        *)
-            warn "Unknown distribution. Install manually: ffmpeg, adb (android-tools), evdi + libevdi"
-            ;;
-    esac
-}
+install_deps() { "$(us_distro_family)_install_deps"; }
 
 # Say what is missing before a build fails on it in a less obvious way.
 check_deps() {
@@ -266,13 +225,7 @@ install_extension() {
 install_menu_runtime() {
     if ldconfig -p 2>/dev/null | grep -q "libgtk-4.so" || dpkg -s libgtk-4-1 >/dev/null 2>&1; then return 0; fi
     info "Installing the GTK 4 runtime for the pen menu"
-    case "$(us_distro_family)" in
-        fedora) run $SUDO dnf install -y gtk4 ;;
-        debian) run $SUDO apt-get install -y libgtk-4-1 ;;
-        arch)   run $SUDO pacman -S --needed --noconfirm gtk4 ;;
-        suse)   run $SUDO zypper --non-interactive install --no-recommends libgtk-4-1 ;;
-        *) false ;;
-    esac || warn "Could not install GTK 4 — the fallback pen menu window will not be available"
+    "$(us_distro_family)_install_gtk" || warn "Could not install GTK 4 — the fallback pen menu window will not be available"
 }
 
 # spawn-at places the pen-menu fallback window (https://github.com/harshp2008/spawn-at).

@@ -135,12 +135,55 @@ t_core_packages_use_the_right_adb_name() {
 }
 t_ubuntu_prebuilt_candidates_follow_the_running_kernel() {
     with_release ubuntu-24.04; UNAME_R=7.0.0-42-generic
-    local c; c="$(us_ubuntu_evdi_candidates)"
+    local c; c="$(debian_evdi_prebuilt_candidates)"
     has "$c" "linux-main-modules-evdi-7.0.0-42-generic"
     has "$c" "linux-modules-evdi-generic-hwe-24.04"
-    UNAME_R=6.8.0-45-lowlatency; c="$(us_ubuntu_evdi_candidates)"
+    UNAME_R=6.8.0-45-lowlatency; c="$(debian_evdi_prebuilt_candidates)"
     has "$c" "linux-main-modules-evdi-6.8.0-45-lowlatency"
     eq "$(us_kernel_flavour)" lowlatency
+}
+# ---- distros/<family>.sh: one file per family, one interface -----------------------------------------
+# The functions every family file must define (see scripts/lib/distros/_template.sh).
+DISTRO_INTERFACE="order ids core_packages evdi_strategy install_deps install_gtk evdi_install"
+t_every_family_file_implements_the_whole_interface() {
+    local f fam fn n=0
+    for f in "$SCRIPTS"/lib/distros/[a-z]*.sh; do
+        fam="$(basename "$f" .sh)"; n=$((n+1))
+        for fn in $DISTRO_INTERFACE; do
+            declare -F "${fam}_${fn}" >/dev/null || fail "$fam.sh does not define ${fam}_${fn}"
+        done
+    done
+    [ "$n" -ge 5 ] || fail "expected debian, fedora, arch, suse and unknown, found $n family files"
+}
+t_the_template_defines_the_same_interface_and_is_not_loaded() {
+    local fn
+    for fn in $DISTRO_INTERFACE; do grep -q "^FAMILY_${fn}()" "$SCRIPTS/lib/distros/_template.sh" || fail "_template.sh lacks FAMILY_${fn}"; done
+    ! declare -F FAMILY_ids >/dev/null || fail "the template must not be sourced"
+}
+t_family_order_is_debian_fedora_arch_suse_and_unknown_is_never_asked() {
+    eq "$(us_distro_families | tr '\n' ' ')" "debian fedora arch suse "
+}
+t_each_family_claims_only_its_own_ids() {
+    # No os-release ID may belong to two families, or the first one tried would silently win.
+    local fam tok seen=" "
+    for fam in $(us_distro_families); do
+        for tok in $("${fam}_ids"); do
+            case "$seen" in *" $tok "*) fail "id '$tok' is claimed twice" ;; esac
+            seen="$seen$tok "
+        done
+    done
+}
+t_each_family_names_its_packages() {
+    local fam
+    for fam in debian fedora arch suse; do [ -n "$("${fam}_core_packages")" ] || fail "$fam has no core packages"; done
+    eq "$(unknown_core_packages)" ""
+}
+t_each_strategy_is_one_of_the_known_ones() {
+    local fam s
+    for fam in debian fedora arch suse unknown; do
+        s="$("${fam}_evdi_strategy")"
+        case "$s" in prebuilt|dkms|package|source|bundled) ;; *) fail "$fam: unknown strategy '$s'" ;; esac
+    done
 }
 t_desktop_and_session_detection() {
     local d s

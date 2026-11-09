@@ -2,45 +2,14 @@
 # UScreen installer: getting the EVDI virtual-display kernel module, without ever leaving the
 # package manager half-configured.
 #
+# Holds the steps every family shares: is the module there, build upstream source with dkms, load it with two
+# devices. What differs per family (package names, prebuilt/dkms/package methods) is in distros/<family>.sh.
+#
 # Needs from the caller: `run` (executes or, in a dry run, only prints), `info`, `warn`, `$SUDO`.
 # Sets US_EVDI_NEEDS_REBOOT=1 when the module cannot be (re)loaded in the running system.
 
 # 0 when an EVDI module for the running kernel can be loaded.
 evdi_module_available() { modinfo evdi >/dev/null 2>&1; }
-
-# 0 when a Debian-family package is half-installed or half-configured (dpkg state F, H, U or W...).
-# That state makes every later `apt` call fail, so it is cleaned up before anything else.
-dpkg_package_broken() {
-    local st
-    st="$(dpkg-query -W -f='${db:Status-Abbrev}' "$1" 2>/dev/null || true)"
-    case "$st" in
-        ""|ii*|rc*|un*) return 1 ;;
-        *) return 0 ;;
-    esac
-}
-
-# Remove a half-installed package so apt works again. Purge, not remove: a failed configure leaves
-# state that `remove` keeps. Never touches modules owned by another package.
-dpkg_clean_broken() {
-    local pkg="$1"
-    if dpkg_package_broken "$pkg"; then
-        warn "$pkg is half-installed (its build failed) — removing it so apt works again"
-        run $SUDO dpkg --purge --force-remove-reinstreq "$pkg" || warn "could not remove $pkg"
-    fi
-}
-
-# Ubuntu: the kernel packages ship signed EVDI modules; install the one for the running kernel.
-evdi_install_prebuilt_ubuntu() {
-    local cand
-    while read -r cand; do
-        [ -n "$cand" ] || continue
-        if apt-cache show "$cand" >/dev/null 2>&1; then
-            info "Installing the distribution's prebuilt EVDI module ($cand)"
-            run $SUDO apt-get install -y "$cand" && return 0
-        fi
-    done < <(us_ubuntu_evdi_candidates)
-    return 1
-}
 
 # The newest upstream EVDI release tag (v1.14.x), from the repository itself, not from memory.
 evdi_latest_tag() {
@@ -70,54 +39,24 @@ evdi_install_from_source() {
 
 # Get a loadable EVDI module for the running kernel using the cheapest method this family has.
 # Returns 0 on success. Never leaves the package manager in a broken state.
+# The family's own method is `<family>_evdi_install` (distros/<family>.sh); building upstream source is the
+# last resort for every family.
 evdi_ensure() {
-    # A package left half-configured by an earlier failed build breaks every later apt call. Remove
-    # it, unless dkms has really built and installed a module from it.
-    if [ "$(us_distro_family)" = debian ] && dpkg_package_broken evdi-dkms; then
-        if dkms status evdi 2>/dev/null | grep -q 'installed'; then
-            warn "evdi-dkms is half-configured but dkms has a built module: leaving it alone"
-        else
-            dpkg_clean_broken evdi-dkms
-        fi
-    fi
+    local family strategy
+    family="$(us_distro_family)"
+    # Optional per-family repair step (Debian: a half-configured evdi-dkms breaks every later apt call).
+    if declare -F "${family}_evdi_prepare" >/dev/null; then "${family}_evdi_prepare"; fi
     if evdi_module_available; then
         info "EVDI module already available for kernel ${UNAME_R:-$(uname -r)}"
         return 0
     fi
-    local strategy family
     strategy="$(us_evdi_strategy)"
-    family="$(us_distro_family)"
     info "EVDI module missing — strategy for this system: $strategy"
-    case "$strategy" in
-        bundled)
-            warn "This image should already ship EVDI; if it is missing, update the image"
-            return 1 ;;
-        prebuilt)
-            dpkg_clean_broken evdi-dkms
-            evdi_install_prebuilt_ubuntu && return 0
-            ;;
-        package)
-            run $SUDO zypper --non-interactive install --no-recommends evdi libevdi1 && return 0
-            ;;
-        dkms)
-            case "$family" in
-                debian)
-                    dpkg_clean_broken evdi-dkms
-                    run $SUDO apt-get install -y "linux-headers-${UNAME_R:-$(uname -r)}" dkms || true
-                    if run $SUDO apt-get install -y evdi-dkms && evdi_module_available; then return 0; fi
-                    # The distribution's source was too old for this kernel: do not leave it half-configured.
-                    dpkg_clean_broken evdi-dkms
-                    ;;
-                arch)
-                    if pacman -Qq evdi-dkms >/dev/null 2>&1; then return 0; fi
-                    if command -v yay >/dev/null 2>&1; then run yay -S --needed --noconfirm evdi-dkms && return 0
-                    elif command -v paru >/dev/null 2>&1; then run paru -S --needed --noconfirm evdi-dkms && return 0
-                    fi
-                    warn "evdi-dkms is only in the AUR: install an AUR helper (yay, paru) and run this again"
-                    ;;
-            esac
-            ;;
-    esac
+    if [ "$strategy" = bundled ]; then
+        warn "This image should already ship EVDI; if it is missing, update the image"
+        return 1
+    fi
+    "${family}_evdi_install" && return 0
     # Last resort for every family: upstream source.
     evdi_install_from_source && return 0
     return 1
