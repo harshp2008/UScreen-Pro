@@ -156,7 +156,9 @@ impl InjectDevices {
 
     /// Take the tablet tool out of range if it is in range (a route flip, or the start of a click).
     pub(super) fn ghost_tool_away(&mut self, s: &PenSample) {
-        if self.pen_proximity {
+        // Also when the bookkeeping says "out" but the device still holds a tool key: a stuck tool
+        // leaves a second, stale cursor on screen.
+        if self.pen_proximity || self.dev_state(Which::Pen) != DevState::Idle {
             self.ghost_tablet(s, 4);
         }
     }

@@ -438,7 +438,10 @@ impl InjectDevices {
     /// Called from the ticker: the focus can change while the pen holds still (no samples). With no
     /// stroke open and the route now the mouse, the tool leaves range; an open stroke is left alone.
     pub(in crate::input) fn auto_check_route(&mut self, to_pen: bool) {
-        if self.auto_down_at.is_none() && !to_pen && self.pen_proximity {
+        if self.auto_down_at.is_none()
+            && !to_pen
+            && (self.pen_proximity || self.dev_state(Which::Pen) != DevState::Idle)
+        {
             let (x, y) = self.last_pen_pos;
             let s = PenSample {
                 x,

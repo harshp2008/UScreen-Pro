@@ -293,7 +293,7 @@ impl Default for FileConfig {
             stylus_idle_hide_timeout: 0,
             pen_menu: true,
             pen_menu_style: "text".into(),
-            pen_menu_hold_ms: 800,
+            pen_menu_hold_ms: 500,
             pen_click_hold_ms: 90,
             stylus_art_apps: default_art_apps(),
             physical_tablet_support: false,

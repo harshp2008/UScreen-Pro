@@ -67,7 +67,7 @@ const config: AppConfig = {
   stylus_idle_hide_timeout: 0,
   pen_menu: true,
   pen_menu_style: "text",
-  pen_menu_hold_ms: 800,
+  pen_menu_hold_ms: 500,
   stylus_art_apps: ["krita", "gimp", "inkscape", "blender"],
   physical_tablet_support: false,
   physical_tablet_device: "",
