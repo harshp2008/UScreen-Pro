@@ -5,16 +5,22 @@
 # which exists only in the AUR (so an AUR helper is needed and its absence is explained).
 # Does not own the shared EVDI steps (evdi.sh) or detection (platform.sh). Interface: see _template.sh.
 
+# Tried third.
 arch_order() { echo 30; }
 
+# os-release IDs of this family.
 arch_ids() { echo "arch manjaro endeavouros cachyos"; }
 
+# adb is in android-tools.
 arch_core_packages() { echo "ffmpeg android-tools"; }
 
+# evdi-dkms from the AUR.
 arch_evdi_strategy() { echo dkms; }
 
+# Installs the userspace packages with pacman.
 arch_install_deps() { run $SUDO pacman -S --needed --noconfirm ffmpeg android-tools; }
 
+# The GTK 4 runtime of the fallback pen menu.
 arch_install_gtk() { run $SUDO pacman -S --needed --noconfirm gtk4; }
 
 # evdi-dkms is only in the AUR: use yay or paru if there is one.

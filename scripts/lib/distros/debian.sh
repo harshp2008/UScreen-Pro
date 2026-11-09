@@ -8,8 +8,10 @@
 # families (evdi.sh: dkms from upstream source, activating the module).
 # The interface every family file implements is described in _template.sh.
 
+# Tried first among the families.
 debian_order() { echo 10; }
 
+# os-release IDs of this family.
 debian_ids() { echo "ubuntu debian linuxmint pop raspbian"; }
 
 # Package names checked against real Debian and Ubuntu containers, not from memory.

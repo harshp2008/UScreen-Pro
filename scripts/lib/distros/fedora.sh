@@ -6,10 +6,13 @@
 # from upstream source, or already bundled in the image on Bazzite and Nobara).
 # Does not own the shared EVDI steps (evdi.sh) or detection (platform.sh). Interface: see _template.sh.
 
+# Tried second.
 fedora_order() { echo 20; }
 
+# os-release IDs of this family.
 fedora_ids() { echo "fedora rhel centos rocky almalinux nobara bazzite"; }
 
+# ffmpeg comes from RPM Fusion; adb is in android-tools.
 fedora_core_packages() { echo "ffmpeg android-tools"; }
 
 # Bazzite and Nobara ship the module in their image; plain Fedora has no package, so it is built from source.
@@ -20,6 +23,7 @@ fedora_evdi_strategy() {
     esac
 }
 
+# Layers the packages with rpm-ostree on an image-based system; otherwise enables RPM Fusion if needed and installs with dnf.
 fedora_install_deps() {
     if us_immutable && command -v rpm-ostree >/dev/null 2>&1; then
         info "Image-based Fedora detected: layering packages (needs a reboot afterwards)"
@@ -39,6 +43,7 @@ fedora_install_deps() {
     fi
 }
 
+# The GTK 4 runtime of the fallback pen menu.
 fedora_install_gtk() { run $SUDO dnf install -y gtk4; }
 
 # Nothing is packaged for Fedora: evdi_ensure builds upstream source after this returns non-zero.

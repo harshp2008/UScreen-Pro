@@ -21,8 +21,11 @@ EXT_ID="uscreen-app-lock@uscreen.app"
 EXT_DIR="${HOME}/.local/share/gnome-shell/extensions/${EXT_ID}"
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
+# Prints a green [INFO] line.
 info()  { echo -e "${GREEN}[INFO]${NC} $1"; }
+# Prints a yellow [WARN] line.
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+# Prints a red [ERROR] line on stderr.
 error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
 
 # shellcheck source=lib/platform.sh
@@ -42,6 +45,7 @@ US_EVDI_NEEDS_REBOOT=0
 US_PKG_LAYERED=0
 SUDO=""
 
+# Prints the option summary from the header comment of this file.
 usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; }
 
 # ---- running things -------------------------------------------------------------------------
@@ -94,6 +98,7 @@ setup_privilege() {
     fi
 }
 
+# True when [part] (core, menu, extension, spawnat, system) is still selected.
 has_part() { case " $PARTS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 # ---- dependencies ---------------------------------------------------------------------------
@@ -121,6 +126,7 @@ check_path() {
     warn "or log out and back in."
 }
 
+# Builds the binaries with make unless --no-build, or a release tarball already ships them, or they are already built.
 build_if_needed() {
     [ "$NO_BUILD" = 1 ] && return 0
     [ -f "$PROJECT_DIR/bin/uscreen" ] && return 0     # release tarballs ship prebuilt binaries
@@ -132,8 +138,10 @@ build_if_needed() {
 
 # ---- files ----------------------------------------------------------------------------------
 
+# The integer `version` of an extension's metadata.json, or nothing. The installer compares it to decide whether a log out is needed.
 ext_version() { { sed -n 's/.*"version"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$1" 2>/dev/null || true; } | head -n1; }
 
+# Copies the binaries, helper, icons, desktop entry and systemd unit into the user's home; fails clearly when a binary is missing.
 install_files() {
     run mkdir -p "$BIN_DIR" "$APP_DIR" "$DATA_DIR"
     local src_bin
@@ -256,6 +264,7 @@ install_spawn_at() {
 
 # ---- system -------------------------------------------------------------------------------------
 
+# The system part: gets and activates the EVDI module and installs the udev rules for /dev/uinput and EVDI. Needs root or sudo.
 system_setup() {
     info "System setup: virtual display driver and input permissions"
     evdi_ensure || warn "No EVDI module could be installed: Extended Display mode will not work (stylus and touchpad modes do not need it)"
@@ -281,6 +290,7 @@ system_setup() {
 
 # ---- result ---------------------------------------------------------------------------------------
 
+# Prints the UScreen-INSTALL-RESULT line, writes install-result.json and explains any restart the user needs.
 report_result() {
     export US_EXT_CHANGED US_EVDI_NEEDS_REBOOT US_PKG_LAYERED
     local needs
@@ -302,6 +312,7 @@ report_result() {
     fi
 }
 
+# --plan: prints what this system needs (family, desktop, image based, packages, EVDI method) and changes nothing.
 print_plan() {
     echo "family:        $(us_distro_family)"
     echo "desktop:       $(us_desktop) / session $(us_session)"
@@ -313,6 +324,7 @@ print_plan() {
 
 # ---- main -----------------------------------------------------------------------------------------
 
+# Reads the command-line options; an unknown option prints the usage and exits with 64.
 parse_args() {
     while [ $# -gt 0 ]; do
         case "$1" in
@@ -331,11 +343,13 @@ parse_args() {
     done
 }
 
+# Picks the text interface when a person is at a terminal with whiptail or dialog, otherwise headless.
 choose_mode() {
     [ -n "$MODE" ] && return 0
     if tui_interactive && [ -n "$(tui_tool)" ]; then MODE=tui; else MODE=headless; fi
 }
 
+# Runs the selected parts in order, then reports the result.
 main() {
     parse_args "$@"
     if [ "$PLAN_ONLY" = 1 ]; then print_plan; exit 0; fi
