@@ -189,7 +189,7 @@ pub fn run(
     codec_config: std::sync::Arc<std::sync::Mutex<Option<Bytes>>>,
     idr_wanted: std::sync::Arc<std::sync::atomic::AtomicBool>,
     stop: std::sync::Arc<std::sync::atomic::AtomicBool>,
-    latency: crate::latency::LatencyTracker,
+    latency: crate::capture::latency::LatencyTracker,
 ) -> Result<()> {
     use std::sync::atomic::Ordering;
 

@@ -68,7 +68,7 @@ impl CaptureManager {
         }
 
         cmd.args(["--capture-fifo", &fifo]);
-        let timing_shm = crate::runtime::timing_path_for(self.config.instance);
+        let timing_shm = crate::daemon::runtime::timing_path_for(self.config.instance);
         cmd.args(["--timing-shm", &timing_shm.to_string_lossy()]);
         if let Some(card) = self.config.card {
             cmd.args(["--card", &card.to_string()]);
@@ -122,7 +122,7 @@ impl CaptureManager {
 
         let mut child = cmd.spawn().context("Failed to spawn evdi-helper")?;
         // A fresh helper has not reported the pointer yet; never dim on stale information.
-        crate::options::set_pointer(self.config.instance, true);
+        crate::config::options::set_pointer(self.config.instance, true);
 
         let stdout = child
             .stdout
@@ -172,7 +172,7 @@ impl CaptureManager {
                 // The helper watches the X pointer against this output's rectangle and reports
                 // each crossing; the idle-dim timer starts when the pointer leaves.
                 if let Some(rest) = line.strip_prefix("POINTER_IN_TABLET ") {
-                    crate::options::set_pointer(instance, rest.trim() == "1");
+                    crate::config::options::set_pointer(instance, rest.trim() == "1");
                     continue;
                 }
                 if let Some(rest) = line.strip_prefix("STREAM_SIZE ") {

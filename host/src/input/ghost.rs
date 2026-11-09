@@ -767,7 +767,7 @@ impl InjectDevices {
 /// cursor), whatever the Android pen's `stylus_style` is, unless X11 or no pointer device.
 pub(super) fn apply_physical(
     guard: &mut InjectDevices,
-    opts: &crate::options::DeviceOptions,
+    opts: &crate::config::options::DeviceOptions,
     s: &PenSample,
 ) {
     if guard.has_pointer() && !session_is_x11() {
@@ -788,7 +788,7 @@ pub(super) fn spawn_idle_task(uinput: Arc<std::sync::Mutex<InjectDevices>>, inst
             n = n.wrapping_add(1);
             // The idle hide is checked a few times a second, reading the timeout live (before the
             // device lock is taken, as the event path does).
-            let opts = crate::options::current_options(instance);
+            let opts = crate::config::options::current_options(instance);
             let timeout = if n % 5 == 0 { opts.stylus_idle_hide_timeout } else { 0 };
             let to_pen = route_to_pen(&opts.stylus_art_apps);
             let Ok(mut guard) = uinput.lock() else { continue };

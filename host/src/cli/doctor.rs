@@ -167,7 +167,7 @@ async fn check_tools(r: &mut Report, cfg: &FileConfig) {
     // built with, and a distribution build is built with everything. An AMD
     // laptop had h264_nvenc "available" by that measure (#15).
     if output_of("ffmpeg", &["-version"]).await.is_some() {
-        if let Err(why) = crate::encoders::probe(&cfg.encoder).await {
+        if let Err(why) = crate::capture::encoders::probe(&cfg.encoder).await {
             r.line(
                 Level::Fail,
                 "configured encoder",
@@ -175,8 +175,8 @@ async fn check_tools(r: &mut Report, cfg: &FileConfig) {
             );
             r.hint(&format!("ffmpeg: {}", why));
             let mut alternatives = Vec::new();
-            for e in crate::encoders::CANDIDATES {
-                if e != cfg.encoder && crate::encoders::works(e).await {
+            for e in crate::capture::encoders::CANDIDATES {
+                if e != cfg.encoder && crate::capture::encoders::works(e).await {
                     alternatives.push(e);
                 }
             }
@@ -195,8 +195,8 @@ async fn check_tools(r: &mut Report, cfg: &FileConfig) {
                 &format!("{} encodes a test frame", cfg.encoder),
             );
             if cfg.encoder.contains("vaapi") {
-                r.line(Level::Ok, "VAAPI device", &crate::encoders::vaapi_device());
-                if crate::encoders::nvidia_gpu_present() {
+                r.line(Level::Ok, "VAAPI device", &crate::capture::encoders::vaapi_device());
+                if crate::capture::encoders::nvidia_gpu_present() {
                     r.hint(
                         "an NVIDIA GPU is also in this machine. With VAAPI on the other GPU, steady \
                          motion at full size can make frames queue up in front of the encoder. If it \
@@ -217,7 +217,7 @@ async fn check_processes(r: &mut Report) {
 
     // The PID file is the daemon's single slot; anything running beside it is
     // untracked and `uscreen stop` will never reach it.
-    let pid_file = crate::config_handler::get_pid_path();
+    let pid_file = crate::config::handler::get_pid_path();
     let tracked: Option<u32> = std::fs::read_to_string(&pid_file)
         .ok()
         .and_then(|t| t.trim().parse().ok())
@@ -862,24 +862,24 @@ async fn check_version(r: &mut Report, cfg: &FileConfig) {
             "version",
             &format!(
                 "{} (update check disabled)",
-                crate::update::current_version()
+                crate::daemon::update::current_version()
             ),
         );
         return;
     }
     // One-shot: doctor is its own process and cannot read the daemon's daily
     // result, and ten seconds on the network is fine for a diagnostic.
-    let cur = crate::update::current_version();
-    match crate::update::latest_release_tag().await {
+    let cur = crate::daemon::update::current_version();
+    match crate::daemon::update::latest_release_tag().await {
         Some(tag) => {
             let latest = tag.trim_start_matches('v').to_string();
-            if crate::update::is_newer(&latest, cur) {
+            if crate::daemon::update::is_newer(&latest, cur) {
                 r.line(
                     Level::Warn,
                     "version",
                     &format!("{} — {} is available", cur, latest),
                 );
-                r.hint(crate::update::RELEASES_PAGE);
+                r.hint(crate::daemon::update::RELEASES_PAGE);
             } else {
                 r.line(Level::Ok, "version", &format!("{} (latest)", cur));
             }
@@ -1079,7 +1079,7 @@ pub async fn run_latency(secs: u64, sparse: bool) -> anyhow::Result<()> {
         cfg.width, cfg.height, cfg.fps, cfg.encoder, cfg.stream_scale
     );
     let sweeper = tokio::task::spawn_blocking(move || sweep_mouse(secs, sparse));
-    let sock = crate::runtime::runtime_dir().join("control.sock");
+    let sock = crate::daemon::runtime::runtime_dir().join("control.sock");
     // Give the sweep a moment to start, then read the window that covers it.
     tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
     let reply = {

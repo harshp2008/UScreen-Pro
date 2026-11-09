@@ -11,7 +11,7 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::config::FileConfig;
-use crate::session::DaemonControlMsg;
+use crate::daemon::session::DaemonControlMsg;
 
 /// Synchronize the application window lock state with the GNOME Shell extension via JSON state.
 ///
@@ -47,7 +47,7 @@ pub fn sync_app_lock(connector: Option<&str>, serial: Option<&str>) {
 /// Used by CLI subcommands (`uscreen pause-device <serial>`, `uscreen resume-device <serial>`)
 /// to communicate directly with the active background daemon without restarting it.
 pub async fn client_control_cmd(cmd: &str) -> Result<()> {
-    let control_sock_path = crate::runtime::runtime_dir().join("control.sock");
+    let control_sock_path = crate::daemon::runtime::runtime_dir().join("control.sock");
     if !control_sock_path.exists() {
         anyhow::bail!(
             "uscreen daemon is not running (control socket {:?} not found)",
@@ -269,7 +269,7 @@ pub async fn run_control_server(
                     // Percentiles over the last N seconds (default 10), one JSON line.
                     let secs = arg.trim().parse::<u64>().unwrap_or(10).clamp(1, 60);
                     let _ = writer
-                        .write_all(format!("{}\n", crate::latency::recent_json(secs)).as_bytes())
+                        .write_all(format!("{}\n", crate::capture::latency::recent_json(secs)).as_bytes())
                         .await;
                 } else if cmd == "PING" {
                     let _ = writer.write_all(b"PONG\n").await;

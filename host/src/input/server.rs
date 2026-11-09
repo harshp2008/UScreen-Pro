@@ -9,7 +9,7 @@ pub struct InputServer {
     pub(super) config: InputConfig,
     pub(super) running: Arc<AtomicBool>,
     pub(super) settings_tx: Option<watch::Sender<EncoderSettings>>,
-    pub(super) latency: crate::latency::LatencyTracker,
+    pub(super) latency: crate::capture::latency::LatencyTracker,
     /// Woken when a client fails to authenticate, so the daemon can push the
     /// token to the app again over adb (a manually launched app never got
     /// one).
@@ -26,7 +26,7 @@ impl InputServer {
     pub fn new(
         config: InputConfig,
         settings_tx: Option<watch::Sender<EncoderSettings>>,
-        latency: crate::latency::LatencyTracker,
+        latency: crate::capture::latency::LatencyTracker,
         relaunch: Arc<tokio::sync::Notify>,
         card_rx: watch::Receiver<Option<u32>>,
         ping_notify: Arc<tokio::sync::Notify>,
@@ -55,7 +55,7 @@ impl InputServer {
             .context(format!("Failed to bind input server to {}", addr))?;
 
         info!("Input server on ws://{}", addr);
-        crate::options::spawn_idle_task(self.config.instance);
+        crate::config::options::spawn_idle_task(self.config.instance);
 
         // Created once for the lifetime of the daemon, not per connection.
         // Recreating them on every reconnect gave the devices a fresh identity
@@ -131,7 +131,7 @@ impl InputServer {
         // held at the moment of the switch — a finger or pen tip that was down
         // would otherwise stay down on a screen that is no longer listening.
         {
-            let mut mode_rx = crate::options::pen_only_rx(self.config.instance);
+            let mut mode_rx = crate::config::options::pen_only_rx(self.config.instance);
             let mut card_rx = self.card_rx.clone();
             let devices = uinput.clone();
             let ident_map = ident.clone();
@@ -190,7 +190,7 @@ impl InputServer {
         // Make the devices a mode needs as soon as it is entered (and at start), off the async runtime
         // because creating a device sleeps while udev settles.
         {
-            let mut opts_rx = crate::options::options_rx(self.config.instance);
+            let mut opts_rx = crate::config::options::options_rx(self.config.instance);
             let devices = uinput.clone();
             tokio::spawn(async move {
                 // What the pen/touch routing was last told, to notice a change of mode or style.
@@ -300,7 +300,7 @@ pub(super) async fn handle_connection(
     raw_stream: tokio::net::TcpStream,
     config: InputConfig,
     settings_tx: Option<watch::Sender<EncoderSettings>>,
-    latency: crate::latency::LatencyTracker,
+    latency: crate::capture::latency::LatencyTracker,
     uinput: Arc<std::sync::Mutex<InjectDevices>>,
     relaunch: Arc<tokio::sync::Notify>,
     ping_notify: Arc<tokio::sync::Notify>,
@@ -318,7 +318,7 @@ pub(super) async fn handle_connection(
         .context("WebSocket handshake failed")?;
 
     let (mut ws_sender, mut ws_receiver) = ws_stream.split();
-    let mut mode_rx = crate::options::pen_only_rx(config.instance);
+    let mut mode_rx = crate::config::options::pen_only_rx(config.instance);
     // The stream settings as they are now, and a way to hear when they change.
     let mut settings_rx = settings_tx.as_ref().map(|t| t.subscribe());
     let current_codec = |tx: &Option<watch::Sender<EncoderSettings>>, fallback: &str| -> String {
@@ -341,7 +341,7 @@ pub(super) async fn handle_connection(
     let mut seq_filter = SeqFilter::default();
     // Per-device options (touchpad mode, immersive mode, battery saver, idle dimming). Sent right
     // after the greeting and again whenever they change, whoever changed them.
-    let mut options_rx = crate::options::options_rx(config.instance);
+    let mut options_rx = crate::config::options::options_rx(config.instance);
 
     // Authenticate before anything else happens: no greeting, no events.
     if let Some(expected) = config.token.as_deref() {
@@ -350,7 +350,7 @@ pub(super) async fn handle_connection(
         let ok = match first {
             Ok(Some(Ok(Message::Text(text)))) => matches!(
                 serde_json::from_str::<InputEvent>(&text),
-                Ok(InputEvent::Auth { token }) if crate::runtime::token_matches(expected, &token)
+                Ok(InputEvent::Auth { token }) if crate::daemon::runtime::token_matches(expected, &token)
             ),
             _ => false,
         };

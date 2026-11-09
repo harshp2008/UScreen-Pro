@@ -6,26 +6,11 @@
 
 mod capture;
 mod cli;
-mod commands;
 mod config;
-mod config_handler;
 mod daemon;
 mod display;
-mod doctor;
-#[cfg(feature = "inproc-encoder")]
-mod encoder;
-mod encoders;
-mod guard;
 mod input;
-mod latency;
 mod net;
-mod options;
-mod osk;
-mod runtime;
-mod session;
-pub mod timing;
-mod tray;
-mod update;
 
 // Used by `doctor` through `crate::is_network_serial`.
 pub use net::adb::is_network_serial;
@@ -35,8 +20,8 @@ use clap::Parser;
 use tracing::info;
 
 use cli::{Cli, Commands};
-use commands::{list_displays, show_status, stop_daemon};
-use config_handler::client_control_cmd;
+use cli::commands::{list_displays, show_status, stop_daemon};
+use config::handler::client_control_cmd;
 use daemon::run_daemon;
 
 #[tokio::main]
@@ -95,12 +80,12 @@ async fn main() -> Result<()> {
             latency: true,
             secs,
             sparse,
-        }) => doctor::run_latency(*secs, *sparse).await?,
+        }) => cli::doctor::run_latency(*secs, *sparse).await?,
         Some(Commands::CheckEncoder {
             encoder,
             vaapi_device,
-        }) => commands::check_encoder(encoder, vaapi_device.as_deref()).await?,
-        Some(Commands::Doctor { .. }) => doctor::run().await?,
+        }) => cli::commands::check_encoder(encoder, vaapi_device.as_deref()).await?,
+        Some(Commands::Doctor { .. }) => cli::doctor::run().await?,
         Some(Commands::TabletRules { vid, pid, hide }) => {
             let ids = match (vid.as_deref(), pid.as_deref()) {
                 (Some(v), Some(p)) => u16::from_str_radix(v.trim_start_matches("0x"), 16)
@@ -152,12 +137,12 @@ async fn main() -> Result<()> {
             }
             anyhow::bail!("the daemon did not answer: is it running? (uscreen start)");
         }
-        Some(Commands::ResetGuard) => match guard::reset() {
+        Some(Commands::ResetGuard) => match daemon::guard::reset() {
             Ok(true) => println!(
                 "Safety record cleared. Restart the daemon to re-enable the virtual display."
             ),
             Ok(false) => println!("Nothing to clear: no safety record exists."),
-            Err(e) => anyhow::bail!("could not clear {:?}: {}", guard::state_path(), e),
+            Err(e) => anyhow::bail!("could not clear {:?}: {}", daemon::guard::state_path(), e),
         },
     }
 

@@ -160,7 +160,7 @@ impl StreamServer {
             let read = tokio::time::timeout(AUTH_TIMEOUT, socket.read_exact(&mut buf)).await;
             let ok = matches!(read, Ok(Ok(_)))
                 && std::str::from_utf8(&buf)
-                    .map(|t| crate::runtime::token_matches(expected, t))
+                    .map(|t| crate::daemon::runtime::token_matches(expected, t))
                     .unwrap_or(false);
             if !ok {
                 warn!(

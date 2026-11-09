@@ -29,20 +29,25 @@ use tracing::{error, info, warn};
 #[cfg(not(feature = "inproc-encoder"))]
 mod avi;
 mod display;
+#[cfg(feature = "inproc-encoder")]
+pub mod encoder;
+pub mod encoders;
 mod helper;
+pub mod latency;
 #[cfg(not(feature = "inproc-encoder"))]
 mod packetizer;
 #[cfg(not(feature = "inproc-encoder"))]
 mod reader;
 mod spawn;
 mod supervisor;
+pub mod timing;
 
 const RECONNECT_DELAY_MS: u64 = 2000;
 /// Capture FIFO, in the per-user runtime directory. It used to be
 /// /tmp/uscreen_capture.fifo with mode 0666, which let any local account read
 /// the raw frames off it.
 pub fn fifo_path() -> String {
-    crate::runtime::fifo_path().to_string_lossy().into_owned()
+    crate::daemon::runtime::fifo_path().to_string_lossy().into_owned()
 }
 
 /// Path of the frame FIFO for the n-th virtual display (instance 0 keeps the legacy name).
@@ -50,7 +55,7 @@ pub fn fifo_path() -> String {
 /// One FIFO per tablet is what lets two pipelines run side by side without
 /// interleaving their frames.
 pub fn fifo_path_for(instance: u32) -> String {
-    crate::runtime::fifo_path_for(instance)
+    crate::daemon::runtime::fifo_path_for(instance)
         .to_string_lossy()
         .into_owned()
 }
@@ -224,7 +229,7 @@ pub struct CaptureManager {
     /// Published once the helper reports which card it opened, for whoever
     /// needs to address this tablet's output (the input mapping does).
     card_tx: watch::Sender<Option<u32>>,
-    latency: crate::latency::LatencyTracker,
+    latency: crate::capture::latency::LatencyTracker,
     /// Set by the stream server when a client attaches. The in-process encoder
     /// turns the next frame into a keyframe, so a client joining an idle screen
     /// gets a picture immediately instead of waiting for the scheduled one.
@@ -250,7 +255,7 @@ impl CaptureManager {
             helper_stdout_task: None,
             helper_card: None,
             card_tx: watch::channel(None).0,
-            latency: crate::latency::LatencyTracker::new(),
+            latency: crate::capture::latency::LatencyTracker::new(),
             idr_wanted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
@@ -262,7 +267,7 @@ impl CaptureManager {
 
     /// Shared with the input server, which receives the tablet's render
     /// acknowledgements and closes the measurement loop.
-    pub fn latency_tracker(&self) -> crate::latency::LatencyTracker {
+    pub fn latency_tracker(&self) -> crate::capture::latency::LatencyTracker {
         self.latency.clone()
     }
 

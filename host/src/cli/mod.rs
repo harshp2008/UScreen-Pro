@@ -1,6 +1,9 @@
 //! Command-line interface of the `uscreen` binary: global stream overrides plus the subcommands
 //! (`start`, `stop`, `status`, `doctor`, ...). Flags override `config.toml` for one run only.
 
+pub mod commands;
+pub mod doctor;
+
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 

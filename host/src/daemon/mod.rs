@@ -4,20 +4,29 @@
 //! It wires the pieces together: capture pipelines, the stream and input servers, the ADB device
 //! monitor, the tray icon and the Unix control socket the GUI talks to.
 
+pub mod guard;
+pub mod osk;
+pub mod runtime;
+pub mod session;
+pub mod tray;
+pub mod update;
+
 use anyhow::Result;
 use tokio::signal;
 use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{error, info, warn};
 
 use crate::cli::Cli;
-use crate::config_handler::{
+use crate::config::handler::{
     find_helper, get_pid_path, other_daemons, remove_pid_file_if_ours, run_control_server,
     sync_app_lock,
 };
 use crate::display::{edid, vdisplay};
 use crate::net::stream;
-use crate::session::{adb_monitor, DaemonControlMsg, ExtraSessionTemplate};
-use crate::{capture, config, encoders, input, options, osk, runtime, tray, update};
+use crate::daemon::session::{adb_monitor, DaemonControlMsg, ExtraSessionTemplate};
+use crate::capture::encoders;
+use crate::config::options;
+use crate::{capture, config, input};
 
 /// Execute the primary uscreen daemon event loop.
 ///
@@ -472,7 +481,7 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
         .await;
     });
 
-    let control_sock_path = crate::runtime::runtime_dir().join("control.sock");
+    let control_sock_path = crate::daemon::runtime::runtime_dir().join("control.sock");
     let _ = std::fs::remove_file(&control_sock_path);
     let control_handle = match tokio::net::UnixListener::bind(&control_sock_path) {
         Ok(listener) => {

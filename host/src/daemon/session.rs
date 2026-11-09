@@ -263,7 +263,7 @@ pub fn spawn_extra_session(
     let (tablet_tx, mut tablet_rx) = watch::channel(false);
     let (gate_tx, gate_rx) = watch::channel(false);
     let (stop_tx, stop_rx) = watch::channel(false);
-    let mut touchpad_rx = crate::options::options_rx(instance);
+    let mut touchpad_rx = crate::config::options::options_rx(instance);
     let mut tasks = Vec::new();
     tasks.push(tokio::spawn(async move {
         let mut last = false;
@@ -752,7 +752,7 @@ pub async fn adb_monitor(
                 announce_transport(&dev.serial);
                 let _ = serial_tx.send(Some(dev.serial.clone()));
                 apply_tablet_profile(&dev.serial, &settings_tx).await;
-                crate::options::bind(0, &[hw_id.as_str(), dev.serial.as_str()]);
+                crate::config::options::bind(0, &[hw_id.as_str(), dev.serial.as_str()]);
                 if !is_fake_serial(&dev.serial) {
                     on_tablet_connected(
                         &dev.serial,
@@ -797,7 +797,7 @@ pub async fn adb_monitor(
                     continue;
                 };
                 apply_tablet_profile(&dev.serial, &sess.settings_tx).await;
-                crate::options::bind(instance, &[hw_id.as_str(), dev.serial.as_str()]);
+                crate::config::options::bind(instance, &[hw_id.as_str(), dev.serial.as_str()]);
                 {
                     let mut rx = sess.settings_tx.subscribe();
                     let serial_for_save = dev.serial.clone();

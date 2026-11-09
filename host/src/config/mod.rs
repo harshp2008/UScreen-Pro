@@ -4,6 +4,9 @@
 //! Loading clamps every numeric setting to a sane range because values arrive from the tablet
 //! and the GUI and, once saved, would otherwise persist a bad number forever.
 
+pub mod handler;
+pub mod options;
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;

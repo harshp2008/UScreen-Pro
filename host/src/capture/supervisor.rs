@@ -31,20 +31,20 @@ impl CaptureManager {
         let mut stream_rx = self.stream_rx.clone();
         // Touchpad and Stylus mode switch the whole pipeline off for this tablet, keep_alive included:
         // a throttled 1 fps stream would still run ffmpeg and the capture loop.
-        let touchpad_rx = crate::options::options_rx(self.config.instance);
+        let touchpad_rx = crate::config::options::options_rx(self.config.instance);
         // Frame size the running encoder was configured for, so a later mode
         // change can be detected as a mismatch rather than silently skewing.
         let mut encoder_mode: Option<(u32, u32)> = None;
         let mut is_throttled = false;
         let mut applied_nonce = settings_rx.borrow().restart_nonce;
 
-        // Compositor safety (see crate::guard and experiments_and_findings/56_*):
+        // Compositor safety (see crate::daemon::guard and experiments_and_findings/56_*):
         // the virtual monitor is only created once the compositor is up and idle,
         // hotplugs are spaced out, and a stall watchdog removes the monitor again
         // if the compositor stops answering while it exists.
-        let mut gate = crate::guard::Guard::new();
+        let mut gate = crate::daemon::guard::Guard::new();
         let (active_tx, active_rx) = watch::channel(false);
-        let (mut trip_rx, mut ok_rx) = crate::guard::spawn_watchdog(active_rx);
+        let (mut trip_rx, mut ok_rx) = crate::daemon::guard::spawn_watchdog(active_rx);
         // keep_alive only means "keep the monitor after the tablet leaves". It
         // must never create one at login with nobody attached (issue #12): that
         // consumer-less monitor is what the desktop then has to lay windows,
@@ -181,13 +181,13 @@ impl CaptureManager {
                 // Creating the helper creates a monitor on the desktop. Ask the
                 // guard first: it waits for the compositor instead of racing it.
                 match gate.admit(&mut shutdown_rx).await {
-                    crate::guard::Admission::Go => refusal_logged = false,
-                    crate::guard::Admission::Shutdown => {
+                    crate::daemon::guard::Admission::Go => refusal_logged = false,
+                    crate::daemon::guard::Admission::Shutdown => {
                         gate.display_down();
                         self.shutdown().await;
                         return Ok(());
                     }
-                    crate::guard::Admission::Refused => {
+                    crate::daemon::guard::Admission::Refused => {
                         if !refusal_logged {
                             refusal_logged = true;
                             warn!("guard: virtual display not created (safe mode / breaker latched); the tablet's pen and touch do not need it");
@@ -305,7 +305,7 @@ impl CaptureManager {
                     let (tx2, cc, lat) =
                         (tx.clone(), self.codec_config.clone(), self.latency.clone());
                     let codec = Codec::from_encoder(&self.config.encoder);
-                    let timing_shm = crate::runtime::timing_path_for(self.config.instance);
+                    let timing_shm = crate::daemon::runtime::timing_path_for(self.config.instance);
                     let instance = self.config.instance;
                     tokio::spawn(async move {
                         Self::read_loop(stdout, tx2, cc, lat, codec, timing_shm, instance).await
@@ -339,7 +339,7 @@ impl CaptureManager {
                         self.latency.clone(),
                     );
                     tokio::task::spawn_blocking(move || {
-                        crate::encoder::run(
+                        crate::capture::encoder::run(
                             &fifo_path_for(self.config.instance),
                             &name,
                             w,

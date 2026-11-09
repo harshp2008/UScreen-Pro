@@ -11,7 +11,7 @@ impl CaptureManager {
         mut stdout: impl tokio::io::AsyncRead + Unpin,
         tx: broadcast::Sender<VideoPacket>,
         codec_config: Arc<Mutex<Option<Bytes>>>,
-        latency: crate::latency::LatencyTracker,
+        latency: crate::capture::latency::LatencyTracker,
         codec: Codec,
         timing_shm: std::path::PathBuf,
         instance: u32,
@@ -25,7 +25,7 @@ impl CaptureManager {
         let mut avi = AviDemuxer::default();
         let mut packetizer = H264AnnexBPacketizer::new(codec);
         let mut config_extracted = codec_config.lock().ok().and_then(|g| g.clone()).is_some();
-        let timing_reader = crate::timing::TimingReader::open(&timing_shm);
+        let timing_reader = crate::capture::timing::TimingReader::open(&timing_shm);
 
         loop {
             let n = stdout
@@ -60,7 +60,7 @@ impl CaptureManager {
                 }
             }
 
-            let now_us = crate::timing::now_monotonic_us();
+            let now_us = crate::capture::timing::now_monotonic_us();
             for data in access_units {
                 frames += 1;
                 crate::net::notices::frame_emitted(instance, generation);
@@ -78,7 +78,7 @@ impl CaptureManager {
                                 rec.t_fifo_write_us.saturating_sub(rec.t_conv_done_us) as u32;
                             let encode_us = now_us.saturating_sub(rec.t_fifo_write_us) as u32;
                             let host_total_us = now_us.saturating_sub(rec.t_ready_us) as u32;
-                            crate::latency::DetailedTiming {
+                            crate::capture::latency::DetailedTiming {
                                 is_fresh: rec.is_fresh != 0,
                                 req_to_ready_us,
                                 grab_us,

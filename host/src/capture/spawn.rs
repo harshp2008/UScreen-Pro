@@ -44,7 +44,7 @@ impl CaptureManager {
 
         if encoder == "h264_vaapi" || encoder == "hevc_vaapi" {
             encoder_args
-                .extend_from_slice(&["-vaapi_device".into(), crate::encoders::vaapi_device()]);
+                .extend_from_slice(&["-vaapi_device".into(), crate::capture::encoders::vaapi_device()]);
         }
 
         encoder_args.extend_from_slice(&[
@@ -172,7 +172,7 @@ impl CaptureManager {
             // The default of 2 keeps each frame inside the encoder until the next one
             // arrives. Older ffmpeg (before 5.0) has no such queue and rejects the option,
             // so ask before passing it.
-            if crate::encoders::has_option(encoder, "async_depth").await {
+            if crate::capture::encoders::has_option(encoder, "async_depth").await {
                 encoder_args.extend_from_slice(&["-async_depth".into(), "1".into()]);
             }
             if encoder == "hevc_vaapi" {

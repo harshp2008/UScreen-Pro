@@ -342,7 +342,7 @@ fn read_loop(
         if samples.is_empty() {
             continue;
         }
-        let opts = crate::options::current_options(instance);
+        let opts = crate::config::options::current_options(instance);
         if let Ok(mut g) = uinput.lock() {
             for s in &samples {
                 tracing::debug!("Physical tablet moved to {},{} (action {})", s.x, s.y, s.action);

@@ -47,7 +47,7 @@ const PINCH_UNITS_PER_PX: f64 = 6.0;
 /// the plain pressure pen.
 pub(super) fn apply_pen(
     guard: &mut InjectDevices,
-    opts: &crate::options::DeviceOptions,
+    opts: &crate::config::options::DeviceOptions,
     s: &PenSample,
 ) {
     let (abs_x, abs_y, action, eraser) = (s.x, s.y, s.action, s.eraser);
@@ -121,7 +121,7 @@ pub(super) fn handle_event(
     event: InputEvent,
     uinput: &Arc<std::sync::Mutex<InjectDevices>>,
     settings_tx: &Option<watch::Sender<EncoderSettings>>,
-    latency: &crate::latency::LatencyTracker,
+    latency: &crate::capture::latency::LatencyTracker,
     ping_notify: &Arc<tokio::sync::Notify>,
 ) {
     // A pinch whose end never arrived must not leave Ctrl held.
@@ -140,7 +140,7 @@ pub(super) fn handle_event(
             | InputEvent::Scroll { .. }
             | InputEvent::TouchpadRaw { .. }
     ) {
-        crate::options::note_activity(instance);
+        crate::config::options::note_activity(instance);
     }
     match event {
         InputEvent::Touch {
@@ -152,7 +152,7 @@ pub(super) fn handle_event(
         } => {
             // Stylus mode is a graphics tablet: fingers do nothing. The tablet app already keeps
             // them off the socket; this covers an older app and a mode switched mid-gesture.
-            if crate::options::current_mode(instance) == crate::config::InputMode::Stylus {
+            if crate::config::options::current_mode(instance) == crate::config::InputMode::Stylus {
                 return;
             }
             let abs_x = (x * COORD_MAX as f64) as i32;
@@ -205,7 +205,7 @@ pub(super) fn handle_event(
             let tilt_x_deg = (tilt_x.round() as i32).clamp(-90, 90);
             let tilt_y_deg = (tilt_y.round() as i32).clamp(-90, 90);
 
-            let opts = crate::options::current_options(instance);
+            let opts = crate::config::options::current_options(instance);
             let sample = PenSample {
                 x: abs_x,
                 y: abs_y,
@@ -333,7 +333,7 @@ pub(super) fn handle_event(
         InputEvent::TouchpadRaw { slots } => {
             // Only while native gestures are in use in Touchpad mode: an old or confused tablet
             // must not bring a touchpad into existence in Stylus or Display mode.
-            let opts = crate::options::current_options(instance);
+            let opts = crate::config::options::current_options(instance);
             if opts.input_mode != crate::config::InputMode::Touchpad
                 || !opts.native_gestures_effective()
             {
@@ -404,7 +404,7 @@ pub(super) fn handle_event(
             // input mode, stored like any other setting.
             let mode = if pen_only { "stylus" } else { "display" };
             info!("Tablet asked for {} mode", mode);
-            crate::options::set_from_device(instance, "input_mode", &serde_json::json!(mode));
+            crate::config::options::set_from_device(instance, "input_mode", &serde_json::json!(mode));
         }
 
         InputEvent::Gesture { kind, amount } => {
@@ -426,10 +426,10 @@ pub(super) fn handle_event(
             // The user touched the tablet (the app swallowed that touch to wake the screen, or a
             // finger came down on the touchpad). Count it as use and, in touchpad mode, wake the
             // host cursor: Mutter hides an idle pointer, and a 1 px out-and-back brings it back.
-            crate::options::note_activity(instance);
+            crate::config::options::note_activity(instance);
             // Not with native gestures: the virtual touchpad's own motion shows the cursor, and a
             // second device twitching beside it only confuses the compositor.
-            let opts = crate::options::current_options(instance);
+            let opts = crate::config::options::current_options(instance);
             if opts.input_mode == crate::config::InputMode::Touchpad
                 && !opts.native_gestures_effective()
             {
@@ -443,7 +443,7 @@ pub(super) fn handle_event(
         }
 
         InputEvent::Setting { key, value } => {
-            crate::options::set_from_device(instance, &key, &value);
+            crate::config::options::set_from_device(instance, &key, &value);
         }
 
         InputEvent::Ping => {
@@ -898,7 +898,7 @@ mod tests {
 
     #[test]
     fn native_gestures_need_wayland_gnome_or_kde() {
-        use crate::options::native_gestures_supported as ok;
+        use crate::config::options::native_gestures_supported as ok;
         assert!(ok("wayland", "ubuntu:GNOME"));
         assert!(ok("wayland", "GNOME"));
         assert!(ok("Wayland", "KDE"));

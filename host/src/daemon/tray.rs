@@ -17,8 +17,8 @@ use tracing::{info, warn};
 /// The emerald UScreen Pro icons, embedded as pixmaps. The tray deliberately names no theme icon:
 /// an old `uscreen` icon left in the hicolor theme by a previous install would otherwise win over the
 /// pixmap and show the retired logo. The pen variant carries the mode at a glance without a tooltip.
-const PIXMAP_SCREEN: &[u8] = include_bytes!("../../packaging/icons/uscreen-64.rgba");
-const PIXMAP_TABLET: &[u8] = include_bytes!("../../packaging/icons/uscreen-pen-64.rgba");
+const PIXMAP_SCREEN: &[u8] = include_bytes!("../../../packaging/icons/uscreen-64.rgba");
+const PIXMAP_TABLET: &[u8] = include_bytes!("../../../packaging/icons/uscreen-pen-64.rgba");
 const PIXMAP_SIDE: i32 = 64;
 
 /// RGBA as ImageMagick wrote it → ARGB32 in network byte order, which is
@@ -174,11 +174,11 @@ impl Tray for UScreenTray {
 
 fn open_release_page() {
     match std::process::Command::new("xdg-open")
-        .arg(crate::update::RELEASES_PAGE)
+        .arg(crate::daemon::update::RELEASES_PAGE)
         .spawn()
     {
         Ok(_) => info!("Opened the release page"),
-        Err(e) => warn!("Could not open {}: {}", crate::update::RELEASES_PAGE, e),
+        Err(e) => warn!("Could not open {}: {}", crate::daemon::update::RELEASES_PAGE, e),
     }
 }
 
@@ -257,7 +257,7 @@ pub async fn run(
     mode_request_tx: tokio::sync::mpsc::UnboundedSender<bool>,
     mut tablet_rx: watch::Receiver<bool>,
     shutdown_tx: watch::Sender<bool>,
-    mut update_rx: watch::Receiver<crate::update::Available>,
+    mut update_rx: watch::Receiver<crate::daemon::update::Available>,
 ) {
     let mut mode_rx = mode_tx.subscribe();
     let mut shutdown_rx = shutdown_tx.subscribe();

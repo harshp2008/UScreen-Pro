@@ -4,7 +4,7 @@
 use anyhow::Result;
 use tracing::info;
 
-use crate::config_handler::{get_pid_path, other_daemons};
+use crate::config::handler::{get_pid_path, other_daemons};
 
 /// Send SIGTERM to any running uscreen daemon process owned by the current user.
 pub(crate) async fn stop_daemon() -> Result<()> {
@@ -129,10 +129,10 @@ pub(crate) async fn check_encoder(encoder: &str, vaapi_device: Option<&str>) -> 
     };
     if encoder.contains("vaapi") {
         if let Some(device) = vaapi_device {
-            crate::encoders::ensure_vaapi_device(device).await;
+            crate::capture::encoders::ensure_vaapi_device(device).await;
         }
     }
-    crate::encoders::probe(encoder)
+    crate::capture::encoders::probe(encoder)
         .await
         .map_err(anyhow::Error::msg)?;
     println!("{encoder}: ok");
