@@ -43,7 +43,17 @@ jobs:
       - name: Lint the installer and its tests
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
-          shellcheck -x -S warning scripts/install.sh scripts/lib/*.sh scripts/tests/run.sh scripts/tests/in-containers.sh
+          shellcheck -x -S warning scripts/install.sh scripts/lib/*.sh scripts/lib/distros/*.sh scripts/tests/run.sh scripts/tests/in-containers.sh
+
+  extension:
+    name: Shell extension (syntax and version lists)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax of every module, and metadata.json agrees with compat/versions.js
+        run: |
+          for f in extensions/uscreen-app-lock/extension.js extensions/uscreen-app-lock/lib/*.js extensions/uscreen-app-lock/compat/*.js; do node --check "$f"; done
+          node extensions/uscreen-app-lock/tests/check-versions.mjs
 
   real-install-ubuntu:
     name: Real headless install (Ubuntu runner)
@@ -67,6 +77,8 @@ jobs:
           test -x ~/.local/bin/uscreen
           grep -q "Exec=$HOME/.local/bin/uscreen-pro-gui" ~/.local/share/applications/uscreen-pro.desktop
           test -f ~/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/extension.js
+          test -f ~/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/lib/penMenu.js
+          test -f ~/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/compat/index.js
       - name: AI second opinion (skipped without the secret)
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}

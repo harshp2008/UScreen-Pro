@@ -17,7 +17,7 @@ extension and `bash -n` on every shell script.
 |---|---|---|
 | `cargo test` in `host/` | 199 passed, 2 ignored | 199 passed, 2 ignored |
 | `cargo test` in `uscreen-pro-gui/src-tauri` | 10 passed | 10 passed |
-| `scripts/tests/run.sh` | 53 passed | 53 passed |
+| `scripts/tests/run.sh` | 53 passed | 60 passed (7 new tests) |
 | `npx tsc --noEmit` | clean | clean |
 | `./gradlew assembleDebug testDebugUnitTest` | passes | passes |
 | `node --check extensions/uscreen-app-lock/extension.js` | ok | ok |
@@ -78,11 +78,62 @@ was moved without the build and tests staying green.
 | `host/src/net/adb.rs` (637) | **split** into `net/adb/` (`mod.rs` types and serial classification, `discovery.rs`, `forwarding.rs`, `wifi.rs`, `app.rs`) | discovery, tunnels, wireless setup and app supervision are separate; every public name is re-exported |
 | `host/src/input/uinput/devices.rs` (597) | **kept** | one aggregate, `InjectDevices`, whose methods work on the same device fields |
 | `host/src/input/ghost/auto.rs` (470) | **kept** | the Dynamic pen state machine; its states share private fields |
-| `extensions/uscreen-app-lock/extension.js` (627) | decided with the layout in phase 5 | the version-compatibility layer is introduced there |
+| `extensions/uscreen-app-lock/extension.js` (627) | **split** into `extension.js` (enable/disable), `lib/*.js` and `compat/*.js` | four independent jobs (app lock, pen routing, context probe, pen menu) and the Shell-version code |
 
 The test in `host/src/net/adb/mod.rs` named `physical_device_deduplication_prefers_usb` re-implements the
 merge inline instead of calling production code. It is left as it is; a real test of `scan_adb_devices`
 needs a fake `adb`.
+
+## Where things moved (phase 5)
+
+| Old path | New path |
+|---|---|
+| `host/src/desktop/generic.rs` | `host/src/desktop/generic/mod.rs` |
+| `host/src/desktop/x11.rs` | `host/src/desktop/x11/mod.rs` |
+| `host/src/display/x11.rs` | `host/src/desktop/x11/display.rs` |
+| `host/src/desktop/gnome.rs` | `host/src/desktop/gnome/mod.rs` |
+| `host/src/display/gnome.rs` | `host/src/desktop/gnome/display.rs` |
+| `host/src/desktop/spawn_at.rs` | `host/src/desktop/gnome/spawn_at.rs` |
+| `host/src/display/kwin.rs` | `host/src/desktop/kde/display.rs` |
+| `host/src/daemon/osk.rs` | `host/src/desktop/kde/osk.rs` |
+| `host/src/display/hyprland.rs` | `host/src/desktop/hyprland/display.rs` |
+| `host/src/display/cosmic.rs` | `host/src/desktop/cosmic/display.rs` |
+| `host/src/config/mod.rs` (`FileConfig::sanitize`) | `host/src/config/sanitize.rs` |
+| `host/src/net/adb.rs` | `host/src/net/adb/` (`mod.rs`, `discovery.rs`, `forwarding.rs`, `wifi.rs`, `app.rs`) |
+| `uscreen-pro-gui/src-tauri/src/adb.rs` | `uscreen-pro-gui/src-tauri/src/adb/` (`mod.rs`, `devices.rs`, `install.rs`, `intents.rs`) |
+| `host/evdi/evdi_helper.c` (parts of it) | `host/evdi/helper_state.h`, `helper_signals.h`, `helper_boundary.h`, `helper_timing.h`, `helper_convert.h`, `helper_writer.h`, `helper_events.h` (`evdi_helper.c` stays the file that is compiled) |
+| `android/.../ui/ConnectionScreen.kt` (parts) | `ui/ActiveScreens.kt`, `ui/HostOverlays.kt` |
+| `android/.../ui/SettingsSheet.kt` (parts) | `ui/SettingsParts.kt` |
+| `HostNotice` in `android/.../TouchCapture.kt` | `android/.../HostLink.kt` |
+| `extensions/uscreen-app-lock/extension.js` (all but enable/disable) | `lib/appLock.js`, `lib/penRouting.js`, `lib/contextProbe.js`, `lib/penMenu.js`, `lib/dataFiles.js`, `compat/monitors.js` |
+| `scripts/lib/platform.sh` (per-family `case` blocks) | `scripts/lib/distros/debian.sh`, `fedora.sh`, `arch.sh`, `suse.sh`, `unknown.sh` |
+| `scripts/lib/evdi.sh` (Debian, Arch, openSUSE methods and the dpkg repair) | the same family files |
+| `scripts/install.sh` (`install_deps` and the GTK runtime `case`) | the same family files |
+
+Rust module paths changed with the files: `crate::display::{gnome,x11,kwin,hyprland,cosmic}` is now
+`crate::desktop::{gnome,x11,kde,hyprland,cosmic}::display`, and `daemon::osk` is `desktop::kde::osk`. Nothing
+outside the host crate refers to them. No public name changed: the CLI, `config.toml`, the protocol, the files the
+installer and CI read, and the Tauri command names are as before.
+
+## Added in phase 5
+
+| What | Why |
+|---|---|
+| `extensions/uscreen-app-lock/compat/` (`index.js`, `versions.js`, `monitors.js`) and `tests/check-versions.mjs` | one place for per-Shell-version code, one table of Shell versions, and a check that the table agrees with `metadata.json` |
+| extension `version` 8 → 9 in `metadata.json` | the extension's files changed, and the installer uses the number to decide that a log out is needed once |
+| the extension's first log line now includes the Shell version and what is known about it | the only new runtime output |
+| `scripts/lib/distros/_template.sh` and six installer tests (54 → 60) | the interface every family implements, and tests for it |
+| `docs/adding-support.md` | the guide to adding a distribution, a desktop or a GNOME version |
+| CI: an `extension` job (syntax of every module, version lists), ShellCheck over `distros/`, and checks that the installed extension has its modules | the same checks the local gates run |
+
+### Fixes found while moving files
+
+- The release tarballs (`scripts/build-release.sh`, `make dist-local`) copied `install.sh` but not `scripts/lib/`,
+  which `install.sh` sources, and not the extension. They now copy `scripts/lib/` and `extensions/uscreen-app-lock/`
+  (without its `tests/`). Before this, a tarball install could not start.
+- `make install` copied only `extension.js`, `metadata.json` and the stylesheet; it now also copies `lib/` and `compat/`.
+- `scripts/install.sh` deletes the extension's old `lib/*.js` and `compat/*.js` before copying the new ones, so a module
+  removed later does not linger on an upgrade.
 
 ## Comments (phase 1)
 

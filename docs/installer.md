@@ -6,6 +6,19 @@
 
 `scripts/install.sh` installs UScreen from a source checkout or a release tarball.
 
+## Layout
+
+| File | Owns |
+|---|---|
+| `scripts/install.sh` | the modes, the parts and their order, file copying, the result line |
+| `scripts/lib/platform.sh` | detection (family, desktop, session, image based) and the restart rules; loads the family files |
+| `scripts/lib/evdi.sh` | the EVDI steps every family shares: module check, building upstream source with dkms, activating the module |
+| `scripts/lib/tui.sh` | the text interface |
+| `scripts/lib/distros/<family>.sh` | everything one family differs in: its os-release IDs, package names, EVDI method, GTK runtime, dependency install. `debian`, `fedora`, `arch`, `suse`, and `unknown` for the fallback |
+| `scripts/lib/distros/_template.sh` | the interface every family file implements, for copying (not loaded) |
+
+A new distribution is one new file in `distros/`, plus a fixture and tests: see [adding-support.md](adding-support.md).
+
 ## Modes
 
 | Command | What it does |
@@ -59,12 +72,12 @@ the upstream source is tried; a missing EVDI is a warning, never an abort.
 ## Tests
 
 ```
-scripts/tests/run.sh                  # 50+ tests, no root, no network, writes only to a /tmp sandbox
+scripts/tests/run.sh                  # 60 tests, no root, no network, writes only to a /tmp sandbox
 scripts/tests/run.sh ubuntu           # only tests with "ubuntu" in the name
 scripts/tests/in-containers.sh        # the same suite in Ubuntu 22.04/24.04, Debian 12, Fedora 41, Arch, openSUSE
 ```
 
-The suite has three layers: platform detection against `os-release` fixtures for every family;
+The suite has three layers: platform detection against `os-release` fixtures for every family, and a check that every `distros/<family>.sh` implements the whole interface;
 `--plan` and `--dry-run` (which must change nothing); and real runs in a sandbox HOME where `sudo`,
 `apt-get`, `dnf`, `modprobe`, `curl`, ... are fakes that only record their calls. That lets every
 branch (root, no sudo, offline, half-installed packages, module in use, dev-build spawn-at) be driven

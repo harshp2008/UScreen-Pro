@@ -4,7 +4,7 @@
 -->
 # Desktop backends: supporting a new desktop
 
-UScreen's host asks one question of the desktop layer (`host/src/desktop/`) instead of checking
+UScreen's host asks one question of the desktop layer (`host/src/desktop/`, one directory per desktop; the step-by-step guide is [adding-support.md](adding-support.md)) instead of checking
 which desktop it runs on: *what can this backend do?* A backend answers with a
 [`Capabilities`](../host/src/desktop/mod.rs) value and implements only the parts it supports. Every
 feature that needs the desktop checks the capability and quietly does nothing when it is missing.
@@ -29,15 +29,16 @@ Key presses (Ctrl+C, ...) are sent through uinput and need no backend.
      (report *lengths only*, never the text);
    - placement: a tool or API that opens a window at exact coordinates and can focus a window by id
      (on GNOME: the `spawn-at` command).
-2. **Create `host/src/desktop/<name>.rs`.** A struct that implements `DesktopBackend`:
-   `name()`, `capabilities()` (set only what really works), `poll_focus()`, and any of the optional
-   methods. Reuse `focus_file.rs` if your helper writes `~/.local/share/uscreen/focus.json`.
+2. **Create the directory `host/src/desktop/<name>/`.** Its `mod.rs` holds a struct that implements
+   `DesktopBackend`: `name()`, `capabilities()` (set only what really works), `poll_focus()`, and any of the
+   optional methods. Reuse `focus_file.rs` if your helper writes `~/.local/share/uscreen/focus.json`. Put the
+   compositor-specific virtual-monitor code (enable, place, map input devices) in `display.rs` of the same directory.
 3. **Pick it in `detect()`** (`desktop/mod.rs`), from `XDG_CURRENT_DESKTOP` / `XDG_SESSION_TYPE`,
    before the `generic` fallback.
 4. **Ship the helper**, if there is one (a Shell extension, a KWin script, ...) under `extensions/`,
    and install it from `scripts/install.sh`.
 5. **Test.** Unit-test the parsing of whatever your signals return (see `context.rs` and
-   `spawn_at.rs`). Then run it on the real desktop: the focus routing (`uscreen debug-dump`,
+   `gnome/spawn_at.rs`). Then run it on the real desktop: the focus routing (`uscreen debug-dump`,
    `~/.local/share/uscreen/focus.json`), and the pen menu (long-press on text).
 6. **Record what you verified** in `experiments_and_findings/` and in the table below. Mark
    anything unverified as experimental.
@@ -46,9 +47,9 @@ Key presses (Ctrl+C, ...) are sent through uinput and need no backend.
 
 | Desktop | Backend | Focus | Context | Placement | Verified |
 |---|---|---|---|---|---|
-| GNOME Shell (Wayland) | `gnome.rs` | extension (`focus.json`) | extension probe | extension draws the menu; `spawn-at` window as fallback | Ubuntu 24.04, GNOME 46 only |
-| Any X11 session | `x11.rs` | `_NET_ACTIVE_WINDOW` | no | no | focus only; not re-tested since the desktop layer was introduced |
-| KDE, Sway, Hyprland, others | `generic.rs` | `focus.json` if a helper writes it | no | no | the pen stays on the mouse route; flip it with `uscreen toggle-tablet` |
+| GNOME Shell (Wayland) | `gnome/` | extension (`focus.json`) | extension probe | extension draws the menu; `spawn-at` window as fallback | Ubuntu 24.04, GNOME 46 only |
+| Any X11 session | `x11/` | `_NET_ACTIVE_WINDOW` | no | no | focus only; not re-tested since the desktop layer was introduced |
+| KDE, Sway, Hyprland, COSMIC, others | `generic/` (`kde/`, `hyprland/`, `cosmic/` hold only their virtual-monitor code) | `focus.json` if a helper writes it | no | no | the pen stays on the mouse route; flip it with `uscreen toggle-tablet` |
 
 ## The GNOME backend in detail
 

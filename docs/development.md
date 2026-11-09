@@ -47,34 +47,47 @@ host/                   Rust daemon (binary `uscreen`)
   src/main.rs             entry point: parses the CLI and runs the chosen command
   src/cli/                command line: `mod.rs` (clap), `commands.rs` (stop/status/...),
                           `doctor/` (`uscreen doctor`, split into system/tablet/display/settings/latency)
-  src/config/             config.toml: `mod.rs` (FileConfig), `profile.rs` (per-tablet profile),
-                          `modes.rs`, `limits.rs`, `curves.rs`, `clean.rs`; `handler.rs` (daemon control
-                          socket, PID file); `options/` (live per-tablet options and the idle-dim loop)
+  src/config/             config.toml: `mod.rs` (FileConfig), `sanitize.rs` (clamps and migrates a loaded config),
+                          `profile.rs` (per-tablet profile), `modes.rs`, `limits.rs`, `curves.rs`, `clean.rs`;
+                          `handler.rs` (daemon control socket, PID file); `options/` (live per-tablet options
+                          and the idle-dim loop)
   src/daemon/             the running daemon: `mod.rs` (startup/shutdown), `session/` (tablet sessions and
                           the adb monitor), `guard/` (compositor-freeze safety), `runtime.rs`, `tray.rs`,
-                          `update.rs`, `osk.rs`
+                          `update.rs`
   src/capture/            EVDI helper + encoders: frames in, H.264/HEVC packets out (`packetizer.rs`,
                           `encoders.rs`, `latency.rs`, `timing.rs`)
-  src/display/            virtual display creation per desktop (gnome, kwin, hyprland, cosmic, x11, edid)
-  src/desktop/            the desktop layer: one backend per environment (gnome, x11, generic) behind
-                          the `DesktopBackend` trait; see docs/desktop-backends.md
+  src/desktop/            one directory per desktop environment (see below) plus the shared `DesktopBackend`
+                          trait in `mod.rs`
+  src/display/            what is not desktop specific: the generated EDID (`edid.rs`) and EVDI card
+                          discovery in sysfs (`vdisplay.rs`)
   src/input/              input path: `server.rs` (WebSocket), `protocol/` (wire types, sequence filter),
                           `events/` (one handler per message kind), `menu/` (the long-press pen menu),
-                          `ghost/` (pen routing: mouse vs
-                          tablet, auto style, click slop), `uinput/` (virtual devices), `stillness.rs`
-                          (resting-pen filter), `recorder.rs` (pen flight recorder), `physical.rs`
-                          (real drawing tablets), `mapping.rs` (binding devices to outputs)
-  src/net/                adb (`adb.rs`, `pairing.rs`, `installer.rs`), video server (`stream.rs`), notices
-  evdi/                   C helper: EVDI framebuffer capture -> NV12 -> FIFO
+                          `ghost/` (pen routing: mouse vs tablet, auto style, click slop), `uinput/` (virtual
+                          devices), `stillness.rs` (resting-pen filter), `recorder.rs` (pen flight recorder),
+                          `physical.rs` (real drawing tablets), `mapping.rs` (binding devices to outputs)
+  src/net/                `adb/` (device discovery, `adb reverse` tunnels, wireless adb, the tablet app),
+                          `pairing.rs`, `installer.rs` (APK install queue), `stream.rs` (video server),
+                          `notices.rs`
+  evdi/                   C helper: `evdi_helper.c` (device discovery, `main`) includes `helper_*.h` (state,
+                          signals, X11 boundary sync, timing ring, NV12 conversion, writer, EVDI events);
+                          `evdi_capture_test.c`, `evdi_grab_test.c`, `evdi_test2.c` are old stand-alone experiments
 menu/                   `uscreen-menu`: the pen's long-press menu window (GTK 4), launched by the daemon
 uscreen-pro-gui/        Tauri + React desktop app (settings, pairing, status)
+  src/                    `App.tsx` (state, merge of tablet-side changes), `views/`, `components/`, `lib/`
+  src-tauri/src/          `adb/` (devices, install, intents), `config.rs`, `daemon.rs`, `forget.rs`, `pairing.rs`
 android/                Kotlin/Compose app: MediaCodec decoder, touch/pen capture, touchpad engine
-extensions/             GNOME Shell extension: focus reporting, route hotkey, context probe
+extensions/             GNOME Shell extension `uscreen-app-lock`: `extension.js` (entry), `lib/` (app lock,
+                          pen routing, context probe, pen menu), `compat/` (per-Shell-version code)
 packaging/              deb control/postinst, rpm spec, PKGBUILD, udev/modprobe files
-scripts/                install.sh, release build, test tools (fake tablet, tablet_inject.py)
+scripts/                `install.sh` and `lib/` (`platform.sh`, `evdi.sh`, `tui.sh`, `distros/<family>.sh`),
+                          release build, test tools (fake tablet, tablet_inject.py), `tests/` (installer tests)
 experiments_and_findings/  numbered write-ups of what was measured and decided
-docs/                   this documentation and the GitHub Pages site
+docs/                   this documentation and the existing GitHub Pages site
 ```
+
+Where to change what: a new **distribution** is one file in `scripts/lib/distros/`, a new **desktop** is one
+directory in `host/src/desktop/`, a new **GNOME Shell version** is a row in
+`extensions/uscreen-app-lock/compat/versions.js`. See [adding-support.md](adding-support.md).
 
 ## Command line
 
