@@ -10,7 +10,7 @@
     "46",
     "47"
   ],
-  "version": 8,
+  "version": 9,
   "url": "https://github.com/majmichu1/UScreen",
   "settings-schema": "org.gnome.shell.extensions.uscreen-app-lock"
 }

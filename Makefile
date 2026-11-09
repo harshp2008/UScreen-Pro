@@ -68,6 +68,9 @@ install: build edid
 	@echo "✓ systemd user service installed"
 	mkdir -p ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/ 2>/dev/null || true
 	cp extensions/uscreen-app-lock/metadata.json extensions/uscreen-app-lock/extension.js extensions/uscreen-app-lock/stylesheet.css ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/ 2>/dev/null || true
+	mkdir -p ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/lib ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/compat 2>/dev/null || true
+	cp extensions/uscreen-app-lock/lib/*.js ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/lib/ 2>/dev/null || true
+	cp extensions/uscreen-app-lock/compat/*.js ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/compat/ 2>/dev/null || true
 	mkdir -p ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/schemas 2>/dev/null || true
 	cp extensions/uscreen-app-lock/schemas/*.gschema.xml ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/schemas/ 2>/dev/null || true
 	glib-compile-schemas ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/schemas 2>/dev/null || true
@@ -147,6 +150,8 @@ dist-local: build
 	mkdir -p dist/uscreen-$(VERSION)/bin dist/uscreen-$(VERSION)/scripts dist/uscreen-$(VERSION)/packaging
 	cp target/release/uscreen target/release/uscreen-menu target/release/uscreen-pro-gui host/evdi/evdi_helper dist/uscreen-$(VERSION)/bin/
 	cp scripts/install.sh scripts/uscreen.desktop scripts/uscreen.service dist/uscreen-$(VERSION)/scripts/
+	cp -r scripts/lib dist/uscreen-$(VERSION)/scripts/lib
+	mkdir -p dist/uscreen-$(VERSION)/extensions && cp -r extensions/uscreen-app-lock dist/uscreen-$(VERSION)/extensions/ && rm -rf dist/uscreen-$(VERSION)/extensions/uscreen-app-lock/tests
 	cp packaging/uscreen-evdi.conf packaging/uscreen-modules.conf packaging/uscreen.service packaging/60-uscreen-uinput.rules dist/uscreen-$(VERSION)/packaging/
 	mkdir -p dist/uscreen-$(VERSION)/packaging/icons && cp packaging/icons/uscreen.svg packaging/icons/uscreen-pen.svg dist/uscreen-$(VERSION)/packaging/icons/
 	cp README.md dist/uscreen-$(VERSION)/

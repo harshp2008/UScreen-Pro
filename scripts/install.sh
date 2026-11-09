@@ -244,8 +244,12 @@ install_extension() {
     local have want
     have="$(ext_version "$EXT_DIR/metadata.json")"
     want="$(ext_version "$src/metadata.json")"
-    run mkdir -p "$EXT_DIR/schemas"
+    run mkdir -p "$EXT_DIR/schemas" "$EXT_DIR/lib" "$EXT_DIR/compat"
     run cp "$src/metadata.json" "$src/extension.js" "$src/stylesheet.css" "$EXT_DIR/"
+    # The modules replace the ones of the previous version, so a module removed upstream does not linger.
+    run rm -f "$EXT_DIR"/lib/*.js "$EXT_DIR"/compat/*.js
+    run cp "$src"/lib/*.js "$EXT_DIR/lib/"
+    run cp "$src"/compat/*.js "$EXT_DIR/compat/"
     if ls "$src"/schemas/*.gschema.xml >/dev/null 2>&1; then
         run cp "$src"/schemas/*.gschema.xml "$EXT_DIR/schemas/"
         run glib-compile-schemas "$EXT_DIR/schemas" 2>/dev/null || true

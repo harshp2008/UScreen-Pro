@@ -228,6 +228,19 @@ t_headless_install_copies_files_into_home() {
     grep -q "Exec=$HOME/.local/bin/uscreen-pro-gui" "$HOME/.local/share/applications/uscreen-pro.desktop" || fail "Exec path not absolute"
     [ -f "$HOME/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/extension.js" ] || fail "extension missing"
 }
+# The extension is a set of ES modules: extension.js imports lib/ and compat/, so a copy that lacks them does not load.
+t_extension_modules_are_installed_and_stale_ones_removed() {
+    mk_sandbox ubuntu-24.04
+    local ext="$HOME/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app"
+    mkdir -p "$ext/lib"; echo "old" >"$ext/lib/removed-module.js"
+    run_install --headless --skip-system --skip-spawnat >/dev/null; eq $? 0
+    local f
+    for f in lib/appLock.js lib/penRouting.js lib/contextProbe.js lib/penMenu.js lib/dataFiles.js compat/index.js compat/versions.js compat/monitors.js; do
+        [ -f "$ext/$f" ] || fail "extension module missing: $f"
+    done
+    [ ! -e "$ext/lib/removed-module.js" ] || fail "a module of an older version was left behind"
+    [ ! -e "$ext/tests" ] || fail "the extension's tests were installed"
+}
 t_old_duplicate_desktop_entry_is_removed() {
     mk_sandbox ubuntu-24.04; mkdir -p "$HOME/.local/share/applications"; echo "[Desktop Entry]" >"$HOME/.local/share/applications/uscreen.desktop"
     run_install --headless --skip-system --skip-spawnat >/dev/null

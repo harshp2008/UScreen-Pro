@@ -53,6 +53,8 @@ cp target-deb12/release/uscreen target-deb12/release/uscreen-menu target-deb12/r
 cp target-deb12/evdi-src/library/libevdi.so.1.15.0 "$D/bin/"
 ln -sf libevdi.so.1.15.0 "$D/bin/libevdi.so.1"
 cp scripts/install.sh scripts/uscreen.desktop scripts/uscreen.service "$D/scripts/"
+cp -r scripts/lib "$D/scripts/lib"     # install.sh sources these
+mkdir -p "$D/extensions" && cp -r extensions/uscreen-app-lock "$D/extensions/" && rm -rf "$D/extensions/uscreen-app-lock/tests"
 cp packaging/uscreen-evdi.conf packaging/uscreen-modules.conf packaging/uscreen.service packaging/60-uscreen-uinput.rules "$D/packaging/"
 mkdir -p "$D/packaging/icons" && cp packaging/icons/uscreen.svg packaging/icons/uscreen-pen.svg "$D/packaging/icons/"
 cp README.md "$D/"
