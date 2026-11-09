@@ -84,6 +84,8 @@ pub(in crate::input) struct InjectDevices {
     pub(in crate::input) auto_last_at: Option<std::time::Instant>,
     /// Auto mode: when the last stroke was lifted.
     pub(in crate::input) auto_up_at: Option<std::time::Instant>,
+    /// Where long-press requests for the pen menu go (set when the menu runner starts).
+    pub(in crate::input) menu_tx: Option<std::sync::mpsc::Sender<()>>,
     /// Auto mode, mouse route: where the tip landed, while the pointer is held there (click slop).
     pub(in crate::input) slop_anchor: Option<(i32, i32)>,
     /// Auto mode: parks a pen that rests near the glass, so it stops taking the cursor.
@@ -132,6 +134,7 @@ impl InjectDevices {
             auto_down_at: None,
             auto_last_at: None,
             auto_up_at: None,
+            menu_tx: None,
             slop_anchor: None,
             hover_filter: Default::default(),
             still_cfg: Default::default(),

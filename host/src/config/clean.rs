@@ -19,6 +19,14 @@ pub fn clean_stylus_style(v: &str) -> String {
     }
 }
 
+/// `icons` or `text` (the default) for the pen menu's button style.
+pub fn clean_menu_style(v: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        "icons" => "icons".into(),
+        _ => "text".into(),
+    }
+}
+
 /// Drawing programs that want the pressure-sensitive pen by default.
 pub fn default_art_apps() -> Vec<String> {
     [

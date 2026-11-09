@@ -11,6 +11,7 @@ pub(super) struct GenericDesktop {
 }
 
 impl GenericDesktop {
+    /// A backend that has not seen a focus change yet.
     pub(super) fn new() -> Self {
         Self {
             focus: FocusFile::default(),

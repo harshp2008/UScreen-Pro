@@ -55,12 +55,14 @@ host/                   Rust daemon (binary `uscreen`)
   src/desktop/            the desktop layer: one backend per environment (gnome, x11, generic) behind
                           the `DesktopBackend` trait; see docs/desktop-backends.md
   src/input/              input path: `server.rs` (WebSocket), `protocol/` (wire types, sequence filter),
-                          `events/` (one handler per message kind), `ghost/` (pen routing: mouse vs
+                          `events/` (one handler per message kind), `menu/` (the long-press pen menu),
+                          `ghost/` (pen routing: mouse vs
                           tablet, auto style, click slop), `uinput/` (virtual devices), `stillness.rs`
                           (resting-pen filter), `recorder.rs` (pen flight recorder), `physical.rs`
                           (real drawing tablets), `mapping.rs` (binding devices to outputs)
   src/net/                adb (`adb.rs`, `pairing.rs`, `installer.rs`), video server (`stream.rs`), notices
   evdi/                   C helper: EVDI framebuffer capture -> NV12 -> FIFO
+menu/                   `uscreen-menu`: the pen's long-press menu window (GTK 4), launched by the daemon
 uscreen-pro-gui/        Tauri + React desktop app (settings, pairing, status)
 gui-legacy/             retired egui app, excluded from the workspace (still referenced by packaging)
 android/                Kotlin/Compose app: MediaCodec decoder, touch/pen capture, touchpad engine

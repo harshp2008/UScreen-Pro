@@ -160,7 +160,10 @@ install_files() {
     else
         cp "$PROJECT_DIR/host/evdi/evdi_helper" "$BIN_DIR/evdi_helper"
     fi
+    # The pen's long-press menu window (GTK 4), launched by the daemon.
+    cp "$src_bin/uscreen-menu" "$BIN_DIR/uscreen-menu" 2>/dev/null || warn "uscreen-menu not found, the pen menu will be unavailable"
     chmod +x "$BIN_DIR/uscreen" "$BIN_DIR/evdi_helper"
+    [ -f "$BIN_DIR/uscreen-menu" ] && chmod +x "$BIN_DIR/uscreen-menu"
     info "Binaries installed to $BIN_DIR"
 
     DATA_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/uscreen"
@@ -257,6 +260,23 @@ system_setup() {
     fi
 }
 
+# The pen menu window is a GTK 4 program: make sure the runtime library is there. Best effort; the
+# menu is optional and a failure here never stops the install.
+install_menu_runtime() {
+    if ldconfig -p 2>/dev/null | grep -q "libgtk-4.so"; then
+        return 0
+    fi
+    . /etc/os-release 2>/dev/null || true
+    info "Installing the GTK 4 runtime for the pen menu"
+    case "${ID:-unknown} ${ID_LIKE:-}" in
+        *fedora*|*rhel*|*centos*) sudo dnf install -y gtk4 ;;
+        *debian*|*ubuntu*)        sudo apt-get install -y libgtk-4-1 ;;
+        *arch*)                   sudo pacman -S --needed --noconfirm gtk4 ;;
+        *suse*)                   sudo zypper --non-interactive install --no-recommends libgtk-4-1 ;;
+        *) false ;;
+    esac || warn "Could not install GTK 4 — the pen menu will not be available"
+}
+
 # spawn-at places the long-press menu window exactly at the pen (https://github.com/harshp2008/spawn-at).
 # Not installed: install the latest release. Installed: update it, unless it is a dev build, which
 # is somebody's own working copy and is left alone. A failure here never stops the UScreen install.
@@ -293,6 +313,7 @@ main() {
     check_deps
     build_if_needed
     install_files
+    install_menu_runtime
     install_spawn_at
     system_setup
     echo ""

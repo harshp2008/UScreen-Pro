@@ -150,7 +150,18 @@ impl InjectDevices {
                 if !(open && self.slop_anchor.is_some()) {
                     self.ghost_place_pointer(s.x, s.y);
                 }
+                // A tip that stayed down, inside the click slop, for the long-press time is a long
+                // press: once the button is up, ask for the pen menu.
+                let long_press = open
+                    && self.tip == Tip::Pointer
+                    && self.slop_anchor.is_some()
+                    && self
+                        .auto_down_at
+                        .is_some_and(|t| t.elapsed() >= self.still_cfg.long_press);
                 self.auto_end_stroke(s);
+                if long_press {
+                    crate::input::menu::request(&self.menu_tx);
+                }
                 // Whatever the lift did not manage to let go of, let go of now (only what is held:
                 // the tablet device is not written to when it is idle).
                 self.auto_let_go_left();

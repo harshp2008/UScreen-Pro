@@ -203,6 +203,10 @@ pub struct FileConfig {
     /// Ghost tracking: seconds with the pen out of range after which the desktop cursor is hidden.
     /// `0` (default) never hides it, so the pen's cursor behaves like a mouse cursor.
     pub stylus_idle_hide_timeout: u32,
+    /// The pen's long-press menu (cut, copy, paste, ...) in the mouse route. On by default.
+    pub pen_menu: bool,
+    /// How the pen menu's buttons look: `text` (labels) or `icons`.
+    pub pen_menu_style: String,
     /// Apps (app id, desktop file or window class, case-insensitive substring) whose pen strokes go
     /// to the pressure-sensitive `UScreen Pen`; everywhere else the tip is a mouse click.
     pub stylus_art_apps: Vec<String>,
@@ -282,6 +286,8 @@ impl Default for FileConfig {
             stylus_button_primary: "right".into(),
             stylus_button_secondary: "middle".into(),
             stylus_idle_hide_timeout: 0,
+            pen_menu: true,
+            pen_menu_style: "text".into(),
             stylus_art_apps: default_art_apps(),
             physical_tablet_support: false,
             physical_tablet_device: String::new(),
@@ -380,6 +386,7 @@ impl FileConfig {
         self.stylus_button_primary = clean_pen_button(&self.stylus_button_primary, "right");
         self.stylus_button_secondary = clean_pen_button(&self.stylus_button_secondary, "middle");
         self.stylus_idle_hide_timeout = self.stylus_idle_hide_timeout.min(3600);
+        self.pen_menu_style = clean_menu_style(&self.pen_menu_style);
         self.stylus_art_apps = self
             .stylus_art_apps
             .iter()

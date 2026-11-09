@@ -1,0 +1,177 @@
+//! The background thread that turns a long-press request into a menu on screen and, if a button is
+//! chosen, the key combination in the focused app.
+//!
+//! Per request: check the setting and the desktop's abilities, skip art apps (holding still is
+//! normal while painting), ask the desktop what is under the pointer, let `decision` pick the
+//! buttons, remember the focused window, show `uscreen-menu` at the pointer, wait for its answer,
+//! give the window focus back, send the keys.
+
+use super::actions::MenuAction;
+use super::decision::{items, Rules};
+use crate::desktop::{data_file, DesktopBackend};
+use crate::input::ghost::route_to_pen;
+use crate::input::uinput::InjectDevices;
+use std::sync::mpsc::{channel, Receiver};
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+use tracing::{debug, info, warn};
+
+/// How long to wait for the desktop's description of the pointer.
+const CONTEXT_TIMEOUT: Duration = Duration::from_millis(250);
+/// The menu closes itself after this long without a choice; the runner waits a little longer.
+const MENU_TIMEOUT: Duration = Duration::from_secs(8);
+/// The menu window's app id (set in `menu/src/main.rs`): the desktop backend needs it to find the window.
+const MENU_CLASS: &str = "app.uscreen.menu";
+/// Pixels between the cursor and the menu's centre line (the menu appears above the cursor).
+const LIFT_PX: i32 = 64;
+/// Pause between the menu window going away and the keys, so the app has focus again.
+const FOCUS_SETTLE: Duration = Duration::from_millis(60);
+
+/// Start the runner for one tablet: creates the request channel (the sender is stored in the
+/// devices, where the long-press detection finds it) and the thread that answers requests.
+pub(in crate::input) fn spawn(uinput: Arc<Mutex<InjectDevices>>) {
+    let (tx, rx) = channel();
+    if let Ok(mut g) = uinput.lock() {
+        g.menu_tx = Some(tx);
+    }
+    let r = std::thread::Builder::new()
+        .name("uscreen-menu".into())
+        .spawn(move || run(uinput, rx));
+    if let Err(e) = r {
+        warn!("Could not start the pen menu thread: {}", e);
+    }
+}
+
+/// The runner thread: answers each menu request (showing the menu and sending the chosen keys) until the channel closes.
+fn run(uinput: Arc<Mutex<InjectDevices>>, rx: Receiver<()>) {
+    let mut desktop = crate::desktop::detect();
+    let caps = desktop.capabilities();
+    info!(
+        "Pen menu: desktop {} (context: {}, placement: {})",
+        desktop.name(),
+        caps.context,
+        caps.placement
+    );
+    while rx.recv().is_ok() {
+        // Requests that piled up while a menu was open are stale.
+        while rx.try_recv().is_ok() {}
+        if let Some(action) = show(desktop.as_mut()) {
+            debug!("Pen menu: {}", action.name());
+            if let Ok(mut g) = uinput.lock() {
+                g.tap_key_combo(&action.keys());
+            }
+        }
+    }
+}
+
+/// Show the menu if it should be shown; the chosen action, if any. The focused window gets focus
+/// back before this returns.
+fn show(desktop: &mut dyn DesktopBackend) -> Option<MenuAction> {
+    let cfg = crate::config::FileConfig::load();
+    if !cfg.pen_menu {
+        return None;
+    }
+    let caps = desktop.capabilities();
+    if !(caps.context && caps.placement) {
+        debug!("Pen menu: not available on {}", desktop.name());
+        return None;
+    }
+    if route_to_pen(&cfg.stylus_art_apps) {
+        return None;
+    }
+    let ctx = desktop.context_at_pointer(CONTEXT_TIMEOUT)?;
+    let buttons = items(&ctx, &Rules::default());
+    if buttons.is_empty() {
+        return None;
+    }
+    let result = data_file("menu_result")?;
+    let _ = std::fs::remove_file(&result);
+    let previous = desktop.focused_window();
+    let command = menu_command(&buttons, &cfg.pen_menu_style, &result);
+    if !desktop.spawn_at_pointer(LIFT_PX, MENU_CLASS, &command) {
+        warn!(
+            "Pen menu: could not show the menu window ({:?})",
+            command.first()
+        );
+        return None;
+    }
+    let chosen = wait_for_choice(&result);
+    if let Some(w) = previous {
+        desktop.focus_window(&w);
+        std::thread::sleep(FOCUS_SETTLE);
+    }
+    chosen
+}
+
+/// The command line that shows the menu window with these buttons.
+fn menu_command(buttons: &[MenuAction], style: &str, result: &std::path::Path) -> Vec<String> {
+    let names: Vec<&str> = buttons.iter().map(|a| a.name()).collect();
+    vec![
+        menu_binary(),
+        "--items".into(),
+        names.join(","),
+        "--style".into(),
+        style.into(),
+        "--timeout".into(),
+        MENU_TIMEOUT.as_secs().to_string(),
+        "--result".into(),
+        result.display().to_string(),
+    ]
+}
+
+/// `uscreen-menu` next to the daemon binary if it is there, else whatever `$PATH` finds.
+fn menu_binary() -> String {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("uscreen-menu")))
+        .filter(|p| p.exists())
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|| "uscreen-menu".into())
+}
+
+/// Wait for the menu to write its result file; the chosen action, `None` if it was dismissed.
+fn wait_for_choice(result: &std::path::Path) -> Option<MenuAction> {
+    let deadline = Instant::now() + MENU_TIMEOUT + Duration::from_secs(2);
+    while Instant::now() < deadline {
+        if let Ok(text) = std::fs::read_to_string(result) {
+            if text.ends_with('\n') {
+                return parse_choice(&text);
+            }
+        }
+        std::thread::sleep(Duration::from_millis(30));
+    }
+    None
+}
+
+/// The action named in the menu's result line (`{"action":"copy"}`); `None` for `none` or junk.
+fn parse_choice(text: &str) -> Option<MenuAction> {
+    let v: serde_json::Value = serde_json::from_str(text.trim()).ok()?;
+    MenuAction::from_name(v.get("action")?.as_str()?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_choice_is_read_from_the_result_line() {
+        assert_eq!(
+            parse_choice("{\"action\":\"copy\"}\n"),
+            Some(MenuAction::Copy)
+        );
+        assert_eq!(parse_choice("{\"action\":\"none\"}\n"), None);
+        assert_eq!(parse_choice("junk"), None);
+    }
+
+    #[test]
+    fn the_command_names_every_button_and_the_result_file() {
+        let c = menu_command(
+            &[MenuAction::Paste, MenuAction::Undo],
+            "icons",
+            std::path::Path::new("/tmp/r"),
+        );
+        assert!(c.windows(2).any(|w| w == ["--items", "paste,undo"]));
+        assert!(c.windows(2).any(|w| w == ["--style", "icons"]));
+        assert!(c.windows(2).any(|w| w == ["--result", "/tmp/r"]));
+    }
+}

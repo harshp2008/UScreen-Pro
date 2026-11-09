@@ -12,10 +12,18 @@
 //! To support a new desktop add one file here that implements [`DesktopBackend`], and pick it in
 //! [`detect`]. See `docs/desktop-backends.md`.
 
+mod context;
 mod focus_file;
 mod generic;
 mod gnome;
+mod spawn_at;
 mod x11;
+
+#[cfg(test)]
+pub use context::Rect;
+pub use context::{PointerContext, Zone};
+pub use spawn_at::WindowRef;
+use std::time::Duration;
 
 use serde::Deserialize;
 
@@ -24,6 +32,10 @@ use serde::Deserialize;
 pub struct Capabilities {
     /// Reports which app has focus (lets the pen pick the art route for Krita, GIMP, ...).
     pub focus: bool,
+    /// Can describe the spot under the pointer: surface kind, window frame, selection/clipboard size.
+    pub context: bool,
+    /// Can show a window exactly at the pointer and hand focus back to the previous window.
+    pub placement: bool,
 }
 
 /// What a focus poll found.
@@ -45,6 +57,30 @@ pub trait DesktopBackend: Send {
     fn capabilities(&self) -> Capabilities;
     /// Which app has focus now. Called a few times a second from one thread.
     fn poll_focus(&mut self) -> FocusUpdate;
+
+    /// Describe the spot under the pointer, waiting at most `timeout` for the desktop to answer.
+    /// `None` when unsupported ([`Capabilities::context`]) or the desktop did not answer in time.
+    fn context_at_pointer(&mut self, _timeout: Duration) -> Option<PointerContext> {
+        None
+    }
+
+    /// The window that has focus now, so it can be given focus back ([`Self::focus_window`]).
+    fn focused_window(&mut self) -> Option<WindowRef> {
+        None
+    }
+
+    /// Give focus to `window`. True on success.
+    fn focus_window(&mut self, _window: &WindowRef) -> bool {
+        false
+    }
+
+    /// Start `command` with its window centred on the pointer, `lift` pixels above it; returns once
+    /// the window is placed (the program keeps running). `class` is the window's app id / class,
+    /// which some backends need to find the window. True on success. Supported when
+    /// [`Capabilities::placement`] is set.
+    fn spawn_at_pointer(&mut self, _lift: i32, _class: &str, _command: &[String]) -> bool {
+        false
+    }
 }
 
 /// Pick the backend for this session: X11 if it is one and connects, GNOME if the desktop says

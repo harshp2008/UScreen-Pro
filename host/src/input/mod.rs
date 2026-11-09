@@ -27,6 +27,7 @@ use tracing::{error, info, warn};
 mod events;
 mod ghost;
 mod mapping;
+mod menu;
 mod physical;
 mod protocol;
 mod recorder;

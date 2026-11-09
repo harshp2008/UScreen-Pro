@@ -423,3 +423,63 @@ fn auto_touching_down_works_from_a_parked_pen() {
     done(&[&pp, &qp]);
     assert_eq!(left_events(&ptr), vec![1, 0]);
 }
+
+// ---- Long press (pen menu) ----
+
+fn menu_rig() -> (
+    InjectDevices,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    std::sync::mpsc::Receiver<()>,
+) {
+    let (mut d, pp, qp) = rig();
+    let (tx, rx) = std::sync::mpsc::channel();
+    d.menu_tx = Some(tx);
+    d.still_cfg.long_press = Duration::from_millis(60);
+    (d, pp, qp, rx)
+}
+
+#[test]
+fn long_press_a_still_tip_held_long_enough_asks_for_the_menu_on_lift() {
+    let (mut d, pp, qp, rx) = menu_rig();
+    auto(&mut d, 0, 5000, false);
+    std::thread::sleep(Duration::from_millis(90));
+    auto(&mut d, 2, 5050, false); // wobble inside the slop
+    assert!(
+        rx.try_recv().is_err(),
+        "nothing while the tip is still down"
+    );
+    auto(&mut d, 1, 5050, false);
+    assert!(rx.try_recv().is_ok(), "asked on the lift");
+    done(&[&pp, &qp]);
+}
+
+#[test]
+fn long_press_a_short_tap_does_not_ask() {
+    let (mut d, pp, qp, rx) = menu_rig();
+    auto(&mut d, 0, 5000, false);
+    auto(&mut d, 1, 5000, false);
+    done(&[&pp, &qp]);
+    assert!(rx.try_recv().is_err());
+}
+
+#[test]
+fn long_press_a_hold_that_then_drags_does_not_ask() {
+    let (mut d, pp, qp, rx) = menu_rig();
+    auto(&mut d, 0, 5000, false);
+    std::thread::sleep(Duration::from_millis(90));
+    auto(&mut d, 2, 9000, false); // left the slop: a drag
+    auto(&mut d, 1, 9000, false);
+    done(&[&pp, &qp]);
+    assert!(rx.try_recv().is_err());
+}
+
+#[test]
+fn long_press_never_asks_on_the_art_route() {
+    let (mut d, pp, qp, rx) = menu_rig();
+    auto(&mut d, 0, 5000, true);
+    std::thread::sleep(Duration::from_millis(90));
+    auto(&mut d, 1, 5000, true);
+    done(&[&pp, &qp]);
+    assert!(rx.try_recv().is_err());
+}

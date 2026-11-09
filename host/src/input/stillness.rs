@@ -24,6 +24,9 @@ pub(super) struct StillCfg {
     /// until the pen gets farther than this from it (a hand wobbles when the tip lands, and an app
     /// reads a few pixels of movement with the button down as the start of a drag).
     pub click_slop_mm: f64,
+    /// How long the tip must stay down inside the click slop for a lift to count as a long press
+    /// (the pen menu).
+    pub long_press: Duration,
 }
 
 impl Default for StillCfg {
@@ -33,6 +36,7 @@ impl Default for StillCfg {
             park_after: Duration::from_millis(300),
             wake_radius_mm: 5.0,
             click_slop_mm: 2.0,
+            long_press: Duration::from_millis(600),
         }
     }
 }

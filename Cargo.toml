@@ -1,4 +1,4 @@
 [workspace]
-members = ["host", "uscreen-pro-gui/src-tauri"]
+members = ["host", "uscreen-pro-gui/src-tauri", "menu"]
 exclude = ["gui-legacy"]
 resolver = "2"

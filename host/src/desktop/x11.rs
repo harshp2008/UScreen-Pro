@@ -71,7 +71,10 @@ impl DesktopBackend for X11Desktop {
     }
 
     fn capabilities(&self) -> Capabilities {
-        Capabilities { focus: true }
+        Capabilities {
+            focus: true,
+            ..Capabilities::default()
+        }
     }
 
     fn poll_focus(&mut self) -> FocusUpdate {

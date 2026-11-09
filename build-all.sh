@@ -67,6 +67,13 @@ else
     exit 1
 fi
 
+# The pen menu window (GTK 4; needs libgtk-4-dev). It is a separate program the daemon launches.
+echo ""
+echo "==> [2b/4] Building the pen menu window (cargo build --release -p uscreen-menu)..."
+cargo build --release -p uscreen-menu
+cp --remove-destination "target/release/uscreen-menu" "$DIST_DIR/uscreen-menu"
+echo "  ✓ Pen menu copied -> $DIST_DIR/uscreen-menu"
+
 # Copy evdi_helper if available
 if [ -f "target/release/evdi_helper" ]; then
     cp --remove-destination "target/release/evdi_helper" "$DIST_DIR/evdi_helper"
@@ -104,10 +111,11 @@ sleep 0.5
 
 cp --remove-destination "$DIST_DIR/uscreen-pro-gui" "$BIN_DIR/uscreen-pro-gui"
 cp --remove-destination "$DIST_DIR/uscreen" "$BIN_DIR/uscreen"
+cp --remove-destination "$DIST_DIR/uscreen-menu" "$BIN_DIR/uscreen-menu"
 # The GUI installs this APK onto tablets, so it must match the build above.
 cp --remove-destination "$DIST_DIR/app-debug.apk" "$SHARE_DIR/app-debug.apk"
 
-for pair in "uscreen-pro-gui:$BIN_DIR/uscreen-pro-gui" "uscreen:$BIN_DIR/uscreen" "app-debug.apk:$SHARE_DIR/app-debug.apk"; do
+for pair in "uscreen-pro-gui:$BIN_DIR/uscreen-pro-gui" "uscreen:$BIN_DIR/uscreen" "uscreen-menu:$BIN_DIR/uscreen-menu" "app-debug.apk:$SHARE_DIR/app-debug.apk"; do
     name="${pair%%:*}"
     dest="${pair#*:}"
     if cmp -s "$DIST_DIR/$name" "$dest"; then
