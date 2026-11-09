@@ -1,6 +1,5 @@
 //! Normalisers for free-text config values and the serde default helpers
 
-
 /// `full_screen` (default), `standard_rectangle` or `wide_rectangle`; anything else falls back to the default.
 pub fn clean_shape(v: &str) -> String {
     match v.trim().to_ascii_lowercase().as_str() {
@@ -30,8 +29,18 @@ pub fn clean_menu_style(v: &str) -> String {
 /// Drawing programs that want the pressure-sensitive pen by default.
 pub fn default_art_apps() -> Vec<String> {
     [
-        "krita", "gimp", "inkscape", "blender", "xournalpp", "rnote", "mypaint", "aseprite",
-        "pinta", "darktable", "freecad", "onlyoffice",
+        "krita",
+        "gimp",
+        "inkscape",
+        "blender",
+        "xournalpp",
+        "rnote",
+        "mypaint",
+        "aseprite",
+        "pinta",
+        "darktable",
+        "freecad",
+        "onlyoffice",
     ]
     .iter()
     .map(|s| s.to_string())

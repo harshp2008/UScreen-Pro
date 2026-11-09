@@ -169,6 +169,7 @@ impl InjectDevices {
                 }
             }
             1 => {
+                self.menu_track_lift(open);
                 // A lift inside the click slop releases where the tip landed.
                 if !(open && self.slop_anchor.is_some()) {
                     self.ghost_place_pointer(s.x, s.y);
@@ -244,6 +245,10 @@ impl InjectDevices {
         };
         let now = Instant::now();
         self.auto_down_at = Some(now);
+        if self.menu_armed {
+            self.menu_armed = false;
+            self.menu_second = true;
+        }
         self.auto_last_at = Some(now);
         self.slop_anchor = (self.tip == Tip::Pointer).then_some((s.x, s.y));
         match self.tip {
@@ -327,6 +332,34 @@ impl InjectDevices {
         }
     }
 
+    /// Follow the touches around an open menu: the touch that opened it, then the next one. When the
+    /// next touch lifts, the menu is closed shortly after unless that touch chose a button (the
+    /// runner sees the choice first). The tap itself still reaches the app as a plain click.
+    fn menu_track_lift(&mut self, open: bool) {
+        if !self.menu_open || !open {
+            return;
+        }
+        if self.hold == Hold::Shown && !self.menu_second {
+            self.menu_armed = true;
+        } else if self.menu_second {
+            self.menu_second = false;
+            self.menu_dismiss_at = Some(Instant::now() + Duration::from_millis(150));
+        }
+    }
+
+    /// The menu was closed (chosen, dismissed or timed out): forget its touches.
+    pub(in crate::input) fn menu_closed(&mut self) {
+        self.menu_open = false;
+        self.menu_armed = false;
+        self.menu_second = false;
+        self.menu_dismiss_at = None;
+    }
+
+    /// Whether the touch after the menu opened has ended without a choice, so the menu should close.
+    pub(in crate::input) fn menu_dismiss_due(&self) -> bool {
+        self.menu_dismiss_at.is_some_and(|t| Instant::now() >= t)
+    }
+
     /// Whether a menu question is open for the current stroke.
     pub(in crate::input) fn hold_pending(&self) -> bool {
         self.hold == Hold::Pending && self.auto_down_at.is_some()
@@ -350,6 +383,10 @@ impl InjectDevices {
         if self.hold_pending() {
             if shown {
                 self.hold = Hold::Shown;
+                self.menu_open = true;
+                self.menu_armed = false;
+                self.menu_second = false;
+                self.menu_dismiss_at = None;
             } else {
                 self.hold = Hold::Declined;
                 self.auto_press_now();

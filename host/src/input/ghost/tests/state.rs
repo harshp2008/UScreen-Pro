@@ -18,7 +18,11 @@ fn device_state_follows_what_the_device_holds() {
     auto(&mut d, 1, 10, true);
     assert_eq!(d.dev_state(Which::Pen), DevState::Idle);
     auto(&mut d, 0, 20, false);
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Idle, "the press is held back");
+    assert_eq!(
+        d.dev_state(Which::Pointer),
+        DevState::Idle,
+        "the press is held back"
+    );
     auto(&mut d, 2, 5000, false);
     assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1));
     done(&[&pp, &qp]);

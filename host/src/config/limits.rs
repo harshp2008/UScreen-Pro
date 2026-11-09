@@ -1,6 +1,5 @@
 //! The allowed ranges of bitrate, fps, quality, idle timeout and fade time
 
-
 /// Highest bitrate the USB transport actually sustains. Beyond this the encoder
 /// outruns the link, frames pile up in every queue along the way and latency
 /// grows without bound — the stream does not get sharper, only later.

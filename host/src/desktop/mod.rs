@@ -98,7 +98,14 @@ pub trait DesktopBackend: Send {
 
     /// Wait for the choice made in the menu shown for `req`: the button's name, `None` if it was
     /// dismissed or timed out.
-    fn wait_menu_choice(&mut self, _req: &MenuRequest) -> Option<String> {
+    ///
+    /// `close_now` is polled while waiting; once it returns true the menu is asked to close (the
+    /// answer then comes back as a dismissal). Used when a tap elsewhere should dismiss the menu.
+    fn wait_menu_choice(
+        &mut self,
+        _req: &MenuRequest,
+        _close_now: &dyn Fn() -> bool,
+    ) -> Option<String> {
         None
     }
 

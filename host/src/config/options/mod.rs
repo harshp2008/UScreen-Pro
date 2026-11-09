@@ -15,13 +15,13 @@
 //! * `idle` - the idle-dim state machine that fades the tablet's screen when it is not being used
 
 mod device;
+mod idle;
 mod overrides;
 mod registry;
-mod idle;
 pub use device::*;
+pub use idle::*;
 use overrides::*;
 pub use registry::*;
-pub use idle::*;
 
 use crate::config::{resolve_curve, FileConfig, InputMode, TabletProfile};
 use serde_json::{json, Value};

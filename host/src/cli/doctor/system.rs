@@ -57,7 +57,11 @@ pub(super) async fn check_tools(r: &mut Report, cfg: &FileConfig) {
                 &format!("{} encodes a test frame", cfg.encoder),
             );
             if cfg.encoder.contains("vaapi") {
-                r.line(Level::Ok, "VAAPI device", &crate::capture::encoders::vaapi_device());
+                r.line(
+                    Level::Ok,
+                    "VAAPI device",
+                    &crate::capture::encoders::vaapi_device(),
+                );
                 if crate::capture::encoders::nvidia_gpu_present() {
                     r.hint(
                         "an NVIDIA GPU is also in this machine. With VAAPI on the other GPU, steady \

@@ -99,8 +99,13 @@ impl DesktopBackend for GnomeDesktop {
         false
     }
 
-    fn wait_menu_choice(&mut self, req: &MenuRequest) -> Option<String> {
+    fn wait_menu_choice(
+        &mut self,
+        req: &MenuRequest,
+        close_now: &dyn Fn() -> bool,
+    ) -> Option<String> {
         let result = data_file("menu_result")?;
+        let mut closing = false;
         let deadline = Instant::now() + req.timeout + Duration::from_secs(2);
         while Instant::now() < deadline {
             if let Some(v) = std::fs::read_to_string(&result)
@@ -113,6 +118,12 @@ impl DesktopBackend for GnomeDesktop {
                         .and_then(|a| a.as_str())
                         .filter(|a| *a != "none")
                         .map(String::from);
+                }
+            }
+            if !closing && close_now() {
+                closing = true;
+                if let Some(f) = data_file("menu_close") {
+                    let _ = std::fs::write(f, req.id.to_string());
                 }
             }
             std::thread::sleep(Duration::from_millis(30));

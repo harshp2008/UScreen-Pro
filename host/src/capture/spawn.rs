@@ -45,8 +45,10 @@ impl CaptureManager {
         let mut encoder_args: Vec<String> = vec!["-hide_banner".into()];
 
         if encoder == "h264_vaapi" || encoder == "hevc_vaapi" {
-            encoder_args
-                .extend_from_slice(&["-vaapi_device".into(), crate::capture::encoders::vaapi_device()]);
+            encoder_args.extend_from_slice(&[
+                "-vaapi_device".into(),
+                crate::capture::encoders::vaapi_device(),
+            ]);
         }
 
         encoder_args.extend_from_slice(&[

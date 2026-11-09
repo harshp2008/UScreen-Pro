@@ -181,7 +181,11 @@ fn open_release_page() {
         .spawn()
     {
         Ok(_) => info!("Opened the release page"),
-        Err(e) => warn!("Could not open {}: {}", crate::daemon::update::RELEASES_PAGE, e),
+        Err(e) => warn!(
+            "Could not open {}: {}",
+            crate::daemon::update::RELEASES_PAGE,
+            e
+        ),
     }
 }
 

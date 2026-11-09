@@ -95,6 +95,12 @@ pub(in crate::input) struct InjectDevices {
     pub(in crate::input) hold: crate::input::ghost::Hold,
     /// A tap that ended while the menu question was still open: delivered (or dropped) when it is answered.
     pub(in crate::input) pending_click: Option<(i32, i32)>,
+    /// A pen menu is on screen. `menu_armed`: the touch that opened it has lifted; `menu_second`: the
+    /// next touch is down; `menu_dismiss_at`: that touch lifted without choosing, so close the menu then.
+    pub(in crate::input) menu_open: bool,
+    pub(in crate::input) menu_armed: bool,
+    pub(in crate::input) menu_second: bool,
+    pub(in crate::input) menu_dismiss_at: Option<std::time::Instant>,
     /// Where long-press requests for the pen menu go (set when the menu runner starts).
     pub(in crate::input) menu_tx: Option<std::sync::mpsc::Sender<()>>,
     /// Auto mode, mouse route: where the tip landed, while the pointer is held there (click slop).
@@ -150,6 +156,10 @@ impl InjectDevices {
             press_deferred: false,
             hold: Default::default(),
             pending_click: None,
+            menu_open: false,
+            menu_armed: false,
+            menu_second: false,
+            menu_dismiss_at: None,
             menu_tx: None,
             slop_anchor: None,
             hover_filter: Default::default(),

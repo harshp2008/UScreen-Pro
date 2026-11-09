@@ -9,8 +9,8 @@ use std::path::Path;
 pub const TIMING_RING_SIZE: usize = 1024;
 /// Magic number the helper writes once the ring is initialised.
 pub const TIMING_MAGIC: u32 = 0x55534352; // 'USCR'
-// The C side also writes a layout version (`TIMING_VERSION`, currently 1) into the ring header;
-// the host does not check it, so it is not duplicated here. Bump it in `evdi_helper.c` and the struct together.
+                                          // The C side also writes a layout version (`TIMING_VERSION`, currently 1) into the ring header;
+                                          // the host does not check it, so it is not duplicated here. Bump it in `evdi_helper.c` and the struct together.
 
 /// Stage timestamps of one frame (monotonic microseconds), written by the helper.
 #[repr(C)]

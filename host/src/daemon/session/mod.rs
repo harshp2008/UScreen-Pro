@@ -11,16 +11,16 @@
 //! * `pipeline` - helpers to find and signal a tablet's capture pipeline (FIFO, slot, signals)
 //! * `monitor` - the adb monitor: the long-running loop that watches for tablets and drives every session's lifecycle
 
-mod types;
 mod extra;
-mod profile;
-mod pipeline;
 mod monitor;
-pub use types::*;
+mod pipeline;
+mod profile;
+mod types;
 use extra::*;
-use profile::*;
-use pipeline::*;
 pub use monitor::*;
+use pipeline::*;
+use profile::*;
+pub use types::*;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -38,4 +38,3 @@ use crate::net::adb::{
     teardown_adb_forwarding, DiscoveredDevice, Transport,
 };
 use crate::net::stream::{StreamConfig, StreamServer};
-

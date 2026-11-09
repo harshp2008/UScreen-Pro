@@ -199,7 +199,11 @@ fn auto_a_down_after_a_lost_up_closes_the_old_stroke_first() {
     auto(&mut d, 1, 90, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
-    assert_eq!(left_events(&ptr), vec![1, 0, 1, 0], "the old stroke is closed, the new tap clicks");
+    assert_eq!(
+        left_events(&ptr),
+        vec![1, 0, 1, 0],
+        "the old stroke is closed, the new tap clicks"
+    );
 }
 
 #[test]
@@ -251,9 +255,17 @@ fn auto_range_exit_before_the_tip_keeps_a_held_barrel_button() {
     auto(&mut d, 4, 0, false);
     d.auto_flush_exit();
     auto(&mut d, 0, 10, false);
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b10), "the barrel stays; the tip's press is held back");
+    assert_eq!(
+        d.dev_state(Which::Pointer),
+        DevState::Down(0b10),
+        "the barrel stays; the tip's press is held back"
+    );
     auto(&mut d, 2, 5000, false);
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b11), "a right-drag once the pen moves");
+    assert_eq!(
+        d.dev_state(Which::Pointer),
+        DevState::Down(0b11),
+        "a right-drag once the pen moves"
+    );
     done(&[&pp, &qp]);
 }
 
@@ -422,7 +434,11 @@ fn auto_touching_down_works_from_a_parked_pen() {
     auto(&mut d, 3, 5001, false);
     auto(&mut d, 4, 0, false);
     auto(&mut d, 0, 5001, false);
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Idle, "the press waits for the lift or a move");
+    assert_eq!(
+        d.dev_state(Which::Pointer),
+        DevState::Idle,
+        "the press waits for the lift or a move"
+    );
     auto(&mut d, 1, 5001, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
@@ -448,7 +464,11 @@ fn menu_rig() -> (
 fn long_press_a_still_tip_asks_for_the_menu_while_it_is_down_and_never_clicks_when_it_is_shown() {
     let (mut d, pp, qp, rx) = menu_rig();
     auto(&mut d, 0, 5000, false);
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Idle, "the press is held back");
+    assert_eq!(
+        d.dev_state(Which::Pointer),
+        DevState::Idle,
+        "the press is held back"
+    );
     std::thread::sleep(Duration::from_millis(90));
     auto(&mut d, 2, 5050, false); // wobble inside the slop
     d.auto_hold_check();
@@ -459,8 +479,31 @@ fn long_press_a_still_tip_asks_for_the_menu_while_it_is_down_and_never_clicks_wh
     auto(&mut d, 1, 9000, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
-    assert!(!left_events(&ptr).contains(&1), "no press: the selection stays");
+    assert!(
+        !left_events(&ptr).contains(&1),
+        "no press: the selection stays"
+    );
     assert!(!xs(&ptr).contains(&9000), "and the cursor stays put");
+}
+
+#[test]
+fn a_tap_elsewhere_after_the_menu_opened_asks_for_it_to_close_but_the_opening_touch_does_not() {
+    let (mut d, pp, qp, rx) = menu_rig();
+    auto(&mut d, 0, 5000, false);
+    std::thread::sleep(Duration::from_millis(90));
+    d.auto_hold_check();
+    assert!(rx.try_recv().is_ok());
+    d.auto_menu_resolved(true);
+    auto(&mut d, 1, 5000, false); // the opening touch lifts
+    assert!(!d.menu_dismiss_due() && d.menu_dismiss_at.is_none());
+    auto(&mut d, 0, 9000, false); // a tap elsewhere
+    auto(&mut d, 1, 9000, false);
+    assert!(d.menu_dismiss_at.is_some(), "the tap is dismissal");
+    std::thread::sleep(Duration::from_millis(170));
+    assert!(d.menu_dismiss_due());
+    d.menu_closed();
+    assert!(!d.menu_dismiss_due());
+    done(&[&pp, &qp]);
 }
 
 #[test]
@@ -471,7 +514,11 @@ fn long_press_declined_delivers_the_held_back_press_and_the_hold_goes_on() {
     d.auto_hold_check();
     assert!(rx.try_recv().is_ok());
     d.auto_menu_resolved(false);
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1), "pressed, still held");
+    assert_eq!(
+        d.dev_state(Which::Pointer),
+        DevState::Down(0b1),
+        "pressed, still held"
+    );
     auto(&mut d, 2, 9000, false); // and it can still be dragged
     auto(&mut d, 1, 9000, false);
     let ptr = frames(&qp);
@@ -561,9 +608,17 @@ fn click_hold_a_tap_keeps_the_button_down_until_the_hold_time_is_up() {
     d.still_cfg.click_hold = Duration::from_millis(60);
     auto(&mut d, 0, 5000, false);
     auto(&mut d, 1, 5000, false);
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1), "pressed at the lift, still down");
+    assert_eq!(
+        d.dev_state(Which::Pointer),
+        DevState::Down(0b1),
+        "pressed at the lift, still down"
+    );
     d.auto_flush_click();
-    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1), "not before the hold time");
+    assert_eq!(
+        d.dev_state(Which::Pointer),
+        DevState::Down(0b1),
+        "not before the hold time"
+    );
     std::thread::sleep(Duration::from_millis(80));
     d.auto_flush_click();
     assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
@@ -580,13 +635,20 @@ fn click_hold_the_cursor_does_not_move_while_a_tap_is_held() {
     auto(&mut d, 1, 5000, false);
     let before = xs(&frames(&qp)).len();
     auto(&mut d, 3, 9000, false); // the pen lifts away and hovers elsewhere at once
-    assert_eq!(xs(&frames(&qp)).len(), before, "no motion with the button down");
+    assert_eq!(
+        xs(&frames(&qp)).len(),
+        before,
+        "no motion with the button down"
+    );
     std::thread::sleep(Duration::from_millis(80));
     d.auto_flush_click();
     auto(&mut d, 3, 9100, false);
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
-    assert!(xs(&ptr).contains(&9100), "and it follows again once the button is up");
+    assert!(
+        xs(&ptr).contains(&9100),
+        "and it follows again once the button is up"
+    );
 }
 
 #[test]
@@ -598,7 +660,16 @@ fn click_hold_a_new_touch_releases_the_previous_tap_before_moving() {
     auto(&mut d, 0, 20000, false); // the next touch comes long before the hold time is up
     let ptr = frames(&qp);
     done(&[&pp, &qp]);
-    let release = ptr.iter().position(|f| f.contains(&(EV_KEY, BTN_LEFT, 0))).unwrap();
-    let moved = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 20000))).unwrap();
-    assert!(release < moved, "released first, then the cursor moves to the new touch");
+    let release = ptr
+        .iter()
+        .position(|f| f.contains(&(EV_KEY, BTN_LEFT, 0)))
+        .unwrap();
+    let moved = ptr
+        .iter()
+        .position(|f| f.contains(&(EV_ABS, ABS_X, 20000)))
+        .unwrap();
+    assert!(
+        release < moved,
+        "released first, then the cursor moves to the new touch"
+    );
 }

@@ -269,7 +269,9 @@ pub async fn run_control_server(
                     // Percentiles over the last N seconds (default 10), one JSON line.
                     let secs = arg.trim().parse::<u64>().unwrap_or(10).clamp(1, 60);
                     let _ = writer
-                        .write_all(format!("{}\n", crate::capture::latency::recent_json(secs)).as_bytes())
+                        .write_all(
+                            format!("{}\n", crate::capture::latency::recent_json(secs)).as_bytes(),
+                        )
                         .await;
                 } else if cmd == "PING" {
                     let _ = writer.write_all(b"PONG\n").await;

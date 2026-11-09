@@ -20,8 +20,8 @@ use anyhow::Result;
 use clap::Parser;
 use tracing::info;
 
-use cli::{Cli, Commands};
 use cli::commands::{list_displays, show_status, stop_daemon};
+use cli::{Cli, Commands};
 use config::handler::client_control_cmd;
 use daemon::run_daemon;
 
@@ -118,7 +118,8 @@ async fn main() -> Result<()> {
             println!("Toggled: the running daemon flips the pen route for the focused app.");
         }
         Some(Commands::DebugDump) => {
-            let req = input::dump_request_file().ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
+            let req =
+                input::dump_request_file().ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
             let out = input::dump_file().ok_or_else(|| anyhow::anyhow!("HOME is not set"))?;
             if let Some(dir) = req.parent() {
                 std::fs::create_dir_all(dir)?;

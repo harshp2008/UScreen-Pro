@@ -88,9 +88,13 @@ fn handle_request(desktop: &mut dyn DesktopBackend, uinput: &Arc<Mutex<InjectDev
         };
         if desktop.show_menu(&req) {
             resolve(uinput, true);
+            let close_now = || uinput.lock().is_ok_and(|g| g.menu_dismiss_due());
             let chosen = desktop
-                .wait_menu_choice(&req)
+                .wait_menu_choice(&req, &close_now)
                 .and_then(|n| MenuAction::from_name(&n));
+            if let Ok(mut g) = uinput.lock() {
+                g.menu_closed();
+            }
             send_keys(uinput, chosen);
             return;
         }
@@ -104,7 +108,10 @@ fn handle_request(desktop: &mut dyn DesktopBackend, uinput: &Arc<Mutex<InjectDev
     let previous = desktop.focused_window();
     let command = menu_command(&plan.buttons, &plan.style, &plan.result);
     if !desktop.spawn_at_pointer(LIFT_PX, MENU_CLASS, &command) {
-        warn!("Pen menu: could not show the menu window ({:?})", command.first());
+        warn!(
+            "Pen menu: could not show the menu window ({:?})",
+            command.first()
+        );
         resolve(uinput, false);
         return;
     }
@@ -161,7 +168,11 @@ fn plan(desktop: &mut dyn DesktopBackend) -> Option<Plan> {
     if buttons.is_empty() {
         return None;
     }
-    Some(Plan { buttons, style: cfg.pen_menu_style, result: data_file("menu_result")? })
+    Some(Plan {
+        buttons,
+        style: cfg.pen_menu_style,
+        result: data_file("menu_result")?,
+    })
 }
 
 /// The command line that shows the menu window with these buttons.

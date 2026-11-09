@@ -47,7 +47,9 @@ const RECONNECT_DELAY_MS: u64 = 2000;
 /// /tmp/uscreen_capture.fifo with mode 0666, which let any local account read
 /// the raw frames off it.
 pub fn fifo_path() -> String {
-    crate::daemon::runtime::fifo_path().to_string_lossy().into_owned()
+    crate::daemon::runtime::fifo_path()
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Path of the frame FIFO for the n-th virtual display (instance 0 keeps the legacy name).

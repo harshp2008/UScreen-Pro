@@ -16,16 +16,16 @@ use tokio::signal;
 use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{error, info, warn};
 
+use crate::capture::encoders;
 use crate::cli::Cli;
 use crate::config::handler::{
     find_helper, get_pid_path, other_daemons, remove_pid_file_if_ours, run_control_server,
     sync_app_lock,
 };
+use crate::config::options;
+use crate::daemon::session::{adb_monitor, DaemonControlMsg, ExtraSessionTemplate};
 use crate::display::{edid, vdisplay};
 use crate::net::stream;
-use crate::daemon::session::{adb_monitor, DaemonControlMsg, ExtraSessionTemplate};
-use crate::capture::encoders;
-use crate::config::options;
 use crate::{capture, config, input};
 
 /// Execute the primary uscreen daemon event loop.

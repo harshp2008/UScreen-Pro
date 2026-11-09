@@ -199,7 +199,11 @@ impl InputServer {
                 loop {
                     let (mode, native, style) = {
                         let o = opts_rx.borrow_and_update();
-                        (o.input_mode, o.native_gestures_effective(), o.stylus_style.clone())
+                        (
+                            o.input_mode,
+                            o.native_gestures_effective(),
+                            o.stylus_style.clone(),
+                        )
                     };
                     // Tablet -> Mouse -> Touchpad, display <-> stylus, auto <-> tablet: whatever
                     // the old routing held (a pen button, a drag, a finger) must not outlive it.
@@ -285,7 +289,10 @@ fn latest_connection() -> &'static std::sync::Mutex<std::collections::HashMap<u3
 fn register_connection(instance: u32) -> u64 {
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
-    latest_connection().lock().unwrap_or_else(|e| e.into_inner()).insert(instance, id);
+    latest_connection()
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(instance, id);
     id
 }
 
@@ -568,9 +575,15 @@ mod connection_tests {
         let a = register_connection(901);
         assert!(is_latest_connection(901, a));
         let b = register_connection(901);
-        assert!(!is_latest_connection(901, a), "the old connection is superseded");
+        assert!(
+            !is_latest_connection(901, a),
+            "the old connection is superseded"
+        );
         assert!(is_latest_connection(901, b));
         let other = register_connection(902);
-        assert!(is_latest_connection(901, b) && is_latest_connection(902, other), "slots are independent");
+        assert!(
+            is_latest_connection(901, b) && is_latest_connection(902, other),
+            "slots are independent"
+        );
     }
 }

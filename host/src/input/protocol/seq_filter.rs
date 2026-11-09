@@ -159,11 +159,26 @@ mod seq_tests {
 
     #[test]
     fn classify_reads_type_and_action() {
-        assert_eq!(classify(r#"{"type":"pen","seq":42,"action":0}"#), Some((42, Down)));
-        assert_eq!(classify(r#"{"type":"pen","seq":43,"action":2}"#), Some((43, Move)));
-        assert_eq!(classify(r#"{"type":"pen","seq":44,"action":1}"#), Some((44, Up)));
-        assert_eq!(classify(r#"{"type":"pen","seq":45,"action":5}"#), Some((45, Other)));
-        assert_eq!(classify(r#"{"type":"rel","seq":46,"dx":1.0,"dy":0.0}"#), Some((46, Move)));
+        assert_eq!(
+            classify(r#"{"type":"pen","seq":42,"action":0}"#),
+            Some((42, Down))
+        );
+        assert_eq!(
+            classify(r#"{"type":"pen","seq":43,"action":2}"#),
+            Some((43, Move))
+        );
+        assert_eq!(
+            classify(r#"{"type":"pen","seq":44,"action":1}"#),
+            Some((44, Up))
+        );
+        assert_eq!(
+            classify(r#"{"type":"pen","seq":45,"action":5}"#),
+            Some((45, Other))
+        );
+        assert_eq!(
+            classify(r#"{"type":"rel","seq":46,"dx":1.0,"dy":0.0}"#),
+            Some((46, Move))
+        );
         assert_eq!(classify(r#"{"type":"pen","action":0}"#), None);
         assert_eq!(classify(r#"{"type":"pen","note":"seq","action":0}"#), None);
     }
@@ -172,7 +187,10 @@ mod seq_tests {
     fn frame_acks_are_not_input_and_never_move_the_filter() {
         // `rendered` carries the video frame counter in `seq`; it used to be taken for an input
         // number, so once the counter was ahead every real pen message was discarded.
-        assert_eq!(classify(r#"{"type":"rendered","seq":987654,"decode_us":300}"#), None);
+        assert_eq!(
+            classify(r#"{"type":"rendered","seq":987654,"decode_us":300}"#),
+            None
+        );
         let mut f = SeqFilter::default();
         assert!(f.accept(classify(r#"{"type":"rendered","seq":987654}"#)));
         assert!(f.accept(classify(r#"{"type":"pen","seq":3,"action":0}"#)));

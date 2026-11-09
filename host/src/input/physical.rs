@@ -67,7 +67,10 @@ pub(super) struct PhysState {
 impl PhysState {
     /// A state machine for a tablet with this axis range.
     pub fn new(range: AbsRange) -> Self {
-        Self { range, ..Self::default() }
+        Self {
+            range,
+            ..Self::default()
+        }
     }
 
     /// One raw event. Returns the samples it completes (only `SYN_REPORT` does).
@@ -195,7 +198,10 @@ pub(super) fn is_pen_tablet(name: &str, vendor: u16, abs: &[u16], keys: &[u16]) 
 /// `28bd:0931` as `(0x28bd, 0x0931)`; `None` for anything else (including the empty "first found").
 pub(super) fn parse_vid_pid(s: &str) -> Option<(u16, u16)> {
     let (v, p) = s.trim().split_once(':')?;
-    Some((u16::from_str_radix(v, 16).ok()?, u16::from_str_radix(p, 16).ok()?))
+    Some((
+        u16::from_str_radix(v, 16).ok()?,
+        u16::from_str_radix(p, 16).ok()?,
+    ))
 }
 
 /// The first evdev device that looks like a pen tablet (matching `want` as vendor:product when
@@ -251,7 +257,11 @@ fn read_range(dev: &Device) -> AbsRange {
 /// Run the physical tablet reader for the daemon's lifetime. It follows `physical_tablet_support`
 /// in `config.toml` live (checked every second), finds the pen, grabs it, and feeds the shared
 /// injector until the tablet is unplugged or support is switched off.
-pub(super) fn spawn(uinput: Arc<std::sync::Mutex<InjectDevices>>, instance: u32, running: Arc<AtomicBool>) {
+pub(super) fn spawn(
+    uinput: Arc<std::sync::Mutex<InjectDevices>>,
+    instance: u32,
+    running: Arc<AtomicBool>,
+) {
     let r = std::thread::Builder::new().name("uscreen-tablet".into()).spawn(move || {
         let mut told_x11 = false;
         while running.load(Ordering::SeqCst) {
@@ -323,7 +333,11 @@ fn read_loop(
                 return;
             }
         }
-        let mut pfd = libc::pollfd { fd: dev.as_raw_fd(), events: libc::POLLIN, revents: 0 };
+        let mut pfd = libc::pollfd {
+            fd: dev.as_raw_fd(),
+            events: libc::POLLIN,
+            revents: 0,
+        };
         // SAFETY: one valid pollfd for the duration of the call.
         let n = unsafe { libc::poll(&mut pfd, 1, 250) };
         if n <= 0 {
@@ -353,7 +367,12 @@ fn read_loop(
         let opts = crate::config::options::current_options(instance);
         if let Ok(mut g) = uinput.lock() {
             for s in &samples {
-                tracing::debug!("Physical tablet moved to {},{} (action {})", s.x, s.y, s.action);
+                tracing::debug!(
+                    "Physical tablet moved to {},{} (action {})",
+                    s.x,
+                    s.y,
+                    s.action
+                );
                 apply_physical(&mut g, &opts, s);
             }
         }
@@ -387,7 +406,12 @@ mod tests {
     use super::*;
 
     fn st() -> PhysState {
-        PhysState::new(AbsRange { x_max: 1000, y_max: 500, p_max: 8000, tilt_deg_per_unit: 0.5 })
+        PhysState::new(AbsRange {
+            x_max: 1000,
+            y_max: 500,
+            p_max: 8000,
+            tilt_deg_per_unit: 0.5,
+        })
     }
 
     fn syn(s: &mut PhysState) -> Vec<PenSample> {
@@ -412,14 +436,22 @@ mod tests {
         s.feed(EV_ABS, ABS_PRESSURE, 4000);
         let down = syn(&mut s);
         assert_eq!(actions(&down), vec![0]);
-        assert_eq!(down[0].pressure, PEN_PRESSURE_MAX / 2, "4000 of 8000 is half of the virtual axis");
+        assert_eq!(
+            down[0].pressure,
+            PEN_PRESSURE_MAX / 2,
+            "4000 of 8000 is half of the virtual axis"
+        );
         s.feed(EV_ABS, ABS_X, 600);
         assert_eq!(actions(&syn(&mut s)), vec![2]);
         s.feed(EV_KEY, BTN_TOUCH, 0);
         s.feed(EV_ABS, ABS_PRESSURE, 0);
         assert_eq!(actions(&syn(&mut s)), vec![1]);
         s.feed(EV_ABS, ABS_X, 620);
-        assert_eq!(actions(&syn(&mut s)), vec![3], "hovering again after the lift");
+        assert_eq!(
+            actions(&syn(&mut s)),
+            vec![3],
+            "hovering again after the lift"
+        );
         s.feed(EV_KEY, BTN_TOOL_PEN, 0);
         assert_eq!(actions(&syn(&mut s)), vec![4]);
         assert!(syn(&mut s).is_empty(), "nothing more once out of range");
@@ -480,12 +512,32 @@ mod tests {
     fn only_the_pen_interface_of_a_tablet_is_picked() {
         let abs = [ABS_X, ABS_Y, ABS_PRESSURE, ABS_TILT_X, ABS_TILT_Y];
         let keys = [BTN_TOOL_PEN, BTN_TOUCH, BTN_STYLUS];
-        assert!(is_pen_tablet("UGTABLET 6 inch PenTablet", 0x28bd, &abs, &keys));
+        assert!(is_pen_tablet(
+            "UGTABLET 6 inch PenTablet",
+            0x28bd,
+            &abs,
+            &keys
+        ));
         // The same tablet's other nodes: a mouse (relative) and a keyboard.
-        assert!(!is_pen_tablet("UGTABLET 6 inch PenTablet Mouse", 0x28bd, &[], &[BTN_LEFT]));
-        assert!(!is_pen_tablet("UGTABLET 6 inch PenTablet Keyboard", 0x28bd, &[], &[30]));
+        assert!(!is_pen_tablet(
+            "UGTABLET 6 inch PenTablet Mouse",
+            0x28bd,
+            &[],
+            &[BTN_LEFT]
+        ));
+        assert!(!is_pen_tablet(
+            "UGTABLET 6 inch PenTablet Keyboard",
+            0x28bd,
+            &[],
+            &[30]
+        ));
         // A touchscreen has no pen tool; our own virtual pen is never read back.
-        assert!(!is_pen_tablet("Touch", 0x1, &[ABS_X, ABS_Y, ABS_PRESSURE], &[BTN_TOUCH]));
+        assert!(!is_pen_tablet(
+            "Touch",
+            0x1,
+            &[ABS_X, ABS_Y, ABS_PRESSURE],
+            &[BTN_TOUCH]
+        ));
         assert!(!is_pen_tablet("UScreen Pen", UINPUT_VENDOR, &abs, &keys));
     }
 
@@ -500,9 +552,15 @@ mod tests {
     #[test]
     fn udev_rules_name_the_ids_in_lowercase_hex() {
         let (access, hide) = tablet_rules(0x28bd, 0x0931);
-        assert!(access.contains("ATTRS{idVendor}==\"28bd\"") && access.contains("ATTRS{idProduct}==\"0931\""));
+        assert!(
+            access.contains("ATTRS{idVendor}==\"28bd\"")
+                && access.contains("ATTRS{idProduct}==\"0931\"")
+        );
         assert!(access.contains("TAG+=\"uaccess\""));
-        assert!(hide.contains("ENV{ID_VENDOR_ID}==\"28bd\"") && hide.contains("ENV{ID_MODEL_ID}==\"0931\""));
+        assert!(
+            hide.contains("ENV{ID_VENDOR_ID}==\"28bd\"")
+                && hide.contains("ENV{ID_MODEL_ID}==\"0931\"")
+        );
         assert!(hide.contains("ENV{LIBINPUT_IGNORE_DEVICE}=\"1\""));
         // Rule lines (not comments) are single lines, as udev requires.
         for text in [&access, &hide] {

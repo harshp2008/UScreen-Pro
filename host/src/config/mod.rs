@@ -11,16 +11,16 @@
 //! * `profile` - `TabletProfile`: the per-device section of config.toml and its helpers
 //! * `clean` - normalisers for free-text config values and the serde default helpers
 
-mod limits;
+mod clean;
 mod curves;
+mod limits;
 mod modes;
 mod profile;
-mod clean;
-pub use limits::*;
+pub use clean::*;
 pub use curves::*;
+pub use limits::*;
 pub use modes::*;
 pub use profile::*;
-pub use clean::*;
 
 pub mod handler;
 pub mod options;
@@ -515,7 +515,10 @@ mod tests {
         let mut c = FileConfig::default();
         assert!(c.set_global_stylus(true));
         assert_eq!(c.input_mode, Some(InputMode::Stylus));
-        assert!(!c.set_global_stylus(true), "already Stylus: nothing to write");
+        assert!(
+            !c.set_global_stylus(true),
+            "already Stylus: nothing to write"
+        );
         assert!(c.set_global_stylus(false));
         assert_eq!(c.input_mode, Some(InputMode::Display));
         // A Touchpad default chosen separately survives the switch being turned off.

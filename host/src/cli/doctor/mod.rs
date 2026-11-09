@@ -14,16 +14,16 @@
 //! * `settings` - checks of the release version and of config.toml
 //! * `latency` - `uscreen doctor --latency`: end-to-end latency report and the mouse sweep
 
+mod display;
+mod latency;
+mod settings;
 mod system;
 mod tablet;
-mod display;
-mod settings;
-mod latency;
+use display::*;
+pub use latency::run_latency;
+use settings::*;
 use system::*;
 use tablet::*;
-use display::*;
-use settings::*;
-pub use latency::run_latency;
 
 use crate::capture::fifo_path;
 use crate::config::{self, FileConfig, MAX_BITRATE_KBPS, MAX_FPS};

@@ -252,6 +252,17 @@ export default class UScreenAppLockExtension extends Extension {
         this._menuCapture = null;
         this._menuTimeout = null;
         try {
+            // The host asks for the menu to close when a tap elsewhere ended (the shell cannot see
+            // taps that go to app windows).
+            this._closeMonitor = this._dataFile('menu_close').monitor_file(Gio.FileMonitorFlags.NONE, null);
+            this._closeMonitorId = this._closeMonitor.connect('changed', (mon, f, other, ev) => {
+                if (ev !== Gio.FileMonitorEvent.CHANGES_DONE_HINT && ev !== Gio.FileMonitorEvent.CREATED)
+                    return;
+                try {
+                    let [ok, bytes] = f.load_contents(null);
+                    this._finishMenu(Number(new TextDecoder().decode(bytes).trim()), 'none');
+                } catch (e) {}
+            });
             let file = this._dataFile('menu_request.json');
             this._menuMonitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null);
             this._menuMonitorId = this._menuMonitor.connect('changed', (mon, f, other, ev) => {
@@ -265,6 +276,11 @@ export default class UScreenAppLockExtension extends Extension {
 
     _teardownPenMenu() {
         this._removeMenu();
+        if (this._closeMonitor) {
+            try { this._closeMonitor.disconnect(this._closeMonitorId); } catch (e) {}
+            this._closeMonitor.cancel();
+            this._closeMonitor = null;
+        }
         if (this._menuMonitor) {
             try { this._menuMonitor.disconnect(this._menuMonitorId); } catch (e) {}
             this._menuMonitor.cancel();
