@@ -4,25 +4,33 @@
 //! The rest of the host (input routing, the pen menu) never asks "is this GNOME?"; it asks the
 //! backend what it can do ([`Capabilities`]) and degrades when the answer is "nothing":
 //!
+//! One directory per desktop; each holds everything that desktop needs (`mod.rs`: the
+//! [`DesktopBackend`]; `display.rs`: enabling, placing and mapping the virtual monitor; helpers):
+//!
 //! * `gnome` - GNOME Shell on Wayland, through the `uscreen-app-lock` Shell extension.
-//! * `x11` - any X11 session (`_NET_ACTIVE_WINDOW`).
+//! * `x11` - any X11 session (`_NET_ACTIVE_WINDOW`, RandR).
+//! * `kde` - KDE Plasma: virtual monitor through KWin and the on-screen keyboard policy. No backend
+//!   yet, so the pen menu and focus routing fall back to `generic`.
+//! * `hyprland`, `cosmic` - virtual monitor placement only, for the same reason.
 //! * `generic` - an unknown desktop: reads the same focus file a helper script may write, otherwise
 //!   knows nothing. Every feature that needs the desktop is simply unavailable there.
 //!
-//! To support a new desktop add one file here that implements [`DesktopBackend`], and pick it in
-//! [`detect`]. See `docs/desktop-backends.md`.
+//! To support a new desktop add one directory here whose `mod.rs` implements [`DesktopBackend`], and
+//! pick it in [`detect`]. See `docs/adding-support.md` and `docs/desktop-backends.md`.
 
 mod context;
+pub mod cosmic;
 mod focus_file;
 mod generic;
-mod gnome;
-mod spawn_at;
-mod x11;
+pub mod gnome;
+pub mod hyprland;
+pub mod kde;
+pub mod x11;
 
 #[cfg(test)]
 pub use context::Rect;
 pub use context::{PointerContext, Zone};
-pub use spawn_at::WindowRef;
+pub use gnome::spawn_at::WindowRef;
 use std::time::Duration;
 
 use serde::Deserialize;

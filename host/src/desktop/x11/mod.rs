@@ -1,6 +1,8 @@
 //! X11 sessions: the focused app is the `_NET_ACTIVE_WINDOW` property of the root window and its
 //! `WM_CLASS`, read over x11rb.
 
+pub mod display;
+
 use super::{AppIdentity, Capabilities, DesktopBackend, FocusUpdate};
 
 /// `_NET_ACTIVE_WINDOW` and `WM_CLASS` over x11rb, for X11 sessions.

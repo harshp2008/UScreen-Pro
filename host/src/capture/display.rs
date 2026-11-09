@@ -86,20 +86,20 @@ impl CaptureManager {
             warn!("No EVDI connector found in sysfs — cannot enable the virtual display");
             return;
         }
-        if crate::display::hyprland::active() {
-            crate::display::hyprland::enable_output(&evdi_names, position).await;
+        if crate::desktop::hyprland::display::active() {
+            crate::desktop::hyprland::display::enable_output(&evdi_names, position).await;
             return;
         }
-        if crate::display::cosmic::active() {
-            crate::display::cosmic::enable_output(&evdi_names).await;
+        if crate::desktop::cosmic::display::active() {
+            crate::desktop::cosmic::display::enable_output(&evdi_names).await;
             return;
         }
         // GNOME places and switches on a new monitor by itself.
-        if crate::display::gnome::active() {
+        if crate::desktop::gnome::display::active() {
             return;
         }
-        if crate::display::x11::active() {
-            crate::display::x11::enable_output(&evdi_names, position).await;
+        if crate::desktop::x11::display::active() {
+            crate::desktop::x11::display::enable_output(&evdi_names, position).await;
             return;
         }
 
@@ -288,19 +288,19 @@ impl CaptureManager {
         if evdi_names.is_empty() {
             return;
         }
-        if crate::display::hyprland::active() {
-            crate::display::hyprland::disable_output(&evdi_names).await;
+        if crate::desktop::hyprland::display::active() {
+            crate::desktop::hyprland::display::disable_output(&evdi_names).await;
             return;
         }
-        if crate::display::cosmic::active() {
-            crate::display::cosmic::disable_output(&evdi_names).await;
+        if crate::desktop::cosmic::display::active() {
+            crate::desktop::cosmic::display::disable_output(&evdi_names).await;
             return;
         }
-        if crate::display::gnome::active() {
+        if crate::desktop::gnome::display::active() {
             return;
         }
-        if crate::display::x11::active() {
-            crate::display::x11::disable_output(&evdi_names).await;
+        if crate::desktop::x11::display::active() {
+            crate::desktop::x11::display::disable_output(&evdi_names).await;
             return;
         }
         let Ok(o) = tokio::process::Command::new("kscreen-doctor")

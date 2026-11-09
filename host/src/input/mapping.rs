@@ -50,7 +50,7 @@ pub(super) async fn primary_non_evdi_output() -> Option<String> {
 
 /// Read one property of a KWin input device by its sysname.
 pub(super) async fn kwin_device_property(sysname: &str, property: &str) -> Option<String> {
-    crate::display::kwin::get_property(
+    crate::desktop::kde::display::get_property(
         &format!("/org/kde/KWin/InputDevice/{}", sysname),
         KWIN_INPUT_IFACE,
         property,
@@ -77,13 +77,13 @@ pub(super) async fn map_devices_to_output(
     ident: &DeviceIdentity,
     card: Option<u32>,
 ) -> Option<String> {
-    if crate::display::hyprland::active() {
+    if crate::desktop::hyprland::display::active() {
         return map_devices_on_hyprland(pen_only, ident, card).await;
     }
-    if crate::display::gnome::active() {
+    if crate::desktop::gnome::display::active() {
         return map_devices_on_gnome(pen_only, ident, card).await;
     }
-    if crate::display::x11::active() {
+    if crate::desktop::x11::display::active() {
         return map_devices_on_x11(pen_only, ident, card).await;
     }
     let Some(output) = target_output(pen_only, card, std::time::Duration::from_secs(10)).await
@@ -104,7 +104,7 @@ pub(super) async fn map_devices_to_output(
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         }
 
-        let Some(devices) = crate::display::kwin::list_strings(
+        let Some(devices) = crate::desktop::kde::display::list_strings(
             "/org/kde/KWin/InputDevice",
             "org.kde.KWin.InputDeviceManager",
             "devicesSysNames",
@@ -123,7 +123,7 @@ pub(super) async fn map_devices_to_output(
             if !ident.owns(&name) {
                 continue;
             }
-            let ok = crate::display::kwin::set_property(
+            let ok = crate::desktop::kde::display::set_property(
                 &format!("/org/kde/KWin/InputDevice/{}", sysname),
                 KWIN_INPUT_IFACE,
                 "outputName",
@@ -176,14 +176,14 @@ pub(super) async fn map_devices_on_hyprland(
     let connectors = crate::display::vdisplay::evdi_connectors();
     let output = if pen_only {
         let all: Vec<String> = connectors.into_iter().map(|c| c.name).collect();
-        crate::display::hyprland::primary_output(&all).await
+        crate::desktop::hyprland::display::primary_output(&all).await
     } else {
         let mine: Vec<String> = connectors
             .into_iter()
             .filter(|c| card.is_none_or(|want| c.card == want))
             .map(|c| c.name)
             .collect();
-        crate::display::hyprland::wait_on(&mine, std::time::Duration::from_secs(10)).await
+        crate::desktop::hyprland::display::wait_on(&mine, std::time::Duration::from_secs(10)).await
     };
     let Some(output) = output else {
         warn!("Hyprland has no output to map onto — touch and pen will address the whole desktop");
@@ -194,7 +194,7 @@ pub(super) async fn map_devices_on_hyprland(
         if attempt > 0 {
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         }
-        if crate::display::hyprland::map_devices(&names, &output).await >= names.len() {
+        if crate::desktop::hyprland::display::map_devices(&names, &output).await >= names.len() {
             return Some(output);
         }
     }
@@ -203,7 +203,7 @@ pub(super) async fn map_devices_on_hyprland(
 }
 
 /// GNOME on Wayland: per-device settings keyed on the EDID triple; see
-/// `display/gnome.rs`. The plain pointer has no such setting, so it keeps whatever
+/// `desktop/gnome/display.rs`. The plain pointer has no such setting, so it keeps whatever
 /// GNOME does with an absolute pointer.
 pub(super) async fn map_devices_on_gnome(
     pen_only: bool,
@@ -215,7 +215,7 @@ pub(super) async fn map_devices_on_gnome(
         .filter(|c| card.is_none_or(|want| c.card == want))
         .map(|c| c.name)
         .collect();
-    crate::display::gnome::map_devices(
+    crate::desktop::gnome::display::map_devices(
         UINPUT_VENDOR,
         ident.product_touch,
         ident.product_pen,
@@ -225,7 +225,7 @@ pub(super) async fn map_devices_on_gnome(
     .await
 }
 
-/// Real X11 sessions other than Plasma: `xinput map-to-output`; see `display/x11.rs`.
+/// Real X11 sessions other than Plasma: `xinput map-to-output`; see `desktop/x11/display.rs`.
 pub(super) async fn map_devices_on_x11(
     pen_only: bool,
     ident: &DeviceIdentity,
@@ -234,14 +234,14 @@ pub(super) async fn map_devices_on_x11(
     let connectors = crate::display::vdisplay::evdi_connectors();
     let output = if pen_only {
         let all: Vec<String> = connectors.into_iter().map(|c| c.name).collect();
-        crate::display::x11::primary_output(&all).await
+        crate::desktop::x11::display::primary_output(&all).await
     } else {
         let mine: Vec<String> = connectors
             .into_iter()
             .filter(|c| card.is_none_or(|want| c.card == want))
             .map(|c| c.name)
             .collect();
-        crate::display::x11::wait_active(&mine, std::time::Duration::from_secs(10)).await
+        crate::desktop::x11::display::wait_active(&mine, std::time::Duration::from_secs(10)).await
     };
     let Some(output) = output else {
         warn!("X11 has no output to map onto — touch and pen will address the whole desktop");
@@ -253,7 +253,7 @@ pub(super) async fn map_devices_on_x11(
         .unwrap_or_default()
         .to_uppercase()
         .contains("CINNAMON")
-        && !crate::display::gnome::map_cinnamon_devices(
+        && !crate::desktop::gnome::display::map_cinnamon_devices(
             UINPUT_VENDOR,
             ident.product_touch,
             ident.product_pen,
@@ -271,7 +271,7 @@ pub(super) async fn map_devices_on_x11(
         if attempt > 0 {
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         }
-        if crate::display::x11::map_devices(&names, &output).await >= names.len() {
+        if crate::desktop::x11::display::map_devices(&names, &output).await >= names.len() {
             return Some(output);
         }
     }
@@ -288,16 +288,18 @@ pub(super) async fn map_and_note_area(
 ) {
     let output = map_devices_to_output(pen_only, ident, card).await;
     let area = match output.as_deref() {
-        Some(o) if crate::display::hyprland::active() => {
-            crate::display::hyprland::output_area(o).await
+        Some(o) if crate::desktop::hyprland::display::active() => {
+            crate::desktop::hyprland::display::output_area(o).await
         }
-        Some(o) if crate::display::gnome::active() => crate::display::gnome::output_area(o).await,
-        Some(_) if crate::display::x11::active() => None,
+        Some(o) if crate::desktop::gnome::display::active() => {
+            crate::desktop::gnome::display::output_area(o).await
+        }
+        Some(_) if crate::desktop::x11::display::active() => None,
         Some(o) => output_area_on_desktop(o).await,
         None => None,
     };
-    let snap_grid = if crate::display::gnome::active() {
-        crate::display::gnome::desktop_pixels().await
+    let snap_grid = if crate::desktop::gnome::display::active() {
+        crate::desktop::gnome::display::desktop_pixels().await
     } else {
         None
     };

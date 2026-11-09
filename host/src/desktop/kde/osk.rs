@@ -34,7 +34,7 @@ fn state_path() -> PathBuf {
 
 /// KWin's current on-screen-keyboard mode, if it can be read.
 async fn get_mode() -> Option<String> {
-    let raw = crate::display::kwin::get_property(OBJECT, IFACE, "mode").await?;
+    let raw = crate::desktop::kde::display::get_property(OBJECT, IFACE, "mode").await?;
     let digits: String = raw.chars().filter(|c| c.is_ascii_digit()).collect();
     (!digits.is_empty()).then_some(digits)
 }
@@ -42,12 +42,12 @@ async fn get_mode() -> Option<String> {
 /// Set KWin's on-screen-keyboard mode; true on success.
 async fn set_mode(mode: &str) -> bool {
     // `mode` is a D-Bus int32; busctl needs to be told so.
-    crate::display::kwin::set_property(OBJECT, IFACE, "mode", "i", mode).await
+    crate::desktop::kde::display::set_property(OBJECT, IFACE, "mode", "i", mode).await
 }
 
 /// Turn the on-screen keyboard off, remembering how it was set.
 pub async fn disable() {
-    if !crate::display::kwin::in_kde_session() {
+    if !crate::desktop::kde::display::in_kde_session() {
         return;
     }
     let path = state_path();
@@ -77,7 +77,7 @@ pub async fn disable() {
 
 /// Put the on-screen keyboard back the way the user had it.
 pub async fn restore() {
-    if !crate::display::kwin::in_kde_session() {
+    if !crate::desktop::kde::display::in_kde_session() {
         return;
     }
     let path = state_path();

@@ -27,8 +27,8 @@ pub(super) async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
     }
 
     let names: Vec<&str> = connectors.iter().map(|c| c.name.as_str()).collect();
-    if crate::display::hyprland::active() {
-        let Some(monitors) = crate::display::hyprland::monitors().await else {
+    if crate::desktop::hyprland::display::active() {
+        let Some(monitors) = crate::desktop::hyprland::display::monitors().await else {
             r.line(Level::Warn, "Hyprland", "hyprctl did not answer");
             return;
         };
@@ -122,7 +122,7 @@ pub(super) fn kwin_version(text: &str) -> Option<(u32, u32, u32)> {
 /// should quietly decide on the user's behalf.
 pub(super) async fn check_osk(r: &mut Report) {
     // Hyprland has no KWin to ask; hyprctl does the mapping there.
-    if crate::display::hyprland::active() {
+    if crate::desktop::hyprland::display::active() {
         r.line(
             Level::Ok,
             "Hyprland",
@@ -130,7 +130,7 @@ pub(super) async fn check_osk(r: &mut Report) {
         );
         return;
     }
-    if crate::display::gnome::active() {
+    if crate::desktop::gnome::display::active() {
         r.line(
             Level::Ok,
             "GNOME",
@@ -138,7 +138,7 @@ pub(super) async fn check_osk(r: &mut Report) {
         );
         return;
     }
-    if crate::display::x11::active() {
+    if crate::desktop::x11::display::active() {
         r.line(
             Level::Ok,
             "X11",
@@ -170,7 +170,7 @@ pub(super) async fn check_osk(r: &mut Report) {
     }
     // Whether we can reach KWin at all decides whether touch and pen land on
     // the tablet's screen, so it is reported first and in its own right.
-    match crate::display::kwin::backend().await {
+    match crate::desktop::kde::display::backend().await {
         Some(b) => r.line(
             Level::Ok,
             "KWin D-Bus",
@@ -214,7 +214,7 @@ pub(super) async fn check_osk(r: &mut Report) {
 
     // The live value, not the one in kwinrc: KWin does not re-read that file,
     // so the two disagree routinely and only this one reflects what happens.
-    let Some(raw) = crate::display::kwin::get_property(
+    let Some(raw) = crate::desktop::kde::display::get_property(
         "/VirtualKeyboard",
         "org.kde.kwin.VirtualKeyboard",
         "mode",

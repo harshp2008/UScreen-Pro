@@ -139,7 +139,7 @@ impl InputServer {
             let initial = *mode_rx.borrow_and_update();
             let card0 = *card_rx.borrow_and_update();
             // RandR changes (Xorg re-numbering or moving the virtual output) re-run the mapping.
-            let mut output_changes = crate::display::x11::output_changes();
+            let mut output_changes = crate::desktop::x11::display::output_changes();
             // The first mapping waits for the virtual display to be enabled
             // like every later one, so it runs in the background rather than
             // holding up the accept loop below.

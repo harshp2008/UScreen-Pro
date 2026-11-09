@@ -26,7 +26,7 @@ fn command_exists(name: &str) -> bool {
 }
 
 /// A GNOME Wayland session with the two tools this needs. On GNOME's X11
-/// session `display/x11.rs` does the mapping instead.
+/// session `desktop/x11/display.rs` does the mapping instead.
 pub fn active() -> bool {
     let desktop = std::env::var("XDG_CURRENT_DESKTOP")
         .unwrap_or_default()

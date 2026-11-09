@@ -3,10 +3,12 @@
 //! backend reads that file. It also asks the extension for the pointer context (`context_request` /
 //! `context.json`) and places windows with the `spawn-at` command. Verified on GNOME 46 (Ubuntu 24.04) only.
 
+pub mod display;
+pub mod spawn_at;
+
 use super::focus_file::FocusFile;
 use super::{
-    data_file, spawn_at, Capabilities, DesktopBackend, FocusUpdate, MenuRequest, PointerContext,
-    WindowRef,
+    data_file, Capabilities, DesktopBackend, FocusUpdate, MenuRequest, PointerContext, WindowRef,
 };
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 

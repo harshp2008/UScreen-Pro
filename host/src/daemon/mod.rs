@@ -5,7 +5,6 @@
 //! monitor, the tray icon and the Unix control socket the GUI talks to.
 
 pub mod guard;
-pub mod osk;
 pub mod runtime;
 pub mod session;
 pub mod tray;
@@ -208,7 +207,7 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
 
     let (video_tx, _) = broadcast::channel(8);
 
-    osk::disable().await;
+    crate::desktop::kde::osk::disable().await;
 
     info!("=== uscreen daemon starting ===");
     info!("  Resolution: {}x{} @ {}fps", width, height, fps);
@@ -527,7 +526,7 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
         warn!("Capture pipeline did not stop within 5s");
     }
 
-    osk::restore().await;
+    crate::desktop::kde::osk::restore().await;
 
     stream_handle.abort();
     input_handle.abort();

@@ -12,11 +12,11 @@ pub(super) async fn check_tools(r: &mut Report, cfg: &FileConfig) {
             r.line(Level::Fail, tool, "not installed");
             r.hint(&format!("install {} with your package manager", tool));
         } else {
-            if crate::display::hyprland::active() {
+            if crate::desktop::hyprland::display::active() {
                 r.line(Level::Ok, tool, "not needed on Hyprland (hyprctl is used)");
-            } else if crate::display::gnome::active()
-                || crate::display::x11::active()
-                || crate::display::cosmic::active()
+            } else if crate::desktop::gnome::display::active()
+                || crate::desktop::x11::display::active()
+                || crate::desktop::cosmic::display::active()
             {
                 r.line(Level::Ok, tool, "not needed on this desktop");
             } else {
