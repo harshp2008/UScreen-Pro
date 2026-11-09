@@ -67,7 +67,9 @@ install_deps() {
             sudo apt-get install -y ffmpeg adb libevdi1 libevdi-dev || \
             sudo apt-get install -y ffmpeg android-tools-adb libevdi1 || \
                 warn "Check the package names for your release"
-            sudo apt-get install -y evdi-dkms || \
+            # An EVDI module for this kernel that already loads is enough; a dkms rebuild of the
+            # distro's older source can fail on a new kernel and would leave dpkg half-configured.
+            modinfo evdi >/dev/null 2>&1 || sudo apt-get install -y evdi-dkms || \
                 warn "evdi-dkms did not install — you may need linux-headers-$(uname -r)"
             ;;
         *arch*|*manjaro*|*endeavouros*|*cachyos*)
@@ -264,7 +266,7 @@ system_setup() {
 # The pen menu window is a GTK 4 program: make sure the runtime library is there. Best effort; the
 # menu is optional and a failure here never stops the install.
 install_menu_runtime() {
-    if ldconfig -p 2>/dev/null | grep -q "libgtk-4.so"; then
+    if ldconfig -p 2>/dev/null | grep -q "libgtk-4.so" || dpkg -s libgtk-4-1 >/dev/null 2>&1; then
         return 0
     fi
     . /etc/os-release 2>/dev/null || true
