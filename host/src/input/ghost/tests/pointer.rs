@@ -291,3 +291,37 @@ fn range_exit_releases_a_held_tip() {
     assert_eq!(d.pen_mouse_buttons, 0);
     assert_eq!(d.tip, Tip::None);
 }
+
+#[test]
+fn the_pointer_only_ever_lands_on_whole_pixels_when_the_screen_size_is_known() {
+    // Fractional positions leave stale "ghost" cursor images behind with software cursors, so the
+    // absolute pointer is snapped to the panel's pixel grid (here 1920 x 1080).
+    let (mut d, pp, qp) = rig();
+    d.snap_grid = Some((1920.0, 1080.0));
+    for i in 0..400 {
+        d.ghost_place_pointer(10_000 + i * 53 + (i % 7), 20_000 + i * 31 + (i % 5));
+    }
+    let ptr = frames(&qp);
+    done(&[&pp, &qp]);
+    let px = |v: i32, n: f64| {
+        let c = v as f64 / COORD_MAX as f64 * (n - 1.0);
+        (c - c.round()).abs()
+    };
+    let abs_vals = |code: u16| -> Vec<i32> {
+        ptr.iter().flatten().filter(|e| e.0 == EV_ABS && e.1 == code).map(|e| e.2).collect()
+    };
+    let (xs_, ys_) = (abs_vals(ABS_X), abs_vals(ABS_Y));
+    assert!(!xs_.is_empty());
+    assert!(xs_.iter().all(|&v| px(v, 1920.0) < 0.02), "x lands between pixels");
+    assert!(ys_.iter().all(|&v| px(v, 1080.0) < 0.02), "y lands between pixels");
+}
+
+#[test]
+fn without_a_known_screen_size_positions_are_left_alone() {
+    let (mut d, pp, qp) = rig();
+    d.snap_grid = None;
+    d.ghost_place_pointer(12_345, 23_456);
+    let ptr = frames(&qp);
+    done(&[&pp, &qp]);
+    assert!(xs(&ptr).contains(&12_345));
+}
