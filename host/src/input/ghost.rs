@@ -454,34 +454,40 @@ impl InjectDevices {
         }
         match s.action {
             0 => {
-                self.ghost_place_pointer(s.x, s.y);
                 if open {
                     if self.auto_last_at.is_some_and(|t| t.elapsed() < AUTO_STALE_STROKE) {
                         // The same press again: the drag goes on, nothing is released or pressed.
+                        self.auto_stroke_pointer(s);
                         self.auto_continue(s);
                         return;
                     }
                     warn!("Pen DOWN with a stale stroke open (its UP was lost): closing it first");
+                    self.ghost_place_pointer(s.x, s.y);
                     self.auto_end_stroke(s);
+                } else {
+                    self.ghost_place_pointer(s.x, s.y);
                 }
                 self.auto_begin(s, to_pen);
             }
             2 => {
-                self.ghost_place_pointer(s.x, s.y);
                 if open {
+                    self.auto_stroke_pointer(s);
                     self.auto_continue(s);
-                } else if !s.eraser && self.auto_up_at.is_none_or(|t| t.elapsed() >= AUTO_LIFT_QUIET) {
-                    warn!("Pen MOVE with no stroke open (its DOWN was lost): starting the stroke");
-                    self.auto_begin(s, to_pen);
                 } else {
-                    self.auto_hover(s, to_pen);
+                    self.ghost_place_pointer(s.x, s.y);
+                    if !s.eraser && self.auto_up_at.is_none_or(|t| t.elapsed() >= AUTO_LIFT_QUIET) {
+                        warn!("Pen MOVE with no stroke open (its DOWN was lost): starting the stroke");
+                        self.auto_begin(s, to_pen);
+                    } else {
+                        self.auto_hover(s, to_pen);
+                    }
                 }
                 self.last_pen_pos = (s.x, s.y);
             }
             3 => {
                 if open {
                     // A hover inside a stroke: the cursor follows, nothing else.
-                    self.ghost_place_pointer(s.x, s.y);
+                    self.auto_stroke_pointer(s);
                     self.last_pen_pos = (s.x, s.y);
                     return;
                 }
@@ -506,7 +512,10 @@ impl InjectDevices {
                 }
             }
             1 => {
-                self.ghost_place_pointer(s.x, s.y);
+                // A lift inside the click slop releases where the tip landed.
+                if !(open && self.slop_anchor.is_some()) {
+                    self.ghost_place_pointer(s.x, s.y);
+                }
                 self.auto_end_stroke(s);
                 // Whatever the lift did not manage to let go of, let go of now (only what is held:
                 // the tablet device is not written to when it is idle).
@@ -554,6 +563,7 @@ impl InjectDevices {
         let now = Instant::now();
         self.auto_down_at = Some(now);
         self.auto_last_at = Some(now);
+        self.slop_anchor = (self.tip == Tip::Pointer).then_some((s.x, s.y));
         match self.tip {
             // Tool, X/Y, tilt, then BTN_TOUCH with the real pressure (see `inject_pen`).
             Tip::Pen => self.ghost_tablet(s, 0),
@@ -564,6 +574,20 @@ impl InjectDevices {
             Tip::None => self.ghost_tool_away(s),
         }
         self.last_pen_pos = (s.x, s.y);
+    }
+
+    /// Move the pointer for a sample of the open stroke: held at the press point while the pen stays
+    /// inside the click slop, following normally from the moment it leaves it (and never held
+    /// again for this stroke).
+    fn auto_stroke_pointer(&mut self, s: &PenSample) {
+        if let Some(anchor) = self.slop_anchor {
+            let inside = super::stillness::dist_mm(anchor, (s.x, s.y), self.tablet_mm) <= self.still_cfg.click_slop_mm;
+            if inside {
+                return;
+            }
+            self.slop_anchor = None;
+        }
+        self.ghost_place_pointer(s.x, s.y);
     }
 
     /// One more sample of the open stroke, on the route it started on.
@@ -602,6 +626,7 @@ impl InjectDevices {
         self.ghost_end_stroke(s);
         self.auto_down_at = None;
         self.auto_last_at = None;
+        self.slop_anchor = None;
     }
 
     /// Called from the ticker: the focus can change while the pen holds still (no samples). With no
@@ -1111,23 +1136,23 @@ mod tests {
         // Android: hover, range exit just before the touch-down, down, moves, up. Unknown focus is
         // the same route (`to_pen == false`).
         let (mut d, pp, qp) = rig();
-        auto(&mut d, 3, 90, false);
+        auto(&mut d, 3, 9000, false);
         auto(&mut d, 4, 0, false);
-        auto(&mut d, 0, 100, false);
+        auto(&mut d, 0, 10000, false);
         for i in 1..=4 {
-            auto(&mut d, 2, 100 + i * 10, false);
+            auto(&mut d, 2, 10000 + i * 1000, false);
         }
-        auto(&mut d, 1, 140, false);
+        auto(&mut d, 1, 14000, false);
         let (pen, ptr) = (frames(&pp), frames(&qp));
         done(&[&pp, &qp]);
         assert!(pen.iter().flatten().next().is_none(), "the tablet device gets nothing at all on the mouse route");
         assert_eq!(left_events(&ptr), vec![1, 0], "one press, no extra press or release during the drag, one release");
         let press = ptr.iter().position(|f| f.contains(&(EV_KEY, BTN_LEFT, 1))).unwrap();
-        let at_down = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 100))).unwrap();
+        let at_down = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 10000))).unwrap();
         assert!(at_down < press, "ABS_X/Y reach the pointer before BTN_LEFT goes down");
         let release = ptr.iter().position(|f| f.contains(&(EV_KEY, BTN_LEFT, 0))).unwrap();
         for i in 1..=4 {
-            let m = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 100 + i * 10))).unwrap();
+            let m = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 10000 + i * 1000))).unwrap();
             assert!(press < m && m < release, "move {} is between the press and the release", i);
         }
         assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
@@ -1212,16 +1237,16 @@ mod tests {
     #[test]
     fn auto_a_repeated_down_in_mid_drag_is_a_move_not_a_release_and_press() {
         let (mut d, pp, qp) = rig();
-        auto(&mut d, 3, 10, false);
-        auto(&mut d, 0, 10, false);
-        auto(&mut d, 2, 20, false);
-        auto(&mut d, 0, 30, false); // a DOWN again, long after the first? no: while the drag runs
-        auto(&mut d, 2, 40, false);
-        auto(&mut d, 1, 40, false);
+        auto(&mut d, 3, 1000, false);
+        auto(&mut d, 0, 1000, false);
+        auto(&mut d, 2, 2000, false);
+        auto(&mut d, 0, 3000, false); // a DOWN again, long after the first? no: while the drag runs
+        auto(&mut d, 2, 4000, false);
+        auto(&mut d, 1, 4000, false);
         let ptr = frames(&qp);
         done(&[&pp, &qp]);
         assert_eq!(left_events(&ptr), vec![1, 0], "the hold is never interrupted");
-        assert!(has(&ptr, (EV_ABS, ABS_X, 30)), "the repeated DOWN's position still moves the cursor");
+        assert!(has(&ptr, (EV_ABS, ABS_X, 3000)), "the repeated DOWN's position still moves the cursor");
     }
 
     #[test]
@@ -1340,6 +1365,66 @@ mod tests {
         let pen = frames(&pp);
         done(&[&pp, &qp]);
         assert!(has(&pen, (EV_KEY, BTN_STYLUS, 1)), "art route: the tablet's barrel button");
+    }
+
+    // ---- Click slop (mouse route) ----
+
+    fn xs(f: &[Vec<(u16, u16, i32)>]) -> Vec<i32> {
+        f.iter().flat_map(|fr| fr.iter().filter(|e| e.1 == ABS_X).map(|e| e.2)).collect()
+    }
+
+    #[test]
+    fn slop_a_wobble_inside_the_zone_never_reaches_the_pointer_and_the_lift_releases_at_the_press_point() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 3, 5000, false);
+        auto(&mut d, 0, 5000, false);
+        let before = xs(&frames(&qp)).len();
+        for dx in [60, -80, 120, -100, 150] {
+            auto(&mut d, 2, 5000 + dx, false); // under 1 mm
+        }
+        auto(&mut d, 1, 5100, false);
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        assert_eq!(xs(&ptr).len(), before, "no pointer motion while inside the slop, not even at the lift");
+        assert_eq!(left_events(&ptr), vec![1, 0], "a clean click");
+    }
+
+    #[test]
+    fn slop_leaving_the_zone_releases_the_pointer_for_the_rest_of_the_stroke() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 0, 5000, false);
+        auto(&mut d, 2, 5100, false); // inside
+        auto(&mut d, 2, 8000, false); // ~12 mm: out
+        auto(&mut d, 2, 5050, false); // back near the start: it is a drag now, so it follows
+        auto(&mut d, 1, 5050, false);
+        let ptr = frames(&qp);
+        done(&[&pp, &qp]);
+        let x = xs(&ptr);
+        assert!(x.contains(&8000) && x.last() == Some(&5050), "{:?}", x);
+        assert!(!x.contains(&5100), "the wobble inside the zone was held");
+    }
+
+    #[test]
+    fn slop_does_not_apply_on_the_art_route() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 0, 5000, true);
+        auto(&mut d, 2, 5060, true);
+        let ptr = frames(&qp);
+        let pen = frames(&pp);
+        done(&[&pp, &qp]);
+        assert!(xs(&ptr).contains(&5060), "the cursor follows every sample");
+        assert!(has(&pen, (EV_ABS, ABS_X, 5060)), "and so does the tablet");
+    }
+
+    #[test]
+    fn slop_is_cleared_when_the_stroke_ends() {
+        let (mut d, pp, qp) = rig();
+        auto(&mut d, 0, 5000, false);
+        auto(&mut d, 1, 5000, false);
+        assert!(d.slop_anchor.is_none());
+        auto(&mut d, 3, 5030, false);
+        assert!(xs(&frames(&qp)).contains(&5030), "hovering follows at once");
+        done(&[&pp, &qp]);
     }
 
     // ---- Resting pen: parked hover writes nothing ----

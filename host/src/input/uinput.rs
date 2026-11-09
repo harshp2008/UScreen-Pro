@@ -1068,6 +1068,8 @@ pub(super) struct InjectDevices {
     pub(super) auto_last_at: Option<std::time::Instant>,
     /// Auto mode: when the last stroke was lifted.
     pub(super) auto_up_at: Option<std::time::Instant>,
+    /// Auto mode, mouse route: where the tip landed, while the pointer is held there (click slop).
+    pub(super) slop_anchor: Option<(i32, i32)>,
     /// Auto mode: parks a pen that rests near the glass, so it stops taking the cursor.
     pub(super) hover_filter: super::stillness::HoverFilter,
     /// Thresholds of the hover filter.
@@ -1114,6 +1116,7 @@ impl InjectDevices {
             auto_down_at: None,
             auto_last_at: None,
             auto_up_at: None,
+            slop_anchor: None,
             hover_filter: Default::default(),
             still_cfg: Default::default(),
             tablet_mm: (266.0, 166.0),
@@ -1421,6 +1424,7 @@ impl InjectDevices {
             self.auto_exit_at = None;
             self.auto_down_at = None;
             self.auto_last_at = None;
+            self.slop_anchor = None;
         }
     }
 

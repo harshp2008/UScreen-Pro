@@ -20,11 +20,20 @@ pub(super) struct StillCfg {
     pub park_after: Duration,
     /// A parked pen wakes when it gets farther than this from where it was parked.
     pub wake_radius_mm: f64,
+    /// Click slop: after the tip lands on the mouse route, the pointer stays at the press point
+    /// until the pen gets farther than this from it (a hand wobbles when the tip lands, and an app
+    /// reads a few pixels of movement with the button down as the start of a drag).
+    pub click_slop_mm: f64,
 }
 
 impl Default for StillCfg {
     fn default() -> Self {
-        Self { park_radius_mm: 1.5, park_after: Duration::from_millis(300), wake_radius_mm: 5.0 }
+        Self {
+            park_radius_mm: 1.5,
+            park_after: Duration::from_millis(300),
+            wake_radius_mm: 5.0,
+            click_slop_mm: 2.0,
+        }
     }
 }
 
@@ -51,7 +60,7 @@ pub(super) struct HoverFilter {
 /// Position range of the normalised pen coordinates.
 const SPAN: f64 = 65536.0;
 
-fn dist_mm(a: (i32, i32), b: (i32, i32), mm: (f64, f64)) -> f64 {
+pub(super) fn dist_mm(a: (i32, i32), b: (i32, i32), mm: (f64, f64)) -> f64 {
     let dx = (a.0 - b.0) as f64 * mm.0 / SPAN;
     let dy = (a.1 - b.1) as f64 * mm.1 / SPAN;
     dx.hypot(dy)

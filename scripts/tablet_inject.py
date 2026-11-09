@@ -281,6 +281,27 @@ class Tablet:
         self.pen_frame(ex, ey, in_range=False)
         time.sleep(0.25)
 
+    def pen_tap(self, x, y, ms, amp):
+        """A tap with a shaky hand: hover, touch down, `ms` of wobble of up to `amp` pixels, lift."""
+        rx, ry = self.screen.raw(x, y)
+        for _ in range(3):
+            self.pen_frame(rx, ry)
+            time.sleep(0.02)
+        self.pen_frame(rx, ry, tip=True, pressure=900)
+        time.sleep(0.03)
+        pattern = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1), (1, -1)]
+        t0, i = time.time(), 0
+        while (time.time() - t0) * 1000 < ms:
+            dx, dy = pattern[i % len(pattern)]
+            px, py = self.screen.raw(x + dx * amp, y + dy * amp)
+            self.pen_frame(px, py, tip=True, pressure=900)
+            time.sleep(0.012)
+            i += 1
+        self.pen_frame(rx, ry, tip=False)
+        time.sleep(0.03)
+        self.pen_frame(rx, ry, in_range=False)
+        time.sleep(0.25)
+
     def scroll2(self, dy, steps):
         """Two fingers moving down (dy > 0) or up together."""
         cx, cy = VIEW_W / 2, VIEW_H / 2
@@ -351,6 +372,8 @@ class Tablet:
                 time.sleep(0.008)
             self.pen_frame(*self.screen.raw(f[0], f[1]), in_range=False)
             time.sleep(0.25)
+        elif c == "pen-tap":
+            self.pen_tap(f[0], f[1], f[2], f[3])
         elif c == "pen-rest":
             # A pen lying near the glass: in range the whole time, a pixel of noise, 100 Hz.
             end = time.time() + f[2]
