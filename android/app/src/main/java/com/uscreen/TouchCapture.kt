@@ -1340,11 +1340,3 @@ and consults it when choosing between the device's adb entries.
         isConnected = false
     }
 }
-
-/** A state the host announced over the input socket; the UI covers the screen with an overlay while it holds. */
-data class HostNotice(val kind: Kind, val host: String = "", val device: String = "") {
-    /**
-     * What the host announced: its operation is paused, its settings are being changed, or the app is being updated.
-     */
-    enum class Kind { PAUSED, SETTINGS, UPDATING }
-}

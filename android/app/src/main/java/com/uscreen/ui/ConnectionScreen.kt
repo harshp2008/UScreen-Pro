@@ -10,8 +10,6 @@ import android.view.SurfaceHolder
 import android.view.SurfaceView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -37,11 +35,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,7 +52,6 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -73,263 +67,6 @@ import com.uscreen.VideoReceiver
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
-
-/**
- * Screen displayed when running in Graphics Tablet mode.
- * Shows informational guidance and blanks out the OLED screen after a timeout to conserve battery.
- */
-@Composable
-fun PenOnlyScreen(blankAfterSeconds: Int) {
-    var blank by remember { mutableStateOf(false) }
-    LaunchedEffect(blankAfterSeconds) {
-        blank = false
-        if (blankAfterSeconds > 0) {
-            delay(blankAfterSeconds * 1000L)
-            blank = true
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
-        if (!blank) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(32.dp)
-            ) {
-                Text(
-                    "Graphics tablet mode",
-                    fontSize = 20.sp,
-                    color = OnSurface,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "The pen drives your computer's screen.\n" +
-                        "Touch input is sent back; no video is streamed here.",
-                    fontSize = 14.sp,
-                    color = Muted,
-                    textAlign = TextAlign.Center
-                )
-                if (blankAfterSeconds > 0) {
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "The screen goes black in a few seconds to spare OLED panels. " +
-                            "Settings are behind the gear icon in the corner.",
-                        fontSize = 12.sp,
-                        color = Muted,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * The single static screen shown while Touchpad mode is on. The host has stopped capturing and
- * encoding for this tablet, so nothing else will ever arrive to draw here.
- *
- * Outside the touch area ([shape]) the screen is pure black and touches there do nothing; the area
- * itself is a slightly lighter panel with a faint border. With [showRightClickZone] a faint line
- * across its bottom 15% and a divider mark the right-click zone (the right half of that strip).
- */
-@Composable
-fun TouchpadActiveScreen(
-    showRightClickZone: Boolean = true,
-    shape: String = com.uscreen.TouchpadShape.FULL,
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black),
-        contentAlignment = Alignment.Center
-    ) {
-        TouchpadArea(shape, showRightClickZone)
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(32.dp)
-        ) {
-            Text(
-                "Touchpad Mode Active",
-                fontSize = 20.sp,
-                color = OnSurface,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "Move your finger to move the pointer. Tap to click, two fingers to scroll or pinch.\n" +
-                    "No video is streamed to this screen. Settings are behind the gear icon.",
-                fontSize = 14.sp,
-                color = Muted,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
-/** Draws the touch area for [shape] and, optionally, its right-click zone. */
-@Composable
-private fun TouchpadArea(shape: String, showRightClickZone: Boolean) {
-    val line = Color(0x33FFFFFF)
-    Box(modifier = Modifier.fillMaxSize()) {
-        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-            val b = com.uscreen.TouchpadShape.bounds(shape, size.width, size.height)
-            val restricted = shape != com.uscreen.TouchpadShape.FULL
-            val topLeft = androidx.compose.ui.geometry.Offset(b.left, b.top)
-            val area = androidx.compose.ui.geometry.Size(b.width, b.height)
-            if (restricted) {
-                drawRect(Color(0xFF151515), topLeft, area)
-                drawRect(line, topLeft, area, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
-            }
-            if (showRightClickZone) {
-                val y = b.bottom - b.height * com.uscreen.TouchpadShape.ZONE_FRACTION
-                val mid = (b.left + b.right) / 2f
-                drawLine(line, androidx.compose.ui.geometry.Offset(b.left, y), androidx.compose.ui.geometry.Offset(b.right, y), strokeWidth = 2f)
-                drawLine(line, androidx.compose.ui.geometry.Offset(mid, y), androidx.compose.ui.geometry.Offset(mid, b.bottom), strokeWidth = 2f)
-            }
-        }
-        if (showRightClickZone) {
-            // Anchored to the touch area, not the screen: the label sits in its bottom-right corner.
-            androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val wPx = constraints.maxWidth.toFloat()
-                val hPx = constraints.maxHeight.toFloat()
-                val b = com.uscreen.TouchpadShape.bounds(shape, wPx, hPx)
-                val density = androidx.compose.ui.platform.LocalDensity.current
-                Text(
-                    "Right click",
-                    fontSize = 11.sp,
-                    color = Color(0x40FFFFFF),
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(
-                            end = with(density) { (wPx - b.right).toDp() } + 24.dp,
-                            bottom = with(density) { (hPx - b.bottom).toDp() } + 12.dp,
-                        )
-                )
-            }
-        }
-    }
-}
-
-/**
- * Persistent cover shown after the host forgot this device. It stays until the host talks to the app
- * again, and offers to uninstall the app (the system asks the user to confirm).
- */
-@Composable
-fun UnpairedBanner() {
-    val context = LocalContext.current
-    /*
-     * The system uninstall dialog can take a second to appear. From the tap until the dialog is answered
-     * (uninstalled, or cancelled) the button shows a spinner and ignores further taps, so it never looks
-     * dead and cannot launch the dialog twice.
-     */
-    var uninstalling by remember { mutableStateOf(false) }
-    val uninstall = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        uninstalling = false
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .zIndex(300f)
-            .background(Color(0xE6000000))
-            .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-            Text(
-                text = "Unpaired by Host. This device is no longer connected.",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White,
-                textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(20.dp))
-            Button(
-                enabled = !uninstalling,
-                onClick = {
-                    uninstalling = true
-                    try {
-                        uninstall.launch(
-                            Intent(Intent.ACTION_UNINSTALL_PACKAGE, Uri.parse("package:${context.packageName}"))
-                                .putExtra(Intent.EXTRA_RETURN_RESULT, true)
-                        )
-                    } catch (_: Exception) {
-                        // No uninstaller to handle it: nothing will ever answer, so release the button now.
-                        uninstalling = false
-                    }
-                }
-            ) {
-                if (uninstalling) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = LocalContentColor.current
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("Uninstalling…")
-                } else {
-                    Text("Uninstall App")
-                }
-            }
-        }
-    }
-}
-
-/**
- * Full-screen, semi-transparent cover shown while the host says the stream is paused, its settings
- * are being applied, or this app is being replaced. It swallows touches so nothing is sent to the
- * host meanwhile. A "settings updating" or "updating" overlay clears itself after 45 s in case the
- * host never says it is done.
- */
-@Composable
-fun HostNoticeOverlay(notice: HostNotice?) {
-    var shown by remember { mutableStateOf(notice) }
-    LaunchedEffect(notice) {
-        shown = notice
-        if (notice != null && notice.kind != HostNotice.Kind.PAUSED) {
-            delay(45_000)
-            shown = null
-        }
-    }
-    AnimatedVisibility(
-        visible = shown != null,
-        enter = fadeIn(),
-        exit = fadeOut(),
-        modifier = Modifier.fillMaxSize().zIndex(200f)
-    ) {
-        val n = shown ?: notice
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xB3000000))
-                .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent().changes.forEach { it.consume() } } },
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-                if (n?.kind != HostNotice.Kind.PAUSED) {
-                    CircularProgressIndicator(color = OnSurface, modifier = Modifier.size(36.dp))
-                    Spacer(Modifier.height(16.dp))
-                }
-                Text(
-                    text = when (n?.kind) {
-                        HostNotice.Kind.PAUSED -> "Connection Paused by Host"
-                        HostNotice.Kind.SETTINGS -> "Settings updating..."
-                        HostNotice.Kind.UPDATING -> "Updating App... (Host: ${n?.host}, Device: ${n?.device})"
-                        null -> ""
-                    },
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = OnSurface,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}
 
 /**
  * Root Composable orchestrating video rendering, touch capture, onboarding,
