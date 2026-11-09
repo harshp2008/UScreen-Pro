@@ -15,14 +15,18 @@
 use tokio::sync::OnceCell;
 use tracing::{debug, info, warn};
 
+/// D-Bus service name of KWin.
 const SERVICE: &str = "org.kde.KWin";
 /// Probe target: a property KWin always exposes, so a tool that exists but
 /// cannot reach the session bus is rejected here instead of failing on every
 /// call afterwards.
 const PROBE_PATH: &str = "/VirtualKeyboard";
+/// D-Bus interface of the probe property.
 const PROBE_IFACE: &str = "org.kde.kwin.VirtualKeyboard";
+/// Name of the probe property, `available`.
 const PROBE_PROP: &str = "available";
 
+/// Names under which a qdbus tool may be installed.
 const QDBUS_NAMES: [&str; 4] = ["qdbus", "qdbus6", "qdbus-qt6", "qdbus-qt5"];
 
 /// Tool used to talk to KWin over D-Bus: `busctl`, or one of the qdbus variants.
@@ -42,6 +46,7 @@ impl Backend {
     }
 }
 
+/// The detected D-Bus tool, probed once.
 static BACKEND: OnceCell<Option<Backend>> = OnceCell::const_new();
 
 /// Run `cmd`; its stdout, or `None` if it could not be run.
@@ -240,10 +245,12 @@ pub async fn list_strings(path: &str, iface: &str, prop: &str) -> Option<Vec<Str
     }
 }
 
+/// Tests for parsing `busctl` output and for KDE session detection.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A `busctl` string array is split on its quotes.
     #[test]
     fn busctl_string_array_is_split_on_quotes() {
         let raw = r#"as 3 "event7" "event8" "event4""#;
@@ -256,6 +263,7 @@ mod tests {
         assert_eq!(got, vec!["event7", "event8", "event4"]);
     }
 
+    /// A `busctl` scalar reply loses its type signature and quotes.
     #[test]
     fn busctl_scalar_drops_the_signature_and_quotes() {
         for (raw, want) in [(r#"s "DVI-I-1""#, "DVI-I-1"), ("i 1", "1"), (r#"s """#, "")] {
@@ -264,6 +272,7 @@ mod tests {
         }
     }
 
+    /// `is_kde_session` finds KDE in a colon-separated desktop list ignoring case, and treats an empty value as KDE.
     #[test]
     fn is_kde_session_reads_the_desktop_list() {
         assert!(is_kde_session("KDE"));

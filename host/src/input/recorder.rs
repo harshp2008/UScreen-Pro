@@ -11,8 +11,10 @@ use std::collections::VecDeque;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
+/// Most pen records kept; older ones are dropped first.
 const CAPACITY: usize = 4000;
 
+/// One recorded pen sample: milliseconds since the ring started, action code, position, pressure, tilt, whether it went to the tablet route, and a short note on what happened to it.
 struct Rec {
     ms: u64,
     action: u8,
@@ -24,6 +26,7 @@ struct Rec {
     note: &'static str,
 }
 
+/// Bounded in-memory history of pen samples (up to `CAPACITY`), with counts of moves and skipped hovers.
 struct Ring {
     start: Instant,
     recs: VecDeque<Rec>,
@@ -33,6 +36,7 @@ struct Ring {
 
 /// The process-wide ring buffer.
 fn ring() -> &'static Mutex<Ring> {
+    /// The process-wide ring, created on first use.
     static R: OnceLock<Mutex<Ring>> = OnceLock::new();
     R.get_or_init(|| {
         Mutex::new(Ring {
@@ -106,10 +110,12 @@ pub(super) fn render() -> String {
     out
 }
 
+/// Tests for the pen recorder ring.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A pen sample with the given action and x position (y fixed at 5).
     fn s(action: u8, x: i32) -> PenSample {
         PenSample {
             x,
@@ -122,6 +128,7 @@ mod tests {
         }
     }
 
+    /// Every record is kept in full, with its note, while samples, skips and moves are counted.
     #[test]
     fn records_follow_in_full_and_samples_skips_and_moves() {
         let before = ring().lock().unwrap().recs.len();
@@ -142,6 +149,7 @@ mod tests {
         );
     }
 
+    /// The ring never holds more than `CAPACITY` records.
     #[test]
     fn the_ring_is_bounded() {
         for i in 0..(CAPACITY as i32 + 100) {

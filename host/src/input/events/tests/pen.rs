@@ -3,6 +3,7 @@
 use super::support::*;
 use crate::input::*;
 
+/// A pen lift sends its last position before it leaves proximity.
 #[test]
 fn pen_lift_sends_its_position_before_leaving_proximity() {
     let (mut dev, path) = device_over_file("penlift");
@@ -27,6 +28,7 @@ fn pen_lift_sends_its_position_before_leaving_proximity() {
     );
 }
 
+/// A touching pen never reports pressure 0, because the kernel would see that as lifted.
 #[test]
 fn a_touching_pen_never_reports_zero_pressure() {
     let (mut dev, path) = device_over_file("lightpress");
@@ -54,6 +56,7 @@ fn a_touching_pen_never_reports_zero_pressure() {
     assert_eq!(pressure(&f[5]), Some(0), "the lift stays at zero");
 }
 
+/// In mouse style the left button is held from pen down to pen up.
 #[test]
 fn stylus_mouse_style_holds_left_from_pen_down_to_pen_up() {
     let (dev, path) = device_over_file("penmouse");
@@ -94,6 +97,7 @@ fn stylus_mouse_style_holds_left_from_pen_down_to_pen_up() {
     assert_eq!(inj.pen_mouse_buttons, 0);
 }
 
+/// The pen's side buttons follow the configured mapping.
 #[test]
 fn stylus_side_buttons_follow_the_configured_mapping() {
     let (dev, path) = device_over_file("penbuttons");
@@ -125,6 +129,7 @@ fn stylus_side_buttons_follow_the_configured_mapping() {
     assert_eq!(inj.pen_mouse_buttons, 0);
 }
 
+/// Lifting the eraser end leaves proximity with the eraser tool.
 #[test]
 fn eraser_lift_leaves_proximity_with_the_eraser_tool() {
     let (mut dev, path) = device_over_file("eraserlift");

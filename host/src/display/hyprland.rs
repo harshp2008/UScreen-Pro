@@ -325,16 +325,19 @@ pub async fn output_area(output: &str) -> Option<(f64, f64, f64, f64)> {
     (tw > 0.0 && th > 0.0).then(|| ((x - min_x) / tw, (y - min_y) / th, w / tw, h / th))
 }
 
+/// Tests for Hyprland device keys, output listing and scale.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Device keys are lowercase with dashes, as `hyprctl devices` prints them.
     #[test]
     fn device_keys_match_hyprctl_devices() {
         assert_eq!(device_key("UScreen Pen"), "uscreen-pen");
         assert_eq!(device_key("UScreen Touch 2"), "uscreen-touch-2");
     }
 
+    /// An output that Hyprland lists with a mode but at 0x0 is read as present but switched off.
     #[test]
     fn reads_an_output_hyprland_left_off() {
         // Shaped like #19: the laptop panel on, the EVDI output listed with
@@ -354,6 +357,7 @@ mod tests {
         assert_eq!(m[0].logical(), (0.0, 0.0, 1200.0, 675.0));
     }
 
+    /// The scale is a whole number and 2 only for tablet-sized panels (3000x2120, 2960x1848 give 2; 1920x1200, 2561x1600 give 1).
     #[test]
     fn scale_is_whole_and_tablet_sized() {
         assert_eq!(scale_for(3000, 2120), 2);

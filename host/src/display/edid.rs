@@ -197,10 +197,12 @@ pub fn ensure_edid_sized(
     Ok(path)
 }
 
+/// Tests for the generated EDID.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The detailed timing block encodes a physical size that matches the pixel size for several resolutions.
     #[test]
     fn detailed_timing_preserves_physical_size() {
         for (width_px, height_px) in [(1536, 960), (2560, 1600), (2960, 1848)] {
@@ -211,6 +213,7 @@ mod tests {
         }
     }
 
+    /// The EDID is 128 bytes, its bytes sum to 0 modulo 256, and the detailed timing decodes back to the requested size.
     #[test]
     fn edid_checksum_is_valid() {
         for (w, h) in [(2960u32, 1848u32), (2560, 1600), (1920, 1200), (2000, 1200)] {

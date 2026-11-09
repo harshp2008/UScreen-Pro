@@ -231,6 +231,7 @@ pub struct FileConfig {
 }
 
 impl Default for FileConfig {
+    /// The values used when `config.toml` is missing or lacks a key (for example `encoder` h264_nvenc, 60 fps).
     fn default() -> Self {
         Self {
             version: default_version(),
@@ -508,8 +509,10 @@ impl FileConfig {
     }
 }
 
+/// Tests for config defaults, validation and (de)serialization, including per-device sections.
 #[cfg(test)]
 mod tests {
+    /// The tray toggle changes only the global stylus default and nothing else.
     #[test]
     fn the_tray_toggle_changes_only_the_stylus_default() {
         let mut c = FileConfig::default();
@@ -527,6 +530,7 @@ mod tests {
         assert_eq!(c.input_mode, Some(InputMode::Touchpad));
     }
 
+    /// Pen button and stylus style names are trimmed, lowercased and replaced by the default when unknown.
     #[test]
     fn stylus_settings_are_validated() {
         assert_eq!(clean_pen_button(" Right ", "middle"), "right");
@@ -544,6 +548,7 @@ mod tests {
 
     use super::*;
 
+    /// Per-device encoder settings read from and written back to TOML.
     #[test]
     fn per_device_encoder_deserialization_and_serialization() {
         let toml_data = r#"
@@ -588,6 +593,7 @@ height = 1080
         );
     }
 
+    /// Per-device profile overrides and the nickname survive serialization.
     #[test]
     fn device_profile_overrides_and_nickname_serialization() {
         let toml_data = r#"
@@ -633,6 +639,7 @@ position = "left"
         assert_eq!(p2.ten_bit, Some(true));
     }
 
+    /// A device's display name is its nickname; a blank nickname falls back to the model label, and with no label to the serial.
     #[test]
     fn device_profile_display_name_fallback_hierarchy() {
         let mut p = TabletProfile::default();
@@ -648,6 +655,7 @@ position = "left"
         assert_eq!(p.display_name("fallback_serial"), "Samsung Tab S9 FE");
     }
 
+    /// The keep-alive, locked-apps and Wi-Fi address settings are read from TOML.
     #[test]
     fn test_trio_features_config() {
         let toml_data = r#"

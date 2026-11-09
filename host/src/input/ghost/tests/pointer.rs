@@ -5,6 +5,7 @@ use super::super::*;
 use super::support::*;
 use std::time::{Duration, Instant};
 
+/// On the pen route hover is written to both devices, so the system cursor stays visible while the tablet tool is in range.
 #[test]
 fn hover_moves_both_devices_on_the_pen_route_so_the_cursor_stays_visible() {
     let (mut d, pp, qp) = rig();
@@ -19,6 +20,7 @@ fn hover_moves_both_devices_on_the_pen_route_so_the_cursor_stays_visible() {
     assert!(!has(&ptr, (EV_KEY, BTN_LEFT, 1)), "hover never clicks");
 }
 
+/// On the mouse route the tablet tool is never put in range, across two full taps of the Android sequence.
 #[test]
 fn the_mouse_route_never_puts_the_tablet_tool_in_range() {
     // The Android sequence of a tap: hover, range exit (just before the tip lands), down, a
@@ -55,6 +57,7 @@ fn the_mouse_route_never_puts_the_tablet_tool_in_range() {
     assert_eq!(d.pen_mouse_buttons, 0);
 }
 
+/// Flipping the route during hover puts the tablet tool in range or takes it out of range accordingly.
 #[test]
 fn a_route_flip_while_hovering_moves_the_tool_in_and_out_of_range() {
     let (mut d, pp, qp) = rig();
@@ -70,6 +73,7 @@ fn a_route_flip_while_hovering_moves_the_tool_in_and_out_of_range() {
     assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 0)));
 }
 
+/// A repeated hover position is written one unit to the side (500, 501, 500) and never as the identical value twice, so the pointer device still sees motion.
 #[test]
 fn a_still_pen_keeps_the_pointer_alive_with_a_one_unit_nudge() {
     let (mut d, pp, qp) = rig();
@@ -89,6 +93,7 @@ fn a_still_pen_keeps_the_pointer_alive_with_a_one_unit_nudge() {
     );
 }
 
+/// The panic release lifts every button and tool on both devices.
 #[test]
 fn panic_release_lets_go_of_everything_on_both_devices() {
     let (mut d, pp, qp) = rig();
@@ -122,6 +127,7 @@ fn panic_release_lets_go_of_everything_on_both_devices() {
     }
 }
 
+/// A lift with no earlier DOWN still releases the left button, so a lost DOWN cannot leave the button stuck.
 #[test]
 fn a_lift_with_no_matching_down_still_releases_the_left_button() {
     let (mut d, pp, qp) = rig();
@@ -131,6 +137,7 @@ fn a_lift_with_no_matching_down_still_releases_the_left_button() {
     assert!(has(&ptr, (EV_KEY, BTN_LEFT, 0)));
 }
 
+/// For an app that is not a drawing app, the tip is a left click on the pointer device only.
 #[test]
 fn non_art_app_tip_is_a_left_click_on_the_pointer_only() {
     let (mut d, pp, qp) = rig();
@@ -173,6 +180,7 @@ fn non_art_app_tip_is_a_left_click_on_the_pointer_only() {
     assert_eq!(d.pen_mouse_buttons, 0);
 }
 
+/// For a drawing app the tip goes to the tablet device with pressure and never produces a click.
 #[test]
 fn art_app_tip_goes_to_the_pen_with_pressure_and_never_clicks() {
     let (mut d, pp, qp) = rig();
@@ -194,6 +202,7 @@ fn art_app_tip_goes_to_the_pen_with_pressure_and_never_clicks() {
     );
 }
 
+/// A stroke finishes on the device it started on, even if the route flips in the middle.
 #[test]
 fn a_stroke_stays_on_the_device_it_started_on_when_the_route_flips() {
     let (mut d, pp, qp) = rig();
@@ -214,6 +223,7 @@ fn a_stroke_stays_on_the_device_it_started_on_when_the_route_flips() {
     );
 }
 
+/// The pen's side button goes to the tablet in drawing apps and to the pointer elsewhere.
 #[test]
 fn side_button_goes_to_the_pen_in_art_apps_and_to_the_pointer_elsewhere() {
     let (mut d, pp, qp) = rig();
@@ -228,6 +238,7 @@ fn side_button_goes_to_the_pen_in_art_apps_and_to_the_pointer_elsewhere() {
     assert_eq!(d.pen_mouse_buttons, 0);
 }
 
+/// Leaving range stops pointer updates and starts the idle clock.
 #[test]
 fn leaving_range_stops_pointer_updates_and_starts_the_idle_clock() {
     let (mut d, pp, qp) = rig();
@@ -246,6 +257,7 @@ fn leaving_range_stops_pointer_updates_and_starts_the_idle_clock() {
     assert!(!d.pen_proximity);
 }
 
+/// Idle hide is off at 0 and otherwise fires once after the timeout with no pointer motion.
 #[test]
 fn idle_hide_is_off_at_zero_and_fires_once_after_the_timeout_with_no_pointer_motion() {
     let (mut d, pp, qp) = rig();
@@ -280,6 +292,7 @@ fn idle_hide_is_off_at_zero_and_fires_once_after_the_timeout_with_no_pointer_mot
     done(&[&p2, &q2]);
 }
 
+/// A range exit releases a held tip.
 #[test]
 fn range_exit_releases_a_held_tip() {
     let (mut d, pp, qp) = rig();
@@ -292,6 +305,7 @@ fn range_exit_releases_a_held_tip() {
     assert_eq!(d.tip, Tip::None);
 }
 
+/// With a known screen size (1920 x 1080 in the test) the pointer only lands on whole pixels; fractional positions leave stale cursor images behind with software cursors.
 #[test]
 fn the_pointer_only_ever_lands_on_whole_pixels_when_the_screen_size_is_known() {
     // Fractional positions leave stale "ghost" cursor images behind with software cursors, so the
@@ -316,6 +330,7 @@ fn the_pointer_only_ever_lands_on_whole_pixels_when_the_screen_size_is_known() {
     assert!(ys_.iter().all(|&v| px(v, 1080.0) < 0.02), "y lands between pixels");
 }
 
+/// Without a known screen size the positions are written unchanged.
 #[test]
 fn without_a_known_screen_size_positions_are_left_alone() {
     let (mut d, pp, qp) = rig();

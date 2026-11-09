@@ -18,7 +18,9 @@ use tracing::{info, warn};
 /// an old `uscreen` icon left in the hicolor theme by a previous install would otherwise win over the
 /// pixmap and show the retired logo. The pen variant carries the mode at a glance without a tooltip.
 const PIXMAP_SCREEN: &[u8] = include_bytes!("../../../packaging/icons/uscreen-64.rgba");
+/// Raw RGBA pixels (64 x 64) of the pen icon shown while Stylus mode is the global default.
 const PIXMAP_TABLET: &[u8] = include_bytes!("../../../packaging/icons/uscreen-pen-64.rgba");
+/// Side length in pixels of the tray icon bitmaps.
 const PIXMAP_SIDE: i32 = 64;
 
 /// RGBA as ImageMagick wrote it → ARGB32 in network byte order, which is
@@ -38,6 +40,7 @@ fn pixmap(rgba: &[u8]) -> ksni::Icon {
 /// The Tauri settings app. The retired `uscreen-gui` must never be launched from here.
 const GUI_BIN: &str = "uscreen-pro-gui";
 
+/// State behind the status-notifier tray icon: the global stylus default, whether a tablet is connected, a newer release when one was found, and channels to the daemon.
 struct UScreenTray {
     pen_only: bool,
     tablet_present: bool,
@@ -71,10 +74,12 @@ impl UScreenTray {
 }
 
 impl Tray for UScreenTray {
+    /// StatusNotifierItem id of the tray icon.
     fn id(&self) -> String {
         "uscreen-pro".into()
     }
 
+    /// Title shown by the desktop for the tray icon.
     fn title(&self) -> String {
         "UScreen Pro".into()
     }
@@ -84,6 +89,7 @@ impl Tray for UScreenTray {
         String::new()
     }
 
+    /// The tray icon as pixel data, chosen by the current state.
     fn icon_pixmap(&self) -> Vec<ksni::Icon> {
         vec![self.current_pixmap()]
     }
@@ -94,6 +100,7 @@ impl Tray for UScreenTray {
         Status::Active
     }
 
+    /// Tooltip: the state line, plus the newer release when one was found.
     fn tool_tip(&self) -> ToolTip {
         let mut description = self.state_line();
         if let Some(v) = &self.update {
@@ -113,6 +120,7 @@ impl Tray for UScreenTray {
         open_settings();
     }
 
+    /// The tray menu: a disabled state line, then the actions.
     fn menu(&self) -> Vec<MenuItem<Self>> {
         let mut items: Vec<MenuItem<Self>> = vec![StandardItem {
             label: self.state_line(),

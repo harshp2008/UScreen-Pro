@@ -3,6 +3,7 @@
 use super::support::*;
 use crate::input::*;
 
+/// A pinch holds Ctrl for every step and lets go at the end.
 #[test]
 fn pinch_holds_ctrl_for_every_step_and_lets_go_at_the_end() {
     let (kb, kpath) = device_over_file("pinchkb");
@@ -30,6 +31,7 @@ fn pinch_holds_ctrl_for_every_step_and_lets_go_at_the_end() {
     assert!(inj.pinch_since.is_none());
 }
 
+/// Touchpad motion and clicks become mouse events; zero motion writes no frame.
 #[test]
 fn touchpad_motion_and_clicks_become_mouse_events() {
     let (mut dev, path) = device_over_file("mouse");
@@ -47,6 +49,7 @@ fn touchpad_motion_and_clicks_become_mouse_events() {
     assert_eq!(f[3], vec![(EV_KEY, BTN_RIGHT, 1)]);
 }
 
+/// Scrolling sends hi-res units and whole notches from the accumulated remainder.
 #[test]
 fn scroll_sends_hi_res_units_and_whole_notches_from_the_remainder() {
     let (mut dev, path) = device_over_file("scroll");
@@ -68,6 +71,7 @@ fn scroll_sends_hi_res_units_and_whole_notches_from_the_remainder() {
     assert_eq!(rest, (0, 60));
 }
 
+/// Touchpad messages (`rel`, `button`, `scroll`) parse.
 #[test]
 fn touchpad_messages_parse() {
     let rel: InputEvent = serde_json::from_str(r#"{"type":"rel","dx":1.5,"dy":-2}"#).unwrap();
@@ -85,6 +89,7 @@ fn touchpad_messages_parse() {
     assert!(matches!(sc, InputEvent::Scroll { dy, .. } if dy == 12.0));
 }
 
+/// Key combinations press modifiers first and release in reverse order.
 #[test]
 fn key_combinations_press_modifiers_first_and_release_in_reverse() {
     let (mut dev, path) = device_over_file("keys");
@@ -100,6 +105,7 @@ fn key_combinations_press_modifiers_first_and_release_in_reverse() {
     );
 }
 
+/// In stylus mode there is no relative mouse device.
 #[test]
 fn stylus_mode_has_no_relative_mouse() {
     let (mouse, mpath) = device_over_file("stylus-mouse");
@@ -116,6 +122,7 @@ fn stylus_mode_has_no_relative_mouse() {
     assert!(!d.stylus_mode);
 }
 
+/// Entering touchpad mode lifts the stylus policy and keeps the devices that exist.
 #[test]
 fn entering_touchpad_mode_lifts_the_stylus_policy_and_keeps_existing_devices() {
     let (mouse, mpath) = device_over_file("ensure-mouse");
@@ -135,6 +142,7 @@ fn entering_touchpad_mode_lifts_the_stylus_policy_and_keeps_existing_devices() {
     }
 }
 
+/// Gesture messages parse.
 #[test]
 fn gesture_messages_parse() {
     let g: InputEvent =

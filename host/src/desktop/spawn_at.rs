@@ -68,21 +68,25 @@ pub(super) fn spawn_at_pointer(lift: i32, class: &str, command: &[String]) -> bo
     cmd.status().is_ok_and(|s| s.success())
 }
 
+/// Tests for parsing the window table printed by spawn-at.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Sample window table with a focused window marked `*`.
     const TABLE: &str = "\
 ID         PID      CLASS                 MON  STATE      GEOMETRY        REL  FOCUSED  TITLE
 296732775  1425580  google-chrome         0    maximized  1920x1040@0,40  0,0           A page - Google Chrome
 296732771  1422374  com.anthropic.Claude  0    maximized  1550x1040@0,40  0,0  *        Claude Code
 ";
 
+    /// The focused window is found by the FOCUSED column.
     #[test]
     fn finds_the_focused_window_by_column() {
         assert_eq!(parse_focused(TABLE), Some(WindowRef("296732771".into())));
     }
 
+    /// No marker, or empty output, means no focused window.
     #[test]
     fn no_focused_window_is_none() {
         let t = TABLE.replace('*', " ");
@@ -90,6 +94,7 @@ ID         PID      CLASS                 MON  STATE      GEOMETRY        REL  F
         assert_eq!(parse_focused(""), None);
     }
 
+    /// A star inside a title is not a focus marker.
     #[test]
     fn a_star_in_a_title_is_not_a_focus_marker() {
         let t = TABLE.replace("A page - Google Chrome", "* not focused");

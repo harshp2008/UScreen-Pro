@@ -5,6 +5,7 @@ use super::super::*;
 use crate::desktop::AppIdentity;
 use std::fs::OpenOptions;
 
+/// An app identity with the given application id and window class.
 pub(super) fn app(id: &str, class: &str) -> AppIdentity {
     AppIdentity {
         app_id: id.into(),
@@ -13,12 +14,15 @@ pub(super) fn app(id: &str, class: &str) -> AppIdentity {
     }
 }
 
+/// The default list of drawing-app names.
 pub(super) fn art() -> Vec<String> {
     crate::config::default_art_apps()
 }
 
+/// Builds an `InjectDevices` that writes into two fresh temporary files (pointer, then tablet); returns it and both paths. Each call uses unique file names because tests run in parallel threads.
 pub(super) fn rig() -> (InjectDevices, std::path::PathBuf, std::path::PathBuf) {
     // Tests run in parallel threads of one process: every rig needs its own files.
+    /// Counter that gives each rig its own file names.
     static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     let mk = |n: &str| {
@@ -42,6 +46,7 @@ pub(super) fn rig() -> (InjectDevices, std::path::PathBuf, std::path::PathBuf) {
     (d, pp, qp)
 }
 
+/// Decodes the events a device wrote to `path` into frames of (type, code, value), one frame per sync report.
 pub(super) fn frames(path: &std::path::Path) -> Vec<Vec<(u16, u16, i32)>> {
     let bytes = std::fs::read(path).unwrap();
     let (mut all, mut frame) = (Vec::new(), Vec::new());
@@ -61,6 +66,7 @@ pub(super) fn frames(path: &std::path::Path) -> Vec<Vec<(u16, u16, i32)>> {
     all
 }
 
+/// A pen sample with the given action code and x position; y is fixed at 500.
 pub(super) fn sample(action: u8, x: i32) -> PenSample {
     PenSample {
         x,
@@ -73,16 +79,19 @@ pub(super) fn sample(action: u8, x: i32) -> PenSample {
     }
 }
 
+/// Whether any frame contains the event `e`.
 pub(super) fn has(f: &[Vec<(u16, u16, i32)>], e: (u16, u16, i32)) -> bool {
     f.iter().any(|fr| fr.contains(&e))
 }
 
+/// Deletes the capture files of a test.
 pub(super) fn done(p: &[&std::path::Path]) {
     for x in p {
         let _ = std::fs::remove_file(x);
     }
 }
 
+/// Feeds one sample through the auto style, on the art route when `to_pen` is set; right button for the barrel, middle for the eraser.
 pub(super) fn auto(d: &mut InjectDevices, a: u8, x: i32, to_pen: bool) {
     d.auto_pen(&sample(a, x), to_pen, "right", "middle");
 }
@@ -100,6 +109,7 @@ pub(super) fn left_events(ptr: &[Vec<(u16, u16, i32)>]) -> Vec<i32> {
     v
 }
 
+/// The X values of every ABS_X event in the frames, in order.
 pub(super) fn xs(f: &[Vec<(u16, u16, i32)>]) -> Vec<i32> {
     f.iter()
         .flat_map(|fr| fr.iter().filter(|e| e.1 == ABS_X).map(|e| e.2))

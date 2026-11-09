@@ -23,6 +23,7 @@ pub(super) fn frames(path: &std::path::Path) -> Vec<Vec<(u16, u16, i32)>> {
     all
 }
 
+/// Creates a `UInputDevice` that writes to a temp file instead of /dev/uinput; returns it and the path.
 pub(super) fn device_over_file(name: &str) -> (UInputDevice, std::path::PathBuf) {
     let path = std::env::temp_dir().join(format!("uscreen-{}-{}", name, std::process::id()));
     let file = OpenOptions::new()
@@ -34,6 +35,7 @@ pub(super) fn device_over_file(name: &str) -> (UInputDevice, std::path::PathBuf)
     (UInputDevice { file, held: 0 }, path)
 }
 
+/// A touchpad finger at (`x`, `y`) millimetres with the given id.
 pub(super) fn finger(id: i32, x: f64, y: f64) -> PadFinger {
     PadFinger {
         id,

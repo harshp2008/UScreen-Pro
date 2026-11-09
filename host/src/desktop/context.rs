@@ -72,10 +72,12 @@ impl PointerContext {
     }
 }
 
+/// Tests for parsing the pointer context the Shell extension writes.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A full `context.json` document is parsed into position, selection and clipboard lengths, zone, frame and app identity.
     #[test]
     fn parses_what_the_extension_writes() {
         let c = PointerContext::from_json(
@@ -89,6 +91,7 @@ mod tests {
         assert!(c.csd);
     }
 
+    /// Missing fields default (zone Desktop, no selection, no frame) and malformed JSON gives `None`.
     #[test]
     fn missing_fields_default_and_garbage_is_rejected() {
         let c = PointerContext::from_json(r#"{"x":1,"y":2}"#).unwrap();

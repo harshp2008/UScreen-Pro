@@ -14,11 +14,14 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{broadcast, watch};
 use tracing::{error, info, warn};
 
+/// Packet type byte of a codec-config packet (SPS/PPS/VPS).
 const PACKET_TYPE_CONFIG: u8 = 0;
+/// Packet type byte of a video frame packet.
 const PACKET_TYPE_FRAME: u8 = 1;
 /// Sent once to every attached client as the daemon exits cleanly, so the app can say
 /// "Host Offline" at once instead of guessing from a dropped socket.
 const PACKET_TYPE_HOST_SHUTDOWN: u8 = 2;
+/// Body of the message sent with `PACKET_TYPE_HOST_SHUTDOWN`.
 const HOST_SHUTDOWN_JSON: &[u8] = br#"{"type":"host_shutdown"}"#;
 
 /// If more than this many frames are queued for a client, skip ahead to the
@@ -38,6 +41,7 @@ pub struct StreamConfig {
 }
 
 impl Default for StreamConfig {
+    /// Defaults to video port 8890 and no token.
     fn default() -> Self {
         Self {
             video_port: 8890,

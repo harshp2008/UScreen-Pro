@@ -39,6 +39,7 @@ struct Recent {
 
 /// The shared rolling list of recently acknowledged frames.
 fn recent() -> &'static Mutex<VecDeque<Recent>> {
+    /// Recent acknowledged frames, created on first use.
     static R: std::sync::OnceLock<Mutex<VecDeque<Recent>>> = std::sync::OnceLock::new();
     R.get_or_init(|| Mutex::new(VecDeque::new()))
 }
@@ -90,6 +91,7 @@ pub struct DetailedTiming {
     pub host_total_us: u32,
 }
 
+/// Mutable state of the tracker: frames sent and not yet acknowledged (sequence, send time, detailed timing), and round-trip samples in microseconds for the current window.
 #[derive(Default)]
 struct Inner {
     /// (seq, time the access unit left the encoder, detailed timing), oldest first.

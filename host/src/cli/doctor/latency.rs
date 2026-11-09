@@ -74,10 +74,15 @@ pub async fn run_latency(secs: u64, sparse: bool) -> anyhow::Result<()> {
 pub(super) fn sweep_mouse(secs: u64, sparse: bool) -> anyhow::Result<()> {
     use std::io::Write;
     use std::os::unix::io::AsRawFd;
+    /// ioctl `UI_SET_EVBIT`: enable an event type on the uinput device.
     const UI_SET_EVBIT: libc::c_ulong = 0x4004_5564;
+    /// ioctl `UI_SET_KEYBIT`: enable a key or button code.
     const UI_SET_KEYBIT: libc::c_ulong = 0x4004_5565;
+    /// ioctl `UI_SET_RELBIT`: enable a relative axis.
     const UI_SET_RELBIT: libc::c_ulong = 0x4004_5566;
+    /// ioctl `UI_DEV_CREATE`: create the device after setup.
     const UI_DEV_CREATE: libc::c_ulong = 0x5501;
+    /// ioctl `UI_DEV_DESTROY`: remove the device.
     const UI_DEV_DESTROY: libc::c_ulong = 0x5502;
     let mut f = std::fs::OpenOptions::new()
         .write(true)

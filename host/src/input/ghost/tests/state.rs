@@ -3,6 +3,7 @@
 use super::super::*;
 use super::support::*;
 
+/// The reported device state follows what the device actually holds: idle, in range, pressed.
 #[test]
 fn device_state_follows_what_the_device_holds() {
     let (mut d, pp, qp) = rig();
@@ -28,6 +29,7 @@ fn device_state_follows_what_the_device_holds() {
     done(&[&pp, &qp]);
 }
 
+/// Forcing a release lets go of everything a device holds: buttons, tip and tool.
 #[test]
 fn force_release_all_lets_go_of_everything_a_device_holds() {
     let (mut d, pp, qp) = rig();
@@ -45,6 +47,7 @@ fn force_release_all_lets_go_of_everything_a_device_holds() {
     assert_eq!(d.tip, Tip::None);
 }
 
+/// A second left DOWN on the pointer is written as it comes; the device layer no longer inserts a release, which would break a hold.
 #[test]
 fn a_second_left_down_on_the_pointer_device_is_written_as_it_comes() {
     // The device layer no longer rewrites a press (an inserted release would break a hold).
@@ -67,6 +70,7 @@ fn a_second_left_down_on_the_pointer_device_is_written_as_it_comes() {
     assert_eq!(raw, vec![1, 1]);
 }
 
+/// An UP that does not name the eraser (a cancel after a DOWN with the eraser end) still releases the rubber tool.
 #[test]
 fn a_lift_that_does_not_name_the_eraser_still_releases_the_rubber_tool() {
     // Plain tablet path: DOWN with the eraser end, then an UP sample (a cancel) without it.

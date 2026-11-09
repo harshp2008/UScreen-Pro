@@ -42,6 +42,7 @@ mod spawn;
 mod supervisor;
 pub mod timing;
 
+/// Pause in milliseconds before the capture pipeline restarts after it ended.
 const RECONNECT_DELAY_MS: u64 = 2000;
 /// Capture FIFO, in the per-user runtime directory. It used to be
 /// /tmp/uscreen_capture.fifo with mode 0666, which let any local account read
@@ -165,6 +166,7 @@ pub struct CaptureConfig {
 }
 
 impl Default for CaptureConfig {
+    /// Defaults for a capture session: helper next to the source tree, no EDID file, `h264_nvenc`.
     fn default() -> Self {
         Self {
             helper_path: PathBuf::from("host/evdi/evdi_helper"),
@@ -364,16 +366,19 @@ impl CaptureManager {
 }
 
 impl Drop for CaptureManager {
+    /// Stops the capture and removes its FIFO.
     fn drop(&mut self) {
         self.stop();
         let _ = std::fs::remove_file(fifo_path_for(self.config.instance));
     }
 }
 
+/// Tests for codec selection and the encoder allow-list.
 #[cfg(all(test, not(feature = "inproc-encoder")))]
 mod tests {
     use super::*;
 
+    /// The codec follows the encoder name: `hevc_*` is HEVC, everything else H.264.
     #[test]
     fn codec_is_picked_from_the_encoder_name() {
         assert_eq!(Codec::from_encoder("h264_nvenc"), Codec::H264);
@@ -382,6 +387,7 @@ mod tests {
         assert_eq!(Codec::from_encoder("hevc_vaapi"), Codec::Hevc);
     }
 
+    /// `hevc_vaapi` is among the allowed encoders; unknown names are rejected.
     #[test]
     fn allowed_encoders_include_hevc_vaapi() {
         let check = |name: &str| -> Result<()> {

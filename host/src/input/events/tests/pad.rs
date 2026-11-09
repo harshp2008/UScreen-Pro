@@ -3,6 +3,7 @@
 use super::support::*;
 use crate::input::*;
 
+/// A `touchpad_raw` message parses with id, x and y per slot; pressure is optional and defaults to 0; an empty slot list is valid.
 #[test]
 fn touchpad_raw_message_parses() {
     let m: InputEvent = serde_json::from_str(
@@ -21,6 +22,7 @@ fn touchpad_raw_message_parses() {
     assert!(matches!(empty, InputEvent::TouchpadRaw { slots } if slots.is_empty()));
 }
 
+/// Fingers get slots and tracking ids when they land and are lifted with tracking id -1.
 #[test]
 fn pad_frames_assign_slots_and_tracking_ids_and_lift_with_minus_one() {
     let (mut dev, path) = device_over_file("pad");
@@ -78,6 +80,7 @@ fn pad_frames_assign_slots_and_tracking_ids_and_lift_with_minus_one() {
     assert_eq!(st.count(), 0);
 }
 
+/// A freed slot is reused with a new tracking id, and positions are clamped to the pad surface.
 #[test]
 fn pad_reuses_a_freed_slot_with_a_fresh_tracking_id_and_clamps_to_the_surface() {
     let (mut dev, path) = device_over_file("padreuse");
@@ -104,6 +107,7 @@ fn pad_reuses_a_freed_slot_with_a_fresh_tracking_id_and_clamps_to_the_surface() 
     assert!(again.contains(&(EV_ABS, ABS_MT_POSITION_Y, 0)));
 }
 
+/// Three, four and five fingers select the triple-tap, quad-tap and quint-tap tool buttons.
 #[test]
 fn pad_finger_counts_pick_the_tool_button() {
     let (mut dev, path) = device_over_file("padtools");
@@ -122,6 +126,7 @@ fn pad_finger_counts_pick_the_tool_button() {
     assert!(f[2].contains(&(EV_KEY, BTN_TOOL_QUINTTAP, 1)));
 }
 
+/// Leaving touchpad mode removes the pad device and first lifts its fingers.
 #[test]
 fn leaving_touchpad_mode_removes_the_pad_and_lifts_its_fingers() {
     let (pad, ppath) = device_over_file("leavepad");
@@ -140,6 +145,7 @@ fn leaving_touchpad_mode_removes_the_pad_and_lifts_its_fingers() {
     assert_eq!(d.pad_state.count(), 0);
 }
 
+/// Native gestures are offered only on a Wayland GNOME or KDE session.
 #[test]
 fn native_gestures_need_wayland_gnome_or_kde() {
     use crate::config::options::native_gestures_supported as ok;

@@ -66,10 +66,12 @@ impl X11Desktop {
 }
 
 impl DesktopBackend for X11Desktop {
+    /// Backend name shown in logs.
     fn name(&self) -> &'static str {
         "x11"
     }
 
+    /// Only focus detection is available.
     fn capabilities(&self) -> Capabilities {
         Capabilities {
             focus: true,
@@ -77,6 +79,7 @@ impl DesktopBackend for X11Desktop {
         }
     }
 
+    /// Reports the active window's app, or unknown when there is none.
     fn poll_focus(&mut self) -> FocusUpdate {
         match self.active() {
             Some(app) => FocusUpdate::Known(app),

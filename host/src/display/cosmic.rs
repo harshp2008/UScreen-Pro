@@ -114,10 +114,12 @@ pub async fn disable_output(names: &[String]) {
     }
 }
 
+/// Tests for parsing the COSMIC output listing.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The enabled or disabled state is read with or without terminal colour codes.
     #[test]
     fn reads_output_state_with_and_without_colour_codes() {
         let listing = "eDP-1 (enabled)\n  Modes:\n    1920x1080 @ 60.000 Hz\n\

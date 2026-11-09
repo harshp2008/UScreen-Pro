@@ -18,6 +18,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 
+/// Per-instance notice channel: `tx` broadcasts to current subscribers, `sticky` is replayed to a subscriber that joins later until it is released.
 struct Slot {
     tx: broadcast::Sender<String>,
     sticky: Option<String>,
@@ -25,6 +26,7 @@ struct Slot {
 
 /// The per-tablet notice channels.
 fn slots() -> &'static Mutex<HashMap<u32, Slot>> {
+    /// Process-wide table of notice slots keyed by instance number, created on first use.
     static SLOTS: OnceLock<Mutex<HashMap<u32, Slot>>> = OnceLock::new();
     SLOTS.get_or_init(|| Mutex::new(HashMap::new()))
 }
@@ -107,8 +109,11 @@ pub fn update_done() -> Value {
     json!({ "type": "update_done" })
 }
 
+/// Number of per-instance counters; instance numbers beyond it share the last one.
 const MAX_SLOTS: usize = 8;
+/// Per-instance count of encoders started; a new value means the encoder was restarted.
 static GENERATION: [AtomicU64; MAX_SLOTS] = [const { AtomicU64::new(0) }; MAX_SLOTS];
+/// Per-instance count of video frames delivered, used to tell when a restarted encoder is live.
 static FRAMES: [AtomicU64; MAX_SLOTS] = [const { AtomicU64::new(0) }; MAX_SLOTS];
 
 /// Array index for an instance number (clamped to the last slot).
@@ -158,10 +163,12 @@ pub async fn wait_live(
     }
 }
 
+/// Tests for sticky notices and for the restart-is-live wait.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A sticky notice is replayed to a new subscriber until it is released; after release a new subscriber gets none.
     #[tokio::test]
     async fn sticky_notice_is_replayed_until_released() {
         set(40, paused());
@@ -172,6 +179,7 @@ mod tests {
         assert!(sticky.is_none());
     }
 
+    /// A restart counts as live only after the new encoder has delivered a frame; before that `wait_live` times out.
     #[tokio::test]
     async fn restart_is_live_only_after_a_new_encoder_delivers_a_frame() {
         let before = generation(41);

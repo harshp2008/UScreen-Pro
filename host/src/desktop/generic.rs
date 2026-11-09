@@ -20,14 +20,17 @@ impl GenericDesktop {
 }
 
 impl DesktopBackend for GenericDesktop {
+    /// Backend name shown in logs.
     fn name(&self) -> &'static str {
         "generic"
     }
 
+    /// No optional capabilities.
     fn capabilities(&self) -> Capabilities {
         Capabilities::default()
     }
 
+    /// Focus is read through the generic focus poller.
     fn poll_focus(&mut self) -> FocusUpdate {
         self.focus.poll()
     }

@@ -2,6 +2,7 @@
 
 use crate::input::*;
 
+/// The greeting sent to the tablet includes the computer's stream settings when they are known.
 #[test]
 fn the_greeting_carries_the_computers_stream_settings_when_it_has_them() {
     let with = InputResponse {

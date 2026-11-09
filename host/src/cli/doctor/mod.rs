@@ -31,6 +31,7 @@ use crate::display::vdisplay;
 use anyhow::Result;
 use std::path::Path;
 
+/// Severity of one doctor check: passed, warning or failure.
 #[derive(PartialEq)]
 enum Level {
     Ok,
@@ -38,6 +39,7 @@ enum Level {
     Fail,
 }
 
+/// Running totals of warnings and failures, used for the final summary and the exit status.
 struct Report {
     warnings: u32,
     failures: u32,
@@ -170,10 +172,12 @@ pub async fn run() -> Result<()> {
     Ok(())
 }
 
+/// Tests for doctor helpers.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The KWin version is read from its banner; a missing patch number is 0 and empty text gives `None`.
     #[test]
     fn reads_the_kwin_version_from_its_banner() {
         assert_eq!(kwin_version("kwin 6.8.2\n"), Some((6, 8, 2)));

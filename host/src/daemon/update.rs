@@ -13,6 +13,7 @@ use std::time::Duration;
 use tokio::sync::watch;
 use tracing::{debug, info};
 
+/// GitHub API endpoint queried for the latest release (the upstream project's repository).
 const RELEASES_API: &str = "https://api.github.com/repos/majmichu1/UScreen/releases/latest";
 /// Human-readable page the update notice points to.
 pub const RELEASES_PAGE: &str = "https://github.com/majmichu1/UScreen/releases/latest";
@@ -20,6 +21,7 @@ pub const RELEASES_PAGE: &str = "https://github.com/majmichu1/UScreen/releases/l
 /// Delay before the first check, so startup is not spent waiting on the
 /// network, and the interval between checks after that.
 const FIRST_CHECK: Duration = Duration::from_secs(30);
+/// Time between update checks after the first one.
 const INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Version string of a newer release, if one exists.
@@ -102,10 +104,12 @@ pub async fn run(tx: watch::Sender<Available>) {
     }
 }
 
+/// Tests for version comparison and release JSON parsing.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A version is newer only if it is strictly greater; a leading `v` is ignored.
     #[test]
     fn version_comparison() {
         assert!(is_newer("1.1.0", "1.0.2"));
@@ -116,6 +120,7 @@ mod tests {
         assert!(!is_newer("garbage", "1.0.2"));
     }
 
+    /// The tag is read from the `tag_name` field of the release JSON, and invalid JSON gives `None`.
     #[test]
     fn tag_is_read_from_release_json() {
         let body = r#"{"url":"x","tag_name":"v1.4.0","name":"v1.4.0","assets":[]}"#;

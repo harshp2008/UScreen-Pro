@@ -205,6 +205,7 @@ pub async fn desktop_pixels() -> Option<(f64, f64)> {
     (max_x > 0.0 && max_y > 0.0).then(|| ((max_x * max_scale).round(), (max_y * max_scale).round()))
 }
 
+/// Kind of input device whose GNOME mapping setting is written: a graphics tablet or a touchscreen.
 #[derive(Clone, Copy)]
 enum Kind {
     Tablet,
@@ -354,10 +355,12 @@ pub async fn map_devices(
     target.map(|m| m[0].clone())
 }
 
+/// Tests for GNOME display parsing and dconf schema paths.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The connector, vendor, product and serial triple is read from the `GetCurrentState` JSON.
     #[test]
     fn reads_the_edid_triple_from_getcurrentstate_json() {
         let json = r#"{"type":"u(a((ssss)a(siiddada{sv})a{sv})a(iiduba(ssss)a{sv})a{sv})",
@@ -373,6 +376,7 @@ mod tests {
         assert!(parse_monitors("{}").is_none());
     }
 
+    /// The per-device schema path is built from the USB ids as four lowercase hex digits each.
     #[test]
     fn builds_the_per_device_schema_path_and_value() {
         assert_eq!(
@@ -392,6 +396,7 @@ mod tests {
         );
     }
 
+    /// An explicit output mapping is only used when the monitor identity is unique.
     #[test]
     fn explicit_mapping_requires_a_unique_monitor_identity() {
         let mut monitors = vec![

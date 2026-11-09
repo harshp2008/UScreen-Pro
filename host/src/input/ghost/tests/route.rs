@@ -5,6 +5,7 @@ use super::support::*;
 use crate::desktop::AppIdentity;
 use std::collections::HashMap;
 
+/// Drawing apps match by any of their names, ignoring case.
 #[test]
 fn art_apps_match_by_any_name_case_insensitively() {
     assert!(app("org.kde.krita.desktop", "krita").is_art(&art()));
@@ -13,6 +14,7 @@ fn art_apps_match_by_any_name_case_insensitively() {
     assert!(!AppIdentity::default().is_art(&art()));
 }
 
+/// The route follows the focused app, and a per-app override replaces it.
 #[test]
 fn route_follows_the_app_then_the_override() {
     let krita = app("org.kde.krita.desktop", "krita");
@@ -37,6 +39,7 @@ fn route_follows_the_app_then_the_override() {
     assert!(decide(None, &ov, Some(true), &art()));
 }
 
+/// Toggling the route remembers the choice for that app.
 #[test]
 fn toggling_remembers_the_choice_per_app() {
     set_focus(Some(app("zz-test-app.desktop", "zz-test-app")));

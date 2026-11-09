@@ -280,6 +280,7 @@ impl InputServer {
 /// must neither feed events in after the new one took over nor release the new one's buttons
 /// when it finally closes.
 fn latest_connection() -> &'static std::sync::Mutex<std::collections::HashMap<u32, u64>> {
+    /// Newest connection id per instance, created on first use.
     static LATEST: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<u32, u64>>> =
         std::sync::OnceLock::new();
     LATEST.get_or_init(Default::default)
@@ -287,6 +288,7 @@ fn latest_connection() -> &'static std::sync::Mutex<std::collections::HashMap<u3
 
 /// Give a new connection the next id and make it the newest of its instance.
 fn register_connection(instance: u32) -> u64 {
+    /// Source of connection ids, starting at 1.
     static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let id = NEXT.fetch_add(1, Ordering::SeqCst);
     latest_connection()
@@ -369,6 +371,7 @@ pub(super) async fn handle_connection(
         if !ok {
             // The app reconnects every two seconds; after a handful of these
             // the log has made its point.
+            /// Counts unauthenticated connections so the warning is logged only for the first five.
             static DROPS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
             let n = DROPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if n < 5 {
@@ -566,10 +569,12 @@ pub(super) async fn handle_connection(
     Ok(())
 }
 
+/// Tests for connection ordering within one instance.
 #[cfg(test)]
 mod connection_tests {
     use super::*;
 
+    /// Only the newest connection of an instance is current; an older one is no longer latest once a newer one registers.
     #[test]
     fn only_the_newest_connection_of_a_slot_is_current() {
         let a = register_connection(901);

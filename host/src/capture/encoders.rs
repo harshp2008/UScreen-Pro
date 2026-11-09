@@ -14,8 +14,11 @@ use tracing::{info, warn};
 /// either falls back to.
 pub const CANDIDATES: [&str; 4] = ["h264_nvenc", "h264_vaapi", "hevc_vaapi", "libx264"];
 
+/// Render node used until `ensure_vaapi_device` has picked one.
 const DEFAULT_VAAPI_DEVICE: &str = "/dev/dri/renderD128";
+/// The VAAPI render node chosen for this run, set once.
 static VAAPI_DEVICE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+/// Makes sure the render node is picked once per process.
 static VAAPI_PICKED: tokio::sync::OnceCell<()> = tokio::sync::OnceCell::const_new();
 
 /// The render node VAAPI encodes on: the configured or auto-picked one once
@@ -267,10 +270,12 @@ pub async fn resolve(configured: &str) -> Option<String> {
     }
 }
 
+/// Tests for encoder option detection and VAAPI render-node selection.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// An option counts as supported only if ffmpeg's help lists it as a whole word (`async` does not match `async_depth`).
     #[test]
     fn finds_an_option_only_where_ffmpeg_lists_it() {
         let help = "h264_vaapi AVOptions:\n  -async_depth  <int>  E..V... Maximum processing parallelism\n  -low_power  <boolean>  uses async_depth internally\n";
@@ -280,6 +285,7 @@ mod tests {
         assert!(!help_lists_option("h264_vaapi AVOptions:\n", "async_depth"));
     }
 
+    /// A node whose driver is `nvidia` is spotted among the render nodes.
     #[test]
     fn spots_an_nvidia_render_node() {
         let intel_and_nvidia = vec![(128, "i915".to_string()), (129, "nvidia".to_string())];
@@ -288,6 +294,7 @@ mod tests {
         assert!(!has_nvidia(&[]));
     }
 
+    /// NVIDIA nodes are skipped for VAAPI and the remaining nodes keep their order.
     #[test]
     fn skips_nvidia_and_keeps_node_order() {
         let found = vec![
@@ -302,6 +309,7 @@ mod tests {
         assert!(order_nodes(vec![(128, "nvidia".into())]).is_empty());
     }
 
+    /// The VAAPI setup arguments name the chosen render node, for both h264 and hevc.
     #[test]
     fn vaapi_setup_names_the_chosen_render_node() {
         let a = setup_args("h264_vaapi", "/dev/dri/renderD129");

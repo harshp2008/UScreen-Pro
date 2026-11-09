@@ -6,6 +6,7 @@ use crate::desktop::AppIdentity;
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 
+/// The focused application and the per-app route choices made with the hotkey.
 #[derive(Default)]
 struct FocusState {
     app: Option<AppIdentity>,
@@ -17,6 +18,7 @@ struct FocusState {
 
 /// The process-wide focus state.
 fn focus() -> &'static Mutex<FocusState> {
+    /// Process-wide focus state, created on first use.
     static F: OnceLock<Mutex<FocusState>> = OnceLock::new();
     F.get_or_init(|| Mutex::new(FocusState::default()))
 }

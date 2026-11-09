@@ -338,10 +338,12 @@ impl CaptureManager {
     }
 }
 
+/// Tests for the EVDI problem report, using temporary directories in place of `/sys`.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// A missing EVDI module is reported as not loaded.
     #[test]
     fn evdi_problem_reports_a_missing_module() {
         let dir = std::env::temp_dir().join("uscreen-test-evdi-absent");
@@ -349,6 +351,7 @@ mod tests {
         let msg = evdi_setup_problem_in(&dir).expect("absent module is a problem");
         assert!(msg.contains("not loaded"), "got: {msg}");
     }
+    /// A module with no devices (count 0, `add` writable only by root) is reported as a problem.
     #[test]
     fn evdi_problem_reports_a_module_with_no_devices() {
         // The state the Arch report landed in: module resident, count 0, and
@@ -364,6 +367,7 @@ mod tests {
         );
         let _ = std::fs::remove_dir_all(&dir);
     }
+    /// No problem is reported when a device exists.
     #[test]
     fn evdi_problem_stays_quiet_when_a_device_exists() {
         let dir = std::env::temp_dir().join("uscreen-test-evdi-ok");

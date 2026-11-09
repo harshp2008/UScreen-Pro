@@ -245,6 +245,7 @@ pub async fn adb_devices() -> Vec<String> {
 
 /// The device-side ports the Android app falls back to when it is launched without port extras.
 const APP_VIDEO_PORT: u16 = 8890;
+/// The device-side input port the Android app falls back to when it is launched without port extras.
 const APP_INPUT_PORT: u16 = 8891;
 
 /// `(device port, host port)` pairs to reverse for one tablet.
@@ -557,10 +558,12 @@ pub async fn launch_app(serial: &str, token: Option<&str>, video_port: u16, inpu
     }
 }
 
+/// Tests for adb port reversal and device-serial handling.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Reversed ports keep the app's fixed device ports for every host session: slot 0 maps each port once, later slots map their own ports and also the app's defaults.
     #[test]
     fn reverse_keeps_the_apps_fixed_device_ports_for_every_host_session() {
         // Slot 0 uses the defaults: nothing is mapped twice.
@@ -574,6 +577,7 @@ mod tests {
         }
     }
 
+    /// Network serials (`ip:port` and mDNS names) are told apart from USB serials.
     #[test]
     fn tells_network_serials_from_usb_ones() {
         assert!(is_network_serial("192.168.1.20:5555"));
@@ -592,6 +596,7 @@ mod tests {
         );
     }
 
+    /// When one physical device shows up both by USB and over the network, the USB entry is kept.
     #[test]
     fn physical_device_deduplication_prefers_usb() {
         let dev1 = DiscoveredDevice {

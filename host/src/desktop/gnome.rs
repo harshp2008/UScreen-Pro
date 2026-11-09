@@ -25,10 +25,12 @@ impl GnomeDesktop {
 }
 
 impl DesktopBackend for GnomeDesktop {
+    /// Backend name shown in logs.
     fn name(&self) -> &'static str {
         "gnome"
     }
 
+    /// Focus, pointer context and the pen menu are available; placement only when the spawn-at tool is installed.
     fn capabilities(&self) -> Capabilities {
         Capabilities {
             focus: true,
@@ -38,6 +40,7 @@ impl DesktopBackend for GnomeDesktop {
         }
     }
 
+    /// Focus comes from the Shell extension's focus poll.
     fn poll_focus(&mut self) -> FocusUpdate {
         self.focus.poll()
     }
@@ -99,6 +102,9 @@ impl DesktopBackend for GnomeDesktop {
         false
     }
 
+    /// Waits for the extension to write the menu's result (`menu_result`) for this request and returns the chosen action name.
+/// `None` when the result is `none` (dismissed) or nothing arrives within the request timeout plus 2 s.
+/// When `close_now` turns true it asks the extension to close the menu by writing `menu_close`.
     fn wait_menu_choice(
         &mut self,
         req: &MenuRequest,
@@ -131,14 +137,17 @@ impl DesktopBackend for GnomeDesktop {
         None
     }
 
+    /// The focused window, via spawn-at.
     fn focused_window(&mut self) -> Option<WindowRef> {
         spawn_at::focused_window()
     }
 
+    /// Gives the window keyboard focus, via spawn-at; true on success.
     fn focus_window(&mut self, window: &WindowRef) -> bool {
         spawn_at::focus_window(window)
     }
 
+    /// Opens `command` as a window of class `class` at the pointer, `lift` pixels higher, via spawn-at; true on success.
     fn spawn_at_pointer(&mut self, lift: i32, class: &str, command: &[String]) -> bool {
         spawn_at::spawn_at_pointer(lift, class, command)
     }
