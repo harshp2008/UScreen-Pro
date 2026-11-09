@@ -92,3 +92,12 @@ shadow and no rectangular edge (seen in a crop of its own area). A real pen tap 
 (`action: none`).
 Bug found on the way: the request id was nanoseconds (~1.8e18), above JavaScript's exact-integer range (2^53), so the extension echoed a different number; ids are now milliseconds.
 Also: after the re-login the tablet app was not connected to the restarted daemon (no input client); `am force-stop` + start of the app reconnected it.
+
+## Follow-up: "clicking on a selection does nothing / drags" (found: Mouse style, then zero-length clicks)
+* First finding: during the reported test the tablet profile was in **Mouse** style (log: `Tablet changed stylus_style to "mouse"`, set from the tablet's "Pen acts as" chips). Mouse style presses at touchdown with no click
+  zone, so the drift of a normal tap (measured ~1.4 mm per 100 ms) was sent as movement with the button down: libinput showed press, 20-30 motion events, release on sub-100 ms strokes. Set back to `auto`.
+* Second finding, in Auto: the recorder showed clean taps (15 taps drifting 0.0-0.9 mm, all inside the 2 mm zone, delivered as motion-free clicks) that still did not deselect in the reporter's app. The one remaining difference from a
+  working click (Mouse style: a gentle click deselects) is timing: since the held-back press, a tap was press+release at the same instant. A real quick click on the reporter's touchpad was held 70-147 ms (median ~105).
+* Change: a delivered tap now keeps the left button down for `pen_click_hold_ms` (default 90, 0 = release at once), released by a 10 ms ticker; the cursor does not move while it is held (no micro-drag), and a new touch releases it
+  first. Verified with libinput: press-to-release 93-99 ms with 0 motion events in between, for taps whose touch lasted 30-110 ms. Regression unchanged (drags 12/12, quick taps, art route, resting pen, shaky taps, menu, Chrome Wayland tap on a selection).
+* Not verified: the reporter's app (Google Docs). If it still fails there, the next knobs are a tiny natural motion during the press and a configurable click-zone size.

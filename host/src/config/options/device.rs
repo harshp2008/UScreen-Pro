@@ -45,6 +45,8 @@ pub struct DeviceOptions {
     pub pen_menu: bool,
     /// Milliseconds the pen is held still before the menu appears. Global.
     pub pen_menu_hold_ms: u32,
+    /// Milliseconds a pen tap keeps the left button down (0 = release at once). Global.
+    pub pen_click_hold_ms: u32,
     /// Ghost tracking: apps that get the pressure pen. Global.
     pub stylus_art_apps: Vec<String>,
     /// Informational: a Wi-Fi address is configured for this device, so the app hides its
@@ -126,6 +128,7 @@ impl DeviceOptions {
             stylus_idle_hide_timeout: g.stylus_idle_hide_timeout,
             pen_menu: g.pen_menu,
             pen_menu_hold_ms: g.pen_menu_hold_ms,
+            pen_click_hold_ms: g.pen_click_hold_ms,
             stylus_art_apps: g.stylus_art_apps.clone(),
             wifi_configured: wifi(&p.wifi_address) || !cfg.wifi_address.trim().is_empty(),
         }

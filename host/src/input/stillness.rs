@@ -27,6 +27,8 @@ pub(super) struct StillCfg {
     /// How long the tip must stay down inside the click slop for a lift to count as a long press
     /// (the pen menu).
     pub long_press: Duration,
+    /// How long a delivered tap keeps the left button down before it is released.
+    pub click_hold: Duration,
 }
 
 impl Default for StillCfg {
@@ -37,6 +39,7 @@ impl Default for StillCfg {
             wake_radius_mm: 5.0,
             click_slop_mm: 2.0,
             long_press: Duration::from_millis(800),
+            click_hold: Duration::from_millis(90),
         }
     }
 }

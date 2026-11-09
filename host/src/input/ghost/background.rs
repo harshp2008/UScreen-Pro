@@ -75,21 +75,29 @@ pub(in crate::input) fn start_focus_watcher() {
     }
 }
 
-/// Drive the idle hide for the daemon's lifetime: a few ticks a second, reading the timeout live.
+/// Drive the timed pen work for the daemon's lifetime. Every 10 ms: release a tap's button when its
+/// hold time is up. Every 50 ms: read the options live, check the route, the range-exit grace, the
+/// long-press menu and the idle cursor hide.
 pub(in crate::input) fn spawn_idle_task(
     uinput: Arc<std::sync::Mutex<InjectDevices>>,
     instance: u32,
 ) {
     tokio::spawn(async move {
-        let mut tick = tokio::time::interval(Duration::from_millis(50));
+        let mut tick = tokio::time::interval(Duration::from_millis(10));
         let mut n: u32 = 0;
         loop {
             tick.tick().await;
             n = n.wrapping_add(1);
             // The idle hide is checked a few times a second, reading the timeout live (before the
             // device lock is taken, as the event path does).
+            if !n.is_multiple_of(5) {
+                if let Ok(mut guard) = uinput.lock() {
+                    guard.auto_flush_click();
+                }
+                continue;
+            }
             let opts = crate::config::options::current_options(instance);
-            let timeout = if n.is_multiple_of(5) {
+            let timeout = if n.is_multiple_of(25) {
                 opts.stylus_idle_hide_timeout
             } else {
                 0
@@ -98,6 +106,8 @@ pub(in crate::input) fn spawn_idle_task(
             let Ok(mut guard) = uinput.lock() else {
                 continue;
             };
+            guard.auto_flush_click();
+            guard.still_cfg.click_hold = Duration::from_millis(opts.pen_click_hold_ms as u64);
             guard.auto_check_route(to_pen);
             guard.auto_flush_exit();
             guard.menu_enabled = opts.pen_menu;

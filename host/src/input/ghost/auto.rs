@@ -76,6 +76,10 @@ impl InjectDevices {
             // Anything but a hover (touch, lift, range exit) ends a parked spell.
             self.hover_filter.reset();
         }
+        // A new touch (or a move that starts one) first lets go of the previous tap's button.
+        if matches!(s.action, 0 | 2) {
+            self.auto_release_click_now();
+        }
         let open = self.auto_down_at.is_some();
         if s.action != 3 {
             record(
@@ -169,20 +173,33 @@ impl InjectDevices {
                 if !(open && self.slop_anchor.is_some()) {
                     self.ghost_place_pointer(s.x, s.y);
                 }
+                let mut tap = false;
                 if open && self.tip == Tip::Pointer && self.press_deferred {
                     match self.hold {
                         // A long press with the menu up: no click, the selection stays.
                         Hold::Shown => {}
                         // The runner is still deciding: the tap is delivered or dropped when it answers.
                         Hold::Pending => self.pending_click = self.slop_anchor,
-                        // A plain tap: the press goes out now and is released just below.
-                        _ => self.auto_press_now(),
+                        // A plain tap: the press goes out now; the button stays down for the click
+                        // hold time (like a real click) and is released by `auto_flush_click`.
+                        _ => {
+                            self.auto_press_now();
+                            tap = true;
+                        }
                     }
+                }
+                let keep_down = tap && !self.still_cfg.click_hold.is_zero();
+                if keep_down {
+                    // `ghost_end_stroke` would release the button now; leave it to the timer.
+                    self.tip = Tip::None;
+                    self.click_release_at = Some(Instant::now() + self.still_cfg.click_hold);
                 }
                 self.auto_end_stroke(s);
                 // Whatever the lift did not manage to let go of, let go of now (only what is held:
                 // the tablet device is not written to when it is idle).
-                self.auto_let_go_left();
+                if !keep_down {
+                    self.auto_let_go_left();
+                }
                 self.auto_exit_at = None;
                 self.auto_up_at = Some(Instant::now());
                 self.last_pen_pos = (s.x, s.y);
@@ -216,6 +233,8 @@ impl InjectDevices {
     /// Start a stroke on the route `to_pen` says (latched until the lift). The pointer is already
     /// at the pen, so the button goes down after the position.
     fn auto_begin(&mut self, s: &PenSample, to_pen: bool) {
+        // The previous tap's button must be up before anything new starts.
+        self.auto_release_click_now();
         self.tip = if to_pen {
             Tip::Pen
         } else if s.eraser {
@@ -268,6 +287,20 @@ impl InjectDevices {
         self.ghost_place_pointer(s.x, s.y);
     }
 
+    /// Release a tap's left button when its hold time is up. Called by the 10 ms ticker.
+    pub(in crate::input) fn auto_flush_click(&mut self) {
+        if self.click_release_at.is_some_and(|t| Instant::now() >= t) {
+            self.auto_release_click_now();
+        }
+    }
+
+    /// Release a tap's left button now, if it is still down.
+    fn auto_release_click_now(&mut self) {
+        if self.click_release_at.take().is_some() {
+            self.ghost_pointer_button(BTN_LEFT, 1, false);
+        }
+    }
+
     /// Send the left-button press that was held back, if it still is. The pointer is at the spot the
     /// tip landed (it was held there), so the press goes out where the user touched.
     fn auto_press_now(&mut self) {
@@ -306,7 +339,11 @@ impl InjectDevices {
             if !shown {
                 self.ghost_place_pointer(p.0, p.1);
                 self.ghost_pointer_button(BTN_LEFT, 1, true);
-                self.ghost_pointer_button(BTN_LEFT, 1, false);
+                if self.still_cfg.click_hold.is_zero() {
+                    self.ghost_pointer_button(BTN_LEFT, 1, false);
+                } else {
+                    self.click_release_at = Some(Instant::now() + self.still_cfg.click_hold);
+                }
             }
             return;
         }

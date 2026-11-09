@@ -552,3 +552,53 @@ fn long_press_never_asks_on_the_art_route() {
     done(&[&pp, &qp]);
     assert!(rx.try_recv().is_err());
 }
+
+// ---- Click hold: a tap keeps the button down for a natural time ----
+
+#[test]
+fn click_hold_a_tap_keeps_the_button_down_until_the_hold_time_is_up() {
+    let (mut d, pp, qp) = rig();
+    d.still_cfg.click_hold = Duration::from_millis(60);
+    auto(&mut d, 0, 5000, false);
+    auto(&mut d, 1, 5000, false);
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1), "pressed at the lift, still down");
+    d.auto_flush_click();
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Down(0b1), "not before the hold time");
+    std::thread::sleep(Duration::from_millis(80));
+    d.auto_flush_click();
+    assert_eq!(d.dev_state(Which::Pointer), DevState::Idle);
+    let ptr = frames(&qp);
+    done(&[&pp, &qp]);
+    assert_eq!(left_events(&ptr), vec![1, 0]);
+}
+
+#[test]
+fn click_hold_the_cursor_does_not_move_while_a_tap_is_held() {
+    let (mut d, pp, qp) = rig();
+    d.still_cfg.click_hold = Duration::from_millis(60);
+    auto(&mut d, 0, 5000, false);
+    auto(&mut d, 1, 5000, false);
+    let before = xs(&frames(&qp)).len();
+    auto(&mut d, 3, 9000, false); // the pen lifts away and hovers elsewhere at once
+    assert_eq!(xs(&frames(&qp)).len(), before, "no motion with the button down");
+    std::thread::sleep(Duration::from_millis(80));
+    d.auto_flush_click();
+    auto(&mut d, 3, 9100, false);
+    let ptr = frames(&qp);
+    done(&[&pp, &qp]);
+    assert!(xs(&ptr).contains(&9100), "and it follows again once the button is up");
+}
+
+#[test]
+fn click_hold_a_new_touch_releases_the_previous_tap_before_moving() {
+    let (mut d, pp, qp) = rig();
+    d.still_cfg.click_hold = Duration::from_millis(500);
+    auto(&mut d, 0, 5000, false);
+    auto(&mut d, 1, 5000, false);
+    auto(&mut d, 0, 20000, false); // the next touch comes long before the hold time is up
+    let ptr = frames(&qp);
+    done(&[&pp, &qp]);
+    let release = ptr.iter().position(|f| f.contains(&(EV_KEY, BTN_LEFT, 0))).unwrap();
+    let moved = ptr.iter().position(|f| f.contains(&(EV_ABS, ABS_X, 20000))).unwrap();
+    assert!(release < moved, "released first, then the cursor moves to the new touch");
+}

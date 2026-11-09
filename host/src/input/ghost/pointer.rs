@@ -21,6 +21,11 @@ impl InjectDevices {
     /// the cursor vanish; so when the tool is up and the position repeats, it is written one unit
     /// (1/65535 of the desktop, far below a pixel) to the side and back.
     pub(super) fn ghost_place_pointer(&mut self, x: i32, y: i32) {
+        // A tap's button is still down for its click hold time: the cursor must not move yet, or the
+        // app would see a tiny drag.
+        if self.click_release_at.is_some() {
+            return;
+        }
         let (px, py) = self.desktop_xy(x, y);
         let mut wx = px;
         if self.pen_proximity && self.ghost_last_written == (px, py) {

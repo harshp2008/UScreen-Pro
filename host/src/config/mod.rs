@@ -209,6 +209,9 @@ pub struct FileConfig {
     pub pen_menu_style: String,
     /// How long (milliseconds) the pen must be held still before the menu appears.
     pub pen_menu_hold_ms: u32,
+    /// How long (milliseconds) a pen tap keeps the left button down before releasing it; 0 releases
+    /// at once. A real mouse click is held about 100 ms; some apps ignore a click with no press time.
+    pub pen_click_hold_ms: u32,
     /// Apps (app id, desktop file or window class, case-insensitive substring) whose pen strokes go
     /// to the pressure-sensitive `UScreen Pen`; everywhere else the tip is a mouse click.
     pub stylus_art_apps: Vec<String>,
@@ -291,6 +294,7 @@ impl Default for FileConfig {
             pen_menu: true,
             pen_menu_style: "text".into(),
             pen_menu_hold_ms: 800,
+            pen_click_hold_ms: 90,
             stylus_art_apps: default_art_apps(),
             physical_tablet_support: false,
             physical_tablet_device: String::new(),
@@ -391,6 +395,7 @@ impl FileConfig {
         self.stylus_idle_hide_timeout = self.stylus_idle_hide_timeout.min(3600);
         self.pen_menu_style = clean_menu_style(&self.pen_menu_style);
         self.pen_menu_hold_ms = self.pen_menu_hold_ms.clamp(300, 3000);
+        self.pen_click_hold_ms = self.pen_click_hold_ms.min(300);
         self.stylus_art_apps = self
             .stylus_art_apps
             .iter()

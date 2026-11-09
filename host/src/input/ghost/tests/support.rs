@@ -37,6 +37,8 @@ pub(super) fn rig() -> (InjectDevices, std::path::PathBuf, std::path::PathBuf) {
     let mut d = InjectDevices::headless();
     d.pen = Some(pen);
     d.pointer = Some(pointer);
+    // Taps release at once in the tests, except where a test sets a hold time.
+    d.still_cfg.click_hold = std::time::Duration::ZERO;
     (d, pp, qp)
 }
 
