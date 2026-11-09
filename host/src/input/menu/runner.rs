@@ -77,9 +77,10 @@ fn handle_request(desktop: &mut dyn DesktopBackend, uinput: &Arc<Mutex<InjectDev
     // Preferred: the desktop draws the menu itself (no window, no focus change).
     if desktop.capabilities().menu {
         let req = MenuRequest {
+            // Milliseconds: small enough for the extension's JavaScript numbers (2^53) to carry exactly.
             id: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_nanos() as u64)
+                .map(|d| d.as_millis() as u64)
                 .unwrap_or(1),
             items: plan.buttons.iter().map(|a| a.name().to_string()).collect(),
             style: plan.style.clone(),

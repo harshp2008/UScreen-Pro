@@ -85,3 +85,10 @@ Reported after trying it: the menu showed up in the dock (a generic gear icon) a
 Verified: host tests (192); the window fallback with the old extension (menu up 1.5 s after the press: 0.8 s hold + 0.4 s waiting for the missing menu code + 0.2 s placement); the Shell path with a stand-in for the extension's
 menu code (request written with items/style/timeout, ack, result, Ctrl+V sent, no window). **Not verified: the extension's menu code in the real Shell** (extension v5, needs the files copied and a re-login), its look, and the
 settings controls in the desktop app.
+
+### Verified in the real Shell (extension v5, after the re-login)
+Chrome probe page, text selected, pen held on it: the **Shell drew the menu 1.04 s after the press** (no `app.uscreen.menu` window, nothing for the dock), above the pointer, a dark rounded pill with a soft Shell
+shadow and no rectangular edge (seen in a crop of its own area). A real pen tap on its **Copy** button wrote `{"id":...,"action":"copy"}` and Ctrl+C reached the keyboard device. Left alone, it dismissed itself after 8 s
+(`action: none`).
+Bug found on the way: the request id was nanoseconds (~1.8e18), above JavaScript's exact-integer range (2^53), so the extension echoed a different number; ids are now milliseconds.
+Also: after the re-login the tablet app was not connected to the restarted daemon (no input client); `am force-stop` + start of the app reconnected it.
