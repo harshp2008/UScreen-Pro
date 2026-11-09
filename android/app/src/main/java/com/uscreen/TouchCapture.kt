@@ -119,7 +119,6 @@ class TouchCapture {
      * overwrite newer settings made on the computer (config.toml or the GUI).
      */
     private var pendingConfig: JSONObject? = null
-    @Volatile private var pendingMode: JSONObject? = null
 
     /** Tablet's native landscape resolution, reported to the host on connect
      *  so the virtual display can match it automatically. */
@@ -187,10 +186,6 @@ class TouchCapture {
                         "(${nativeWidthMm}x${nativeHeightMm} mm), version: ${BuildConfig.VERSION_NAME}")
             }
             sendPendingConfig(webSocket)
-            pendingMode?.let {
-                webSocket.send(it.toString())
-                pendingMode = null
-            }
             webSocket.send(JSONObject().apply {
                 put("type", "ping")
             }.toString())
@@ -892,27 +887,6 @@ class TouchCapture {
             if (decodeUs >= 0) put("decode_us", decodeUs)
         }
         webSocket?.send(msg.toString())
-    }
-
-    /**
-     * Ask the host to switch between being a second screen and being a
-     * graphics tablet. The host applies it and answers with its new mode, so
-     * the UI follows [onModeKnown] rather than assuming this succeeded.
-     */
-    fun sendMode(penOnly: Boolean) {
-        val msg = JSONObject().apply {
-            put("type", "mode")
-            put("pen_only", penOnly)
-        }
-        if (isConnected) {
-            webSocket?.send(msg.toString())
-            Log.i(TAG, "Requested mode: ${if (penOnly) "pen-only" else "display"}")
-        } else {
-            // Held rather than replayed forever: the host is the source of
-            // truth for the mode, and re-asserting a stale choice on every
-            // reconnect would fight whatever it was set to in the meantime.
-            pendingMode = msg
-        }
     }
 
     /**

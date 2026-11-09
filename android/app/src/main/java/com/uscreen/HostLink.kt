@@ -260,9 +260,6 @@ object FadeCurve {
         override fun getInterpolation(input: Float): Float = exponential(input)
     }
 
-    /** The names the host may send; anything else is treated as linear. */
-    val NAMES = listOf("linear", "ease_in", "ease_out", "ease_in_out", "exponential")
-
     /**
      * Control points of a `bezier:x1,y1,x2,y2` curve (a CSS-style cubic Bezier through (0,0) and (1,1)), or
      * null when the text is not one. x is clamped to 0..1 as [PathInterpolator] requires.

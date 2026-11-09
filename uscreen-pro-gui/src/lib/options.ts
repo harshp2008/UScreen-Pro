@@ -50,7 +50,6 @@ export function labelOf(options: Option[], value: string | number | undefined): 
 /** Encoder CRF/QP scale of the quality slider: lower is sharper. 18 is the host default. */
 export const QUALITY_MIN = 12;
 export const QUALITY_MAX = 32;
-export const DEFAULT_QUALITY = 18;
 
 /** Named band for a CRF value, shown next to the number while the slider moves. */
 export function qualityLabel(crf: number): string {
