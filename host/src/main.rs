@@ -8,6 +8,7 @@ mod capture;
 mod cli;
 mod config;
 mod daemon;
+mod desktop;
 mod display;
 mod input;
 mod net;
