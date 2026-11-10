@@ -5,8 +5,15 @@ name: Build UScreen
 on:
   push:
     branches: [main, develop]
+    paths-ignore: ['website/**', 'docs/**', 'experiments_and_findings/**', '**/*.md']
   pull_request:
     branches: [main]
+    paths-ignore: ['website/**', 'docs/**', 'experiments_and_findings/**', '**/*.md']
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-host:
@@ -28,14 +35,12 @@ jobs:
           # libevdi headers are needed only for the C helper; not in all repos
           sudo apt-get install -y libevdi0-dev || echo "libevdi-dev unavailable, helper build will be skipped"
 
+      # Caches the registry and the compiled dependencies, keyed on Cargo.lock; saved only from main so
+      # pull requests read the cache without filling it with their own variants.
       - name: Cache cargo
-        uses: actions/cache@v4
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Build daemon and pen menu
         run: cargo build --release -p uscreen -p uscreen-menu
@@ -70,6 +75,12 @@ jobs:
       # licences accepted, and Gradle finds it through ANDROID_HOME. The
       # setup-android action started failing on the licence prompt in
       # September 2026 and took every build red with it.
+
+      # Caches the Gradle distribution, dependencies and build cache between runs.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Build debug APK
         run: |
