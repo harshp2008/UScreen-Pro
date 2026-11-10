@@ -30,7 +30,7 @@ Nothing is claimed for another desktop, distribution or tablet than the one abov
 | Feature | What it does | Where | Status |
 |---|---|---|---|
 | **Mouse style** | The pen is a pointer that clicks and drag-selects; two side buttons can be right click, middle click or nothing | `ghost/pointer.rs` | run |
-| **Graphics tablet style** | The pen is a pressure + tilt + eraser tablet device (`UScreen Pen`) that Krita, GIMP and Blender see as a tablet | `ghost/route.rs` | run (libinput level; Krita not installed) |
+| **Graphics tablet style** | The pen is a pressure + tilt + eraser tablet device (`UScreen Pen`) that Krita, GIMP and Blender see as a tablet | `ghost/route.rs` | run (pressure works in Krita with the Galaxy Tab S9 FE+ and its S Pen) |
 | **Dynamic style** | One pen, both behaviours: a tablet in drawing apps, a mouse everywhere else, chosen per app from the focused window | `ghost/auto.rs`, GNOME extension | run, **experimental, GNOME only** |
 | **Route hotkey / CLI** | `Ctrl+Alt+P` or `uscreen toggle-tablet` flips the focused app between tablet and mouse | extension `penRouting.js` | run (CLI); hotkey needs the extension |
 | **Ghost tracking** | A visible cursor always follows the pen, because tablet-class events hide the pointer on Wayland | `ghost/mod.rs` | run |

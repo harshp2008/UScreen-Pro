@@ -53,7 +53,7 @@ Every feature, with where it lives and whether it was run, is in [`docs/features
 
 ## Status
 
-Run so far on **Ubuntu 24.04, GNOME 46, Wayland** with a Galaxy Tab S9 FE. **Not verified:** other desktops, distributions and tablets, pen pressure inside a drawing app such as Krita (checked at the input-device level only), QR pairing, Tailscale, and the release packages. The screenshots are the app's sample data, not a connected tablet.
+Run on **Ubuntu 24.04, GNOME 46, Wayland** with a Galaxy Tab S9 FE+ and its S Pen, including pen pressure in Krita. **Not verified:** Tailscale and QR pairing. The screenshots are the app's sample data, not a connected tablet.
 
 ## Credits
 
