@@ -25,9 +25,15 @@
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
 
-## What Pro adds
+## Set up in three steps
 
-Pro is an extension of [UScreen](https://github.com/majmichu1/UScreen) by majmichu1, built on top of their work to make it comfortable to use every day.
+1. **Run the installer.** `./scripts/install.sh` detects your distribution, shows what it will install, asks before it does, and tells you if you need to log out. (`--dry-run` shows every command first.)
+2. **Add your tablet.** Open UScreen Pro, press **Add device** and plug the tablet in. The app is installed on it and wireless is set up for you. You turn on USB debugging once; the wizard shows how.
+3. **Use it.** Plug in whenever you like. If something looks off, run `uscreen doctor`.
+
+Details: [Install](https://harshp2008.github.io/UScreen-Pro/install/).
+
+## What Pro adds
 
 - ✏️ **A pen that works.** A pressure tablet in drawing apps and a normal mouse everywhere else, switched per app (Dynamic: GNOME, experimental) or set by hand.
 - 📋 **Cut, copy and paste from the pen.** Hold it still and a small menu opens at the tip.
@@ -45,18 +51,10 @@ Every feature, with where it lives and whether it was run, is in [`docs/features
   <img src="docs/assets/screenshots/tour.gif" alt="A tour of the desktop app (sample data)" width="700">
 </p>
 
-## Install
-
-```bash
-./scripts/install.sh        # add --dry-run to see every command first
-```
-
-Then install `uscreen.apk` on the tablet, plug it in and run `uscreen start`. If something is off, run `uscreen doctor`. Details: [Install](https://harshp2008.github.io/UScreen-Pro/install/).
-
 ## Status
 
 Run so far on **Ubuntu 24.04, GNOME 46, Wayland** with a Galaxy Tab S9 FE. **Not verified:** other desktops, distributions and tablets, pen pressure inside a drawing app such as Krita (checked at the input-device level only), QR pairing, Tailscale, and the release packages. The screenshots are the app's sample data, not a connected tablet.
 
 ## Credits
 
-UScreen Pro is an extension of **[UScreen](https://github.com/majmichu1/UScreen) by [majmichu1](https://github.com/majmichu1)**, and a thank-you to it: the virtual display, the capture pipeline, the adb connection, the session token and the first Android app are theirs. Pro would not exist without that work. MIT licence, see [`LICENSE`](LICENSE) and [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+UScreen Pro started from **[UScreen](https://github.com/majmichu1/UScreen)** by majmichu1 and keeps its idea, its virtual-display capture and its adb link. The desktop app, the tablet app, the input engine and the installer are new, and most of the rest has been reworked. MIT licence, see [`LICENSE`](LICENSE) and [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).

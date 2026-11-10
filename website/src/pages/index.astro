@@ -1,0 +1,484 @@
+---
+// The landing page: a standalone page, not part of the documentation layout (no docs header, sidebar or pager).
+// Everything on it is either a real screenshot or a mock-up built from the app's real labels, and says which.
+// The documentation starts at /what-is-uscreen-pro/. System fonts only; no third-party requests.
+const base = import.meta.env.BASE_URL;
+const docs = `${base}what-is-uscreen-pro/`;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UScreen Pro: your Android tablet as a display, touchpad and pen tablet on Linux</title>
+    <meta name="description" content="Turn an Android tablet into a second display, a laptop touchpad and a real pen tablet on Linux. One installer, a guided setup." />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <meta name="color-scheme" content="dark light" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="w bar">
+        <a class="logo" href={base}>UScreen Pro</a>
+        <nav>
+          <a href="#setup">Setup</a>
+          <a href="#pen">Pen</a>
+          <a href="#new">Features</a>
+          <a href={docs}>Docs</a>
+          <a class="gh" href="https://github.com/harshp2008/UScreen-Pro">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <!-- Hero: the real first screen of the Add device wizard, rebuilt in HTML -->
+      <section class="hero">
+        <div class="w hero-grid">
+          <div>
+            <p class="pill"><i></i>Open source · Linux · Android</p>
+            <h1>Your tablet.<br /><em>Your pen.</em><br />Your Linux.</h1>
+            <p class="sub">A second display, a laptop touchpad and a real pen tablet, from one Android tablet. Set up in a few clicks.</p>
+            <div class="cta">
+              <a class="btn primary" href="#setup">Get started</a>
+              <a class="btn" href="https://github.com/harshp2008/UScreen-Pro">GitHub</a>
+              <a class="btn ghost" href={docs}>Docs</a>
+            </div>
+          </div>
+          <figure class="mock-wrap">
+            <div class="app" role="img" aria-label="Mock-up of the Add device dialog of the UScreen Pro desktop app">
+              <div class="app-side">
+                <div class="brand"><span class="logo-sq"></span>UScreen Pro</div>
+                <div class="start">&#9655; Start Daemon</div>
+                <div class="nav">Settings</div>
+                <div class="nav">Advanced</div>
+                <div class="nav">System health</div>
+                <div class="cap">PAIRED DEVICES (1)</div>
+                <div class="nav sel">SM-X616B <small>USB</small></div>
+                <div class="cap">NEW DEVICES (1)</div>
+                <div class="nav">SM-A556E <small>USB</small></div>
+              </div>
+              <div class="app-main"></div>
+              <div class="dialog">
+                <h3>Add device</h3>
+                <div class="usb">
+                  <b>Setup via USB (Recommended)</b>
+                  <span>Plug in your device. We will automatically install the app and configure wireless mode.</span>
+                </div>
+                <div class="wl">&#8964; Don't have a USB cable? Set up wirelessly.</div>
+              </div>
+            </div>
+            <figcaption>Mock-up of the Add device dialog, with sample devices.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <!-- Setup comes first: easy setup is the point -->
+      <section id="setup">
+        <div class="w">
+          <h2>Set up in three steps</h2>
+          <p class="lead">No config files. The installer works out your system, and the app does the tablet.</p>
+          <ol class="steps">
+            <li class="reveal">
+              <h3>Run the installer</h3>
+              <code>./scripts/install.sh</code>
+              <p>It detects your distribution, shows what it will install, asks before it does, and tells you at the end if you need to log out.</p>
+            </li>
+            <li class="reveal" style="--d:1">
+              <h3>Add your tablet</h3>
+              <p>Open UScreen Pro, press <b>Add device</b> and plug the tablet in. The app is installed on it and wireless is set up for you.</p>
+              <ul class="stepper" aria-label="The five steps of the wizard">
+                <li>Prepare Device</li><li>Connect USB</li><li>Install</li><li>Wireless</li><li>Finish</li>
+              </ul>
+            </li>
+            <li class="reveal" style="--d:2">
+              <h3>Use it</h3>
+              <p>Plug in whenever you like and the display appears. The tablet app is kept in step with the computer on its own.</p>
+              <code>uscreen doctor</code>
+              <p class="small">checks everything if something looks off.</p>
+            </li>
+          </ol>
+          <p class="note">One thing the wizard cannot do for you: turn on USB debugging on the tablet, once. It shows you how, step by step.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="w">
+          <h2>One tablet, three jobs</h2>
+          <div class="cards">
+            <div class="card reveal"><div class="ico"><svg class="i"><use href="#i-monitor" /></svg></div><h3>Second display</h3><p>A real extra monitor, encoded in hardware. Touch and pen come back.</p></div>
+            <div class="card reveal" style="--d:1"><div class="ico"><svg class="i"><use href="#i-pad" /></svg></div><h3>Touchpad</h3><p>Swipes, pinch and palm rejection. Nothing is streamed.</p></div>
+            <div class="card reveal" style="--d:2"><div class="ico"><svg class="i"><use href="#i-pen" /></svg></div><h3>Pen tablet</h3><p>Pressure, tilt and eraser on the screen you are already using.</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- The pen: an interactive illustration of the three styles and the pen menu -->
+      <section id="pen">
+        <div class="w pen">
+          <div class="reveal">
+            <h2>A pen for drawing and for clicking</h2>
+            <p class="lead">Choose how the pen behaves. Try it.</p>
+            <div class="styles" role="group" aria-label="Pen style">
+              <button type="button" aria-pressed="true" data-style="dynamic">Dynamic</button>
+              <button type="button" aria-pressed="false" data-style="mouse">Mouse</button>
+              <button type="button" aria-pressed="false" data-style="tablet">Graphics tablet</button>
+            </div>
+            <p id="style-text" class="explain"></p>
+            <p class="small">Dynamic is experimental and GNOME only. The menu opens when you hold the pen still on selected text, and only when the pen is acting as a mouse.</p>
+          </div>
+          <div class="reveal" style="--d:2">
+            <div class="demo" id="demo" data-style="dynamic" aria-label="Illustration of the pen styles and the pen menu">
+              <div class="win art">
+                <div class="wbar"><b></b><b></b><b></b><span>Drawing app</span></div>
+                <svg viewBox="0 0 240 110" class="canvas" aria-hidden="true">
+                  <path class="plain" d="M14 80 C 60 20, 110 110, 160 50 S 214 40, 226 56" />
+                  <path class="taper" d="M14 80 C 60 20, 110 110, 160 50 S 214 40, 226 56" />
+                </svg>
+                <div class="badge" id="badge-art"></div>
+              </div>
+              <div class="win txt">
+                <div class="wbar"><b></b><b></b><b></b><span>Notes</span></div>
+                <p>Remember to renew the <mark id="sel">domain</mark> before Friday.</p>
+                <p class="dim">Plain text, like everywhere else.</p>
+                <svg class="cursor" id="cursor" viewBox="0 0 16 24" aria-hidden="true"><path d="M1.5 1.5 L1.5 18 L5.8 14.2 L8.6 20.8 L11.2 19.6 L8.4 13.2 L14 13 Z" /></svg>
+                <div class="menu" id="menu" aria-hidden="true"><span>Cut</span><span>Copy</span><span>Paste</span><span>Select all</span><span>Undo</span></div>
+                <div class="badge" id="badge-txt"></div>
+              </div>
+            </div>
+            <p class="note c">Illustration. The pointer is the normal system cursor; the real menu is drawn by the GNOME Shell extension.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="new">
+        <div class="w">
+          <h2>What Pro adds</h2>
+          <div class="tiles">
+            <div class="tile reveal"><div class="ico"><svg class="i"><use href="#i-clip" /></svg></div><b>Pen menu</b><span>Cut, copy and paste from the pen</span></div>
+            <div class="tile reveal" style="--d:1"><div class="ico"><svg class="i"><use href="#i-cursor" /></svg></div><b>Clean pen strokes</b><span>No stray clicks, no stolen cursor</span></div>
+            <div class="tile reveal" style="--d:2"><div class="ico"><svg class="i"><use href="#i-pad" /></svg></div><b>Native gestures</b><span>Fingers replayed as a real touchpad</span></div>
+            <div class="tile reveal" style="--d:3"><div class="ico"><svg class="i"><use href="#i-zap" /></svg></div><b>Faster, smoother</b><span>Tuned HEVC and steady frame pacing</span></div>
+            <div class="tile reveal"><div class="ico"><svg class="i"><use href="#i-battery" /></svg></div><b>Battery care</b><span>Dim when idle, save power when away</span></div>
+            <div class="tile reveal" style="--d:1"><div class="ico"><svg class="i"><use href="#i-wifi" /></svg></div><b>Wired or wireless</b><span>USB and Wi-Fi; Tailscale is experimental</span></div>
+            <div class="tile reveal" style="--d:2"><div class="ico"><svg class="i"><use href="#i-refresh" /></svg></div><b>Self-updating</b><span>The tablet app stays in step</span></div>
+            <div class="tile reveal" style="--d:3"><div class="ico"><svg class="i"><use href="#i-alert" /></svg></div><b>Clear errors</b><span>Messages with a button to fix them</span></div>
+            <div class="tile reveal"><div class="ico"><svg class="i"><use href="#i-shield" /></svg></div><b>Safety guard</b><span>The virtual monitor never stalls your desktop</span></div>
+            <div class="tile reveal" style="--d:1"><div class="ico"><svg class="i"><use href="#i-sliders" /></svg></div><b>Per-tablet settings</b><span>Override any value for one tablet</span></div>
+            <div class="tile reveal" style="--d:2"><div class="ico"><svg class="i"><use href="#i-pulse" /></svg></div><b>Doctor</b><span>One command checks the setup</span></div>
+            <div class="tile reveal" style="--d:3"><div class="ico"><svg class="i"><use href="#i-tablet" /></svg></div><b>Drawing tablets</b><span>A plugged-in pen tablet works too (tried with an XP-Pen)</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="see">
+        <div class="w">
+          <h2>The app</h2>
+          <figure class="shot reveal">
+            <div class="frame"><img id="gallery-img" src={`${base}img/dark-device.png`} alt="A device page with per-device overrides (sample data)" width="2560" height="1600" loading="lazy" /></div>
+          </figure>
+          <div class="thumbs">
+            <button type="button" aria-pressed="false" data-src={`${base}img/dark-settings-modes.png`} data-alt="Mode settings (sample data)">Modes</button>
+            <button type="button" aria-pressed="true" data-src={`${base}img/dark-device.png`} data-alt="A device page with per-device overrides (sample data)">Device</button>
+            <button type="button" aria-pressed="false" data-src={`${base}img/dark-health.png`} data-alt="System health (sample data)">Health</button>
+            <button type="button" aria-pressed="false" data-src={`${base}img/dark-wizard.png`} data-alt="The Add device dialog (sample data)">Add device</button>
+            <button type="button" aria-pressed="false" data-src={`${base}img/light-device.png`} data-alt="A device page in the light theme (sample data)">Light</button>
+          </div>
+          <p class="note">Screenshots of the real app running on sample data, not a connected tablet.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="w two">
+          <div class="card reveal">
+            <h3>Where it stands</h3>
+            <p><b>Run</b> on Ubuntu 24.04, GNOME 46, Wayland, with a Galaxy Tab S9 FE. <b>Not verified</b>: other desktops, distributions and tablets, pressure inside a drawing app, QR pairing, Tailscale and the release packages. Every feature is marked in <a href={`${base}project/features/`}>the full list</a>.</p>
+          </div>
+          <div class="card reveal" style="--d:1">
+            <h3>Built on UScreen</h3>
+            <p>UScreen Pro started from <a href="https://github.com/majmichu1/UScreen">UScreen</a> by majmichu1 and keeps its idea, its virtual-display capture and its adb link. The desktop app, the tablet app, the input engine and the installer are new, and most of the rest has been reworked.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="w foot">
+      <a href={docs}>Docs</a> · <a href={`${base}project/features/`}>All features</a> · <a href={`${base}environments/`}>Where it works</a> · <a href="https://github.com/harshp2008/UScreen-Pro">GitHub</a> · MIT licence
+    </footer>
+
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <defs>
+        <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></symbol>
+        <symbol id="i-pad" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 15h18M12 15v5" /></symbol>
+        <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></symbol>
+        <symbol id="i-clip" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /></symbol>
+        <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" /></symbol>
+        <symbol id="i-battery" viewBox="0 0 24 24"><rect x="2" y="7" width="16" height="10" rx="2" /><path d="M22 11v2M6 11v2" /></symbol>
+        <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01" /></symbol>
+        <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16M16 16h5v5" /></symbol>
+        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></symbol>
+        <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></symbol>
+        <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></symbol>
+        <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></symbol>
+        <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2" /><path d="M12 18h.01" /></symbol>
+        <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" /></symbol>
+      </defs>
+    </svg>
+
+    <script>
+      // Scroll reveal, the screenshot gallery and the pen illustration.
+      document.documentElement.classList.add('js');
+      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const items = document.querySelectorAll('.reveal');
+      if ('IntersectionObserver' in window && !reduce) {
+        const io = new IntersectionObserver((entries) => {
+          entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+        }, { threshold: 0.12 });
+        items.forEach((el) => io.observe(el));
+      } else items.forEach((el) => el.classList.add('in'));
+
+      // Gallery: each button names the image it shows.
+      const img = document.getElementById('gallery-img') as HTMLImageElement | null;
+      const thumbs = document.querySelectorAll<HTMLButtonElement>('.thumbs button');
+      thumbs.forEach((b) => b.addEventListener('click', () => {
+        if (img) { img.src = b.dataset.src!; img.alt = b.dataset.alt!; }
+        thumbs.forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
+      }));
+
+      // Pen illustration. What each style does, per window; the menu only opens where the pen acts as a mouse.
+      const demo = document.getElementById('demo')!;
+      const TEXT: Record<string, string> = {
+        dynamic: 'In a drawing app the pen is a pressure tablet. Everywhere else it is a mouse. The computer picks, per app.',
+        mouse: 'The pen is always a mouse: it clicks, drags and selects. A side button can be right click or middle click.',
+        tablet: 'The pen is always a pressure and tilt tablet, in every app.',
+      };
+      const route = (style: string, win: 'art' | 'txt') => (style === 'tablet' ? 'tablet' : style === 'mouse' ? 'mouse' : win === 'art' ? 'tablet' : 'mouse');
+      const label = (r: string) => (r === 'tablet' ? 'Pen: pressure + tilt' : 'Pen: mouse');
+      const styleText = document.getElementById('style-text')!;
+      const badgeArt = document.getElementById('badge-art')!;
+      const badgeTxt = document.getElementById('badge-txt')!;
+      const menu = document.getElementById('menu')!;
+      const cursor = document.getElementById('cursor')!;
+      const sel = document.getElementById('sel')!;
+      const txt = demo.querySelector<HTMLElement>('.win.txt')!;
+      let style = 'dynamic';
+      let timers: number[] = [];
+      const later = (fn: () => void, ms: number) => { timers.push(window.setTimeout(fn, ms)); };
+
+      function applyStyle(s: string) {
+        style = s;
+        demo.dataset.style = s;
+        demo.dataset.art = route(s, 'art');
+        demo.dataset.txt = route(s, 'txt');
+        styleText.textContent = TEXT[s];
+        badgeArt.textContent = label(route(s, 'art'));
+        badgeTxt.textContent = label(route(s, 'txt'));
+        document.querySelectorAll<HTMLButtonElement>('.styles button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === s)));
+        restart();
+      }
+      // Puts the cursor on the selected word, holds, and opens the menu above it when the pen acts as a mouse there.
+      function place() {
+        const t = txt.getBoundingClientRect();
+        const r = sel.getBoundingClientRect();
+        cursor.style.left = `${r.left - t.left + r.width / 2 - 2}px`;
+        cursor.style.top = `${r.top - t.top + r.height - 4}px`;
+        const mw = menu.offsetWidth;
+        const cx = r.left - t.left + r.width / 2;
+        menu.style.left = `${Math.max(mw / 2 + 6, Math.min(cx, t.width - mw / 2 - 6))}px`;
+        menu.style.top = `${r.top - t.top - 10}px`;
+      }
+      function loop() {
+        txt.classList.remove('selected', 'menu-on', 'at');
+        cursor.classList.remove('on');
+        const mouse = route(style, 'txt') === 'mouse';
+        later(() => { place(); cursor.classList.add('on'); }, 400);
+        later(() => txt.classList.add('selected'), 1300);
+        if (mouse) later(() => txt.classList.add('menu-on'), 2500);
+        later(loop, 6200);
+      }
+      function restart() {
+        timers.forEach(clearTimeout);
+        timers = [];
+        if (reduce) {
+          place();
+          cursor.classList.add('on');
+          txt.classList.add('selected');
+          txt.classList.toggle('menu-on', route(style, 'txt') === 'mouse');
+          return;
+        }
+        loop();
+      }
+      document.querySelectorAll<HTMLButtonElement>('.styles button').forEach((b) => b.addEventListener('click', () => applyStyle(b.dataset.style!)));
+      addEventListener('resize', place);
+      applyStyle('dynamic');
+    </script>
+
+    <style is:global>
+      :root {
+        --bg: #0c1512; --surface: #121f1b; --line: #22352d; --text: #d8ebe0; --strong: #f1faf5; --muted: #8fada0;
+        --accent: #34d399; --ink: #00382a; --accent-low: #14382a; --glow: rgba(52, 211, 153, 0.22);
+        color-scheme: dark;
+      }
+      @media (prefers-color-scheme: light) {
+        :root {
+          --bg: #f7fbf8; --surface: #edf5f0; --line: #cfe0d6; --text: #1b3228; --strong: #0b1f17; --muted: #4f6a5d;
+          --accent: #047857; --ink: #ffffff; --accent-low: #d5eadf; --glow: rgba(4, 120, 87, 0.16);
+          color-scheme: light;
+        }
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; scroll-padding-top: 4.5rem; overflow-x: clip; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "Noto Sans", Roboto, sans-serif; overflow-x: clip; }
+      a { color: var(--accent); }
+      h1, h2, h3, p { margin: 0; }
+      .w { width: min(1120px, calc(100% - 2rem)); margin-inline: auto; }
+      section { padding: clamp(3rem, 7vw, 5.5rem) 0 0; }
+      h2 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); line-height: 1.12; letter-spacing: -0.02em; color: var(--strong); margin-bottom: 0.6rem; }
+      h3 { color: var(--strong); font-size: 1.05rem; }
+      .lead { color: var(--muted); font-size: 1.1rem; max-width: 38rem; }
+      .small { color: var(--muted); font-size: 0.85rem; margin-top: 0.8rem; }
+      .note { color: var(--muted); font-size: 0.85rem; margin-top: 1rem; }
+      .note.c { text-align: center; }
+      svg.i { width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+      /* header: the landing's own bar, not the docs header */
+      .top { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: color-mix(in srgb, var(--bg) 80%, transparent); border-bottom: 1px solid transparent; }
+      .bar { display: flex; align-items: center; justify-content: space-between; height: 3.5rem; }
+      .logo { font-weight: 700; color: var(--accent); text-decoration: none; letter-spacing: -0.01em; }
+      .top nav { display: flex; gap: 1.4rem; align-items: center; font-size: 0.92rem; }
+      .top nav a { color: var(--muted); text-decoration: none; transition: color .2s; }
+      .top nav a:hover { color: var(--strong); }
+      .top nav .gh { padding: 0.3rem 0.8rem; border: 1px solid var(--line); border-radius: 999px; color: var(--strong); }
+      @media (max-width: 38rem) { .top nav a:not(.gh):not(:nth-child(1)) { display: none; } }
+
+      /* hero */
+      .hero { position: relative; padding-top: clamp(2.5rem, 6vw, 4.5rem); }
+      .hero::before { content: ''; position: absolute; inset: -4rem 0 auto; height: 40rem; pointer-events: none;
+        background: radial-gradient(36rem 22rem at 75% 30%, var(--glow), transparent 70%), radial-gradient(24rem 16rem at 5% 10%, var(--glow), transparent 70%);
+        mask-image: linear-gradient(#000 50%, transparent); animation: drift 14s ease-in-out infinite alternate; }
+      .hero-grid { position: relative; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 3rem; align-items: center; }
+      .pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.8rem; border: 1px solid var(--line); border-radius: 999px; font-size: 0.8rem; color: var(--muted); }
+      .pill i { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--accent); animation: pulse 2s ease-out infinite; }
+      h1 { font-size: clamp(2.5rem, 6vw, 4.3rem); line-height: 1.02; letter-spacing: -0.035em; color: var(--strong); margin: 1rem 0; }
+      h1 em { font-style: normal; color: var(--accent); }
+      .sub { font-size: 1.15rem; color: var(--muted); max-width: 30rem; }
+      .cta { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 1.6rem; }
+      .btn { display: inline-flex; padding: 0.7rem 1.3rem; border-radius: 999px; border: 1px solid var(--line); color: var(--strong); text-decoration: none; font-weight: 600; transition: transform .2s, box-shadow .2s; }
+      .btn:hover { transform: translateY(-2px); }
+      .btn.primary { background: var(--accent); border-color: transparent; color: var(--ink); box-shadow: 0 6px 24px -8px var(--accent); }
+      .btn.ghost { border-color: transparent; color: var(--muted); }
+
+      /* the mock-up of the app: always the app's dark theme, whatever the site theme */
+      .mock-wrap { margin: 0; }
+      .mock-wrap figcaption { margin-top: 0.7rem; font-size: 0.8rem; color: var(--muted); text-align: right; }
+      .app { position: relative; display: grid; grid-template-columns: 11rem 1fr; min-height: 21rem; border: 1px solid #22352d; border-radius: 0.9rem; overflow: hidden; background: #0f1a17; color: #d3e8dd; font-size: 0.8rem; box-shadow: 0 30px 80px -30px rgba(0,0,0,.6); }
+      .app-side { padding: 0.9rem 0.7rem; background: #0c1512; border-right: 1px solid #1c2b25; }
+      .brand { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.9rem; font-weight: 700; color: #eaf6ef; }
+      .logo-sq { width: 1.1rem; height: 1.1rem; border-radius: 0.3rem; background: #34d399; }
+      .start { margin-bottom: 0.8rem; padding: 0.45rem 0; border-radius: 0.5rem; background: #17513b; color: #bdf0d9; text-align: center; font-weight: 600; }
+      .nav { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; margin-bottom: 0.15rem; border-radius: 0.5rem; color: #9db8ab; white-space: nowrap; }
+      .nav.sel { background: #14231e; color: #d3e8dd; }
+      .nav small { font-size: 0.62rem; color: #7f9d8f; }
+      .cap { margin: 0.9rem 0 0.3rem 0.5rem; font-size: 0.62rem; letter-spacing: 0.06em; color: #6f8c7f; }
+      .app-main { background: #0f1a17; opacity: .55; }
+      .dialog { position: absolute; left: 50%; top: 50%; width: min(19rem, 82%); transform: translate(-30%, -50%); padding: 1.1rem; border: 1px solid #22352d; border-radius: 0.8rem; background: #0e1815; box-shadow: 0 20px 50px rgba(0,0,0,.5); animation: floaty 7s ease-in-out infinite; }
+      .dialog h3 { margin-bottom: 1.4rem; font-size: 1.05rem; font-weight: 500; color: #eaf6ef; }
+      .usb { padding: 0.9rem 1rem; border-radius: 0.7rem; background: #34d399; color: #00382a; }
+      .usb b { display: block; font-size: 0.95rem; margin-bottom: 0.25rem; }
+      .usb span { font-size: 0.74rem; line-height: 1.4; display: block; }
+      .wl { margin-top: 0.9rem; font-size: 0.74rem; color: #9db8ab; }
+
+      /* setup */
+      .steps { list-style: none; margin: 1.8rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; counter-reset: s; }
+      .steps > li { counter-increment: s; padding: 1.3rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
+      .steps > li::before { content: counter(s); display: grid; place-items: center; width: 1.9rem; height: 1.9rem; margin-bottom: 0.8rem; border-radius: 50%; background: var(--accent); color: var(--ink); font-weight: 700; }
+      .steps p { margin-top: 0.5rem; font-size: 0.92rem; color: var(--muted); }
+      .steps code { display: block; margin-top: 0.7rem; padding: 0.55rem 0.8rem; border-radius: 0.5rem; background: var(--bg); border: 1px solid var(--line); color: var(--strong); font-size: 0.85rem; }
+      .stepper { list-style: none; margin: 0.9rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
+      .stepper li { padding: 0.15rem 0.6rem; border-radius: 999px; border: 1px solid var(--line); font-size: 0.74rem; color: var(--muted); animation: step 10s infinite; animation-delay: calc(var(--i, 0) * 2s); }
+      .stepper li:nth-child(1) { --i: 0; } .stepper li:nth-child(2) { --i: 1; } .stepper li:nth-child(3) { --i: 2; } .stepper li:nth-child(4) { --i: 3; } .stepper li:nth-child(5) { --i: 4; }
+
+      /* cards and tiles */
+      .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1.6rem; }
+      .card { padding: 1.3rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); transition: transform .25s, border-color .25s, box-shadow .25s; }
+      .card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 18px 40px -22px var(--glow); }
+      .card h3 { margin: 0.8rem 0 0.25rem; }
+      .card p { font-size: 0.9rem; color: var(--muted); }
+      .ico { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; background: var(--accent-low); color: var(--accent); }
+      .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.85rem; margin-top: 1.6rem; }
+      .tile { padding: 1.1rem; border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface); transition: transform .25s, border-color .25s; }
+      .tile:hover { transform: translateY(-3px); border-color: var(--accent); }
+      .tile .ico { width: 2.1rem; height: 2.1rem; border-radius: 0.6rem; }
+      .tile .ico svg { width: 1.2rem; height: 1.2rem; }
+      .tile b { display: block; margin-top: 0.7rem; color: var(--strong); }
+      .tile span { display: block; margin-top: 0.15rem; font-size: 0.85rem; color: var(--muted); line-height: 1.4; }
+      .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
+      .two .card:hover { transform: none; }
+      .two p { font-size: 0.95rem; margin-top: 0.5rem; }
+
+      /* pen illustration: window colours are the desktop's, not the app's */
+      .pen { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 3rem; align-items: center; }
+      .styles { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1.3rem 0 0.9rem; }
+      .styles button { padding: 0.45rem 1rem; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 0.9rem; cursor: pointer; transition: all .2s; }
+      .styles button:hover { color: var(--strong); border-color: var(--accent); }
+      .styles button[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--ink); font-weight: 600; }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .explain { min-height: 4.2rem; color: var(--text); }
+      .demo { display: grid; grid-template-columns: 1fr 1.6fr; gap: 0.8rem; }
+      .win { position: relative; min-height: 13.5rem; border-radius: 0.7rem; background: #fafafa; color: #2e3436; border: 1px solid #c9ccd0; overflow: hidden; font-size: 0.85rem; }
+      .win .wbar { display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.6rem; background: #e9eaec; border-bottom: 1px solid #d3d5d9; font-size: 0.72rem; color: #5e6266; }
+      .win .wbar b { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #b7babf; }
+      .win .wbar span { margin-left: 0.4rem; }
+      .win.txt p { padding: 0.9rem 1rem 0; line-height: 1.7; }
+      .win.txt p.dim { color: #7b8086; padding-top: 0.2rem; }
+      .win mark { background: transparent; color: inherit; border-radius: 0.15rem; transition: background .25s; }
+      .win.txt.selected mark { background: #a9c7ee; }
+      .canvas { display: block; width: 100%; height: auto; padding: 0.6rem; }
+      .canvas path { fill: none; stroke: #2e3436; stroke-linecap: round; stroke-dasharray: 400; animation: draw 4s ease-in-out infinite; }
+      .canvas .plain { stroke-width: 2; }
+      .canvas .taper { stroke-width: 7; opacity: 0; -webkit-mask: linear-gradient(90deg, transparent, #000 25%, #000 70%, transparent); mask: linear-gradient(90deg, transparent, #000 25%, #000 70%, transparent); }
+      .demo[data-art="tablet"] .canvas .taper { opacity: 1; }
+      .demo[data-art="tablet"] .canvas .plain { opacity: 0; }
+      .badge { position: absolute; left: 0.6rem; bottom: 0.6rem; padding: 0.15rem 0.6rem; border-radius: 999px; background: #34d399; color: #00382a; font-size: 0.7rem; font-weight: 600; }
+      .demo[data-txt="tablet"] #badge-txt { background: #14382a; color: #8fd6a3; }
+      .cursor { position: absolute; left: 20%; top: 60%; width: 0.95rem; height: 1.45rem; opacity: 0; transition: left .8s ease, top .8s ease, opacity .3s; fill: #000; stroke: #fff; stroke-width: 1.2; filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)); pointer-events: none; }
+      .cursor.on { opacity: 1; }
+      /* the real menu: a dark grey rounded pill, centred above the pointer */
+      .menu { position: absolute; left: 50%; top: 40%; display: flex; gap: 2px; padding: 4px; border-radius: 20px; background: rgba(34, 34, 38, 0.97); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 6px 20px rgba(0,0,0,.45); color: #f2f2f2; font-size: 0.72rem; font-weight: 500; white-space: nowrap; opacity: 0; transform: translate(-50%, -100%) scale(.92); transform-origin: 50% 100%; transition: opacity .2s, transform .2s; pointer-events: none; }
+      .menu span { padding: 0.45rem 0.7rem; border-radius: 16px; }
+      .win.menu-on .menu { opacity: 1; transform: translate(-50%, -100%); }
+      .win.menu-on .menu span:nth-child(2) { animation: tap 2.4s 0.9s both; }
+
+      /* gallery */
+      .shot { margin: 1.5rem 0 0; }
+      .frame { border: 1px solid var(--line); border-radius: 0.9rem; overflow: hidden; background: var(--surface); box-shadow: 0 30px 80px -40px rgba(0,0,0,.6); }
+      .frame img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
+      .thumbs { display: flex; gap: 0.6rem; margin-top: 0.9rem; overflow-x: auto; padding-bottom: 0.3rem; }
+      .thumbs button { flex: 0 0 auto; padding: 0.4rem 0.9rem; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 0.88rem; cursor: pointer; }
+      .thumbs button[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--ink); font-weight: 600; }
+
+      .foot { padding: 4rem 0 3rem; color: var(--muted); font-size: 0.88rem; }
+      .foot a { color: var(--accent); text-decoration: none; }
+      .foot a:hover { text-decoration: underline; }
+
+      /* reveal on scroll (only when JavaScript runs) */
+      .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; transition-delay: calc(var(--d, 0) * 70ms); }
+      .js .reveal.in { opacity: 1; transform: none; }
+
+      @keyframes floaty { 50% { translate: 0 -6px; } }
+      @keyframes drift { to { transform: translate(2%, 4%) scale(1.05); } }
+      @keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--accent); } 70% { box-shadow: 0 0 0 .5rem transparent; } }
+      @keyframes draw { from { stroke-dashoffset: 400; } 40%, 100% { stroke-dashoffset: 0; } }
+      @keyframes tap { 0%, 40% { background: transparent; color: #f2f2f2; } 55%, 85% { background: rgba(255,255,255,.22); } 100% { background: transparent; } }
+      @keyframes step { 0%, 4% { background: transparent; } 8%, 20% { background: var(--accent); color: var(--ink); border-color: transparent; } 28%, 100% { background: transparent; color: var(--muted); } }
+
+      @media (max-width: 62rem) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 52rem) {
+        .hero-grid, .pen { grid-template-columns: 1fr; gap: 2rem; }
+        .steps, .cards { grid-template-columns: 1fr; }
+        .app { grid-template-columns: 1fr; } .app-side { display: none; }
+        .dialog { position: relative; left: auto; top: auto; transform: none; margin: 2rem auto; }
+      }
+      @media (max-width: 32rem) { .tiles { grid-template-columns: 1fr; } .demo { grid-template-columns: 1fr; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+    </style>
+  </body>
+</html>
