@@ -54,7 +54,9 @@ run_test() {
     local name="$1"
     if [ -n "$FILTER" ] && [[ "$name" != *"$FILTER"* ]]; then return 0; fi
     # shellcheck disable=SC2034  # read by fail() in the test subshell
-    CUR="$name"; CUR_FAILED=0
+    CUR="$name"
+    # shellcheck disable=SC2034
+    CUR_FAILED=0
     ( "$name" ) 2>&1 | sed 's/^/    /' >"$ROOT_SANDBOX/out.$$"
     local rc=${PIPESTATUS[0]}
     if grep -q "FAIL:" "$ROOT_SANDBOX/out.$$" || [ "$rc" != 0 ]; then
