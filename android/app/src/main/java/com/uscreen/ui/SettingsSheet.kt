@@ -422,6 +422,23 @@ fun SettingsSheet(
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text("Grant Device Admin", fontSize = 13.sp) }
                         }
+                        if (canLock) {
+                            Spacer(Modifier.height(8.dp))
+                            Text(
+                                "Device Admin already added. Remove it before uninstalling UScreen, since Android " +
+                                    "blocks uninstalling an active device admin.",
+                                fontSize = 12.sp,
+                                color = Muted
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedButton(
+                                onClick = {
+                                    ScreenLock.removeAdmin(context)
+                                    canLock = ScreenLock.canLock(context)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Remove Device Admin", fontSize = 13.sp) }
+                        }
                         SwitchRow(
                             "Idle dimming",
                             "Dim the screen while the computer's pointer is elsewhere; touch to wake.",

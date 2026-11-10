@@ -58,15 +58,55 @@ pub async fn install_apk(
         .unwrap_or(false);
         if installed {
             progress(app, ev, Some(serial), "Found old APK");
+            // Ask the installed app to drop its Device Admin role first (an active admin cannot be
+            // uninstalled). Builds without the receiver just ignore this; the retry below covers them.
+            progress(app, ev, Some(serial), "Asking the old app to remove its Device Admin");
+            let _ = run(
+                Some(serial),
+                &["shell", "am", "broadcast", "-W", "-n", "com.uscreen/.RemoveAdminReceiver"],
+                Duration::from_secs(10),
+            )
+            .await;
             progress(app, ev, Some(serial), "Removing old APK");
-            let out = run(
+            let mut out = run(
                 Some(serial),
                 &["uninstall", "com.uscreen"],
                 Duration::from_secs(30),
             )
             .await?;
-            let text = combined_of(&out);
-            if !text.contains("Success") {
+            let mut text = combined_of(&out);
+            if !text.contains("Success") && text.contains("DEVICE_POLICY_MANAGER") {
+                // The old app is an active device admin (it uses force-lock), which Android will not
+                // uninstall. Try to deactivate the admin and retry; if that is refused too, fall through
+                // and update in place with `install -r` (works when the signing key matches).
+                progress(app, ev, Some(serial), "Old APK is a device admin, deactivating it");
+                let _ = run(
+                    Some(serial),
+                    &[
+                        "shell",
+                        "dpm",
+                        "remove-active-admin",
+                        "com.uscreen/.UScreenAdminReceiver",
+                    ],
+                    Duration::from_secs(10),
+                )
+                .await;
+                out = run(
+                    Some(serial),
+                    &["uninstall", "com.uscreen"],
+                    Duration::from_secs(30),
+                )
+                .await?;
+                text = combined_of(&out);
+                if !text.contains("Success") {
+                    progress(
+                        app,
+                        ev,
+                        Some(serial),
+                        "Could not remove it, updating the installed app in place",
+                    );
+                }
+            } else if !text.contains("Success") {
                 return Err(format!("Could not remove the old APK: {text}"));
             }
         }

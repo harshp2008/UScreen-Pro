@@ -148,6 +148,17 @@ object ScreenLock {
                 "UScreen uses this only to lock the tablet when battery saver gives up on a host that stays offline."
             )
 
+    /** Give up the device-admin role (an active admin cannot be uninstalled). Returns whether it is now gone. */
+    fun removeAdmin(context: Context): Boolean {
+        return try {
+            dpm(context).removeActiveAdmin(component(context))
+            !canLock(context)
+        } catch (e: Exception) {
+            Log.w("UScreen", "removeActiveAdmin failed: ${e.message}")
+            false
+        }
+    }
+
     /** Lock now. Returns false (and does nothing) when the role has not been granted. */
     fun lockNow(context: Context): Boolean {
         if (!canLock(context)) return false

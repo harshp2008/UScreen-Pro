@@ -57,6 +57,12 @@
             android:exported="true"
             android:permission="android.permission.DUMP" />
 
+        <!-- Exported for `adb shell am broadcast` (reinstall drops the Device Admin role first); DUMP holders only. -->
+        <receiver
+            android:name=".RemoveAdminReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP" />
+
         <!-- Device admin with the force-lock policy only: lets battery saver lock the tablet. -->
         <receiver
             android:name=".UScreenAdminReceiver"
