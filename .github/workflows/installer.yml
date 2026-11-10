@@ -13,9 +13,16 @@ on:
     branches: [main]
     paths: ['scripts/**', 'packaging/**', 'extensions/**', '.github/workflows/installer.yml']
 
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  # The six container suites run on pull requests only; the quick jobs below run on every push.
   suite:
     name: Test suite on ${{ matrix.image }}
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

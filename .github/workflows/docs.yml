@@ -29,16 +29,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      # Compiled dependencies are reused between runs (saved from main only).
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: actions/setup-node@v4
         with:
           node-version-file: website/.nvmrc
           cache: npm
           cache-dependency-path: website/package-lock.json
       # The host's build needs the libraries of its dependencies; the CLI reference only needs the binary to print --help.
-      - name: System libraries for the host crate
+      - name: System libraries for the host crate (no GTK, the pen menu is not built here)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libdrm-dev libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libssl-dev libgtk-4-dev
+          sudo apt-get install -y -qq --no-install-recommends libdrm-dev libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libssl-dev
       - name: Build the daemon (the CLI reference is its --help)
         run: cargo build -p uscreen
       - name: Build the API documentation (warnings are errors)
