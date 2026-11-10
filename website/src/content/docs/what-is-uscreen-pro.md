@@ -1,11 +1,11 @@
 ---
-title: "UScreen"
-description: "Use an Android tablet as a second display, a laptop touchpad or a pen tablet on Linux."
+title: "What is UScreen Pro"
+description: "What UScreen Pro does, what has been run, and where to go next."
 ---
 
-UScreen turns an Android tablet into one of three things for a Linux computer: a **second display** (Extended Display), a **laptop touchpad** (Touchpad) or a **pressure-sensitive pen tablet** (Stylus). A small program on the computer, the daemon, talks to an app on the tablet over a cable (or Wi-Fi) and sends the picture one way and touch and pen input the other.
+UScreen Pro turns an Android tablet into one of three things for a Linux computer: a **second display** (Extended Display), a **laptop touchpad** (Touchpad) or a **pressure-sensitive pen tablet** (Stylus). A small program on the computer, the daemon, talks to an app on the tablet over a cable (or Wi-Fi) and sends the picture one way and touch and pen input the other.
 
-This guide tells you what UScreen does, and tells you plainly what nobody has checked.
+This guide tells you what UScreen Pro does, and tells you plainly what nobody has checked.
 
 ## What has been tried
 
@@ -29,6 +29,6 @@ The word *verified* on these pages means a test or a run in this repository cove
 
 ## Sources
 
-- `README.md` (what UScreen is)
+- `README.md` (what UScreen Pro is)
 - `docs/installation.md`, `docs/compatibility.md`
 - `CHANGELOG.md` for the history of the project it continues
