@@ -27,6 +27,7 @@ fedora_evdi_strategy() {
 fedora_install_deps() {
     if us_immutable && command -v rpm-ostree >/dev/null 2>&1; then
         info "Image-based Fedora detected: layering packages (needs a reboot afterwards)"
+        # shellcheck disable=SC2034  # read by us_restart_needs
         run $SUDO rpm-ostree install --idempotent --allow-inactive ffmpeg android-tools \
             && US_PKG_LAYERED=1 || warn "Layering failed — check the names against your image"
     else

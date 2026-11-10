@@ -35,6 +35,7 @@ us_os_value() {
     local key="$1" file="${US_OS_RELEASE:-/etc/os-release}"
     [ -r "$file" ] || return 0
     # shellcheck disable=SC2016
+    # shellcheck disable=SC1090
     (. "$file" 2>/dev/null; eval "printf '%s' \"\${$key:-}\"")
 }
 

@@ -53,6 +53,7 @@ order()    { # order A B: the first match of A comes before the first match of B
 run_test() {
     local name="$1"
     if [ -n "$FILTER" ] && [[ "$name" != *"$FILTER"* ]]; then return 0; fi
+    # shellcheck disable=SC2034  # read by fail() in the test subshell
     CUR="$name"; CUR_FAILED=0
     ( "$name" ) 2>&1 | sed 's/^/    /' >"$ROOT_SANDBOX/out.$$"
     local rc=${PIPESTATUS[0]}
@@ -215,7 +216,7 @@ t_desktop_and_session_detection() {
     done
     XDG_SESSION_TYPE=Wayland; eq "$(us_session)" wayland
     XDG_SESSION_TYPE=x11; eq "$(us_session)" x11
-    XDG_SESSION_TYPE=tty; eq "$(us_session)" unknown
+    XDG_SESSION_TYPE="tty"; eq "$(us_session)" unknown
     unset XDG_SESSION_TYPE; eq "$(us_session)" unknown
 }
 # US_OSTREE=1 or 0 overrides the image-based check.

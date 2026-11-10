@@ -239,7 +239,7 @@ install_menu_runtime() {
 # spawn-at places the pen-menu fallback window (https://github.com/harshp2008/spawn-at).
 # Missing: install. Installed: update unless it is a dev build. Never stops the install.
 install_spawn_at() {
-    local url="https://raw.githubusercontent.com/harshp2008/spawn-at/main/install.sh" ver before after
+    local url="https://raw.githubusercontent.com/harshp2008/spawn-at/main/install.sh" before after
     if command -v spawn-at >/dev/null 2>&1; then
         before="$(spawn-at -V 2>/dev/null | head -n1 || true)"
         case "$before" in

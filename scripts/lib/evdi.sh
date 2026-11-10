@@ -77,6 +77,7 @@ evdi_activate() {
         fi
     fi
     if ! run $SUDO modprobe evdi 2>/dev/null; then
+        # shellcheck disable=SC2034  # read by the caller (us_restart_needs)
         evdi_module_available && US_EVDI_NEEDS_REBOOT=1
         warn "EVDI could not be loaded now"
         return 0
