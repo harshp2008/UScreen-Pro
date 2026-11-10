@@ -49,9 +49,9 @@ name, every Kotlin function and constant, every Cargo dependency, every config f
 | `scripts/redact.sh`, `scripts/rca56_guarded_test.sh`, `scripts/enc_latency_probe.py`, `experiments_and_findings/cpu_stress.py`, `experiments_and_findings/simulate_motion.py` | referenced by experiment records or used on purpose by the maintainer |
 | `FadeCurve`'s other members, `ReconnectPolicy`, and all serde fields of `config.toml` | read by the app, by tests, or needed for config round-tripping |
 
-## Waiting for a decision (not deleted)
+## Unused files kept on purpose
 
-These look unused but are files, so they are left alone until you decide.
+These look unused but are files. The maintainer decided to keep all of them, and the old GitHub Pages files in `docs/` too.
 
 | File | What I found |
 |---|---|
