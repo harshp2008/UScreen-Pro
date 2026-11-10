@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import mdx from '@astrojs/mdx';
 import codeBreaks from './src/integrations/code-breaks.mjs';
 import records from './src/integrations/records.mjs';
 
@@ -23,7 +24,7 @@ export default defineConfig({
   markdown: { smartypants: false },
   integrations: [
     starlight({
-      title: 'UScreen',
+      title: 'UScreen Pro',
       description: 'Use an Android tablet as a second display, a laptop touchpad or a pen tablet on Linux.',
       social: [
         { icon: 'github', label: 'GitHub', href: 'https://github.com/harshp2008/UScreen-Pro' },
@@ -42,7 +43,8 @@ export default defineConfig({
       // group is `collapsed`: Starlight opens only the group that holds the current page. The
       // groups filled with `autogenerate` need no entry for a new page.
       sidebar: [
-        { slug: 'index', label: 'Introduction' },
+        { slug: 'index', label: 'Home' },
+        { slug: 'what-is-uscreen-pro', label: 'What is UScreen Pro' },
         {
           label: 'Using UScreen',
           collapsed: true,
@@ -118,6 +120,9 @@ export default defineConfig({
         },
       ],
     }),
+    // MDX only for the landing page (src/content/docs/index.mdx), which uses Starlight's card components. After
+    // Starlight, because Starlight's code-block integration must come before it.
+    mdx(),
     // After Starlight on purpose: its build-done step makes the Pagefind index, and these then
     // rewrite the pages, so the search index is made from the text as written. Records come
     // before code-breaks, which then adds its break points inside the records as well.

@@ -1,0 +1,62 @@
+---
+title: UScreen Pro
+description: Use your Android tablet as a second display, a laptop touchpad or a pressure-sensitive pen tablet on Linux.
+template: splash
+hero:
+  tagline: Your Android tablet as a second display, a laptop touchpad or a pressure-sensitive pen tablet, on Linux.
+  image:
+    file: ../../assets/hero.png
+    alt: The UScreen Pro desktop app, showing the mode settings in the dark theme (sample data)
+  actions:
+    - text: Install
+      link: /UScreen-Pro/install/
+      icon: right-arrow
+      variant: primary
+    - text: What is UScreen Pro
+      link: /UScreen-Pro/what-is-uscreen-pro/
+      variant: secondary
+    - text: View on GitHub
+      link: https://github.com/harshp2008/UScreen-Pro
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## Three ways to use the tablet
+
+<CardGrid stagger>
+  <Card title="Extended Display" icon="laptop">
+    A real second monitor. A virtual display is created, encoded and streamed to the tablet; touch and pen come back.
+  </Card>
+  <Card title="Touchpad" icon="pointer">
+    Fingers move the pointer like a laptop touchpad: tap to click, two fingers to scroll, three for workspace gestures.
+  </Card>
+  <Card title="Stylus" icon="pencil">
+    A pen tablet with pressure and tilt, a Dynamic style that switches per app, and a long-press pen menu.
+  </Card>
+  <Card title="Honest by design" icon="approve-check">
+    Every page names its sources and says what was run. Only Ubuntu 24.04 with GNOME 46 on Wayland has been run so far.
+  </Card>
+</CardGrid>
+
+## See it
+
+![A tour of the UScreen Pro desktop app: settings, a device page, system health and the add-device wizard (sample data)](/UScreen-Pro/img/tour.gif)
+
+The screenshots show the desktop app with sample data, not a connected tablet.
+
+## Start here
+
+<CardGrid>
+  <LinkCard title="Install" description="The installer, its modes and what it changes." href="/UScreen-Pro/install/" />
+  <LinkCard title="Concepts" description="Modes, pen styles, the pen menu and how settings sync." href="/UScreen-Pro/concepts/" />
+  <LinkCard title="Where it works" description="What each desktop can and cannot do." href="/UScreen-Pro/environments/" />
+  <LinkCard title="Findings and experiments" description="What was measured, and what each result cannot tell you." href="/UScreen-Pro/findings/" />
+  <LinkCard title="Adding support" description="One file for a distro, one directory for a desktop, one row for a GNOME version." href="/UScreen-Pro/project/adding-support/" />
+  <LinkCard title="API documentation" description="The Rust documentation of the daemon." href="/UScreen-Pro/api/uscreen/index.html" />
+</CardGrid>
+
+## Credits
+
+UScreen Pro continues [UScreen by majmichu1](https://github.com/majmichu1/UScreen), which provided the original design and early code. This project keeps its MIT licence and builds on it; see [Third-party components](/UScreen-Pro/project/third-party/).

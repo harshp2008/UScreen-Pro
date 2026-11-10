@@ -2,7 +2,7 @@
 title: "Install"
 ---
 
-UScreen has two halves that ship together and must be updated together: the Linux side (daemon, desktop app, tray) and the Android app. Since version 1.1.0 they share a session token, so one without the other does not connect.
+UScreen Pro has two halves that ship together and must be updated together: the Linux side (daemon, desktop app, tray) and the Android app. Since version 1.1.0 they share a session token, so one without the other does not connect.
 
 ## The Linux side
 

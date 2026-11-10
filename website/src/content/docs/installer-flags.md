@@ -2,7 +2,7 @@
 title: "Installer flags"
 ---
 
-`scripts/install.sh` installs UScreen from a source checkout or a release tarball.
+`scripts/install.sh` installs UScreen Pro from a source checkout or a release tarball.
 
 ## Modes
 

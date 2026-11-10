@@ -2,7 +2,7 @@
 title: "Files and paths"
 ---
 
-Where UScreen reads and writes. Nothing is written outside your home directory except the system files of the `system` install part.
+Where UScreen Pro reads and writes. Nothing is written outside your home directory except the system files of the `system` install part.
 
 ## Your settings and data
 

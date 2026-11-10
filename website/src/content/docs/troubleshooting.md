@@ -41,7 +41,7 @@ The app is older than the daemon. A session token is required, so install the AP
 
 ## Touch or pen land on the wrong screen
 
-The daemon maps the tablet's input devices onto the virtual output. On GNOME it uses GNOME's per-device settings. If it did not stick, restart the daemon with the tablet attached, or assign "UScreen Pen" and "UScreen Touch" to the UScreen output in your desktop's tablet settings.
+The daemon maps the tablet's input devices onto the virtual output. On GNOME it uses GNOME's per-device settings. If it did not stick, restart the daemon with the tablet attached, or assign "UScreen Pro Pen" and "UScreen Pro Touch" to the UScreen Pro output in your desktop's tablet settings.
 
 ## The pen takes the cursor from the mouse, or a second cursor stays behind
 
