@@ -1,289 +1,135 @@
 <!--
-  README.md: the project's front page: what UScreen is, how to install and run it, and the map of the repository.
-  Owns the overview; the details are in docs/ and, later, the documentation site in website/.
+  README.md: the project's front page: what UScreen Pro is, how to install it, what was run, and the map of the repository.
+  Owns the overview; the details are on the documentation site (website/) and in docs/.
 -->
-# UScreen for Linux — Android Tablet as a USB Second Monitor
+<p align="center">
+  <img src="docs/assets/screenshots/dark-settings-modes.png" alt="The UScreen Pro desktop app in the dark theme, showing the mode settings (sample data)" width="860">
+</p>
 
-**UScreen is an open-source SuperDisplay alternative for Linux.** It turns an
-Android 8.1+ tablet into a real extended USB display and a pressure-sensitive
-graphics tablet, with touch, S Pen pressure, tilt, eraser and stylus-button
-support.
+<h1 align="center">UScreen Pro</h1>
 
-UScreen uses a direct ADB-over-USB connection — no Wi-Fi, USB tethering,
-dummy HDMI plug or cloud account required. Screen and input data never leave
-the cable.
+<p align="center">
+  Your Android tablet as a <b>second display</b>, a <b>laptop touchpad</b> or a <b>pressure-sensitive pen tablet</b>, on Linux.
+</p>
 
-Tested on Bazzite (KDE Plasma, Wayland, NVIDIA) with a Samsung Galaxy Tab S9
-Ultra. Packages and installation instructions cover Bazzite, Fedora,
-Ubuntu/Debian, Arch Linux and openSUSE.
+<p align="center">
+  <a href="https://harshp2008.github.io/UScreen-Pro/"><b>Documentation</b></a> ·
+  <a href="https://harshp2008.github.io/UScreen-Pro/install/">Install</a> ·
+  <a href="https://harshp2008.github.io/UScreen-Pro/concepts/">Concepts</a> ·
+  <a href="https://harshp2008.github.io/UScreen-Pro/experiments/">Experiments</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
 
-[**Download the latest release**](https://github.com/majmichu1/UScreen/releases/latest)
-· [Install](#quick-install)
-· [Compatibility](docs/compatibility.md)
-· [Benchmarks](docs/benchmarks.md)
-· [FAQ](#faq)
-· [Website](https://majmichu1.github.io/UScreen/)
+<p align="center">
+  <a href="https://github.com/harshp2008/UScreen-Pro/actions/workflows/build.yml"><img alt="Build" src="https://github.com/harshp2008/UScreen-Pro/actions/workflows/build.yml/badge.svg"></a>
+  <a href="https://github.com/harshp2008/UScreen-Pro/actions/workflows/installer.yml"><img alt="Installer tests" src="https://github.com/harshp2008/UScreen-Pro/actions/workflows/installer.yml/badge.svg"></a>
+  <a href="https://github.com/harshp2008/UScreen-Pro/actions/workflows/docs.yml"><img alt="Docs" src="https://github.com/harshp2008/UScreen-Pro/actions/workflows/docs.yml/badge.svg"></a>
+  <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue">
+</p>
 
-## Why UScreen?
+> **What has been run.** The only platform this project has been run on is **Ubuntu 24.04 with GNOME 46 on Wayland**.
+> Other desktops, distributions and the release packages are described in the docs as *not verified*. Nothing here claims they work.
 
-- **A real second monitor, not a mirror.** A virtual display is created
-  through the EVDI kernel module; the tablet appears in your display settings
-  and you move windows onto it.
-- **Pen that works like a tablet.** Pressure, tilt, eraser and button arrive
-  in Linux as a graphics-tablet device — Krita, GIMP and Blender see a tablet.
-  A one-tap *graphics tablet* mode uses the pen on your own screen with zero
-  display latency.
-- **Low latency, measured.** About 22 ms median end-to-end over USB with
-  H.264, 15–18 ms with HEVC, on the reference hardware — the
-  [numbers and the method](docs/benchmarks.md) are published.
-- **Plug in and it works.** The daemon starts with your desktop, finds the
-  tablet over adb, launches the app on it and sizes the display to its panel.
-- **Private by construction.** Loopback-only ports guarded by a per-session
-  token, no telemetry, no account. See [SECURITY.md](SECURITY.md).
-- **Honest about its edges.** Wi-Fi is a fallback and the stutter is
-  [quantified](docs/benchmarks.md#usb-vs-wi-fi-h264-quiet-link); KDE gets the
-  full automation, other desktops get the display and manual mapping.
+## What it does
 
-## Quick install
+A small daemon on your computer talks to an app on the tablet over a USB cable (or Wi-Fi). The tablet is in one of three modes:
 
-**1. Linux side** — pick the file for your distribution from the
-[latest release](https://github.com/majmichu1/UScreen/releases/latest):
+| | Mode | What you get |
+|---|---|---|
+| 🖥️ | **Extended Display** | A real second monitor: a virtual display is created, encoded and streamed to the tablet; touch and pen come back. |
+| 🖱️ | **Touchpad** | The tablet is a laptop touchpad: move, tap to click, two-finger scroll, tap-and-drag, three-finger gestures, palm rejection. Nothing is streamed. |
+| ✏️ | **Stylus** | A pen tablet for the screen you are already looking at: pressure, tilt, eraser and side buttons, with no display latency. |
 
-| file | distribution |
-| --- | --- |
-| `uscreen_<ver>_amd64.deb` | Debian 12+, Ubuntu 22.04+, Mint, Pop — `sudo apt install ./uscreen_*.deb` |
-| `uscreen-<ver>-1.x86_64.rpm` | openSUSE (`zypper install`), Fedora (RPM Fusion first, then `dnf install --allowerasing`) |
-| `uscreen-<ver>-PKGBUILD.tar.gz` | Arch and derivatives — extract, `makepkg -si` |
-| `uscreen-<ver>-linux-x86_64.tar.gz` | Bazzite, Nobara, anything else — extract, `./scripts/install.sh` |
+For the pen there are three styles: **Mouse**, **Graphics tablet** and **Dynamic** (experimental, GNOME only), which acts as a pressure tablet in drawing apps and as a mouse everywhere else. A long press opens a small **pen menu** (cut, copy, paste, select all, undo) where it makes sense.
 
-Then `systemctl --user enable --now uscreen` (the tarball installer does this
-for you). Full details, including what the installer changes on the system,
-in [docs/installation.md](docs/installation.md).
+## See it
 
-**2. Tablet** — install `uscreen.apk` and enable USB debugging (Settings →
-Developer options).
+<p align="center">
+  <img src="docs/assets/screenshots/tour.gif" alt="A tour of the desktop app: mode settings, a device page, system health and the add-device wizard (sample data)" width="720">
+</p>
 
-**3. Plug in.** The daemon forwards the ports, launches the app and the
-tablet shows up as a monitor. `uscreen doctor` diagnoses anything that is off.
+<table>
+  <tr>
+    <td><img src="docs/assets/screenshots/dark-device.png" alt="A device page: identity, transport and per-device overrides (dark)"></td>
+    <td><img src="docs/assets/screenshots/dark-health.png" alt="System health: daemon, build and device tools (dark)"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/screenshots/dark-wizard.png" alt="The add-device wizard (dark)"></td>
+    <td><img src="docs/assets/screenshots/light-device.png" alt="The same device page in the light theme"></td>
+  </tr>
+</table>
 
-Update both halves together: since 1.1.0 they share a session token.
+The screenshots show the desktop app with the sample data of its development mode, not a connected tablet. Photos and a recording of a
+real tablet are not in the repository yet; [`docs/assets/README.md`](docs/assets/README.md) says where to add them.
 
-If UScreen replaced a second monitor for you, a star on the repo and a
-[compatibility report](https://github.com/majmichu1/UScreen/issues/new?template=compatibility.yml)
-help the next Linux user find it.
+## Install
 
-## Verified compatibility
+1. **Linux side.** From a checkout or an unpacked release:
 
-| host | tablet | result |
-| --- | --- | --- |
-| Bazzite, KDE Plasma 6 Wayland, NVIDIA RTX 5060 | Galaxy Tab S9 Ultra, Android 14 | works — reference setup, all benchmarks |
-| Arch Linux, KDE Plasma Wayland | — | works — externally verified on a real system twice: the v1.0.2 installer ([report](https://github.com/majmichu1/UScreen/issues/2#issuecomment-5478643599)) and the v1.1.0 PKGBUILD via `makepkg -si`, with menu entry, tray and settings working out of the box ([report](https://github.com/majmichu1/UScreen/issues/3#issuecomment-5494961262)) |
-| Fedora 44, KDE Plasma | Galaxy Tab S9 FE | works — "near perfectly", external report ([discussion #7](https://github.com/majmichu1/UScreen/discussions/7)) |
-| Debian 12 · Fedora 42 · openSUSE Tumbleweed | — | packages install and run (container-tested, no tablet) |
+   ```bash
+   ./scripts/install.sh            # asks what to install; add --dry-run to see every command first
+   ```
 
-Any Android 8.1+ tablet with a hardware H.264 decoder should work — the
-display is generated to match the tablet. More in
-[docs/compatibility.md](docs/compatibility.md); reports are welcome.
+   It detects your distribution family, installs `ffmpeg`, `adb` and the EVDI virtual-display module with the right package manager,
+   and puts everything else in your home directory. It tells you at the end whether you need to log out or reboot
+   (`UScreen-INSTALL-RESULT: relogin=… reboot=…`). Options: [`docs/installer.md`](docs/installer.md).
+2. **Tablet.** Install `uscreen.apk` and turn on USB debugging.
+3. **Plug in** and start the daemon (`uscreen start`, or the Start button in the desktop app). If something is off, run `uscreen doctor`.
 
-## Performance
+Update both halves together: they share a session token. Details and what the installer changes on your system: [Install](https://harshp2008.github.io/UScreen-Pro/install/) and [`SECURITY.md`](SECURITY.md).
 
-Measured on the reference hardware over USB (2960×1848, 90 fps target,
-constant-quality encoding):
+## What is new in UScreen Pro
 
-| | median | p95 |
-| --- | --- | --- |
-| H.264, NVENC | 18–22 ms | 23–31 ms |
-| HEVC, NVENC | 15–18 ms | 20–23 ms |
-| Wi-Fi fallback (H.264) | 22.8 ms | 78.6 ms, worst frames in seconds |
+UScreen Pro continues [UScreen by majmichu1](https://github.com/majmichu1/UScreen) (see [Credits](#credits)). What this project added or changed:
 
-The tablet's hardware decoder is most of the budget (~15 ms), the USB hop
-5–7 ms, the encoder under 1 ms. Method, CPU figures and limitations in
-[docs/benchmarks.md](docs/benchmarks.md).
+- **The Dynamic pen style** with a per-stroke state machine: click slop, resting-pen parking, pointer snapping to whole pixels.
+- **The pen menu**, drawn inside GNOME Shell by the extension (no window, no focus change), with a GTK fallback.
+- **Settings that follow you:** the desktop app and the tablet app edit the same file, and the newest change wins.
+- **A new desktop app** ([Tauri](https://tauri.app/) + React) with a device wizard, per-device overrides and a health page.
+- **An installer that is tested:** one file per distribution family, a dry-run and a plan mode, and 60 tests that run in containers of six distributions.
+- **A layout built to be extended:** a new distribution is one file, a new desktop is one directory, a new GNOME Shell version is one table row. See [Adding support](https://harshp2008.github.io/UScreen-Pro/project/adding-support/).
+- **Every function documented, and the experiments published:** 62 records of what was tried and found, in [Findings and experiments](https://harshp2008.github.io/UScreen-Pro/findings/).
 
-## Compared with the alternatives
+## How it works
 
-Checked against official project documentation in August 2026; corrections
-welcome.
+```text
+ Computer                                                         Tablet
+ ┌──────────────┐   frames   ┌───────────┐  H.264 / HEVC   ┌─────────────────────────┐
+ │ EVDI virtual │ ─────────▶ │ ffmpeg    │ ───── USB ────▶ │ Android app: decodes    │
+ │ display (C   │   NV12     │ encoder   │   (adb reverse) │ and shows the picture   │
+ │ helper)      │            └───────────┘                 │                         │
+ └──────────────┘            ┌───────────┐  touch, pen     │ sends touch, pen and    │
+   Daemon (Rust) ◀────────── │ uinput    │ ◀──── JSON ──── │ touchpad events         │
+   + GNOME extension         │ devices   │   (WebSocket)   └─────────────────────────┘
+                             └───────────┘
+```
 
-| | UScreen | [SuperDisplay](https://superdisplay.app/) | [Weylus](https://github.com/H-M-H/Weylus) | [Sunshine](https://github.com/LizardByte/Sunshine) + Moonlight | [spacedesk](https://www.spacedesk.net/) |
-| --- | --- | --- | --- | --- | --- |
-| Linux host | **yes** | no (Windows, macOS) | yes | yes | no (Windows) |
-| Real extended display | **yes** (EVDI) | yes | needs a separate virtual-display setup | needs an existing or dummy display | yes |
-| Direct USB, no tethering | **yes** (adb) | yes | via adb port forward | no (network) | no (network) |
-| S Pen pressure | **yes** | yes | yes | partial | partial |
-| Tilt, eraser, button | **yes** | yes | pressure/tilt via browser API, no eraser | no | no |
-| Hardware video encoding | NVENC / VAAPI / x264 | yes | yes (VAAPI/NVENC) | yes | yes |
-| Open source | **MIT** | no | AGPL | GPL | no |
-| Dummy HDMI plug | **no** | no | sometimes | often | no |
+Both connections are on loopback and need a per-run session token. The details are in [Behaviour notes](https://harshp2008.github.io/UScreen-Pro/project/behavior-notes/).
 
-Also current: [MoreSpace](https://morespaceapp.com/) — a Linux host daemon
-with an Android app, extended display by default, USB or Wi-Fi, pressure-
-sensitive stylus; its documentation does not state tilt or eraser support, the
-USB protocol, or a license. [TethrLink](https://github.com/princesavsaviya/TethrLink)
-(GPL-3.0) — a real second monitor via GNOME's ScreenCast API, GNOME Wayland
-only, over USB tethering, stylus not documented.
-[subdisplay](https://github.com/TarikTopalovic/subdisplay) (MIT) — a wrapper
-around Sunshine + Moonlight over USB tethering; a dummy plug for a true
-extended display, pressure but no tilt.
+## Repository map
 
-## Settings
-
-Everything lives in `~/.config/uscreen/config.toml` and is reachable from
-`uscreen-pro-gui`, the ⚙ sheet in the tablet app, the tray icon, or CLI flags.
-
-- **Graphics tablet mode** — flip *Graphics tablet* on the tablet: nothing is
-  streamed, the pen drives your own screen, zero display latency. Switch back
-  the same way; no restart.
-- **Touchpad mode** — in the tablet's settings: fingers move the pointer like
-  a laptop touchpad instead of touching where they land. Tap to click, tap and
-  drag to drag, two fingers to scroll, two-finger tap for right click, three
-  fingers for middle click. The pen is unchanged. With *Graphics tablet* on as
-  well, nothing is streamed and the screen goes dark: the whole tablet is a
-  touchpad, plus the pen on your own screen.
-- **Position** — `right` (default), `left`, `above`, `below` your real screens.
-- **Pen and mouse** — `pointer_handoff = false` (or the checkbox in the GUI)
-  stops the pen from moving the desktop cursor: pen and touch drive the
-  tablet's screen, the mouse stays where it was. On by default, which leaves
-  an ordinary cursor where the pen was lifted.
-- **Orientation** — in the tablet's ⚙ sheet: rotate automatically with the
-  tilt sensor, or pin *camera up* / *camera down*.
-- **Codec** — `h264_nvenc` by default because every device decodes it;
-  `hevc_nvenc` is sharper at the same bitrate and was faster on the reference
-  tablet. `ten_bit` (HEVC Main10) smooths gradient banding — the desktop is
-  8-bit, so it adds precision, not colour; it is not HDR.
-- **Stream scale** — `stream_scale = 2` sends a quarter of the pixels for a
-  ~6 ms lower decode time at the cost of softer text.
-- **VAAPI on a laptop with two GPUs** — the daemon picks the first render node
-  that really encodes a frame (NVIDIA's cannot, through VAAPI); to choose
-  yourself set `vaapi_device = "/dev/dri/renderD129"`. `uscreen doctor` says
-  which node is in use.
-- **Black screen in graphics tablet mode** — on by default, in the tablet's ⚙:
-  the explanation shows for eight seconds, then the screen goes fully black
-  so an OLED panel is not left lit with the same text. Pen and touch still
-  work. **Touch input** (same sheet) turns fingers off and leaves the pen.
-- **Several tablets** — `max_tablets` up to 4, each its own screen. Each is
-  remembered by its serial in a `[tablets.<serial>]` block: its panel size, so
-  the right display is built the moment it is plugged in, and optionally its
-  own `fps`, `bitrate`, `quality`, `stream_scale` or `position`.
-- **Wi-Fi** — `uscreen wifi` once, with the cable in: it switches the tablet
-  over, remembers the address and reconnects to it by itself whenever the
-  cable is out. `uscreen wifi --off` undoes it. The daemon prefers the cable
-  when both are there, and the stutter is [quantified](docs/benchmarks.md).
-- **Updates** — the app, the GUI and the tray tell you when a newer release
-  exists; nothing installs itself. `check_updates = false` turns it off.
-
-## FAQ
-
-**Does it need Wi-Fi or USB tethering?** No — a normal data-capable USB cable
-with USB debugging enabled on the tablet; USB tethering is not needed. Wi-Fi
-is an optional fallback.
-
-**Is it a mirror or an extension?** An extension; a real monitor in your
-display settings. Graphics-tablet mode is a separate, non-display mode.
-
-**Does S Pen pressure and tilt work?** Yes, plus eraser and button, as a
-proper tablet device.
-
-**Does it work on Bazzite / KDE Wayland?** That is the reference setup.
-Hyprland is handled through `hyprctl` since 1.2.7, and GNOME (Wayland) and X11
-get pen and touch mapping from 1.2.8 (not yet confirmed on real hardware).
-Other desktops get the display and the stream; mapping is manual there.
-
-**Does it need a dummy HDMI plug?** No.
-
-**Which Android versions?** 8.1 and newer.
-
-**Is anything sent to the cloud?** No. Screen and input data never leave the
-cable; the only outbound request is an optional version check against GitHub
-(`check_updates = false` turns it off).
-
-**How do I uninstall it completely?** [SECURITY.md](SECURITY.md#how-to-uninstall-completely)
-lists every file.
-
-More in [docs/faq.md](docs/faq.md).
-
-## Documentation
-
-- [Installation](docs/installation.md) · [Troubleshooting](docs/troubleshooting.md)
-- [Architecture and protocol](docs/architecture.md) · [Development, building, releasing](docs/development.md)
-- [Benchmarks](docs/benchmarks.md) · [Compatibility](docs/compatibility.md) · [FAQ](docs/faq.md)
-- [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
-- [Documentation site](https://harshp2008.github.io/UScreen-Pro/) (built from `website/`; see [website/README.md](website/README.md))
-
-## Codebase Architecture
-
-UScreen is architected as a modular, low-overhead system with decoupled backend, capture, and client subsystems. The full tree is in [docs/development.md](docs/development.md); adding a distribution, a desktop or a GNOME version is described in [docs/adding-support.md](docs/adding-support.md).
-
-- **Host Daemon (`host/src/`)**:
-  - `main.rs`, `cli/`: entry point and argument parsing; one-shot subcommands (`stop`, `status`, ...); `doctor/` is the environment diagnostic suite.
-  - `daemon/`: the daemon event loop (`mod.rs`), tablet sessions and the adb monitor (`session/`), the compositor-freeze guard (`guard/`), the tray icon and the update check.
-  - `net/`: `adb/` (device discovery, reverse port forwarding, wireless adb, the tablet app), `pairing.rs` (wireless pairing), `installer.rs` (APK install queue), `stream.rs` (video socket), `notices.rs` (status messages pushed to the tablet).
-  - `desktop/`: one directory per desktop environment (`gnome/`, `x11/`, `kde/`, `hyprland/`, `cosmic/`, `generic/`), each with its backend and its virtual-monitor code. `display/` holds the parts that are not desktop specific (`edid.rs`, `vdisplay.rs`).
-  - `capture/`: the video pipeline: `supervisor.rs` (restart loop), `helper.rs` (EVDI helper), `spawn.rs` (encoder process), `display.rs` (monitor placement), `reader.rs` and `packetizer.rs` (Annex B parsing). `encoders.rs` probes which encoders actually work.
-  - `input/`: WebSocket input server (`server.rs`, `protocol/`, `events/`), virtual devices (`uinput/`), pen routing and the Dynamic style (`ghost/`), the long-press pen menu (`menu/`) and `mapping.rs` (binding devices to the right output).
-  - `config/`: the `config.toml` schema, its validation (`sanitize.rs`), the daemon control socket (`handler.rs`) and live per-tablet options (`options/`).
-
-- **C EVDI Helper (`host/evdi/evdi_helper.c` and `helper_*.h`)**:
-  - Event-driven display grabber communicating directly with the `evdi` kernel module via `libevdi`; one translation unit made of `evdi_helper.c` and the `helper_*.h` parts it includes.
-  - Triple-buffered NV12 conversion with SIMD SWAR acceleration and per-buffer damage tracking.
-  - POSIX signal handling supporting active 60 FPS streaming, 1 FPS keep-alive standby throttle (`SIGUSR1`), and full keyframe refresh (`SIGUSR2`).
-
-- **Android Client (`android/`)**:
-  - `MainActivity.kt`: Thin Activity host managing Keyguard flags, WakeLocks, display refresh rate negotiation, and stylus hover event dispatching.
-  - `ui/Theme.kt`: Consistent high-contrast dark theme optimized for OLED tablet displays.
-  - `ui/ConnectionScreen.kt`: Primary video viewport (SurfaceView) and the top-level screen; `ui/ActiveScreens.kt` (graphics-tablet and touchpad screens) and `ui/HostOverlays.kt` (banners and host notices) are split out of it.
-  - `ui/Onboarding.kt`: Guided Developer Options setup, real-time connection diagnostics, and interactive Troubleshooter bottom sheet.
-  - `ui/SettingsSheet.kt`: Settings sheet for bitrate/FPS tuning, orientation locks, preferred transport, and wireless pairing (`ui/SettingsParts.kt` holds its building blocks).
-  - `PlatformSupport.kt`: small platform queries (Wi-Fi IP, lock-screen touch support).
-  - `VideoReceiver.kt`: Low-latency `MediaCodec` hardware video decoder rendering directly to a native Surface.
-  - `TouchCapture.kt`: MotionEvent interception forwarding touch and S Pen events back to the host over WebSocket.
-
-## Releases
-
-Regular releases go out **on Saturday evenings (US Eastern time)**, with
-everything fixed that week; the [changelog](CHANGELOG.md) collects it under
-*Unreleased* until then. A fix ships straight away only when people cannot use
-UScreen without it — a broken install, a black screen on a common setup. If
-you need something sooner, `main` is always buildable
-([docs/development.md](docs/development.md)).
-
-Update the Linux side and the APK together; they are versioned as one.
-
-## Roadmap
-
-Shipped: extended display over USB, S Pen with pressure/tilt/eraser, graphics-
-tablet mode switchable from the tablet, plug-and-play with autostart, tray
-icon, any-side placement, several tablets, HEVC and 10-bit, Wi-Fi fallback,
-packages for five distribution families, `uscreen doctor`, measured latency.
-
-Next: **AOA transport** — removing the USB-debugging requirement, the last
-step between this and simply plugging a cable in. Input mapping on
-GNOME and X11 ([#4](https://github.com/majmichu1/UScreen/issues/4)) is in as of
-1.2.8 but waiting for someone to confirm it on a real desktop; then a
-**PipeWire/dmabuf capture path**: the EVDI cycle is serial by design (the
-compositor copies the frame out of the GPU, then the helper copies it again,
-then the compositor renders the next one), which caps native 2960×1848 at
-about 60 frames/s on the reference laptop whatever the target; taking the
-frame straight from the compositor as a GPU buffer would remove both copies.
-
-Explored: HDR, currently blocked by EVDI providing only 8-bit framebuffers.
-Considered, not scheduled: **iPad**. The Linux side would carry over (the
-virtual display, the encoder, the input devices), but the transport would
-have to move from adb to usbmuxd and the app would have to be rebuilt in
-Swift. Since iOS 17.4 the EU's Digital Markets Act allows distribution
-outside the App Store, which removes the review step, but not the rest: the
-app still has to be notarised by Apple, which needs a paid developer account
-and a Mac to build on, and outside the EU it stays App Store only. It is on
-the list; it is not next.
+| Path | What is in it |
+|---|---|
+| `host/` | the daemon (`uscreen`, Rust); `host/evdi/` the C helper; `host/src/desktop/<name>/` one directory per desktop |
+| `uscreen-pro-gui/` | the desktop app (Tauri + React) |
+| `android/` | the tablet app (Kotlin, Jetpack Compose) |
+| `menu/` | the GTK 4 fallback pen menu |
+| `extensions/uscreen-app-lock/` | the GNOME Shell extension, with a `compat/` layer for Shell versions |
+| `scripts/` | the installer (`install.sh`, `lib/distros/<family>.sh`) and its tests |
+| `website/` | the documentation site ([Starlight](https://starlight.astro.build/)) |
+| `docs/`, `experiments_and_findings/` | the project documents and the original write-ups |
 
 ## Contributing
 
-Compatibility reports are the most useful thing right now; see
-[CONTRIBUTING.md](CONTRIBUTING.md). Issues tagged `good first issue` are
-self-contained. Questions go to
-[Discussions](https://github.com/majmichu1/UScreen/discussions).
+Build and test commands are on [Testing](https://harshp2008.github.io/UScreen-Pro/testing/), the comment rules in [`docs/comment-style.md`](docs/comment-style.md), and the contribution
+workflow in [`CONTRIBUTING.md`](CONTRIBUTING.md). Security issues: [`SECURITY.md`](SECURITY.md).
+
+## Credits
+
+UScreen Pro is a continuation of **[UScreen](https://github.com/majmichu1/UScreen) by [majmichu1](https://github.com/majmichu1)**, which provided the original design, the
+EVDI capture pipeline and the first Android app. This repository keeps its history and its MIT licence. Third-party libraries are listed in
+[`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md); the window-placement tool [spawn-at](https://github.com/harshp2008/spawn-at) is a companion project.
 
 ## License
 
-MIT — see [LICENSE](LICENSE). The bundled libevdi client library is LGPL-2.1
-from DisplayLink, unmodified — see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+MIT. See [`LICENSE`](LICENSE).
