@@ -1,0 +1,31 @@
+// Captures every screen of the Add device wizard from the real app code (dev mock, sample data).
+import { open } from './cdp.mjs';
+const OUT = process.argv[2];
+const q = process.argv[3] ?? '';
+const p = await open('http://localhost:1420/' + q, { w: 1280, h: 800, dpr: 2 });
+const dlg = async (name) => {
+  const r = await p.rect('[role=dialog]');
+  const pad = 0;
+  await p.shot(`${OUT}/${name}.png`, { x: Math.max(0, r.x - pad), y: Math.max(0, r.y - pad), width: r.width + pad * 2, height: r.height + pad * 2 });
+};
+const log = async (t) => console.log(t, '=>', (await p.texts()).split(' | ').slice(-12).join(' | '));
+console.log('add', await p.click('Add device')); await p.sleep(500);
+await dlg('w0-landing'); await log('landing');
+console.log('usb', await p.click('Setup via USB')); await p.sleep(700);
+await dlg('w1-prepare'); await log('prepare');
+console.log('next', await p.click('Next')); await p.sleep(700);
+await dlg('w2-connect-empty'); await log('connect');
+console.log('setup this', await p.click('Setup this device')); await p.sleep(1500);
+await dlg('w2-connect'); await log('connected');
+console.log('next', await p.click('Next')); await p.sleep(2500);
+await dlg('w3-install'); await log('install');
+console.log('next', await p.click('Next')); await p.sleep(800);
+await dlg('w4-wireless'); await log('wireless');
+console.log('configure', await p.click('Configure Wireless over USB')); await p.sleep(3500);
+await dlg('w4-wireless-done'); await log('wireless done');
+console.log('tailscale', await p.click('Tailscale')); await p.sleep(700);
+await dlg('w4-tailscale'); await log('tailscale');
+console.log('auto', await p.click('Automatic Setup')); await p.sleep(400);
+console.log('next', await p.click('Next')); await p.sleep(800);
+await dlg('w5-finish'); await log('finish');
+await p.close();

@@ -1,9 +1,24 @@
 ---
 // The landing page: a standalone page, not part of the documentation layout (no docs header, sidebar or pager).
-// Everything on it is either a real screenshot or a mock-up built from the app's real labels, and says which.
-// The documentation starts at /what-is-uscreen-pro/. System fonts only; no third-party requests.
+// Every picture and video on it is the real desktop app running its development mode (sample data: a made-up
+// tablet and serial, no connected device). The pen illustration is a drawing and says so. The documentation
+// starts at /what-is-uscreen-pro/. System fonts only; no third-party requests.
 const base = import.meta.env.BASE_URL;
 const docs = `${base}what-is-uscreen-pro/`;
+const img = (n: string) => `${base}real/${n}.webp`;
+const wizard = [
+  { id: 'wiz-1-prepare', label: 'Prepare Device', w: 960, h: 868, text: 'Turn on USB debugging on the tablet, once. The app shows you each tap.' },
+  { id: 'wiz-2-connect', label: 'Connect USB', w: 960, h: 983, text: 'Plug the tablet in and choose it. Identify makes it show a notification, so you know which one is which.' },
+  { id: 'wiz-3-install', label: 'Install', w: 960, h: 868, text: 'The app is installed on the tablet for you.' },
+  { id: 'wiz-4-wireless', label: 'Wireless', w: 960, h: 1300, text: 'Wi-Fi is set up over the same cable. Tailscale is an experimental alternative.' },
+  { id: 'wiz-5-finish', label: 'Finish', w: 960, h: 901, text: 'Choose how it connects: USB cable, Auto (USB first, Wi-Fi as a fallback) or Wi-Fi.' },
+  { id: 'wiz-blocked', label: 'If the router blocks it', w: 960, h: 1472, text: 'If your router stops the tablet and computer talking, it says so, explains why and offers the fix.' },
+];
+const modes = [
+  { id: 'set-display', label: 'Extended Display', w: 2080, h: 1090, text: 'A second monitor. The virtual display is encoded in hardware and streamed to the tablet; touch and pen come back.' },
+  { id: 'set-touchpad', label: 'Touchpad', w: 2080, h: 630, text: 'The tablet is a laptop touchpad. Sensitivity, shape, right-click method and haptics are settings. Nothing is streamed.' },
+  { id: 'set-stylus', label: 'Stylus', w: 2080, h: 810, text: 'A pen tablet for the screen you are already using. Nothing is streamed, so there is no display latency.' },
+];
 ---
 <!doctype html>
 <html lang="en">
@@ -18,11 +33,12 @@ const docs = `${base}what-is-uscreen-pro/`;
   <body>
     <header class="top">
       <div class="w bar">
-        <a class="logo" href={base}>UScreen Pro</a>
+        <a class="logo" href={base}><img src={`${base}logo.svg`} alt="" width="28" height="28" />UScreen Pro</a>
         <nav>
           <a href="#setup">Setup</a>
+          <a href="#modes">Modes</a>
           <a href="#pen">Pen</a>
-          <a href="#new">Features</a>
+          <a href="#more">Features</a>
           <a href={docs}>Docs</a>
           <a class="gh" href="https://github.com/harshp2008/UScreen-Pro">GitHub</a>
         </nav>
@@ -30,169 +46,167 @@ const docs = `${base}what-is-uscreen-pro/`;
     </header>
 
     <main>
-      <!-- Hero: the real first screen of the Add device wizard, rebuilt in HTML -->
       <section class="hero">
         <div class="w hero-grid">
           <div>
-            <p class="pill"><i></i>Open source · Linux · Android</p>
-            <h1>Your tablet.<br /><em>Your pen.</em><br />Your Linux.</h1>
+            <h1>Your tablet.<br />Your pen.<br />Your Linux.</h1>
             <p class="sub">A second display, a laptop touchpad and a real pen tablet, from one Android tablet. Set up in a few clicks.</p>
             <div class="cta">
               <a class="btn primary" href="#setup">Get started</a>
-              <a class="btn" href="https://github.com/harshp2008/UScreen-Pro">GitHub</a>
-              <a class="btn ghost" href={docs}>Docs</a>
+              <a class="btn" href={docs}>Read the docs</a>
             </div>
           </div>
-          <figure class="mock-wrap">
-            <div class="app" role="img" aria-label="Mock-up of the Add device dialog of the UScreen Pro desktop app">
-              <div class="app-side">
-                <div class="brand"><span class="logo-sq"></span>UScreen Pro</div>
-                <div class="start">&#9655; Start Daemon</div>
-                <div class="nav">Settings</div>
-                <div class="nav">Advanced</div>
-                <div class="nav">System health</div>
-                <div class="cap">PAIRED DEVICES (1)</div>
-                <div class="nav sel">SM-X616B <small>USB</small></div>
-                <div class="cap">NEW DEVICES (1)</div>
-                <div class="nav">SM-A556E <small>USB</small></div>
-              </div>
-              <div class="app-main"></div>
-              <div class="dialog">
-                <h3>Add device</h3>
-                <div class="usb">
-                  <b>Setup via USB (Recommended)</b>
-                  <span>Plug in your device. We will automatically install the app and configure wireless mode.</span>
-                </div>
-                <div class="wl">&#8964; Don't have a USB cable? Set up wirelessly.</div>
-              </div>
-            </div>
-            <figcaption>Mock-up of the Add device dialog, with sample devices.</figcaption>
+          <figure class="media">
+            <div class="frame"><video id="hero-video" src={`${base}video/setup-wizard.mp4`} poster={`${base}video/setup-wizard.jpg`} width="960" height="600" autoplay muted loop playsinline preload="metadata" aria-label="Recording of the Add device wizard in the desktop app"></video></div>
+            <figcaption>The real app adding a tablet, recorded on sample data.</figcaption>
           </figure>
         </div>
       </section>
 
-      <!-- Setup comes first: easy setup is the point -->
       <section id="setup">
         <div class="w">
           <h2>Set up in three steps</h2>
-          <p class="lead">No config files. The installer works out your system, and the app does the tablet.</p>
-          <ol class="steps">
-            <li class="reveal">
-              <h3>Run the installer</h3>
-              <code>./scripts/install.sh</code>
-              <p>It detects your distribution, shows what it will install, asks before it does, and tells you at the end if you need to log out.</p>
-            </li>
-            <li class="reveal" style="--d:1">
-              <h3>Add your tablet</h3>
-              <p>Open UScreen Pro, press <b>Add device</b> and plug the tablet in. The app is installed on it and wireless is set up for you.</p>
-              <ul class="stepper" aria-label="The five steps of the wizard">
-                <li>Prepare Device</li><li>Connect USB</li><li>Install</li><li>Wireless</li><li>Finish</li>
-              </ul>
-            </li>
-            <li class="reveal" style="--d:2">
-              <h3>Use it</h3>
-              <p>Plug in whenever you like and the display appears. The tablet app is kept in step with the computer on its own.</p>
-              <code>uscreen doctor</code>
-              <p class="small">checks everything if something looks off.</p>
-            </li>
-          </ol>
-          <p class="note">One thing the wizard cannot do for you: turn on USB debugging on the tablet, once. It shows you how, step by step.</p>
+          <p class="lead">No config files. The installer works out your system and the app does the tablet.</p>
+          <div class="setup">
+            <ol class="steps">
+              <li class="reveal">
+                <h3>Run the installer</h3>
+                <p>It detects your distribution, shows what it will install, asks before it does, and tells you if you need to log out.</p>
+                <code>./scripts/install.sh</code>
+              </li>
+              <li class="reveal" style="--d:1">
+                <h3>Add your tablet</h3>
+                <p>Open UScreen Pro, press <b>Add device</b> and plug the tablet in. The app is installed on it and wireless is set up for you. Click through the steps on the right to see each screen.</p>
+              </li>
+              <li class="reveal" style="--d:2">
+                <h3>Use it</h3>
+                <p>Plug in whenever you like and the display appears. The tablet app is kept in step with the computer on its own.</p>
+                <code>uscreen doctor</code>
+                <p class="small">checks everything if something looks off.</p>
+              </li>
+            </ol>
+            <div class="viewer reveal" id="wizard-viewer">
+              <div class="tabs" role="tablist" aria-label="Add device wizard screens">
+                {wizard.map((s, i) => <button type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-i={i}>{s.label}</button>)}
+              </div>
+              <div class="stage"><img id="wizard-img" src={img(wizard[0].id)} alt={`Add device wizard: ${wizard[0].label} (sample data)`} width={wizard[0].w} height={wizard[0].h} /></div>
+              <p class="cap" id="wizard-cap">{wizard[0].text}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="modes">
+        <div class="w">
+          <h2>One tablet, three jobs</h2>
+          <p class="lead">Each tablet has its own mode. These are the real settings for each.</p>
+          <div class="viewer reveal" id="modes-viewer">
+            <div class="tabs" role="tablist" aria-label="Modes">
+              {modes.map((s, i) => <button type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-i={i}>{s.label}</button>)}
+            </div>
+            <div class="stage wide"><img id="modes-img" src={img(modes[0].id)} alt={`Settings for ${modes[0].label} (sample data)`} width={modes[0].w} height={modes[0].h} /></div>
+            <p class="cap" id="modes-cap">{modes[0].text}</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="pen">
+        <div class="w">
+          <h2>A pen for drawing and for clicking</h2>
+          <p class="lead">Pick a style and watch what the pen does in a drawing app and in a text editor.</p>
+          <div class="pen">
+            <div>
+              <div class="styles" role="group" aria-label="Pen style">
+                <button type="button" aria-pressed="true" data-style="dynamic">Dynamic</button>
+                <button type="button" aria-pressed="false" data-style="mouse">Mouse</button>
+                <button type="button" aria-pressed="false" data-style="tablet">Graphics tablet</button>
+              </div>
+              <p id="style-text" class="explain"></p>
+              <p class="small">Dynamic is experimental and tested only on GNOME. The pen menu belongs to Dynamic.</p>
+            </div>
+            <div>
+              <div class="demo" id="demo" data-style="dynamic" role="img" aria-label="Drawing of the three pen styles in a drawing app and a text editor">
+                <div class="win art">
+                  <div class="wbar"><b></b><b></b><b></b><span>Drawing app</span></div>
+                  <svg viewBox="0 0 240 110" class="canvas" aria-hidden="true">
+                    <path class="plain" d="M14 80 C 60 20, 110 110, 160 50 S 214 40, 226 56" />
+                    <path class="taper" d="M14 80 C 60 20, 110 110, 160 50 S 214 40, 226 56" />
+                  </svg>
+                  <div class="badge" id="badge-art"></div>
+                </div>
+                <div class="win txt">
+                  <div class="wbar"><b></b><b></b><b></b><span>Notes</span></div>
+                  <p>Reminders for this week.</p>
+                  <p class="sel-line">Renew the <mark id="sel">domain</mark> before Friday.</p>
+                  <p class="dim">Pick up the parcel on Thursday.</p>
+                  <svg class="cursor" id="cursor" viewBox="0 0 16 24" aria-hidden="true"><path d="M1.5 1.5 L1.5 18 L5.8 14.2 L8.6 20.8 L11.2 19.6 L8.4 13.2 L14 13 Z" /></svg>
+                  <div class="menu" id="menu" aria-hidden="true"><span>Cut</span><span>Copy</span><span>Paste</span><span>Select all</span><span>Undo</span></div>
+                  <div class="none" id="none">No cursor, no clicks in this app</div>
+                  <div class="badge" id="badge-txt"></div>
+                </div>
+              </div>
+              <p class="note">A drawing. The pointer is the normal system cursor; the real menu is drawn by the GNOME Shell extension.</p>
+            </div>
+          </div>
+          <figure class="shot reveal">
+            <div class="frame"><img src={img('set-stylus')} alt="The pen settings in the desktop app: pen style, side buttons, pen menu and hold time (sample data)" width="2080" height="810" loading="lazy" /></div>
+            <figcaption>The real pen settings: style, side buttons, the pen menu and how long to hold.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="more">
+        <div class="w">
+          <h2>What else Pro does</h2>
+          <div class="row reveal">
+            <div class="text">
+              <h3>Easy on the tablet's battery</h3>
+              <p>Dim the tablet while your pointer is elsewhere, with fade curves you choose. After two minutes without the computer it stops retrying and dims to 10 percent. Touch it and it wakes.</p>
+            </div>
+            <div class="frame"><img src={img('set-power')} alt="Android app settings: orientation, theme, battery saver, dim when idle and fade curves (sample data)" width="2080" height="1110" loading="lazy" /></div>
+          </div>
+          <div class="row flip reveal">
+            <div class="text">
+              <h3>Errors that tell you what to do</h3>
+              <p>If your router blocks the tablet, the wizard says so, explains MAC randomization and AP isolation, and offers a fix and a retry. The tablet app has its own screens for a host that is offline or debugging that is off.</p>
+            </div>
+            <div class="frame tall"><img src={img('wiz-blocked')} alt="The Add device wizard showing Connection Blocked by Router (sample data)" width="960" height="1472" loading="lazy" /></div>
+          </div>
+          <div class="row reveal">
+            <div class="text">
+              <h3>Settings for each tablet</h3>
+              <p>One file, two editors: the desktop app and the tablet app change the same settings, and the newest change wins. Click a grey value to override it for one tablet.</p>
+            </div>
+            <div class="frame"><img src={img('set-device')} alt="A device page with per-tablet overrides (sample data)" width="2080" height="1440" loading="lazy" /></div>
+          </div>
+          <div class="row flip reveal">
+            <div class="text">
+              <h3>Health at a glance</h3>
+              <p>Daemon, build and tools in one place: restart ADB, reinstall the tablet app, and see which devices are connected. The tablet app also updates itself when it stops matching the computer.</p>
+            </div>
+            <div class="frame"><img src={img('set-health')} alt="System health page (sample data)" width="2080" height="940" loading="lazy" /></div>
+          </div>
+          <p class="also reveal"><b>Also:</b> hardware encoding (VAAPI HEVC tuned and tested), several tablets at once, a safety guard so the virtual monitor never stalls your desktop, <code>uscreen doctor</code>, a plugged-in pen tablet (tried with an XP-Pen), a tested installer, and every experiment published.</p>
         </div>
       </section>
 
       <section>
         <div class="w">
-          <h2>One tablet, three jobs</h2>
-          <div class="cards">
-            <div class="card reveal"><div class="ico"><svg class="i"><use href="#i-monitor" /></svg></div><h3>Second display</h3><p>A real extra monitor, encoded in hardware. Touch and pen come back.</p></div>
-            <div class="card reveal" style="--d:1"><div class="ico"><svg class="i"><use href="#i-pad" /></svg></div><h3>Touchpad</h3><p>Swipes, pinch and palm rejection. Nothing is streamed.</p></div>
-            <div class="card reveal" style="--d:2"><div class="ico"><svg class="i"><use href="#i-pen" /></svg></div><h3>Pen tablet</h3><p>Pressure, tilt and eraser on the screen you are already using.</p></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- The pen: an interactive illustration of the three styles and the pen menu -->
-      <section id="pen">
-        <div class="w pen">
-          <div class="reveal">
-            <h2>A pen for drawing and for clicking</h2>
-            <p class="lead">Choose how the pen behaves. Try it.</p>
-            <div class="styles" role="group" aria-label="Pen style">
-              <button type="button" aria-pressed="true" data-style="dynamic">Dynamic</button>
-              <button type="button" aria-pressed="false" data-style="mouse">Mouse</button>
-              <button type="button" aria-pressed="false" data-style="tablet">Graphics tablet</button>
-            </div>
-            <p id="style-text" class="explain"></p>
-            <p class="small">Dynamic is experimental and GNOME only. The menu opens when you hold the pen still on selected text, and only when the pen is acting as a mouse.</p>
-          </div>
-          <div class="reveal" style="--d:2">
-            <div class="demo" id="demo" data-style="dynamic" aria-label="Illustration of the pen styles and the pen menu">
-              <div class="win art">
-                <div class="wbar"><b></b><b></b><b></b><span>Drawing app</span></div>
-                <svg viewBox="0 0 240 110" class="canvas" aria-hidden="true">
-                  <path class="plain" d="M14 80 C 60 20, 110 110, 160 50 S 214 40, 226 56" />
-                  <path class="taper" d="M14 80 C 60 20, 110 110, 160 50 S 214 40, 226 56" />
-                </svg>
-                <div class="badge" id="badge-art"></div>
-              </div>
-              <div class="win txt">
-                <div class="wbar"><b></b><b></b><b></b><span>Notes</span></div>
-                <p>Remember to renew the <mark id="sel">domain</mark> before Friday.</p>
-                <p class="dim">Plain text, like everywhere else.</p>
-                <svg class="cursor" id="cursor" viewBox="0 0 16 24" aria-hidden="true"><path d="M1.5 1.5 L1.5 18 L5.8 14.2 L8.6 20.8 L11.2 19.6 L8.4 13.2 L14 13 Z" /></svg>
-                <div class="menu" id="menu" aria-hidden="true"><span>Cut</span><span>Copy</span><span>Paste</span><span>Select all</span><span>Undo</span></div>
-                <div class="badge" id="badge-txt"></div>
-              </div>
-            </div>
-            <p class="note c">Illustration. The pointer is the normal system cursor; the real menu is drawn by the GNOME Shell extension.</p>
-          </div>
-        </div>
-      </section>
-
-      <section id="new">
-        <div class="w">
-          <h2>What Pro adds</h2>
-          <div class="tiles">
-            <div class="tile reveal"><div class="ico"><svg class="i"><use href="#i-clip" /></svg></div><b>Pen menu</b><span>Cut, copy and paste from the pen</span></div>
-            <div class="tile reveal" style="--d:1"><div class="ico"><svg class="i"><use href="#i-cursor" /></svg></div><b>Clean pen strokes</b><span>No stray clicks, no stolen cursor</span></div>
-            <div class="tile reveal" style="--d:2"><div class="ico"><svg class="i"><use href="#i-pad" /></svg></div><b>Native gestures</b><span>Fingers replayed as a real touchpad</span></div>
-            <div class="tile reveal" style="--d:3"><div class="ico"><svg class="i"><use href="#i-zap" /></svg></div><b>Faster, smoother</b><span>Tuned HEVC and steady frame pacing</span></div>
-            <div class="tile reveal"><div class="ico"><svg class="i"><use href="#i-battery" /></svg></div><b>Battery care</b><span>Dim when idle, save power when away</span></div>
-            <div class="tile reveal" style="--d:1"><div class="ico"><svg class="i"><use href="#i-wifi" /></svg></div><b>Wired or wireless</b><span>USB and Wi-Fi; Tailscale is experimental</span></div>
-            <div class="tile reveal" style="--d:2"><div class="ico"><svg class="i"><use href="#i-refresh" /></svg></div><b>Self-updating</b><span>The tablet app stays in step</span></div>
-            <div class="tile reveal" style="--d:3"><div class="ico"><svg class="i"><use href="#i-alert" /></svg></div><b>Clear errors</b><span>Messages with a button to fix them</span></div>
-            <div class="tile reveal"><div class="ico"><svg class="i"><use href="#i-shield" /></svg></div><b>Safety guard</b><span>The virtual monitor never stalls your desktop</span></div>
-            <div class="tile reveal" style="--d:1"><div class="ico"><svg class="i"><use href="#i-sliders" /></svg></div><b>Per-tablet settings</b><span>Override any value for one tablet</span></div>
-            <div class="tile reveal" style="--d:2"><div class="ico"><svg class="i"><use href="#i-pulse" /></svg></div><b>Doctor</b><span>One command checks the setup</span></div>
-            <div class="tile reveal" style="--d:3"><div class="ico"><svg class="i"><use href="#i-tablet" /></svg></div><b>Drawing tablets</b><span>A plugged-in pen tablet works too (tried with an XP-Pen)</span></div>
-          </div>
-        </div>
-      </section>
-
-      <section id="see">
-        <div class="w">
-          <h2>The app</h2>
-          <figure class="shot reveal">
-            <div class="frame"><img id="gallery-img" src={`${base}img/dark-device.png`} alt="A device page with per-device overrides (sample data)" width="2560" height="1600" loading="lazy" /></div>
+          <h2>The settings, in motion</h2>
+          <figure class="media">
+            <div class="frame"><video src={`${base}video/settings-tour.mp4`} poster={`${base}video/settings-tour.jpg`} width="1060" height="660" muted loop playsinline controls preload="none" aria-label="Recording of the settings pages of the desktop app"></video></div>
+            <figcaption>Recorded from the real app on sample data.</figcaption>
           </figure>
-          <div class="thumbs">
-            <button type="button" aria-pressed="false" data-src={`${base}img/dark-settings-modes.png`} data-alt="Mode settings (sample data)">Modes</button>
-            <button type="button" aria-pressed="true" data-src={`${base}img/dark-device.png`} data-alt="A device page with per-device overrides (sample data)">Device</button>
-            <button type="button" aria-pressed="false" data-src={`${base}img/dark-health.png`} data-alt="System health (sample data)">Health</button>
-            <button type="button" aria-pressed="false" data-src={`${base}img/dark-wizard.png`} data-alt="The Add device dialog (sample data)">Add device</button>
-            <button type="button" aria-pressed="false" data-src={`${base}img/light-device.png`} data-alt="A device page in the light theme (sample data)">Light</button>
-          </div>
-          <p class="note">Screenshots of the real app running on sample data, not a connected tablet.</p>
         </div>
       </section>
 
       <section>
         <div class="w two">
-          <div class="card reveal">
+          <div class="reveal">
             <h3>Where it stands</h3>
             <p><b>Run</b> on Ubuntu 24.04, GNOME 46, Wayland, with a Galaxy Tab S9 FE. <b>Not verified</b>: other desktops, distributions and tablets, pressure inside a drawing app, QR pairing, Tailscale and the release packages. Every feature is marked in <a href={`${base}project/features/`}>the full list</a>.</p>
           </div>
-          <div class="card reveal" style="--d:1">
+          <div class="reveal" style="--d:1">
             <h3>Built on UScreen</h3>
             <p>UScreen Pro started from <a href="https://github.com/majmichu1/UScreen">UScreen</a> by majmichu1 and keeps its idea, its virtual-display capture and its adb link. The desktop app, the tablet app, the input engine and the installer are new, and most of the rest has been reworked.</p>
           </div>
@@ -204,280 +218,214 @@ const docs = `${base}what-is-uscreen-pro/`;
       <a href={docs}>Docs</a> · <a href={`${base}project/features/`}>All features</a> · <a href={`${base}environments/`}>Where it works</a> · <a href="https://github.com/harshp2008/UScreen-Pro">GitHub</a> · MIT licence
     </footer>
 
-    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-      <defs>
-        <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" /><path d="M8 21h8M12 17v4" /></symbol>
-        <symbol id="i-pad" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 15h18M12 15v5" /></symbol>
-        <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></symbol>
-        <symbol id="i-clip" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1" /><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /></symbol>
-        <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" /></symbol>
-        <symbol id="i-battery" viewBox="0 0 24 24"><rect x="2" y="7" width="16" height="10" rx="2" /><path d="M22 11v2M6 11v2" /></symbol>
-        <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01" /></symbol>
-        <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8M3 3v5h5M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16M16 16h5v5" /></symbol>
-        <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></symbol>
-        <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" /></symbol>
-        <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" /></symbol>
-        <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></symbol>
-        <symbol id="i-tablet" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2" /><path d="M12 18h.01" /></symbol>
-        <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" /></symbol>
-      </defs>
-    </svg>
-
-    <script>
-      // Scroll reveal, the screenshot gallery and the pen illustration.
+    <script is:inline define:vars={{ wizard, modes, assetBase: `${base}real/` }}>
+      // Scroll reveal, the two viewers of real screens, the hero video and the pen drawing.
       document.documentElement.classList.add('js');
-      const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const items = document.querySelectorAll('.reveal');
+      var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var items = document.querySelectorAll('.reveal');
       if ('IntersectionObserver' in window && !reduce) {
-        const io = new IntersectionObserver((entries) => {
-          entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
         }, { threshold: 0.12 });
-        items.forEach((el) => io.observe(el));
-      } else items.forEach((el) => el.classList.add('in'));
+        items.forEach(function (el) { io.observe(el); });
+      } else items.forEach(function (el) { el.classList.add('in'); });
 
-      // Gallery: each button names the image it shows.
-      const img = document.getElementById('gallery-img') as HTMLImageElement | null;
-      const thumbs = document.querySelectorAll<HTMLButtonElement>('.thumbs button');
-      thumbs.forEach((b) => b.addEventListener('click', () => {
-        if (img) { img.src = b.dataset.src!; img.alt = b.dataset.alt!; }
-        thumbs.forEach((o) => o.setAttribute('aria-pressed', String(o === b)));
-      }));
+      var hero = document.getElementById('hero-video');
+      if (hero && reduce) { hero.pause(); hero.removeAttribute('autoplay'); hero.setAttribute('controls', ''); }
 
-      // Pen illustration. What each style does, per window; the menu only opens where the pen acts as a mouse.
-      const demo = document.getElementById('demo')!;
-      const TEXT: Record<string, string> = {
-        dynamic: 'In a drawing app the pen is a pressure tablet. Everywhere else it is a mouse. The computer picks, per app.',
-        mouse: 'The pen is always a mouse: it clicks, drags and selects. A side button can be right click or middle click.',
-        tablet: 'The pen is always a pressure and tilt tablet, in every app.',
+      // A viewer: tab buttons choose which real screen is shown, and its caption.
+      function viewer(rootId, imgId, capId, list) {
+        var root = document.getElementById(rootId), im = document.getElementById(imgId), cap = document.getElementById(capId);
+        var tabs = root.querySelectorAll('[role=tab]');
+        tabs.forEach(function (t) {
+          t.addEventListener('click', function () {
+            var s = list[Number(t.dataset.i)];
+            im.src = assetBase + s.id + '.webp'; im.width = s.w; im.height = s.h;
+            im.alt = s.label + ' (sample data)'; cap.textContent = s.text;
+            tabs.forEach(function (o) { o.setAttribute('aria-selected', String(o === t)); });
+          });
+        });
+      }
+      viewer('wizard-viewer', 'wizard-img', 'wizard-cap', wizard);
+      viewer('modes-viewer', 'modes-img', 'modes-cap', modes);
+
+      // The pen drawing: what each style does in a drawing app and in a text editor.
+      var demo = document.getElementById('demo');
+      var TEXT = {
+        dynamic: 'The computer picks per app. In a drawing app the pen is a pressure and tilt tablet. In everything else it is a mouse with a visible cursor, and holding it still on selected text opens the pen menu.',
+        mouse: 'The pen is a mouse, everywhere. It clicks, drags and selects, with no pressure and no tilt. A side button can be right click or middle click.',
+        tablet: 'The pen is a pressure and tilt tablet, everywhere. Drawing apps get everything; other apps show no cursor and do not respond.'
       };
-      const route = (style: string, win: 'art' | 'txt') => (style === 'tablet' ? 'tablet' : style === 'mouse' ? 'mouse' : win === 'art' ? 'tablet' : 'mouse');
-      const label = (r: string) => (r === 'tablet' ? 'Pen: pressure + tilt' : 'Pen: mouse');
-      const styleText = document.getElementById('style-text')!;
-      const badgeArt = document.getElementById('badge-art')!;
-      const badgeTxt = document.getElementById('badge-txt')!;
-      const menu = document.getElementById('menu')!;
-      const cursor = document.getElementById('cursor')!;
-      const sel = document.getElementById('sel')!;
-      const txt = demo.querySelector<HTMLElement>('.win.txt')!;
-      let style = 'dynamic';
-      let timers: number[] = [];
-      const later = (fn: () => void, ms: number) => { timers.push(window.setTimeout(fn, ms)); };
-
-      function applyStyle(s: string) {
+      var route = function (style, win) { return style === 'tablet' ? 'tablet' : style === 'mouse' ? 'mouse' : (win === 'art' ? 'tablet' : 'mouse'); };
+      var label = function (r) { return r === 'tablet' ? 'Pressure + tilt' : 'Mouse'; };
+      var styleText = document.getElementById('style-text');
+      var badgeArt = document.getElementById('badge-art'), badgeTxt = document.getElementById('badge-txt');
+      var menu = document.getElementById('menu'), cursor = document.getElementById('cursor'), sel = document.getElementById('sel');
+      var txt = demo.querySelector('.win.txt');
+      var style = 'dynamic', timers = [];
+      function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+      function applyStyle(s) {
         style = s;
-        demo.dataset.style = s;
-        demo.dataset.art = route(s, 'art');
-        demo.dataset.txt = route(s, 'txt');
+        demo.dataset.style = s; demo.dataset.art = route(s, 'art'); demo.dataset.txt = route(s, 'txt');
         styleText.textContent = TEXT[s];
-        badgeArt.textContent = label(route(s, 'art'));
-        badgeTxt.textContent = label(route(s, 'txt'));
-        document.querySelectorAll<HTMLButtonElement>('.styles button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.style === s)));
+        badgeArt.textContent = label(route(s, 'art')); badgeTxt.textContent = label(route(s, 'txt'));
+        document.querySelectorAll('.styles button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.style === s)); });
         restart();
       }
-      // Puts the cursor on the selected word, holds, and opens the menu above it when the pen acts as a mouse there.
+      // Cursor onto the selected word; the menu opens above it, kept 12px inside the window.
       function place() {
-        const t = txt.getBoundingClientRect();
-        const r = sel.getBoundingClientRect();
-        cursor.style.left = `${r.left - t.left + r.width / 2 - 2}px`;
-        cursor.style.top = `${r.top - t.top + r.height - 4}px`;
-        const mw = menu.offsetWidth;
-        const cx = r.left - t.left + r.width / 2;
-        menu.style.left = `${Math.max(mw / 2 + 6, Math.min(cx, t.width - mw / 2 - 6))}px`;
-        menu.style.top = `${r.top - t.top - 10}px`;
+        var t = txt.getBoundingClientRect(), r = sel.getBoundingClientRect();
+        cursor.style.left = (r.left - t.left + r.width / 2 - 2) + 'px';
+        cursor.style.top = (r.top - t.top + r.height - 4) + 'px';
+        var mw = menu.offsetWidth, cx = r.left - t.left + r.width / 2;
+        menu.style.left = Math.max(mw / 2 + 12, Math.min(cx, t.width - mw / 2 - 12)) + 'px';
+        menu.style.top = (r.top - t.top - 12) + 'px';
       }
       function loop() {
-        txt.classList.remove('selected', 'menu-on', 'at');
+        txt.classList.remove('selected', 'menu-on');
         cursor.classList.remove('on');
-        const mouse = route(style, 'txt') === 'mouse';
-        later(() => { place(); cursor.classList.add('on'); }, 400);
-        later(() => txt.classList.add('selected'), 1300);
-        if (mouse) later(() => txt.classList.add('menu-on'), 2500);
+        var mouse = route(style, 'txt') === 'mouse';
+        if (mouse) {
+          later(function () { place(); cursor.classList.add('on'); }, 400);
+          later(function () { txt.classList.add('selected'); }, 1300);
+          if (style === 'dynamic') later(function () { txt.classList.add('menu-on'); }, 2500);
+        }
         later(loop, 6200);
       }
       function restart() {
-        timers.forEach(clearTimeout);
-        timers = [];
+        timers.forEach(clearTimeout); timers = [];
+        txt.classList.remove('selected', 'menu-on'); cursor.classList.remove('on');
         if (reduce) {
-          place();
-          cursor.classList.add('on');
-          txt.classList.add('selected');
-          txt.classList.toggle('menu-on', route(style, 'txt') === 'mouse');
+          if (route(style, 'txt') === 'mouse') { place(); cursor.classList.add('on'); txt.classList.add('selected'); if (style === 'dynamic') txt.classList.add('menu-on'); }
           return;
         }
         loop();
       }
-      document.querySelectorAll<HTMLButtonElement>('.styles button').forEach((b) => b.addEventListener('click', () => applyStyle(b.dataset.style!)));
+      document.querySelectorAll('.styles button').forEach(function (b) { b.addEventListener('click', function () { applyStyle(b.dataset.style); }); });
       addEventListener('resize', place);
       applyStyle('dynamic');
     </script>
 
     <style is:global>
       :root {
-        --bg: #0c1512; --surface: #121f1b; --line: #22352d; --text: #d8ebe0; --strong: #f1faf5; --muted: #8fada0;
-        --accent: #34d399; --ink: #00382a; --accent-low: #14382a; --glow: rgba(52, 211, 153, 0.22);
-        color-scheme: dark;
+        --bg: #0b0f0e; --surface: #121816; --line: #243029; --text: #c9d6d0; --strong: #f4f8f6; --muted: #8a9a93;
+        --accent: #34d399; --ink: #04281d; color-scheme: dark;
       }
       @media (prefers-color-scheme: light) {
-        :root {
-          --bg: #f7fbf8; --surface: #edf5f0; --line: #cfe0d6; --text: #1b3228; --strong: #0b1f17; --muted: #4f6a5d;
-          --accent: #047857; --ink: #ffffff; --accent-low: #d5eadf; --glow: rgba(4, 120, 87, 0.16);
-          color-scheme: light;
-        }
+        :root { --bg: #fafcfb; --surface: #f0f4f2; --line: #d9e2de; --text: #26332d; --strong: #0a1511; --muted: #586861; --accent: #047857; --ink: #ffffff; color-scheme: light; }
       }
       * { box-sizing: border-box; }
       html { scroll-behavior: smooth; scroll-padding-top: 4.5rem; overflow-x: clip; }
-      body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", "Noto Sans", Roboto, sans-serif; overflow-x: clip; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.65 system-ui, -apple-system, "Segoe UI", "Noto Sans", Roboto, sans-serif; overflow-x: clip; }
       a { color: var(--accent); }
       h1, h2, h3, p { margin: 0; }
+      b { color: var(--strong); }
+      code { font: 0.88em ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      img, video { display: block; max-width: 100%; height: auto; }
       .w { width: min(1120px, calc(100% - 2rem)); margin-inline: auto; }
-      section { padding: clamp(3rem, 7vw, 5.5rem) 0 0; }
-      h2 { font-size: clamp(1.7rem, 3.4vw, 2.4rem); line-height: 1.12; letter-spacing: -0.02em; color: var(--strong); margin-bottom: 0.6rem; }
-      h3 { color: var(--strong); font-size: 1.05rem; }
-      .lead { color: var(--muted); font-size: 1.1rem; max-width: 38rem; }
-      .small { color: var(--muted); font-size: 0.85rem; margin-top: 0.8rem; }
-      .note { color: var(--muted); font-size: 0.85rem; margin-top: 1rem; }
-      .note.c { text-align: center; }
-      svg.i { width: 1.5rem; height: 1.5rem; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+      section { padding: clamp(3.5rem, 8vw, 6rem) 0 0; }
+      h2 { font-size: clamp(1.8rem, 3.4vw, 2.5rem); line-height: 1.12; letter-spacing: -0.02em; color: var(--strong); margin-bottom: 0.7rem; }
+      h3 { color: var(--strong); font-size: 1.12rem; margin-bottom: 0.4rem; }
+      .lead { color: var(--muted); font-size: 1.12rem; max-width: 40rem; }
+      .small { color: var(--muted); font-size: 0.88rem; margin-top: 0.7rem; }
+      .note { color: var(--muted); font-size: 0.85rem; margin-top: 0.8rem; }
+      figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 0.7rem; }
 
-      /* header: the landing's own bar, not the docs header */
-      .top { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); background: color-mix(in srgb, var(--bg) 80%, transparent); border-bottom: 1px solid transparent; }
-      .bar { display: flex; align-items: center; justify-content: space-between; height: 3.5rem; }
-      .logo { font-weight: 700; color: var(--accent); text-decoration: none; letter-spacing: -0.01em; }
-      .top nav { display: flex; gap: 1.4rem; align-items: center; font-size: 0.92rem; }
-      .top nav a { color: var(--muted); text-decoration: none; transition: color .2s; }
+      .top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+      .bar { display: flex; align-items: center; justify-content: space-between; height: 3.6rem; }
+      .logo { display: inline-flex; align-items: center; gap: 0.6rem; font-weight: 700; color: var(--strong); text-decoration: none; }
+      .logo img { border-radius: 7px; }
+      .top nav { display: flex; gap: 1.5rem; align-items: center; font-size: 0.92rem; }
+      .top nav a { color: var(--muted); text-decoration: none; }
       .top nav a:hover { color: var(--strong); }
-      .top nav .gh { padding: 0.3rem 0.8rem; border: 1px solid var(--line); border-radius: 999px; color: var(--strong); }
-      @media (max-width: 38rem) { .top nav a:not(.gh):not(:nth-child(1)) { display: none; } }
+      .top nav .gh { padding: 0.3rem 0.85rem; border: 1px solid var(--line); border-radius: 0.5rem; color: var(--strong); }
+      @media (max-width: 44rem) { .top nav a:not(.gh) { display: none; } }
 
-      /* hero */
-      .hero { position: relative; padding-top: clamp(2.5rem, 6vw, 4.5rem); }
-      .hero::before { content: ''; position: absolute; inset: -4rem 0 auto; height: 40rem; pointer-events: none;
-        background: radial-gradient(36rem 22rem at 75% 30%, var(--glow), transparent 70%), radial-gradient(24rem 16rem at 5% 10%, var(--glow), transparent 70%);
-        mask-image: linear-gradient(#000 50%, transparent); animation: drift 14s ease-in-out infinite alternate; }
-      .hero-grid { position: relative; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 3rem; align-items: center; }
-      .pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.8rem; border: 1px solid var(--line); border-radius: 999px; font-size: 0.8rem; color: var(--muted); }
-      .pill i { width: 0.45rem; height: 0.45rem; border-radius: 50%; background: var(--accent); animation: pulse 2s ease-out infinite; }
-      h1 { font-size: clamp(2.5rem, 6vw, 4.3rem); line-height: 1.02; letter-spacing: -0.035em; color: var(--strong); margin: 1rem 0; }
-      h1 em { font-style: normal; color: var(--accent); }
-      .sub { font-size: 1.15rem; color: var(--muted); max-width: 30rem; }
-      .cta { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 1.6rem; }
-      .btn { display: inline-flex; padding: 0.7rem 1.3rem; border-radius: 999px; border: 1px solid var(--line); color: var(--strong); text-decoration: none; font-weight: 600; transition: transform .2s, box-shadow .2s; }
-      .btn:hover { transform: translateY(-2px); }
-      .btn.primary { background: var(--accent); border-color: transparent; color: var(--ink); box-shadow: 0 6px 24px -8px var(--accent); }
-      .btn.ghost { border-color: transparent; color: var(--muted); }
+      .hero { padding-top: clamp(2.5rem, 6vw, 4.5rem); }
+      .hero-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 3rem; align-items: center; }
+      h1 { font-size: clamp(2.6rem, 6vw, 4.4rem); line-height: 1.03; letter-spacing: -0.035em; color: var(--strong); }
+      .sub { font-size: 1.2rem; color: var(--muted); max-width: 30rem; margin-top: 1.2rem; }
+      .cta { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 1.8rem; }
+      .btn { display: inline-flex; padding: 0.7rem 1.3rem; border-radius: 0.55rem; border: 1px solid var(--line); color: var(--strong); text-decoration: none; font-weight: 600; }
+      .btn:hover { border-color: var(--accent); }
+      .btn.primary { background: var(--accent); border-color: transparent; color: var(--ink); }
+      .media { margin: 0; }
+      .frame { border: 1px solid var(--line); border-radius: 0.7rem; overflow: hidden; background: #0e1815; }
+      .frame img, .frame video { width: 100%; }
 
-      /* the mock-up of the app: always the app's dark theme, whatever the site theme */
-      .mock-wrap { margin: 0; }
-      .mock-wrap figcaption { margin-top: 0.7rem; font-size: 0.8rem; color: var(--muted); text-align: right; }
-      .app { position: relative; display: grid; grid-template-columns: 11rem 1fr; min-height: 21rem; border: 1px solid #22352d; border-radius: 0.9rem; overflow: hidden; background: #0f1a17; color: #d3e8dd; font-size: 0.8rem; box-shadow: 0 30px 80px -30px rgba(0,0,0,.6); }
-      .app-side { padding: 0.9rem 0.7rem; background: #0c1512; border-right: 1px solid #1c2b25; }
-      .brand { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.9rem; font-weight: 700; color: #eaf6ef; }
-      .logo-sq { width: 1.1rem; height: 1.1rem; border-radius: 0.3rem; background: #34d399; }
-      .start { margin-bottom: 0.8rem; padding: 0.45rem 0; border-radius: 0.5rem; background: #17513b; color: #bdf0d9; text-align: center; font-weight: 600; }
-      .nav { display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; margin-bottom: 0.15rem; border-radius: 0.5rem; color: #9db8ab; white-space: nowrap; }
-      .nav.sel { background: #14231e; color: #d3e8dd; }
-      .nav small { font-size: 0.62rem; color: #7f9d8f; }
-      .cap { margin: 0.9rem 0 0.3rem 0.5rem; font-size: 0.62rem; letter-spacing: 0.06em; color: #6f8c7f; }
-      .app-main { background: #0f1a17; opacity: .55; }
-      .dialog { position: absolute; left: 50%; top: 50%; width: min(19rem, 82%); transform: translate(-30%, -50%); padding: 1.1rem; border: 1px solid #22352d; border-radius: 0.8rem; background: #0e1815; box-shadow: 0 20px 50px rgba(0,0,0,.5); animation: floaty 7s ease-in-out infinite; }
-      .dialog h3 { margin-bottom: 1.4rem; font-size: 1.05rem; font-weight: 500; color: #eaf6ef; }
-      .usb { padding: 0.9rem 1rem; border-radius: 0.7rem; background: #34d399; color: #00382a; }
-      .usb b { display: block; font-size: 0.95rem; margin-bottom: 0.25rem; }
-      .usb span { font-size: 0.74rem; line-height: 1.4; display: block; }
-      .wl { margin-top: 0.9rem; font-size: 0.74rem; color: #9db8ab; }
+      .setup { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); gap: 3rem; margin-top: 2rem; align-items: start; }
+      .steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; gap: 1.6rem; }
+      .steps > li { counter-increment: s; padding-left: 3rem; position: relative; }
+      .steps > li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); font-weight: 700; }
+      .steps p { color: var(--muted); font-size: 0.96rem; }
+      .steps code { display: block; margin-top: 0.7rem; padding: 0.55rem 0.8rem; border-radius: 0.5rem; background: var(--surface); border: 1px solid var(--line); color: var(--strong); }
 
-      /* setup */
-      .steps { list-style: none; margin: 1.8rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; counter-reset: s; }
-      .steps > li { counter-increment: s; padding: 1.3rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); }
-      .steps > li::before { content: counter(s); display: grid; place-items: center; width: 1.9rem; height: 1.9rem; margin-bottom: 0.8rem; border-radius: 50%; background: var(--accent); color: var(--ink); font-weight: 700; }
-      .steps p { margin-top: 0.5rem; font-size: 0.92rem; color: var(--muted); }
-      .steps code { display: block; margin-top: 0.7rem; padding: 0.55rem 0.8rem; border-radius: 0.5rem; background: var(--bg); border: 1px solid var(--line); color: var(--strong); font-size: 0.85rem; }
-      .stepper { list-style: none; margin: 0.9rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; }
-      .stepper li { padding: 0.15rem 0.6rem; border-radius: 999px; border: 1px solid var(--line); font-size: 0.74rem; color: var(--muted); animation: step 10s infinite; animation-delay: calc(var(--i, 0) * 2s); }
-      .stepper li:nth-child(1) { --i: 0; } .stepper li:nth-child(2) { --i: 1; } .stepper li:nth-child(3) { --i: 2; } .stepper li:nth-child(4) { --i: 3; } .stepper li:nth-child(5) { --i: 4; }
-
-      /* cards and tiles */
-      .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; margin-top: 1.6rem; }
-      .card { padding: 1.3rem; border: 1px solid var(--line); border-radius: 1rem; background: var(--surface); transition: transform .25s, border-color .25s, box-shadow .25s; }
-      .card:hover { transform: translateY(-4px); border-color: var(--accent); box-shadow: 0 18px 40px -22px var(--glow); }
-      .card h3 { margin: 0.8rem 0 0.25rem; }
-      .card p { font-size: 0.9rem; color: var(--muted); }
-      .ico { display: grid; place-items: center; width: 2.5rem; height: 2.5rem; border-radius: 0.75rem; background: var(--accent-low); color: var(--accent); }
-      .tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.85rem; margin-top: 1.6rem; }
-      .tile { padding: 1.1rem; border: 1px solid var(--line); border-radius: 0.9rem; background: var(--surface); transition: transform .25s, border-color .25s; }
-      .tile:hover { transform: translateY(-3px); border-color: var(--accent); }
-      .tile .ico { width: 2.1rem; height: 2.1rem; border-radius: 0.6rem; }
-      .tile .ico svg { width: 1.2rem; height: 1.2rem; }
-      .tile b { display: block; margin-top: 0.7rem; color: var(--strong); }
-      .tile span { display: block; margin-top: 0.15rem; font-size: 0.85rem; color: var(--muted); line-height: 1.4; }
-      .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 1rem; }
-      .two .card:hover { transform: none; }
-      .two p { font-size: 0.95rem; margin-top: 0.5rem; }
-
-      /* pen illustration: window colours are the desktop's, not the app's */
-      .pen { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 3rem; align-items: center; }
-      .styles { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1.3rem 0 0.9rem; }
-      .styles button { padding: 0.45rem 1rem; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 0.9rem; cursor: pointer; transition: all .2s; }
-      .styles button:hover { color: var(--strong); border-color: var(--accent); }
-      .styles button[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--ink); font-weight: 600; }
+      .viewer { min-width: 0; }
+      .tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
+      .tabs button, .styles button { flex: 0 0 auto; padding: 0.4rem 0.9rem; border-radius: 0.5rem; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 0.9rem; cursor: pointer; }
+      .tabs button:hover, .styles button:hover { color: var(--strong); border-color: var(--accent); }
+      .tabs button[aria-selected="true"], .styles button[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--ink); font-weight: 600; }
       button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-      .explain { min-height: 4.2rem; color: var(--text); }
-      .demo { display: grid; grid-template-columns: 1fr 1.6fr; gap: 0.8rem; }
-      .win { position: relative; min-height: 13.5rem; border-radius: 0.7rem; background: #fafafa; color: #2e3436; border: 1px solid #c9ccd0; overflow: hidden; font-size: 0.85rem; }
-      .win .wbar { display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.6rem; background: #e9eaec; border-bottom: 1px solid #d3d5d9; font-size: 0.72rem; color: #5e6266; }
-      .win .wbar b { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #b7babf; }
-      .win .wbar span { margin-left: 0.4rem; }
-      .win.txt p { padding: 0.9rem 1rem 0; line-height: 1.7; }
-      .win.txt p.dim { color: #7b8086; padding-top: 0.2rem; }
-      .win mark { background: transparent; color: inherit; border-radius: 0.15rem; transition: background .25s; }
+      .stage { display: grid; place-items: center; min-height: 20rem; padding: 1.2rem; border: 1px solid var(--line); border-radius: 0.7rem; background: #0a1210; }
+      .stage img { width: auto; max-height: 34rem; max-width: 100%; border-radius: 0.5rem; }
+      .stage.wide { padding: 0; min-height: 0; background: transparent; }
+      .stage.wide img { width: 100%; max-height: none; border-radius: 0.7rem; }
+      .cap { margin-top: 0.8rem; color: var(--text); }
+
+      .pen { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 3rem; margin-top: 1.6rem; align-items: start; }
+      .styles { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+      .explain { min-height: 7.5rem; margin-top: 1rem; }
+      .demo { display: grid; grid-template-columns: 1fr 1.5fr; gap: 0.8rem; }
+      .win { position: relative; min-height: 17rem; border-radius: 0.6rem; background: #fafafa; color: #2e3436; border: 1px solid #c9ccd0; overflow: hidden; font-size: 0.88rem; }
+      .wbar { display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.6rem; background: #e9eaec; border-bottom: 1px solid #d3d5d9; font-size: 0.72rem; color: #5e6266; }
+      .wbar b { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #b7babf; }
+      .wbar span { margin-left: 0.4rem; }
+      .win.txt p { padding: 0.7rem 1.1rem 0; line-height: 1.6; color: #2e3436; }
+      .win.txt p:first-of-type { padding-top: 1.1rem; }
+      .win.txt p.dim { color: #7b8086; }
+      .win.txt p.sel-line { padding-top: 3.6rem; }
+      .win mark { background: transparent; color: inherit; transition: background .25s; }
       .win.txt.selected mark { background: #a9c7ee; }
-      .canvas { display: block; width: 100%; height: auto; padding: 0.6rem; }
+      .canvas { display: block; width: 100%; height: auto; padding: 0.7rem; }
       .canvas path { fill: none; stroke: #2e3436; stroke-linecap: round; stroke-dasharray: 400; animation: draw 4s ease-in-out infinite; }
       .canvas .plain { stroke-width: 2; }
       .canvas .taper { stroke-width: 7; opacity: 0; -webkit-mask: linear-gradient(90deg, transparent, #000 25%, #000 70%, transparent); mask: linear-gradient(90deg, transparent, #000 25%, #000 70%, transparent); }
       .demo[data-art="tablet"] .canvas .taper { opacity: 1; }
       .demo[data-art="tablet"] .canvas .plain { opacity: 0; }
-      .badge { position: absolute; left: 0.6rem; bottom: 0.6rem; padding: 0.15rem 0.6rem; border-radius: 999px; background: #34d399; color: #00382a; font-size: 0.7rem; font-weight: 600; }
-      .demo[data-txt="tablet"] #badge-txt { background: #14382a; color: #8fd6a3; }
-      .cursor { position: absolute; left: 20%; top: 60%; width: 0.95rem; height: 1.45rem; opacity: 0; transition: left .8s ease, top .8s ease, opacity .3s; fill: #000; stroke: #fff; stroke-width: 1.2; filter: drop-shadow(0 1px 1px rgba(0,0,0,.3)); pointer-events: none; }
+      .badge { position: absolute; left: 0.7rem; bottom: 0.7rem; padding: 0.15rem 0.6rem; border-radius: 0.4rem; background: #1f2a26; color: #e6f2ec; font-size: 0.72rem; font-weight: 600; }
+      .none { position: absolute; inset: 3.4rem 1rem auto; padding: 0.6rem; border: 1px dashed #b7babf; border-radius: 0.4rem; color: #7b8086; font-size: 0.8rem; text-align: center; opacity: 0; }
+      .demo[data-txt="tablet"] .none { opacity: 1; }
+      .demo[data-txt="tablet"] .win.txt p { opacity: .35; }
+      .cursor { position: absolute; left: 20%; top: 60%; width: 0.95rem; height: 1.45rem; opacity: 0; transition: left .8s ease, top .8s ease, opacity .3s; fill: #000; stroke: #fff; stroke-width: 1.2; pointer-events: none; }
       .cursor.on { opacity: 1; }
-      /* the real menu: a dark grey rounded pill, centred above the pointer */
-      .menu { position: absolute; left: 50%; top: 40%; display: flex; gap: 2px; padding: 4px; border-radius: 20px; background: rgba(34, 34, 38, 0.97); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 6px 20px rgba(0,0,0,.45); color: #f2f2f2; font-size: 0.72rem; font-weight: 500; white-space: nowrap; opacity: 0; transform: translate(-50%, -100%) scale(.92); transform-origin: 50% 100%; transition: opacity .2s, transform .2s; pointer-events: none; }
+      .menu { position: absolute; left: 50%; top: 40%; display: flex; gap: 2px; padding: 4px; border-radius: 20px; background: rgba(34, 34, 38, 0.97); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 6px 20px rgba(0,0,0,.45); color: #f2f2f2; font-size: 0.72rem; font-weight: 500; white-space: nowrap; opacity: 0; transform: translate(-50%, -100%); transition: opacity .2s; pointer-events: none; }
       .menu span { padding: 0.45rem 0.7rem; border-radius: 16px; }
-      .win.menu-on .menu { opacity: 1; transform: translate(-50%, -100%); }
+      .win.menu-on .menu { opacity: 1; }
       .win.menu-on .menu span:nth-child(2) { animation: tap 2.4s 0.9s both; }
+      .shot { margin: 2.2rem 0 0; }
 
-      /* gallery */
-      .shot { margin: 1.5rem 0 0; }
-      .frame { border: 1px solid var(--line); border-radius: 0.9rem; overflow: hidden; background: var(--surface); box-shadow: 0 30px 80px -40px rgba(0,0,0,.6); }
-      .frame img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
-      .thumbs { display: flex; gap: 0.6rem; margin-top: 0.9rem; overflow-x: auto; padding-bottom: 0.3rem; }
-      .thumbs button { flex: 0 0 auto; padding: 0.4rem 0.9rem; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 0.88rem; cursor: pointer; }
-      .thumbs button[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--ink); font-weight: 600; }
+      .row { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 3rem; align-items: center; margin-top: 3.5rem; }
+      .row.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); }
+      .row.flip .text { order: 2; }
+      .row .text p { color: var(--muted); }
+      .frame.tall { max-width: 30rem; justify-self: center; }
+      .also { margin-top: 3.5rem; max-width: 50rem; color: var(--muted); }
 
-      .foot { padding: 4rem 0 3rem; color: var(--muted); font-size: 0.88rem; }
+      .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 3rem; }
+      .two p { color: var(--muted); }
+      .foot { padding: 4.5rem 0 3rem; color: var(--muted); font-size: 0.88rem; }
       .foot a { color: var(--accent); text-decoration: none; }
-      .foot a:hover { text-decoration: underline; }
 
-      /* reveal on scroll (only when JavaScript runs) */
-      .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; transition-delay: calc(var(--d, 0) * 70ms); }
+      .js .reveal { opacity: 0; transform: translateY(14px); transition: opacity .55s ease, transform .55s ease; transition-delay: calc(var(--d, 0) * 80ms); }
       .js .reveal.in { opacity: 1; transform: none; }
-
-      @keyframes floaty { 50% { translate: 0 -6px; } }
-      @keyframes drift { to { transform: translate(2%, 4%) scale(1.05); } }
-      @keyframes pulse { 0% { box-shadow: 0 0 0 0 var(--accent); } 70% { box-shadow: 0 0 0 .5rem transparent; } }
       @keyframes draw { from { stroke-dashoffset: 400; } 40%, 100% { stroke-dashoffset: 0; } }
-      @keyframes tap { 0%, 40% { background: transparent; color: #f2f2f2; } 55%, 85% { background: rgba(255,255,255,.22); } 100% { background: transparent; } }
-      @keyframes step { 0%, 4% { background: transparent; } 8%, 20% { background: var(--accent); color: var(--ink); border-color: transparent; } 28%, 100% { background: transparent; color: var(--muted); } }
+      @keyframes tap { 0%, 40% { background: transparent; } 55%, 85% { background: rgba(255,255,255,.22); } 100% { background: transparent; } }
 
-      @media (max-width: 62rem) { .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-      @media (max-width: 52rem) {
-        .hero-grid, .pen { grid-template-columns: 1fr; gap: 2rem; }
-        .steps, .cards { grid-template-columns: 1fr; }
-        .app { grid-template-columns: 1fr; } .app-side { display: none; }
-        .dialog { position: relative; left: auto; top: auto; transform: none; margin: 2rem auto; }
+      @media (max-width: 56rem) {
+        .hero-grid, .setup, .pen, .row, .row.flip { grid-template-columns: 1fr; gap: 2rem; }
+        .row.flip .text { order: 0; }
       }
-      @media (max-width: 32rem) { .tiles { grid-template-columns: 1fr; } .demo { grid-template-columns: 1fr; } }
+      @media (max-width: 34rem) { .demo { grid-template-columns: 1fr; } }
       @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
     </style>
   </body>

@@ -26,3 +26,7 @@ When one exists, add it here and use it in `README.md` and on the site's landing
 | `uscreen-social.png` | 1280×640 | the repository's Social preview (uploaded by hand in **Settings → General → Social preview**; there is no API for it) |
 
 Do not add mock-ups drawn by hand: a screenshot of the real app is fine if it says what it shows (sample data or a live device).
+
+## Captures on the landing page
+
+`website/public/real/` (screens) and `website/public/video/` (two recordings) are the real desktop app running its development mode on sample data. `website/scripts/capture/` has the scripts and the recipe.
