@@ -19,6 +19,10 @@ const modes = [
   { id: 'set-touchpad', label: 'Touchpad', w: 2080, h: 630, text: 'The tablet is a laptop touchpad. Sensitivity, shape, right-click method and haptics are settings. Nothing is streamed.' },
   { id: 'set-stylus', label: 'Stylus', w: 2080, h: 810, text: 'A pen tablet for the screen you are already using. Nothing is streamed, so there is no display latency.' },
 ];
+const tablet = [
+  { id: 'tab-display-input', label: 'Display & Input', w: 1600, h: 1000, text: "The tablet app's own settings, from a real tablet: input mode, touch, immersive mode, orientation, theme, bitrate and frame rate." },
+  { id: 'tab-connection-power', label: 'Connection and power', w: 1600, h: 600, text: 'Preferred transport, then battery saver, idle dimming and keeping the connection in the background.' },
+];
 ---
 <!doctype html>
 <html lang="en">
@@ -38,6 +42,7 @@ const modes = [
           <a href="#setup">Setup</a>
           <a href="#modes">Modes</a>
           <a href="#pen">Pen</a>
+          <a href="#tablet">Tablet</a>
           <a href="#more">Features</a>
           <a href={docs}>Docs</a>
           <a class="gh" href="https://github.com/harshp2008/UScreen-Pro">GitHub</a>
@@ -155,6 +160,20 @@ const modes = [
         </div>
       </section>
 
+      <section id="tablet">
+        <div class="w">
+          <h2>On the tablet</h2>
+          <p class="lead">A redesigned Material 3 app with its settings in four cards: Display &amp; Input, Connection, Power &amp; Battery and Advanced. These are screenshots of the real app on a real tablet.</p>
+          <div class="viewer reveal" id="tablet-viewer">
+            <div class="tabs" role="tablist" aria-label="Tablet app screens">
+              {tablet.map((s, i) => <button type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-i={i}>{s.label}</button>)}
+            </div>
+            <div class="stage wide"><img id="tablet-img" src={img(tablet[0].id)} alt={`Tablet app settings: ${tablet[0].label}`} width={tablet[0].w} height={tablet[0].h} loading="lazy" /></div>
+            <p class="cap" id="tablet-cap">{tablet[0].text}</p>
+          </div>
+        </div>
+      </section>
+
       <section id="more">
         <div class="w">
           <h2>What else Pro does</h2>
@@ -218,7 +237,7 @@ const modes = [
       <a href={docs}>Docs</a> · <a href={`${base}project/features/`}>All features</a> · <a href={`${base}environments/`}>Where it works</a> · <a href="https://github.com/harshp2008/UScreen-Pro">GitHub</a> · MIT licence
     </footer>
 
-    <script is:inline define:vars={{ wizard, modes, assetBase: `${base}real/` }}>
+    <script is:inline define:vars={{ wizard, modes, tablet, assetBase: `${base}real/` }}>
       // Scroll reveal, the two viewers of real screens, the hero video and the pen drawing.
       document.documentElement.classList.add('js');
       var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -241,13 +260,14 @@ const modes = [
           t.addEventListener('click', function () {
             var s = list[Number(t.dataset.i)];
             im.src = assetBase + s.id + '.webp'; im.width = s.w; im.height = s.h;
-            im.alt = s.label + ' (sample data)'; cap.textContent = s.text;
+            im.alt = s.label + (list === tablet ? '' : ' (sample data)'); cap.textContent = s.text;
             tabs.forEach(function (o) { o.setAttribute('aria-selected', String(o === t)); });
           });
         });
       }
       viewer('wizard-viewer', 'wizard-img', 'wizard-cap', wizard);
       viewer('modes-viewer', 'modes-img', 'modes-cap', modes);
+      viewer('tablet-viewer', 'tablet-img', 'tablet-cap', tablet);
 
       // The pen drawing: what each style does in a drawing app and in a text editor.
       var demo = document.getElementById('demo');
