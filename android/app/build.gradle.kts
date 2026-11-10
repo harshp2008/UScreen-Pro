@@ -111,7 +111,6 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3:1.5.0-alpha04")
     // Path/shape morphing (Morph, RoundedPolygon) for the expressive Connect / Pair button.
-    implementation("androidx.graphics:graphics-shapes:1.1.0")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.activity:activity-compose:1.8.2")

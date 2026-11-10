@@ -69,8 +69,7 @@ host/                   Rust daemon (binary `uscreen`)
                           `pairing.rs`, `installer.rs` (APK install queue), `stream.rs` (video server),
                           `notices.rs`
   evdi/                   C helper: `evdi_helper.c` (device discovery, `main`) includes `helper_*.h` (state,
-                          signals, X11 boundary sync, timing ring, NV12 conversion, writer, EVDI events);
-                          `evdi_capture_test.c`, `evdi_grab_test.c`, `evdi_test2.c` are old stand-alone experiments
+                          signals, X11 boundary sync, timing ring, NV12 conversion, writer, EVDI events)
 menu/                   `uscreen-menu`: the pen's long-press menu window (GTK 4), launched by the daemon
 uscreen-pro-gui/        Tauri + React desktop app (settings, pairing, status)
   src/                    `App.tsx` (state, merge of tablet-side changes), `views/`, `components/`, `lib/`

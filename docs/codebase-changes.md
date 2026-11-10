@@ -49,16 +49,17 @@ name, every Kotlin function and constant, every Cargo dependency, every config f
 | `scripts/redact.sh`, `scripts/rca56_guarded_test.sh`, `scripts/enc_latency_probe.py`, `experiments_and_findings/cpu_stress.py`, `experiments_and_findings/simulate_motion.py` | referenced by experiment records or used on purpose by the maintainer |
 | `FadeCurve`'s other members, `ReconnectPolicy`, and all serde fields of `config.toml` | read by the app, by tests, or needed for config round-tripping |
 
-## Unused files kept on purpose
+## Unused files deleted (by decision)
 
-These look unused but are files. The maintainer decided to keep all of them, and the old GitHub Pages files in `docs/` too.
-
-| File | What I found |
+| File | Why it went |
 |---|---|
-| `host/evdi/evdi_capture_test.c`, `host/evdi/evdi_test2.c` | EVDI experiment programs; not in the `Makefile`, not in any workflow, not referenced by any document |
-| `host/evdi/evdi_grab_test.c` | same, and it also contains a pasted Markdown explanation of `evdi_grab_pixels` in the middle of the C source |
-| `android/app/src/main/java/com/uscreen/ui/MorphButton.kt` | the `MorphButton` composable and `PillToSquareShape` are not used by any screen |
-| `scripts/test-gen-edid.py` | not run by CI or the `Makefile`; only mentioned by an experiment record |
+| `host/evdi/evdi_capture_test.c`, `evdi_grab_test.c`, `evdi_test2.c` | EVDI experiment programs; in no build, workflow or document |
+| `android/.../ui/MorphButton.kt` and the `androidx.graphics:graphics-shapes` dependency | no screen used the button; the dependency was used only there |
+| `scripts/test-gen-edid.py` | run by no CI job or Makefile target |
+| `uscreen-pro-gui/README.md` | the unedited Tauri template text |
+
+`experiments_and_findings/` was not touched. The old GitHub Pages files in `docs/` stay for now: `scripts/update-release-metadata.sh`
+(and `make release-metadata`) rewrite their version and dates, so deleting them means changing the release script first.
 
 ## Splits and kept files (phase 3)
 
