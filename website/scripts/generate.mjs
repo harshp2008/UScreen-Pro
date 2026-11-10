@@ -54,6 +54,7 @@ function splitTitle(text) {
 
 /** file (relative to the repository), page name, sidebar order, sidebar label */
 const MIRRORED = [
+  ['docs/features.md', 'features', 0, 'Features (the full list)'],
   ['docs/development.md', 'code-layout', 1, 'Code layout and building'],
   ['docs/architecture.md', 'behavior-notes', 2, 'Behaviour notes (architecture and protocol)'],
   ['docs/desktop-backends.md', 'design-desktop-backends', 3, 'Design: desktop backends'],

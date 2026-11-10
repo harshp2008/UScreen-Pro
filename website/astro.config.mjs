@@ -35,6 +35,7 @@ export default defineConfig({
         './src/styles/records.css',
         './src/styles/scroll-hints.css',
         './src/styles/toc-toggle.css',
+        './src/styles/landing.css',
       ],
       head: [{ tag: 'script', content: tocToggle }],
       // The order follows the reader's path: the introduction, then installing and using it (with
