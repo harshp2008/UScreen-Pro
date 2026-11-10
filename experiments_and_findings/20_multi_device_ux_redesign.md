@@ -150,7 +150,7 @@ AFTER (Split-Pane Sidebar Navigation + Pinned Bottom Bar):
 +--------------------+---------------------------------------------------+
 | UScreen            | Global Settings / Device: Galaxy Tab S9 FE        |
 | Virtual Display    | ------------------------------------------------- |
-|                    | Hardware: SM-X616B | Serial: R52X708AEHK          |
+|                    | Hardware: SM-X616B | Serial: TABLET_SERIAL          |
 | [● Running PID]    | Panel: 2560x1600 (266x166 mm)                     |
 | [ Stop Daemon ]    | Custom Nickname: [ Galaxy Tab S9 FE             ] |
 | ------------------ | ------------------------------------------------- |
@@ -200,8 +200,8 @@ enum SelectedView {
 ### 4.1 Test Environment & Hardware Matrix
 - **Host Machine:** HP Spectre x360 2-in-1 (Intel Core Ultra 7 155H, Intel Arc Xe-LPG Graphics).
 - **Host OS:** Ubuntu 24.04 LTS (Kernel `6.8.0-52-generic`, GNOME Mutter Wayland `46.2`).
-- **Device A (Tablet):** Samsung Galaxy Tab S9 FE (`R52X708AEHK`, Model `SM-X616B`, Exynos 1380, native panel `2560x1600`).
-- **Device B (Phone):** Samsung Galaxy A55 5G (`RZCX809Y0FT`, Model `SM-A556E`, Exynos 1480, native panel `2340x1080`).
+- **Device A (Tablet):** Samsung Galaxy Tab S9 FE (`TABLET_SERIAL`, Model `SM-X616B`, Exynos 1380, native panel `2560x1600`).
+- **Device B (Phone):** Samsung Galaxy A55 5G (`PHONE_SERIAL`, Model `SM-A556E`, Exynos 1480, native panel `2340x1080`).
 
 ### 4.2 Configuration Under Test (`~/.config/uscreen/config.toml`)
 ```toml
@@ -228,7 +228,7 @@ auto_launch_app = true
 max_performance_mode = true
 hevc_low_latency_tuning = true
 
-[tablets.RZCX809Y0FT]
+[tablets.PHONE_SERIAL]
 label = "SM-A556E"
 nickname = "Galaxy A55 5G"
 width = 2340
@@ -236,7 +236,7 @@ height = 1080
 width_mm = 154
 height_mm = 71
 
-[tablets.R52X708AEHK]
+[tablets.TABLET_SERIAL]
 label = "SM-X616B"
 nickname = "Galaxy Tab S9 FE"
 width = 2560
@@ -262,11 +262,11 @@ harsh     507630 47.4  0.3 3638512 83524 pts/3   RNLl+ 02:33   0:03 ffmpeg -hide
 ```
 
 #### Empirical Findings:
-1. **Device A (`R52X708AEHK`)**:
+1. **Device A (`TABLET_SERIAL`)**:
    - Assigned to EVDI `/dev/dri/card2`, video port 8892, input port 8893.
    - Spawned `evdi_helper` with EDID `2560x1600@30`.
    - FFmpeg encoder process (PID 507238) cleanly routed to **`-c:v hevc_vaapi`** with **`-framerate 30 -g 30`** at **2560x1600**.
-2. **Device B (`RZCX809Y0FT`)**:
+2. **Device B (`PHONE_SERIAL`)**:
    - Assigned to EVDI `/dev/dri/card0`, video port 8890, input port 8891.
    - Spawned `evdi_helper` with EDID `2340x1080@90`.
    - FFmpeg encoder process (PID 507630) cleanly routed to **`-c:v h264_vaapi`** with **`-framerate 90 -g 90`** at **2340x1080**.

@@ -1,79 +1,47 @@
+/*
+ * The app's single activity: lifecycle, video rendering, input dispatch, refresh-rate and
+ * immersive-mode handling, and hosting the Compose UI.
+ */
 package com.uscreen
 
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.hardware.usb.UsbManager
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.os.BatteryManager
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
-import android.provider.Settings
+import android.os.SystemClock
 import android.util.Log
-import android.view.SurfaceView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import android.view.View
 import android.view.WindowInsetsController
 import android.view.WindowManager
-import android.widget.Toast
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.activity.compose.setContent
-import androidx.compose.animation.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.zIndex
-import java.net.Inet4Address
-import java.net.NetworkInterface
-import java.util.Collections
-import kotlinx.coroutines.delay
+import androidx.compose.runtime.mutableStateOf
+import com.uscreen.ui.UScreenMain
+import com.uscreen.ui.UScreenTheme
 import kotlin.math.roundToInt
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 
-fun getLocalWifiIp(context: Context): String? {
-    try {
-        val interfaces = Collections.list(NetworkInterface.getNetworkInterfaces())
-        for (intf in interfaces) {
-            if (intf.name.startsWith("wlan")) {
-                for (addr in Collections.list(intf.inetAddresses)) {
-                    if (!addr.isLoopbackAddress && addr is Inet4Address) {
-                        return addr.hostAddress
-                    }
-                }
-            }
-        }
-    } catch (_: Exception) {}
-    return null
-}
-
-class MainActivity : ComponentActivity() {
-    /// Mirrors the host's mode so the UI can say what is going on.
-    private var penOnlyMode by mutableStateOf(false)
-    private var updateAvailable by mutableStateOf<String?>(null)
+/**
+ * Primary Android Activity managing lifecycle, hardware video rendering, low-latency touch/stylus
+ * hover dispatch, screen refresh rate negotiation, and system immersive UI flags.
+ */
+class MainActivity : AppCompatActivity() {
     private var hostVersion by mutableStateOf<String?>(null)
-    private var updateChecked = false
+    private var hostNotice by mutableStateOf<HostNotice?>(null)
+    /** Set when the host forgot this device; survives restarts until the host talks to us again. */
+    private var unpairedByHost by mutableStateOf(false)
     private var showThanks by mutableStateOf(false)
     private var videoReceiver: VideoReceiver? = null
     private var touchCapture: TouchCapture? = null
@@ -82,12 +50,28 @@ class MainActivity : ComponentActivity() {
     private var isDeviceLocked by mutableStateOf(false)
     private var lockReceiver: BroadcastReceiver? = null
 
+    /** The per-device settings the host pushed (or the saved copy until it does). */
+    private var hostConfig by mutableStateOf(HostConfig())
+    /** The host has been unreachable for the whole [ReconnectPolicy.OFFLINE_AFTER_MS] window. */
+    private var hostOffline by mutableStateOf(false)
+    /** Battery saver gave up on the host: no retry loop runs until the user taps Retry. */
+    private var autoRetryDisabled by mutableStateOf(false)
+    private val reconnectPolicy = ReconnectPolicy()
+    private lateinit var dimmer: ScreenDimmer
+    /** The host's idle dimming has the screen faded down right now (drives the wake-on-touch overlay). */
+    private var dimmedByHost by mutableStateOf(false)
+    /** Between onResume and onPause: the only time the app's own brightness override may be in force. */
+    private var inForeground = false
+
+
+    /**
+     * Let the activity stay visible and wake the screen over the keyguard when the user opted into
+     * "keep display alive when locked"; otherwise restore the default lock-screen behaviour.
+     */
     fun applyLockScreenFlags() {
         val keepAlive = prefs.keepDisplayAliveWhenLocked
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(keepAlive)
-            setTurnScreenOn(keepAlive)
-        }
+        setShowWhenLocked(keepAlive)
+        setTurnScreenOn(keepAlive)
         if (keepAlive) {
             @Suppress("DEPRECATION")
             window.addFlags(
@@ -105,6 +89,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Takes a partial wake lock (up to 10 hours, not reference counted) so the CPU keeps running the sockets while the screen is off; failure is logged, not fatal.
+     */
     private fun acquireWakeLock() {
         if (wakeLock == null) {
             val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -119,12 +106,14 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Releases the wake lock if it is held; errors are ignored. */
     private fun releaseWakeLock() {
         try {
             wakeLock?.let { if (it.isHeld) it.release() }
         } catch (_: Exception) {}
     }
 
+    /** Reads the keyguard state, dismisses an insecure keyguard, and re-applies the brightness policy. */
     private fun checkKeyguardState() {
         val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
         val locked = km.isKeyguardLocked
@@ -133,11 +122,39 @@ class MainActivity : ComponentActivity() {
         if (locked && !secure) {
             km.requestDismissKeyguard(this, null)
         }
+        applyBrightnessPolicy()
     }
 
+    /**
+     * What the window's brightness override should be right now. While the device is locked, or the app
+     * is not in the foreground, no override at all: a screen dimmed to 5% would otherwise leave the PIN pad
+     * invisible. Back on screen and unlocked, the dim the host asked for (or battery saver's 10%) returns
+     * until the user touches the screen.
+     */
+    private fun applyBrightnessPolicy() {
+        if (!::dimmer.isInitialized) return
+        when {
+            isDeviceLocked || !inForeground -> dimmer.restoreSystem()
+            autoRetryDisabled -> dimmer.setNow(FadeCurve.BATTERY_SAVER_LEVEL)
+            dimmedByHost -> dimmer.setNow(FadeCurve.DIM_LEVEL)
+        }
+    }
+
+    /** The user touched the dimmed screen: fade back up with the host's undim curve and tell the host. */
+    private fun wakeFromIdle() {
+        if (!dimmedByHost) return
+        dimmedByHost = false
+        dimmer.undim(hostConfig.undimDurationMs, hostConfig.undimCurve)
+        touchCapture?.sendWake()
+    }
+
+    /**
+     * Listens for screen on/off and user-present broadcasts to re-check the keyguard; registered once.
+     */
     private fun registerLockReceiver() {
         if (lockReceiver != null) return
         val receiver = object : BroadcastReceiver() {
+            /** Re-checks the keyguard on screen off, screen on and user present. */
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF,
@@ -157,6 +174,7 @@ class MainActivity : ComponentActivity() {
         lockReceiver = receiver
     }
 
+    /** Unregisters the lock receiver if registered. */
     private fun unregisterLockReceiver() {
         lockReceiver?.let {
             try { unregisterReceiver(it) } catch (_: Exception) {}
@@ -164,7 +182,32 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Light / Dark / System choice. Read by the Compose theme, so a change repaints without a restart. */
+    private var themeMode by mutableStateOf(Prefs.THEME_SYSTEM)
+
+    /**
+     * Apply the saved Light / Dark / System choice. AppCompatDelegate carries it to everything that is not
+     * Compose (resources, dialogs, the window); Compose reads [themeMode] directly because the activity
+     * handles uiMode itself and so never gets a recreate to pick the new configuration up.
+     */
+    fun applyThemeMode(mode: Int = prefs.themeMode) {
+        themeMode = mode
+        AppCompatDelegate.setDefaultNightMode(
+            when (mode) {
+                Prefs.THEME_LIGHT -> AppCompatDelegate.MODE_NIGHT_NO
+                Prefs.THEME_DARK -> AppCompatDelegate.MODE_NIGHT_YES
+                else -> AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM
+            }
+        )
+    }
+
+    /**
+     * Creates the activity: the theme is applied before `super.onCreate` so the first frame is already in the chosen scheme, then the preferences, the content and the connections are set up.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Before super.onCreate, so the first frame is already in the chosen scheme.
+        prefs = Prefs(this)
+        applyThemeMode()
         super.onCreate(savedInstanceState)
 
         // Keep screen on while streaming
@@ -172,14 +215,34 @@ class MainActivity : ComponentActivity() {
 
         requestHighestRefreshRate()
 
-        prefs = Prefs(this)
         applyOrientation()
         applyLockScreenFlags()
         registerLockReceiver()
         checkKeyguardState()
 
+        dimmer = ScreenDimmer({ window }, this)
+        hostConfig = HostConfig.fromPrefs(prefs)
         videoReceiver = VideoReceiver()
-        touchCapture = TouchCapture().also { it.setTouchEnabled(prefs.touchEnabled) }
+        touchCapture = TouchCapture().also {
+            it.setTouchEnabled(hostConfig.touchInput || hostConfig.inputMode == HostConfig.MODE_TOUCHPAD)
+            it.setTouchpadMode(hostConfig.inputMode == HostConfig.MODE_TOUCHPAD)
+            it.setStylusMode(hostConfig.inputMode == HostConfig.MODE_STYLUS)
+            it.setTouchpadShape(hostConfig.touchpadShape)
+            it.hostConfig = hostConfig
+            // Touchpad clicks tick lightly when the setting is on (it is on by default).
+            it.onHaptic = {
+                if (hostConfig.touchpadHaptics && hostConfig.inputMode == HostConfig.MODE_TOUCHPAD) Haptics.click(this)
+            }
+        }
+        touchCapture?.onHostConfig = { cfg -> runOnUiThread { applyHostConfig(cfg) } }
+        touchCapture?.onDimCommand = { dim, durationMs, curve ->
+            runOnUiThread {
+                dimmedByHost = dim
+                // Locked or backgrounded: remember the state, but leave the system brightness alone.
+                if (isDeviceLocked || !inForeground) applyBrightnessPolicy()
+                else if (dim) dimmer.dim(durationMs, curve) else dimmer.undim(durationMs, curve)
+            }
+        }
         applyIntentExtras(intent, restart = false)
 
         // Close the host's latency measurement loop: every acknowledged frame
@@ -214,17 +277,26 @@ class MainActivity : ComponentActivity() {
                     // restarts anything if the host switched codec while
                     // connected.
                     Log.i("UScreen", "Host is sending $codec — rebuilding the decoder")
-                    val wasRunning = !penOnlyMode
+                    val wasRunning = hostConfig.streamsVideo
                     if (wasRunning) vr.stop()
                     vr.mimeType = mime
                     if (wasRunning) vr.start()
                 }
             }
         }
-        touchCapture?.onModeKnown = { penOnly ->
-            runOnUiThread {
-                penOnlyMode = penOnly
-                if (penOnly) videoReceiver?.stop() else videoReceiver?.start()
+        touchCapture?.onHostNotice = { notice ->
+            runOnUiThread { hostNotice = notice }
+        }
+        unpairedByHost = prefs.unpairedByHost
+        touchCapture?.onUnpaired = {
+            prefs.unpairedByHost = true
+            runOnUiThread { unpairedByHost = true }
+        }
+        // A greeting from the host means we are paired again (or still), so the banner goes away.
+        touchCapture?.onPairedGreeting = {
+            if (prefs.unpairedByHost) {
+                prefs.unpairedByHost = false
+                runOnUiThread { unpairedByHost = false }
             }
         }
         touchCapture?.onHostVersionKnown = { hostVer ->
@@ -262,10 +334,9 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            UScreenTheme {
+            UScreenTheme(themeMode = themeMode) {
                 UScreenMain(
-                    penOnly = penOnlyMode,
-                    updateAvailable = updateAvailable,
+                    penOnly = hostConfig.inputMode == HostConfig.MODE_STYLUS,
                     showThanks = showThanks,
                     onDismissThanks = { showThanks = false },
                     videoReceiver = videoReceiver,
@@ -273,20 +344,31 @@ class MainActivity : ComponentActivity() {
                     prefs = prefs,
                     isDeviceLocked = isDeviceLocked,
                     hostVersion = hostVersion,
+                    hostNotice = hostNotice,
+                    unpairedByHost = unpairedByHost,
+                    hostConfig = hostConfig,
+                    hostOffline = hostOffline,
+                    autoRetryDisabled = autoRetryDisabled,
+                    onRetry = { retryHostLink() },
+                    idleDimmed = dimmedByHost,
+                    onWake = { wakeFromIdle() },
+                    onSetting = { key, value -> onUserSetting(key, value) },
                     onSurfaceReady = { surfaceView ->
                         videoReceiver?.setSurface(surfaceView)
                         touchCapture?.setSurfaceView(surfaceView)
                     },
                     onSurfaceDestroyed = { videoReceiver?.onSurfaceDestroyed() },
-                    onOrientationChange = { choice ->
-                        prefs.orientation = choice
+                    onStreamingChange = { live ->
+                        streaming = live
                         applyOrientation()
-                    }
+                    },
                 )
             }
         }
 
-        // Start foreground service to prevent Samsung from killing us
+        startLinkWatchdog()
+
+        // Start foreground service to prevent system kill
         val serviceIntent = Intent(this, StreamingService::class.java)
         startForegroundService(serviceIntent)
 
@@ -294,6 +376,143 @@ class MainActivity : ComponentActivity() {
         window.decorView.post {
             applyImmersiveMode()
         }
+    }
+
+    /**
+     * Mirror the host's per-device settings into [Prefs], the live input handling and the UI. Runs on the
+     * UI thread; the host sends it on connect and whenever a setting changes there (or here).
+     */
+    private fun applyHostConfig(cfg: HostConfig) {
+        val prev = hostConfig
+        hostConfig = cfg
+        touchCapture?.hostConfig = cfg
+        prefs.inputMode = cfg.inputMode
+        prefs.immersiveModeEnabled = cfg.immersiveMode
+        prefs.showStats = cfg.showStats
+        prefs.touchEnabled = cfg.touchInput
+        prefs.touchOnLockScreen = cfg.touchOnLockScreen
+        prefs.keepDisplayAliveWhenLocked = cfg.keepDisplayAliveWhenLocked
+        prefs.keepConnectedInBackground = cfg.keepConnectedInBackground
+        prefs.blankPenOnly = cfg.blankPenOnly
+        prefs.orientation = Prefs.orientationFromName(cfg.orientation)
+        prefs.themeMode = Prefs.themeFromName(cfg.themeMode)
+        prefs.batterySaverOnDisconnect = cfg.batterySaverOnDisconnect
+        prefs.batterySaverLock = cfg.batterySaverLock
+        prefs.wifiConfigured = cfg.wifiConfigured
+        prefs.touchpadHaptics = cfg.touchpadHaptics
+        prefs.nativeGestures = cfg.nativeGestures
+        prefs.touchpadSensitivity = cfg.touchpadSensitivity
+        prefs.rightClickMethod = cfg.rightClickMethod
+        prefs.touchpadShape = cfg.touchpadShape
+        prefs.stylusStyle = cfg.stylusStyle
+        prefs.stylusButtonPrimary = cfg.stylusButtonPrimary
+        prefs.stylusButtonSecondary = cfg.stylusButtonSecondary
+        prefs.penMenu = cfg.penMenu
+        prefs.penMenuStyle = cfg.penMenuStyle
+        prefs.penMenuHoldMs = cfg.penMenuHoldMs
+        prefs.stylusIdleHideTimeout = cfg.stylusIdleHideTimeout
+        // Touchpad mode is made of finger input, so it overrides the "Touch input" switch.
+        touchCapture?.setTouchEnabled(cfg.touchInput || cfg.inputMode == HostConfig.MODE_TOUCHPAD)
+        touchCapture?.setTouchpadMode(cfg.inputMode == HostConfig.MODE_TOUCHPAD)
+        touchCapture?.setStylusMode(cfg.inputMode == HostConfig.MODE_STYLUS)
+        touchCapture?.setTouchpadShape(cfg.touchpadShape)
+        touchCapture?.refreshNativeGestures()
+        if (prev.immersiveMode != cfg.immersiveMode) applyImmersiveMode(cfg.immersiveMode)
+        if (prev.keepDisplayAliveWhenLocked != cfg.keepDisplayAliveWhenLocked) applyLockScreenFlags()
+        if (prev.orientation != cfg.orientation) applyOrientation()
+        if (prev.themeMode != cfg.themeMode) applyThemeMode(prefs.themeMode)
+        // Only Display mode has a video stream: the host stops capturing for the other two, so the
+        // decoder has nothing to wait for. start() and stop() are idempotent.
+        if (!autoRetryDisabled) {
+            if (cfg.streamsVideo) videoReceiver?.start() else videoReceiver?.stop()
+        }
+        Log.i("UScreen", "Host config applied: $cfg")
+    }
+
+    /**
+     * A synced setting was changed on this tablet: apply it now and tell the host to store it as this
+     * device's override. [value] is a Boolean, an Int or a String, as the key requires.
+     */
+    private fun onUserSetting(key: String, value: Any) {
+        val next = hostConfig.withSetting(key, value) ?: return
+        applyHostConfig(next)
+        touchCapture?.sendSetting(key, value)
+        // "Require Device Admin Lock" needs the permission; ask for it right away.
+        if (key == "battery_saver_lock" && value == true && !ScreenLock.canLock(this)) {
+            try { startActivity(ScreenLock.requestIntent(this)) } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Watches the control socket while the activity is visible. Every 2 s of failure is just another
+     * retry (the socket and video loops do the retrying); only a link that stayed down for the whole
+     * 120 s window flips [hostOffline] and, with battery saver on, shuts the app down for the night.
+     */
+    private fun startLinkWatchdog() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                reconnectPolicy.linkUp()
+                while (isActive) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (touchCapture?.isControlConnected() == true) {
+                        reconnectPolicy.linkUp()
+                        if (hostOffline && !autoRetryDisabled) hostOffline = false
+                    } else if (!autoRetryDisabled) {
+                        reconnectPolicy.linkDown(now)
+                        // A screen faded down for idleness is no use while the host is gone.
+                        if (dimmedByHost) {
+                            dimmedByHost = false
+                            dimmer.undim(500, "ease_in")
+                        }
+                        if (reconnectPolicy.expired(now) && !hostOffline) {
+                            Log.i("UScreen", "Host unreachable for ${ReconnectPolicy.OFFLINE_AFTER_MS / 1000} s")
+                            hostOffline = true
+                            if (hostConfig.batterySaverOnDisconnect) enterBatterySaver()
+                        }
+                    }
+                    delay(1000)
+                }
+            }
+        }
+    }
+
+    /**
+     * Battery saver after the reconnect window: stop every retry loop, drop to 10% brightness and let go of
+     * the wake lock and keep-screen-on flag. Locking is separate and optional ("Require Device Admin
+     * Lock"): only with it on, and the Device Admin permission granted, is `lockNow()` called.
+     */
+    private fun enterBatterySaver() {
+        Log.i("UScreen", "Battery saver: stopping retries and dimming (lock: ${hostConfig.batterySaverLock})")
+        autoRetryDisabled = true
+        touchCapture?.autoReconnect = false
+        touchCapture?.disconnect()
+        videoReceiver?.autoRetry = false
+        dimmedByHost = false
+        applyBrightnessPolicy()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        releaseWakeLock()
+        if (hostConfig.batterySaverLock) {
+            setShowWhenLocked(false)
+            setTurnScreenOn(false)
+            if (!ScreenLock.lockNow(this)) {
+                Log.w("UScreen", "Device Admin not granted — not locking")
+            }
+        }
+    }
+
+    /** The Retry button, or the host coming back: re-arm every loop and reconnect now. */
+    private fun retryHostLink() {
+        Log.i("UScreen", "Retrying the host link")
+        autoRetryDisabled = false
+        hostOffline = false
+        reconnectPolicy.linkUp()
+        dimmedByHost = false
+        dimmer.restoreSystem()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        applyLockScreenFlags()
+        touchCapture?.autoReconnect = true
+        touchCapture?.connect()
+        videoReceiver?.retryConnection()
     }
 
     /**
@@ -325,13 +544,13 @@ class MainActivity : ComponentActivity() {
             }
             window.attributes = lp
 
-            android.util.Log.i(
+            Log.i(
                 "UScreen",
                 "Requested display mode ${best.modeId} @ ${best.refreshRate}Hz " +
                     "(current ${disp.refreshRate}Hz)"
             )
         } catch (e: Exception) {
-            android.util.Log.w("UScreen", "Could not request a refresh rate: ${e.message}")
+            Log.w("UScreen", "Could not request a refresh rate: ${e.message}")
         }
     }
 
@@ -346,7 +565,19 @@ class MainActivity : ComponentActivity() {
      */
     private var tiltListener: android.view.OrientationEventListener? = null
 
+    /** True while video is flowing; only then is the picture pinned to landscape. */
+    private var streaming = false
+
+    /**
+     * Sets the screen orientation: free while nothing streams (onboarding follows the device); once video flows, landscape with the camera up, camera down, or following the tilt sensor, per the setting.
+     */
     private fun applyOrientation() {
+        if (!streaming) {
+            // Onboarding and the waiting screen follow the device, so portrait works too.
+            stopTiltListener()
+            requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            return
+        }
         when (prefs.orientation) {
             Prefs.ORIENTATION_CAMERA_UP -> {
                 stopTiltListener()
@@ -363,15 +594,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Starts the tilt listener that switches between the two landscape orientations by sensor; does nothing when it is running or the sensor cannot detect orientation.
+     */
     @Suppress("DEPRECATION")
     private fun startTiltListener() {
         if (tiltListener != null) return
-        // Whether the panel is naturally landscape decides how the sensor's
-        // angles read; see OrientationPolicy.
         val display = windowManager.defaultDisplay
         val size = android.graphics.Point().also { display.getRealSize(it) }
         val naturalLandscape = OrientationPolicy.naturallyLandscape(size.x, size.y, display.rotation)
         tiltListener = object : android.view.OrientationEventListener(this) {
+            /** Requests the landscape orientation that matches the sensor reading. */
             override fun onOrientationChanged(orientation: Int) {
                 val want = OrientationPolicy.landscapeForSensor(orientation, naturalLandscape) ?: return
                 if (requestedOrientation != want) requestedOrientation = want
@@ -379,17 +612,33 @@ class MainActivity : ComponentActivity() {
         }.also { if (it.canDetectOrientation()) it.enable() else tiltListener = null }
     }
 
+    /** Stops the tilt listener. */
     private fun stopTiltListener() {
         tiltListener?.disable()
         tiltListener = null
     }
 
+    /** Pauses: not in the foreground any more, so the brightness override is given back to the system. */
+    override fun onPause() {
+        super.onPause()
+        // Never leave a brightness override behind when the window is not the one in front.
+        inForeground = false
+        if (::dimmer.isInitialized) dimmer.restoreSystem()
+    }
+
+    /** Resumes: foreground again, re-checks the keyguard, re-applies the layout and pings the host. */
     override fun onResume() {
         super.onResume()
+        inForeground = true
+        checkKeyguardState()
         applyImmersiveMode()
         touchCapture?.sendPing()
     }
 
+    /**
+     * Switch between the default window insets and the opt-in immersive layout (content under the
+     * cutout, system bars hidden). Wrapped in try/catch because OEM window managers differ.
+     */
     fun applyImmersiveMode(optIn: Boolean = prefs.immersiveModeEnabled) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -415,7 +664,6 @@ class MainActivity : ComponentActivity() {
                     if (optIn) {
                         controller.hide(android.view.WindowInsets.Type.systemBars())
                     } else {
-                        // Original APK behavior: default fullscreen without cutout takeover
                         controller.hide(
                             android.view.WindowInsets.Type.statusBars() or
                             android.view.WindowInsets.Type.navigationBars()
@@ -436,37 +684,22 @@ class MainActivity : ComponentActivity() {
                 )
             }
         } catch (e: Exception) {
-            // Fallback: some Samsung firmwares have issues with insetsController
-            android.util.Log.w("UScreen", "Immersive mode failed: ${e.message}")
+            Log.w("UScreen", "Immersive mode failed: ${e.message}")
         }
     }
 
     /**
-     * Stylus hover, caught at the activity rather than on the SurfaceView.
-     *
-     * A hover listener on the SurfaceView does not reliably receive stylus
-     * hover once Compose is in the picture — anything drawn over the surface
-     * sits between the pointer and that listener. Hover is what moves the
-     * cursor on the host, so without it there is no way to see where the pen
-     * is pointing before it touches down, which matters most in graphics
-     * tablet mode where the host's screen is all you are looking at.
-     *
-     * Safe to take at this level precisely because hover is not a click: it
-     * cannot steal taps from the settings button the way intercepting touch
-     * would.
+     * A new launch intent (the host starts the app with the token, ports and host address as extras): applies them and restarts the connections.
      */
-    /**
-     * The daemon launches us with `am start --es token <hex>`; because the
-     * activity is singleTask, a running app receives that here rather than
-     * being recreated. A changed token means a new daemon run, so both
-     * connections are torn down and rebuilt with it.
-     */
-    override fun onNewIntent(intent: android.content.Intent?) {
+    override fun onNewIntent(intent: Intent?) {
         super.onNewIntent(intent)
         intent?.let { applyIntentExtras(it, restart = true) }
     }
 
-    private fun applyIntentExtras(intent: android.content.Intent, restart: Boolean) {
+    /**
+     * Applies the extras of the launch intent: session token, video and input ports and the host address; reconnects when the ports or the host changed and [restart] is true.
+     */
+    private fun applyIntentExtras(intent: Intent, restart: Boolean) {
         val fromIntent = intent.getStringExtra("token")
         if (fromIntent != null) prefs.hostToken = fromIntent
         val token = prefs.hostToken
@@ -508,13 +741,14 @@ class MainActivity : ComponentActivity() {
             Log.i("UScreen", "Session parameters updated — reconnecting")
             touchCapture?.disconnect()
             touchCapture?.connect()
-            if (!penOnlyMode) {
+            if (hostConfig.streamsVideo) {
                 videoReceiver?.stop()
                 videoReceiver?.start()
             }
         }
     }
 
+    /** Forwards stylus hover to the input link; other motion events are left to the system. */
     override fun onGenericMotionEvent(event: android.view.MotionEvent): Boolean {
         val w = window.decorView.width
         val h = window.decorView.height
@@ -524,35 +758,29 @@ class MainActivity : ComponentActivity() {
         return super.onGenericMotionEvent(event)
     }
 
+    /** On window focus: re-applies the immersive layout and asks for the highest refresh rate. */
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
             applyImmersiveMode()
-            // Re-assert once the window is actually attached: a request made in
-            // onCreate can be dropped before the window exists.
             requestHighestRefreshRate()
         }
     }
 
+    /** Connects the input link and pings the host. */
     override fun onStart() {
         super.onStart()
-        // One check per process, when the app comes to the front. It is a
-        // single small request and the answer changes about once a month.
-        if (!updateChecked) {
-            updateChecked = true
-            val cur = try { packageManager.getPackageInfo(packageName, 0).versionName ?: "0" } catch (_: Exception) { "0" }
-            Thread {
-                val found = UpdateCheck.newerThan(cur)
-                if (found != null) runOnUiThread { updateAvailable = found }
-            }.start()
-        }
-        // Connect control socket; mode acknowledgement from host starts videoReceiver if needed
         touchCapture?.connect()
         touchCapture?.sendPing()
     }
 
+    /**
+     * Stops: gives the brightness back and, unless `keepConnectedInBackground` is set, closes the video and input connections.
+     */
     override fun onStop() {
         super.onStop()
+        inForeground = false
+        if (::dimmer.isInitialized) dimmer.restoreSystem()
         if (!prefs.keepConnectedInBackground) {
             Log.i("UScreen", "App backgrounded and keepConnectedInBackground is false — disconnecting")
             videoReceiver?.stop()
@@ -560,1398 +788,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * Destroys the activity: releases brightness, tilt listener, receiver and wake lock, and stops the streaming service.
+     */
     override fun onDestroy() {
         super.onDestroy()
+        dimmer.restoreSystem()
         stopTiltListener()
         unregisterLockReceiver()
         releaseWakeLock()
         stopService(Intent(this, StreamingService::class.java))
-    }
-}
-
-private val Accent = Color(0xFF6C63FF)
-private val AccentSoft = Color(0xFF8B85FF)
-private val Ok = Color(0xFF4CAF50)
-private val Warn = Color(0xFFFF9800)
-
-@Composable
-fun UScreenTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Accent,
-            secondary = Color(0xFF03DAC6),
-            background = Color(0xFF0A0A0A),
-            surface = Color(0xFF16161F),
-            surfaceVariant = Color(0xFF20202C),
-        )
-    ) {
-        content()
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun UScreenMain(
-    onSurfaceReady: (SurfaceView) -> Unit,
-    penOnly: Boolean = false,
-    updateAvailable: String? = null,
-    showThanks: Boolean = false,
-    onDismissThanks: () -> Unit = {},
-    onSurfaceDestroyed: () -> Unit = {},
-    videoReceiver: VideoReceiver? = null,
-    touchCapture: TouchCapture? = null,
-    onOrientationChange: (Int) -> Unit = {},
-    prefs: Prefs? = null,
-    isDeviceLocked: Boolean = false,
-    hostVersion: String? = null,
-) {
-    var isConnected by remember { mutableStateOf(false) }
-    var fps by remember { mutableStateOf(0f) }
-    var mbps by remember { mutableStateOf(0f) }
-    var showSettings by remember { mutableStateOf(false) }
-    var showStats by remember { mutableStateOf(prefs?.showStats ?: false) }
-    var touchOn by remember { mutableStateOf(prefs?.touchEnabled ?: true) }
-    var blankInPenMode by remember { mutableStateOf(prefs?.blankPenOnly ?: true) }
-    var orientationChoice by remember { mutableStateOf(prefs?.orientation ?: Prefs.ORIENTATION_AUTO) }
-    var immersiveOn by remember { mutableStateOf(prefs?.immersiveModeEnabled ?: false) }
-    var keepConnectedInBackground by remember { mutableStateOf(prefs?.keepConnectedInBackground ?: false) }
-    var keepDisplayAliveWhenLocked by remember { mutableStateOf(prefs?.keepDisplayAliveWhenLocked ?: true) }
-    var preferredTransport by remember { mutableStateOf(prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO) }
-
-    val context = LocalContext.current
-    val activity = context as? MainActivity
-
-    // Only intercept Back button when opt-in immersive mode is ON and streaming or pen mode.
-    // When immersive mode is OFF (Default), Back button behaves as normal Android back (does nothing special).
-    BackHandler(enabled = immersiveOn && (isConnected || penOnly) && !showSettings) {
-        showSettings = true
-    }
-
-    // Re-assert immersive mode whenever settings sheet closes
-    LaunchedEffect(showSettings) {
-        if (!showSettings) {
-            activity?.applyImmersiveMode(immersiveOn)
-        }
-    }
-
-    LaunchedEffect(videoReceiver) {
-        videoReceiver?.onConnected = {
-            (context as? ComponentActivity)?.runOnUiThread { isConnected = true }
-        }
-        videoReceiver?.onDisconnected = {
-            (context as? ComponentActivity)?.runOnUiThread { isConnected = false }
-        }
-    }
-
-    LaunchedEffect(isConnected, showStats) {
-        while (isConnected) {
-            delay(1000)
-            fps = videoReceiver?.getFps() ?: 0f
-            mbps = videoReceiver?.getMbps() ?: 0f
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-    ) {
-        // Video surface — fills entire screen
-        AndroidView(
-            factory = { ctx ->
-                SurfaceView(ctx).apply {
-                    holder.setFormat(android.graphics.PixelFormat.OPAQUE)
-                    holder.addCallback(
-                        object : android.view.SurfaceHolder.Callback {
-                            override fun surfaceCreated(holder: android.view.SurfaceHolder) {
-                                onSurfaceReady(this@apply)
-                            }
-                            override fun surfaceChanged(
-                                holder: android.view.SurfaceHolder,
-                                format: Int, width: Int, height: Int
-                            ) {
-                                onSurfaceReady(this@apply)
-                            }
-                            override fun surfaceDestroyed(holder: android.view.SurfaceHolder) {
-                                onSurfaceDestroyed()
-                            }
-                        }
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxSize()
-        )
-
-        // Pen-only: there is no picture coming, so say so instead of leaving
-        // the user staring at a "waiting for the host" spinner forever.
-        AnimatedVisibility(
-            visible = penOnly,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            PenOnlyScreen(blankAfterSeconds = if (blankInPenMode) 8 else 0)
-        }
-
-        // Connection / State-Aware Onboarding screen
-        AnimatedVisibility(
-            visible = !isConnected && !penOnly,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize()
-        ) {
-            OnboardingScreen(
-                videoReceiver = videoReceiver,
-                touchCapture = touchCapture,
-                prefs = prefs,
-                isConnected = isConnected
-            )
-        }
-
-        // Stats chip (top-left, only while streaming)
-        if (isConnected && showStats) {
-            Surface(
-                color = Color(0x99000000),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-            ) {
-                Text(
-                    text = "%.0f fps   %.1f Mbps".format(fps, mbps),
-                    fontSize = 12.sp,
-                    color = Color(0xFFB0B0C0),
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
-                )
-            }
-        }
-
-        // Version Mismatch Banner (Task 6)
-        val isMismatch = hostVersion != null && hostVersion != BuildConfig.GIT_VERSION_STRING
-        AnimatedVisibility(
-            visible = isMismatch,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .zIndex(50f)
-        ) {
-            Surface(
-                color = Color(0xFFD32F2F),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "⚠ Host version mismatch (Host: ${hostVersion ?: "unknown"}, Device: ${BuildConfig.GIT_VERSION_STRING}). Please update on PC.",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
-
-        // Device locked warning banner
-        if (isDeviceLocked) {
-            Surface(
-                color = Color(0xD9B71C1C),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = if (isMismatch) 48.dp else 16.dp)
-            ) {
-                Text(
-                    text = "🔒 Device Locked — Touch Disabled",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White,
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
-                )
-            }
-        }
-
-        // Settings handle (top-right).
-        // OFF (Default): Always visible, exactly matching the original APK.
-        // ON (Opt-in): Hidden during streaming, visible when disconnected.
-        val showSettingsHandle = !immersiveOn || !isConnected
-
-        if (showSettingsHandle) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(10.dp)
-                    .size(38.dp)
-                    .alpha(if (penOnly && blankInPenMode) 0.18f else if (isConnected) 0.35f else 0.9f)
-                    .clip(CircleShape)
-                    .background(Color(0xAA20202C))
-                    .clickable { showSettings = true },
-                contentAlignment = Alignment.Center
-            ) {
-                Text("⚙", fontSize = 18.sp, color = Color.White)
-            }
-        }
-
-        // "Update available" pill at bottom center so it does not overlap the top settings cog.
-        // Only show on failure/waiting screen, never while actively streaming.
-        if (updateAvailable != null && !isConnected && !penOnly && !showThanks) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 24.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xCC20202C))
-                    .clickable {
-                        context.startActivity(
-                            Intent(
-                                Intent.ACTION_VIEW,
-                                android.net.Uri.parse(UpdateCheck.RELEASES_PAGE)
-                            )
-                        )
-                    }
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Text("Update $updateAvailable available", fontSize = 12.sp, color = Color.White)
-            }
-        }
-
-        // One-time note after the first successful picture. Dismissable, never
-        // repeated: the point is one honest ask, not a nag.
-        if (showThanks) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(24.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Color(0xE620202C))
-                    .padding(16.dp)
-            ) {
-                Column {
-                    Text("UScreen is working.", fontSize = 15.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                    Text(
-                        "If it replaced a second monitor for you, a star on GitHub or a compatibility " +
-                            "report helps other Linux users find it. This note appears only once.",
-                        fontSize = 12.sp, color = Color(0xFFB0B0C0)
-                    )
-                    Row(modifier = Modifier.padding(top = 10.dp)) {
-                        Text("Open GitHub", fontSize = 13.sp, color = Accent,
-                            modifier = Modifier.clickable {
-                                context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
-                                    android.net.Uri.parse("https://github.com/majmichu1/UScreen")))
-                                onDismissThanks()
-                            }.padding(end = 20.dp))
-                        Text("Dismiss", fontSize = 13.sp, color = Color(0xFF9A9AB0),
-                            modifier = Modifier.clickable { onDismissThanks() })
-                    }
-                }
-            }
-        }
-
-        if (showSettings) {
-            SettingsSheet(
-                prefs = prefs,
-                updateAvailable = updateAvailable,
-                onOpenUpdate = {
-                    context.startActivity(
-                        android.content.Intent(
-                            android.content.Intent.ACTION_VIEW,
-                            android.net.Uri.parse(UpdateCheck.RELEASES_PAGE)
-                        )
-                    )
-                },
-                penOnly = penOnly,
-                onPenOnlyChange = { wantPenOnly ->
-                    // Fire and forget: the host answers with the mode it
-                    // actually switched to, and that answer is what moves the
-                    // UI. Flipping it here as well would show the new mode
-                    // even when the host never got the message.
-                    touchCapture?.sendMode(wantPenOnly)
-                    showSettings = false
-                },
-                showStats = showStats,
-                onShowStatsChange = {
-                    showStats = it
-                    prefs?.showStats = it
-                },
-                blankPenOnly = blankInPenMode,
-                onBlankPenOnlyChange = {
-                    blankInPenMode = it
-                    prefs?.blankPenOnly = it
-                },
-                touchEnabled = touchOn,
-                onTouchEnabledChange = {
-                    touchOn = it
-                    prefs?.touchEnabled = it
-                    touchCapture?.setTouchEnabled(it)
-                },
-                orientation = orientationChoice,
-                onOrientationChange = {
-                    orientationChoice = it
-                    onOrientationChange(it)
-                },
-                onApply = { bitrateKbps, newFps ->
-                    prefs?.bitrateKbps = bitrateKbps
-                    prefs?.fps = newFps
-                    // The one moment the tablet speaks: the user chose these.
-                    touchCapture?.sendConfig(bitrateKbps, newFps)
-                },
-                immersiveModeEnabled = immersiveOn,
-                onImmersiveModeEnabledChange = {
-                    immersiveOn = it
-                    prefs?.immersiveModeEnabled = it
-                    activity?.applyImmersiveMode(it)
-                },
-                keepConnectedInBackground = keepConnectedInBackground,
-                onKeepConnectedInBackgroundChange = {
-                    keepConnectedInBackground = it
-                    prefs?.keepConnectedInBackground = it
-                },
-                keepDisplayAliveWhenLocked = keepDisplayAliveWhenLocked,
-                onKeepDisplayAliveWhenLockedChange = {
-                    keepDisplayAliveWhenLocked = it
-                    prefs?.keepDisplayAliveWhenLocked = it
-                    activity?.applyLockScreenFlags()
-                },
-                preferredTransport = preferredTransport,
-                onPreferredTransportChange = {
-                    preferredTransport = it
-                    prefs?.preferredTransport = it
-                    val transStr = when (it) {
-                        Prefs.TRANSPORT_WIFI -> "wifi"
-                        Prefs.TRANSPORT_USB -> "usb"
-                        else -> "auto"
-                    }
-                    touchCapture?.sendPreferredTransport(transStr)
-                },
-                onExitApp = {
-                    activity?.finish()
-                },
-                onDismiss = { showSettings = false }
-            )
-        }
-    }
-}
-
-@Composable
-private fun PenOnlyScreen(blankAfterSeconds: Int) {
-    // After the explanation has been read the screen goes fully black: on an
-    // OLED panel black pixels are off, and the explanation would otherwise sit
-    // on screen for as long as the pen is in use.
-    var blank by remember { mutableStateOf(false) }
-    LaunchedEffect(blankAfterSeconds) {
-        blank = false
-        if (blankAfterSeconds > 0) {
-            kotlinx.coroutines.delay(blankAfterSeconds * 1000L)
-            blank = true
-        }
-    }
-    if (blank) {
-        Box(modifier = Modifier.fillMaxSize().background(Color.Black))
-        return
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF0D0D14), Color(0xFF141B2A), Color(0xFF0D0D14))
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("Graphics tablet", fontSize = 34.sp, fontWeight = FontWeight.Bold,
-                color = Color.White)
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Draw here — it goes to the screen on your computer.",
-                fontSize = 15.sp, color = AccentSoft, textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(28.dp))
-            Text(
-                "Nothing is streamed to this screen in this mode, so there is no\n" +
-                    "display latency at all. Pressure, tilt and the eraser all work.",
-                fontSize = 13.sp, lineHeight = 22.sp, color = Color(0xFF9A9AAE),
-                textAlign = TextAlign.Center
-            )
-            if (blankAfterSeconds > 0) {
-                Spacer(Modifier.height(18.dp))
-                Text(
-                    "The screen goes black in a few seconds to spare OLED panels. " +
-                        "Settings are behind the faint ⚙ in the corner.",
-                    fontSize = 12.sp, color = Color(0xFF6A6A7E), textAlign = TextAlign.Center
-                )
-            }
-        }
-    }
-}
-
-enum class OnboardingStep {
-    DEVELOPER_OPTIONS_DISABLED,
-    USB_DEBUGGING_DISABLED,
-    WAITING_FOR_HOST
-}
-
-private fun getOnboardingStep(context: Context): OnboardingStep {
-    val devEnabled = try {
-        Settings.Global.getInt(context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0) != 0
-    } catch (_: Exception) {
-        true
-    }
-    if (!devEnabled) return OnboardingStep.DEVELOPER_OPTIONS_DISABLED
-
-    val adbEnabled = try {
-        val usbAdb = Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) != 0
-        val wifiAdb = Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0) != 0
-        usbAdb || wifiAdb
-    } catch (_: Exception) {
-        true
-    }
-    if (!adbEnabled) return OnboardingStep.USB_DEBUGGING_DISABLED
-
-    return OnboardingStep.WAITING_FOR_HOST
-}
-
-private fun checkUsbConnected(context: Context): Boolean {
-    val usbManager = context.getSystemService(Context.USB_SERVICE) as? UsbManager
-    val hasUsb = try {
-        (usbManager?.deviceList?.isNotEmpty() == true) || (usbManager?.accessoryList?.isNotEmpty() == true)
-    } catch (_: Exception) {
-        false
-    }
-    val filter = IntentFilter("android.hardware.usb.action.USB_STATE")
-    val intent = context.registerReceiver(null, filter)
-    val usbConnected = intent != null && intent.getBooleanExtra("connected", false)
-    val batteryIntent = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-    val plugged = batteryIntent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
-    val isPluggedUsb = plugged == BatteryManager.BATTERY_PLUGGED_USB || plugged == BatteryManager.BATTERY_PLUGGED_AC
-    return hasUsb || usbConnected || isPluggedUsb
-}
-
-private fun checkWifiConnected(context: Context): Boolean {
-    val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
-    val net = cm.activeNetwork ?: return false
-    val caps = cm.getNetworkCapabilities(net) ?: return false
-    return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
-}
-
-enum class DiagnosticState {
-    NO_TRANSPORT,
-    USB_UNAUTHORIZED,
-    SOCKET_REFUSED,
-    WIFI_HOST_UNREACHABLE,
-    CONNECTING
-}
-
-private fun evaluateDiagnostic(
-    usbPlugged: Boolean,
-    wifiOn: Boolean,
-    preferredTransport: Int,
-    dynamicDiagnostic: String?,
-    secondsWaiting: Int
-): Pair<DiagnosticState, String> {
-    val transportOk = when (preferredTransport) {
-        Prefs.TRANSPORT_USB -> usbPlugged
-        Prefs.TRANSPORT_WIFI -> wifiOn
-        else -> usbPlugged || wifiOn
-    }
-    val state = when {
-        !transportOk -> DiagnosticState.NO_TRANSPORT
-        dynamicDiagnostic?.contains("refused", ignoreCase = true) == true -> DiagnosticState.SOCKET_REFUSED
-        !usbPlugged && wifiOn && (secondsWaiting > 4 || dynamicDiagnostic?.contains("unreachable", ignoreCase = true) == true) -> DiagnosticState.WIFI_HOST_UNREACHABLE
-        else -> DiagnosticState.CONNECTING
-    }
-    val message = when (state) {
-        DiagnosticState.NO_TRANSPORT -> when (preferredTransport) {
-            Prefs.TRANSPORT_USB -> "Please connect a USB cable."
-            Prefs.TRANSPORT_WIFI -> "Please connect to a Wi-Fi network."
-            else -> "Please connect a USB cable or ensure Wi-Fi is enabled."
-        }
-        DiagnosticState.USB_UNAUTHORIZED -> "Waiting for UScreen desktop..."
-        DiagnosticState.SOCKET_REFUSED -> "Connection refused. Is UScreen running on your PC?"
-        DiagnosticState.WIFI_HOST_UNREACHABLE -> "Wi-Fi connected, but host unreachable. Are you on the same network?"
-        DiagnosticState.CONNECTING -> "Waiting for UScreen desktop..."
-    }
-    return Pair(state, message)
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun OnboardingScreen(
-    videoReceiver: VideoReceiver?,
-    touchCapture: TouchCapture?,
-    prefs: Prefs?,
-    isConnected: Boolean
-) {
-    val context = LocalContext.current
-    var step by remember { mutableStateOf(getOnboardingStep(context)) }
-    var usbPlugged by remember { mutableStateOf(checkUsbConnected(context)) }
-    var wifiOn by remember { mutableStateOf(checkWifiConnected(context)) }
-    var showHelpWizard by remember { mutableStateOf(false) }
-    var dynamicDiagnostic by remember { mutableStateOf<String?>(null) }
-    var secondsWaiting by remember { mutableStateOf(0) }
-    val preferredTransport = prefs?.preferredTransport ?: Prefs.TRANSPORT_AUTO
-
-    LaunchedEffect(videoReceiver) {
-        videoReceiver?.onDiagnosticUpdate = { diag ->
-            (context as? ComponentActivity)?.runOnUiThread {
-                dynamicDiagnostic = diag
-            }
-        }
-    }
-
-    // Refresh system status periodically
-    LaunchedEffect(Unit) {
-        while (true) {
-            step = getOnboardingStep(context)
-            usbPlugged = checkUsbConnected(context)
-            wifiOn = checkWifiConnected(context)
-            secondsWaiting += 1
-            delay(1000)
-        }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(Color(0xFF0D0D14), Color(0xFF14142A), Color(0xFF0D0D14))
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(24.dp)
-        ) {
-            Text(
-                text = "UScreen",
-                fontSize = 42.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Text(
-                text = "USB & Wireless Display",
-                fontSize = 15.sp,
-                color = AccentSoft
-            )
-            Spacer(modifier = Modifier.height(32.dp))
-
-            when (step) {
-                OnboardingStep.DEVELOPER_OPTIONS_DISABLED -> {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0x8C1A1A2A)),
-                        modifier = Modifier.fillMaxWidth(0.85f)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "Developer Options Required",
-                                fontSize = 18.sp,
-                                color = Warn,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "UScreen communicates with your PC via Android USB/Wi-Fi debugging. " +
-                                    "Tap 'Build number' 7 times in About Device to unlock Developer options.",
-                                fontSize = 13.sp,
-                                lineHeight = 20.sp,
-                                color = Color(0xFFB0B0C0),
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(18.dp))
-                            Button(
-                                onClick = {
-                                    try {
-                                        context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS))
-                                    } catch (_: Exception) {
-                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Accent)
-                            ) {
-                                Text("Open About Device", color = Color.White, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-                OnboardingStep.USB_DEBUGGING_DISABLED -> {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0x8C1A1A2A)),
-                        modifier = Modifier.fillMaxWidth(0.85f)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = "Enable USB / Wireless Debugging",
-                                fontSize = 18.sp,
-                                color = Warn,
-                                fontWeight = FontWeight.Bold,
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "Developer options are enabled, but debugging is turned off. " +
-                                    "Please turn on 'USB debugging' or 'Wireless debugging' to allow your PC to connect.",
-                                fontSize = 13.sp,
-                                lineHeight = 20.sp,
-                                color = Color(0xFFB0B0C0),
-                                textAlign = TextAlign.Center
-                            )
-                            Spacer(modifier = Modifier.height(18.dp))
-                            Button(
-                                onClick = {
-                                    try {
-                                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
-                                    } catch (_: Exception) {
-                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = Accent)
-                            ) {
-                                Text("Open Developer Options", color = Color.White, fontWeight = FontWeight.SemiBold)
-                            }
-                        }
-                    }
-                }
-                OnboardingStep.WAITING_FOR_HOST -> {
-                    val (diagState, diagMessage) = evaluateDiagnostic(
-                        usbPlugged = usbPlugged,
-                        wifiOn = wifiOn,
-                        preferredTransport = preferredTransport,
-                        dynamicDiagnostic = dynamicDiagnostic,
-                        secondsWaiting = secondsWaiting
-                    )
-
-                    CircularProgressIndicator(
-                        color = Accent,
-                        strokeWidth = 4.dp,
-                        modifier = Modifier.size(48.dp)
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    Text(
-                        text = diagMessage,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                        color = if (diagState == DiagnosticState.CONNECTING) Color(0xFFB0B0C0) else Warn,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(horizontal = 32.dp)
-                    )
-                    Spacer(modifier = Modifier.height(28.dp))
-                    OutlinedButton(
-                        onClick = { showHelpWizard = true },
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentSoft)
-                    ) {
-                        Text("Help Me Fix It 🛠", fontSize = 13.sp)
-                    }
-                }
-            }
-        }
-
-        // Interactive "Help Me Fix It" Wizard
-        if (showHelpWizard) {
-            val devOn = step != OnboardingStep.DEVELOPER_OPTIONS_DISABLED
-            val adbOn = step == OnboardingStep.WAITING_FOR_HOST
-            val transportOk = when (preferredTransport) {
-                Prefs.TRANSPORT_USB -> usbPlugged
-                Prefs.TRANSPORT_WIFI -> wifiOn
-                else -> usbPlugged || wifiOn
-            }
-
-            // Trigger reconnection attempt as soon as all prerequisites become true
-            LaunchedEffect(transportOk, devOn, adbOn) {
-                if (transportOk && devOn && adbOn) {
-                    videoReceiver?.restartSocket()
-                    touchCapture?.connect()
-                }
-            }
-
-            // Dismiss troubleshooter ONLY when connection is established
-            LaunchedEffect(isConnected) {
-                if (isConnected) {
-                    showHelpWizard = false
-                }
-            }
-
-            ModalBottomSheet(
-                onDismissRequest = { showHelpWizard = false },
-                containerColor = Color(0xFF16161F)
-            ) {
-                AnimatedVisibility(
-                    visible = true,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                            .padding(horizontal = 24.dp, vertical = 12.dp)
-                    ) {
-                        Text(
-                            "Connection Troubleshooter",
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.White
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Let's verify each requirement step-by-step:",
-                            fontSize = 13.sp,
-                            color = Color(0xFF9A9AB0)
-                        )
-                        Spacer(Modifier.height(16.dp))
-
-                        // Step 1: Transport check adapted to Preferred Transport
-                        val (tTitle, tDetail) = when (preferredTransport) {
-                            Prefs.TRANSPORT_USB -> "1. USB Cable Connection" to (
-                                if (usbPlugged) "USB cable is securely detected." else "No USB cable detected. Please connect your USB cable."
-                            )
-                            Prefs.TRANSPORT_WIFI -> "1. Wi-Fi Connection" to (
-                                if (wifiOn) "Connected to Wi-Fi network." else "Wi-Fi is disconnected. Please connect to Wi-Fi."
-                            )
-                            else -> "1. Network Transport" to when {
-                                usbPlugged && wifiOn -> "USB and Wi-Fi connected."
-                                usbPlugged -> "USB cable is securely detected."
-                                wifiOn -> "Connected to Wi-Fi network."
-                                else -> "No USB or Wi-Fi connection detected. Connect cable or Wi-Fi."
-                            }
-                        }
-
-                        TroubleshootCheckItem(
-                            title = tTitle,
-                            detail = tDetail,
-                            passed = transportOk,
-                            actionButtonText = if (!transportOk && preferredTransport == Prefs.TRANSPORT_WIFI) "Open Wi-Fi Settings" else null,
-                            onActionClick = if (!transportOk && preferredTransport == Prefs.TRANSPORT_WIFI) {
-                                {
-                                    try {
-                                        context.startActivity(Intent(Settings.ACTION_WIFI_SETTINGS))
-                                    } catch (_: Exception) {
-                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
-                                    }
-                                }
-                            } else null
-                        )
-                        Spacer(Modifier.height(12.dp))
-
-                        // Checklist Step 2: Developer Options
-                        TroubleshootCheckItem(
-                            title = "2. Developer Options",
-                            detail = if (devOn) "Developer options enabled." else "Disabled. Must tap Build number 7 times in About Device.",
-                            passed = devOn,
-                            actionButtonText = if (!devOn) "Open About Device" else null,
-                            onActionClick = if (!devOn) {
-                                {
-                                    try {
-                                        context.startActivity(Intent(Settings.ACTION_DEVICE_INFO_SETTINGS))
-                                    } catch (_: Exception) {
-                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
-                                    }
-                                }
-                            } else null
-                        )
-                        Spacer(Modifier.height(12.dp))
-
-                        // Checklist Step 3: Debugging
-                        TroubleshootCheckItem(
-                            title = "3. USB / Wireless Debugging",
-                            detail = if (adbOn) "Debugging is enabled." else "Disabled. Must toggle USB or Wireless debugging in Developer Options.",
-                            passed = adbOn,
-                            actionButtonText = if (!adbOn) "Open Developer Options" else null,
-                            onActionClick = if (!adbOn) {
-                                {
-                                    try {
-                                        context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
-                                    } catch (_: Exception) {
-                                        context.startActivity(Intent(Settings.ACTION_SETTINGS))
-                                    }
-                                }
-                            } else null
-                        )
-
-                        Spacer(Modifier.height(20.dp))
-                        Text(
-                            text = if (transportOk && devOn && adbOn) "All checks passed! Connecting to PC..." else "Once all items show a green checkmark, UScreen will connect automatically.",
-                            fontSize = 12.sp,
-                            color = if (transportOk && devOn && adbOn) AccentSoft else Color(0xFF9A9AB0),
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(Modifier.height(16.dp))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun TroubleshootCheckItem(
-    title: String,
-    detail: String,
-    passed: Boolean,
-    actionButtonText: String? = null,
-    onActionClick: (() -> Unit)? = null
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0x332A2A3D))
-            .padding(12.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = if (passed) "✓" else "✗",
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = if (passed) Color(0xFF4CAF50) else Color(0xFFEF5350),
-                modifier = Modifier.padding(end = 12.dp)
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                Text(detail, fontSize = 12.sp, color = Color(0xFFB0B0C0))
-            }
-        }
-        if (!passed && actionButtonText != null && onActionClick != null) {
-            Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = onActionClick,
-                colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                modifier = Modifier.padding(start = 28.dp)
-            ) {
-                Text(actionButtonText, fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SettingsSheet(
-    prefs: Prefs?,
-    updateAvailable: String?,
-    onOpenUpdate: () -> Unit,
-    penOnly: Boolean,
-    onPenOnlyChange: (Boolean) -> Unit,
-    showStats: Boolean,
-    onShowStatsChange: (Boolean) -> Unit,
-    blankPenOnly: Boolean,
-    onBlankPenOnlyChange: (Boolean) -> Unit,
-    touchEnabled: Boolean,
-    onTouchEnabledChange: (Boolean) -> Unit,
-    orientation: Int,
-    onOrientationChange: (Int) -> Unit,
-    onApply: (bitrateKbps: Int, fps: Int) -> Unit,
-    immersiveModeEnabled: Boolean = false,
-    onImmersiveModeEnabledChange: (Boolean) -> Unit = {},
-    keepConnectedInBackground: Boolean = false,
-    onKeepConnectedInBackgroundChange: (Boolean) -> Unit = {},
-    keepDisplayAliveWhenLocked: Boolean = true,
-    onKeepDisplayAliveWhenLockedChange: (Boolean) -> Unit = {},
-    preferredTransport: Int = Prefs.TRANSPORT_AUTO,
-    onPreferredTransportChange: (Int) -> Unit = {},
-    onExitApp: () -> Unit = {},
-    onDismiss: () -> Unit,
-) {
-    var bitrateMbps by remember {
-        mutableStateOf((prefs?.bitrateKbps ?: Prefs.DEFAULT_BITRATE_KBPS) / 1000f)
-    }
-    var fpsChoice by remember { mutableStateOf(prefs?.fps ?: Prefs.DEFAULT_FPS) }
-    val context = LocalContext.current
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        containerColor = Color(0xFF16161F)
-    ) {
-        // Scrolls: on a landscape phone or a 600 px tablet the sheet is taller
-        // than the screen, and everything below the first few settings was
-        // unreachable (#27).
-        Column(
-            modifier = Modifier
-                .verticalScroll(androidx.compose.foundation.rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 8.dp)
-        ) {
-            Text(
-                "Settings",
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.White
-            )
-            Spacer(Modifier.height(20.dp))
-
-            if (updateAvailable != null) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color(0x3350507A))
-                        .clickable { onOpenUpdate() }
-                        .padding(12.dp)
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Update available: $updateAvailable", fontSize = 14.sp, color = Color.White)
-                        Text(
-                            "Tap to open the release page. Update the desktop side too — they ship together.",
-                            fontSize = 11.sp,
-                            color = Color(0xFF9A9AB0)
-                        )
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            // What the tablet is for, right now. Everything below only applies
-            // when it is a screen, so the stream controls fold away when it
-            // isn't.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Graphics tablet", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-                    Text(
-                        "Draw on the computer's own screen with the pen, " +
-                            "instead of showing a second screen here",
-                        fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = penOnly,
-                    onCheckedChange = onPenOnlyChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-
-            // Which way round the tablet is held. Applies at once, in both
-            // modes, and needs no Apply: it is the tablet's own business, the
-            // host never sees it. Automatic uses the tilt sensor directly;
-            // with it off, the two pinned directions appear.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Rotate automatically", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-                    Text(
-                        "Follow the tilt sensor between the two landscape directions",
-                        fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = orientation == Prefs.ORIENTATION_AUTO,
-                    onCheckedChange = { auto ->
-                        onOrientationChange(
-                            if (auto) Prefs.ORIENTATION_AUTO else Prefs.ORIENTATION_CAMERA_DOWN
-                        )
-                    },
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
-                )
-            }
-            if (orientation != Prefs.ORIENTATION_AUTO) {
-                Spacer(Modifier.height(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf(
-                        Prefs.ORIENTATION_CAMERA_UP to "Camera up",
-                        Prefs.ORIENTATION_CAMERA_DOWN to "Camera down",
-                    ).forEach { (value, label) ->
-                        FilterChip(
-                            selected = orientation == value,
-                            onClick = { onOrientationChange(value) },
-                            label = { Text(label) },
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = Accent,
-                                selectedLabelColor = Color.White
-                            )
-                        )
-                    }
-                }
-                Text(
-                    "Camera down is the usual way to hold it for drawing.",
-                    fontSize = 11.sp,
-                    color = Color(0xFF6A6A7E)
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-
-            // Preferred Transport selector
-            Text("Preferred transport", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(
-                    Prefs.TRANSPORT_AUTO to "Auto",
-                    Prefs.TRANSPORT_USB to "USB",
-                    Prefs.TRANSPORT_WIFI to "Wi-Fi",
-                ).forEach { (value, label) ->
-                    FilterChip(
-                        selected = preferredTransport == value,
-                        onClick = { onPreferredTransportChange(value) },
-                        label = { Text(label) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Accent,
-                            selectedLabelColor = Color.White
-                        )
-                    )
-                }
-            }
-            Text(
-                when (preferredTransport) {
-                    Prefs.TRANSPORT_USB -> "Strictly connect using a physical USB cable."
-                    Prefs.TRANSPORT_WIFI -> "Strictly connect over Wi-Fi network."
-                    else -> "Automatically use USB when plugged in, falling back to Wi-Fi."
-                },
-                fontSize = 11.sp,
-                color = Color(0xFF6A6A7E)
-            )
-            Spacer(Modifier.height(20.dp))
-
-            // 🔗 Pairing Setup Guide Section (Task 4)
-            var guideExpanded by remember { mutableStateOf(false) }
-            val isAndroid11Plus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-            val localIp = remember { getLocalWifiIp(context) }
-
-            Surface(
-                color = Color(0xFF1E1E2C),
-                shape = RoundedCornerShape(10.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .clickable { guideExpanded = !guideExpanded }
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "🔗 Pairing Setup Guide",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = if (guideExpanded) "▲" else "▼",
-                            fontSize = 13.sp,
-                            color = Color(0xFF9A9AB0)
-                        )
-                    }
-
-                    AnimatedVisibility(
-                        visible = guideExpanded,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
-                    ) {
-                        Column(modifier = Modifier.padding(top = 10.dp)) {
-                            if (isAndroid11Plus) {
-                                Text(
-                                    text = "Secure Wi-Fi Pairing (Android 11+):",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF64B5F6)
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = "1. Go to Settings → Developer Options → Wireless Debugging.\n" +
-                                           "2. Tap 'Pair device with pairing code'.\n" +
-                                           "3. Enter the 6-digit code in the UScreen PC app.",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFFD0D0E0),
-                                    lineHeight = 18.sp
-                                )
-                            } else {
-                                Text(
-                                    text = "Legacy Wi-Fi Pairing (Android <11):",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color(0xFFFFB74D)
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = "1. Go to Settings → Developer Options → USB Debugging.\n" +
-                                           "2. Plug in the USB cable once.\n" +
-                                           "3. The PC will auto-enable Wi-Fi ADB.",
-                                    fontSize = 12.sp,
-                                    color = Color(0xFFD0D0E0),
-                                    lineHeight = 18.sp
-                                )
-                            }
-
-                            Spacer(Modifier.height(10.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = {
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val text = localIp ?: "192.168.1.1"
-                                        val clip = ClipData.newPlainText("UScreen IP", text)
-                                        clipboard.setPrimaryClip(clip)
-                                        Toast.makeText(context, "Copied IP: $text", Toast.LENGTH_SHORT).show()
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2C2C3E)),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                                ) {
-                                    Text("📋 Copy IP & Port", fontSize = 12.sp, color = Color.White)
-                                }
-
-                                Button(
-                                    onClick = {
-                                        try {
-                                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
-                                        } catch (e: Exception) {
-                                            Toast.makeText(context, "Developer options not enabled", Toast.LENGTH_SHORT).show()
-                                        }
-                                    },
-                                    colors = ButtonDefaults.buttonColors(containerColor = Accent),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-                                ) {
-                                    Text("⚙ Open Developer Options", fontSize = 12.sp, color = Color.White)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Spacer(Modifier.height(20.dp))
-
-            if (!penOnly) {
-            Text(
-                "Bitrate: ${bitrateMbps.roundToInt()} Mbps",
-                fontSize = 14.sp,
-                color = Color(0xFFB0B0C0)
-            )
-            Slider(
-                value = bitrateMbps,
-                onValueChange = { bitrateMbps = it },
-                valueRange = (Prefs.MIN_BITRATE_KBPS / 1000).toFloat()..
-                        (Prefs.MAX_BITRATE_KBPS / 1000).toFloat(),
-                steps = 10,
-                colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent)
-            )
-            Text(
-                "20 Mbps is plenty for text and UI. Going higher does not look sharper once " +
-                    "the USB link is saturated — it only adds delay.",
-                fontSize = 11.sp,
-                color = Color(0xFF6A6A7E)
-            )
-            Spacer(Modifier.height(20.dp))
-
-            Text("Frame rate", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-            Spacer(Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // 120 is not offered: the generated EDID caps the virtual mode
-                // at 90 Hz, so anything above would be duplicate frames.
-                listOf(30, 60, 90).forEach { f ->
-                    FilterChip(
-                        selected = fpsChoice == f,
-                        onClick = { fpsChoice = f },
-                        label = { Text("$f fps") },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = Accent,
-                            selectedLabelColor = Color.White
-                        )
-                    )
-                }
-            }
-            Spacer(Modifier.height(20.dp))
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Show stats overlay", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-                    Text(
-                        "FPS and bandwidth in the corner",
-                        fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
-                    )
-                }
-                Switch(
-                    checked = showStats,
-                    onCheckedChange = onShowStatsChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-
-            // OLED care for graphics-tablet mode. Applies at once.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Black screen in graphics tablet mode", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-                    Text(
-                        "Nothing is streamed there, so the screen goes black a few seconds after " +
-                            "it starts instead of showing the same text for hours",
-                        fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = blankPenOnly,
-                    onCheckedChange = onBlankPenOnlyChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-
-            // Fingers or pen only. Applies at once; the host never sees it.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Touch input", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-                    Text(
-                        "Off sends only the pen, which keeps a resting hand from doing anything",
-                        fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = touchEnabled,
-                    onCheckedChange = onTouchEnabledChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-
-            // Opt-in immersive mode toggle.
-            // OFF (Default): original APK UI with visible settings button and standard Back button behavior.
-            // ON: full-screen immersive with hidden settings button and Back button mapping.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Enable Immersive Mode (Hide Settings Button)", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-                    Text(
-                        "Hides the gear button and maps the Android Back button to open settings",
-                        fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = immersiveModeEnabled,
-                    onCheckedChange = onImmersiveModeEnabledChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-
-            // Keep connected in background
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Keep connected in background", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-                    Text(
-                        "Maintain stream and touch connection when switched away. Consumes more battery.",
-                        fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = keepConnectedInBackground,
-                    onCheckedChange = onKeepConnectedInBackgroundChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
-                )
-            }
-            Spacer(Modifier.height(20.dp))
-
-            // Keep display alive when locked
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Keep display alive when locked", fontSize = 14.sp, color = Color(0xFFB0B0C0))
-                    Text(
-                        "Hold system WakeLock while locked. Note: secure keyguard disables touch input until unlocked.",
-                        fontSize = 11.sp,
-                        color = Color(0xFF6A6A7E)
-                    )
-                }
-                Spacer(Modifier.width(12.dp))
-                Switch(
-                    checked = keepDisplayAliveWhenLocked,
-                    onCheckedChange = onKeepDisplayAliveWhenLockedChange,
-                    colors = SwitchDefaults.colors(checkedTrackColor = Accent)
-                )
-            }
-            Spacer(Modifier.height(24.dp))
-
-            if (!penOnly) {
-                Button(
-                    onClick = {
-                        onApply((bitrateMbps * 1000).roundToInt(), fpsChoice)
-                        onDismiss()
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = Accent)
-                ) {
-                    Text("Apply", fontSize = 16.sp, modifier = Modifier.padding(vertical = 4.dp))
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    "Applying restarts the stream for a moment.",
-                    fontSize = 11.sp,
-                    color = Color(0xFF6A6A7E),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            if (immersiveModeEnabled) {
-                Spacer(Modifier.height(16.dp))
-                OutlinedButton(
-                    onClick = onExitApp,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF6B6B))
-                ) {
-                    Text("Exit UScreen", fontSize = 14.sp)
-                }
-            }
-            Spacer(Modifier.height(20.dp))
-
-            val buildVer = BuildConfig.VERSION_NAME
-            val isDirtyVer = buildVer.contains("-dirty")
-            val displayVer = if (isDirtyVer) "$buildVer (Uncommitted Changes)" else buildVer
-            Text(
-                text = "UScreen Build: $displayVer",
-                fontSize = 11.sp,
-                color = if (isDirtyVer) Color(0xFFFFB74D) else Color(0xFF6A6A7E),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
-            )
-        }
     }
 }

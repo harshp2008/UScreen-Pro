@@ -73,7 +73,7 @@ Starting with Android 8.0 (API 26), background execution limits severely throttl
 
 ### 3.2 Methodology & Test Matrix
 1. **Multi-Screen Touch Mapping Test:** Connect Samsung Galaxy Tab S9 FE (Slot 0) and Samsung Galaxy A55 (Slot 1). Inject touch events on Tab S9 FE and verify in GNOME/Mutter that events land on `DVI-I-2`, not `DVI-I-1`.
-2. **Wi-Fi Touch Input Test:** Disconnect USB on Galaxy A55, connect via Wi-Fi ADB (`192.168.1.74:5555`). Verify touch input functions over WebSocket.
+2. **Wi-Fi Touch Input Test:** Disconnect USB on Galaxy A55, connect via Wi-Fi ADB (`192.168.1.102:5555`). Verify touch input functions over WebSocket.
 3. **Background Lifecycle Test:** Background the app (`Home` button). Verify sockets are closed and CPU wakes cease. Re-foreground the app and verify automatic stream reconnection.
 4. **Device Lock Test:** Lock the device with PIN/pattern. Verify wake lock holds, stream continues rendering over lockscreen, and "Device Locked" state is accurately reported.
 5. **GUI APK Installer & Version Mismatch Test:** Verify "Install Android App" button in GUI pushes the built APK to the selected/deduplicated device. Simulate version mismatch and verify warning badge.
@@ -335,7 +335,7 @@ The window keeps `FLAG_SHOW_WHEN_LOCKED` and acquires `PARTIAL_WAKE_LOCK` when `
 ### 6.5 Task 5 & 6: GUI APK Installer & Version Check
 Installed package check on Galaxy Tab S9 FE:
 ```bash
-adb -s R52X708AEHK shell dumpsys package com.uscreen | grep -E "versionName|versionCode"
+adb -s TABLET_SERIAL shell dumpsys package com.uscreen | grep -E "versionName|versionCode"
 ```
 Raw Output:
 ```text
@@ -347,7 +347,7 @@ Host `Cargo.toml` and GUI `Cargo.toml` version: `1.3.0`. Versions match identica
 ### 6.6 Task 7: Connection Troubleshooter OR-Logic & Auto-Dismissal
 Command:
 ```bash
-adb -s R52X708AEHK shell uiautomator dump && adb -s R52X708AEHK shell cat /sdcard/window_dump.xml
+adb -s TABLET_SERIAL shell uiautomator dump && adb -s TABLET_SERIAL shell cat /sdcard/window_dump.xml
 ```
 Raw Output (extracted XML nodes):
 ```xml
@@ -389,9 +389,9 @@ Verification:
 - "Update available" relocated to `BottomCenter`.
 
 ### 6.8 Task 9 / Hardware Disposition: Samsung Galaxy A55 Disposition
-- Probed port 5555 on `192.168.1.74`: timed out (`Operation now in progress`).
-- Bounded retry `timeout 5s adb connect 192.168.1.74:5555` exited with code 124 (timeout).
-- Per protocol, Galaxy A55 is officially abandoned for this session; all production verification consolidated on Galaxy Tab S9 FE (`R52X708AEHK`).
+- Probed port 5555 on `192.168.1.102`: timed out (`Operation now in progress`).
+- Bounded retry `timeout 5s adb connect 192.168.1.102:5555` exited with code 124 (timeout).
+- Per protocol, Galaxy A55 is officially abandoned for this session; all production verification consolidated on Galaxy Tab S9 FE (`TABLET_SERIAL`).
 
 ---
 

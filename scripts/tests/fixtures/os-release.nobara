@@ -1,0 +1,4 @@
+NAME="Nobara Linux"
+VERSION_ID=41
+ID=nobara
+ID_LIKE="rhel centos fedora"

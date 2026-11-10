@@ -1,3 +1,5 @@
+# CI: builds the Linux host (daemon, pen menu, EVDI helper) and the Android APK on pushes to main and develop and on pull requests to main.
+# It does not build the desktop app and does not run the installer tests (installer.yml does).
 name: Build UScreen
 
 on:
@@ -8,7 +10,7 @@ on:
 
 jobs:
   build-host:
-    name: Build Linux host (daemon + GUI + helper)
+    name: Build Linux host (daemon + pen menu + helper)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +24,7 @@ jobs:
           sudo apt-get install -y \
             libxkbcommon-dev libwayland-dev libxcb-render0-dev \
             libxcb-shape0-dev libxcb-xfixes0-dev libssl-dev \
-            libdrm-dev
+            libdrm-dev libgtk-4-dev
           # libevdi headers are needed only for the C helper; not in all repos
           sudo apt-get install -y libevdi0-dev || echo "libevdi-dev unavailable, helper build will be skipped"
 
@@ -35,11 +37,11 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build daemon and GUI
-        run: cargo build --release
+      - name: Build daemon and pen menu
+        run: cargo build --release -p uscreen -p uscreen-menu
 
       - name: Run tests
-        run: cargo test --release
+        run: cargo test --release -p uscreen
 
       - name: Build EVDI helper
         run: make build-helper || echo "Skipped (libevdi headers not available)"
@@ -50,7 +52,7 @@ jobs:
           name: uscreen-linux-x86_64
           path: |
             target/release/uscreen
-            target/release/uscreen-gui
+            target/release/uscreen-menu
 
   build-android:
     name: Build Android APK

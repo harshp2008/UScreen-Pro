@@ -1,3 +1,7 @@
+/*
+ * Video path from the host: receives the stream over loopback TCP, decodes it with MediaCodec onto
+ * a SurfaceView, and reconnects when the link or surface changes.
+ */
 package com.uscreen
 
 import android.media.MediaCodec
@@ -15,7 +19,19 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
+/**
+ * Receives the host's video stream over loopback TCP (port 8890, via `adb reverse`) and decodes it
+ * to a [SurfaceView] with MediaCodec.
+ *
+ * The wire format is length-prefixed packets of three kinds: codec config (SPS/PPS/VPS), frame,
+ * and host shutdown. The first 64 bytes sent are the session token. The receiver reconnects on its
+ * own, rebuilds the decoder when the surface or codec changes, and counts frames and bytes once a
+ * second for the on-screen stats.
+ */
 class VideoReceiver {
+    /**
+     * Defaults and the wire format of the video link: loopback host and port 8890 (adb reverse), the two MIME types, the packet types (config 0, frame 1, host shutdown 2), and the 5-byte frame header.
+     */
     companion object {
         const val HOST = "127.0.0.1"
         const val PORT = 8890
@@ -25,6 +41,8 @@ class VideoReceiver {
         const val MAX_FRAME_SIZE = 8 * 1024 * 1024
         const val PACKET_TYPE_CONFIG = 0
         const val PACKET_TYPE_FRAME = 1
+        /** Sent by the daemon as it exits cleanly: payload is {"type":"host_shutdown"}. */
+        const val PACKET_TYPE_HOST_SHUTDOWN = 2
 
         /** type byte + 4-byte big-endian sequence number */
         const val FRAME_HEADER_SIZE = 5
@@ -52,24 +70,30 @@ class VideoReceiver {
     private var outputThread: Thread? = null
     @Volatile private var isRunning = false
     @Volatile private var codecAlive = false
+
+    /** Decoder an output or feed thread declared fatally broken; the receive loop owns the recovery. */
+    private val failedCodec = AtomicReference<MediaCodec?>(null)
     @Volatile var host: String = HOST
 
+    /**
+     * True between [start] and [stop].
+     */
     fun isRunning(): Boolean = isRunning
 
     var onConnected: (() -> Unit)? = null
     var onDisconnected: (() -> Unit)? = null
     var onDiagnosticUpdate: ((String) -> Unit)? = null
 
-    fun restartSocket() {
-        synchronized(this) {
-            try {
-                socket?.close()
-            } catch (_: Exception) {}
-            socket = null
-            inputStream = null
-            onDisconnected?.invoke()
-            onDiagnosticUpdate?.invoke("Restarting connection...")
-        }
+    /**
+     * False while battery saver has given up on the host: the reconnect loop then idles until
+     * [retryConnection]. Otherwise it retries every [ReconnectPolicy.RETRY_INTERVAL_MS], forever.
+     */
+    @Volatile var autoRetry = true
+
+    /** User-requested retry (or the host coming back): re-arm the loop and reconnect now. */
+    fun retryConnection() {
+        autoRetry = true
+        try { socket?.close() } catch (_: Exception) {}
     }
 
     /**
@@ -79,16 +103,20 @@ class VideoReceiver {
      */
     var onFrameRendered: ((seq: Int, decodeUs: Int) -> Unit)? = null
 
-    /// Which bitstream the host is sending. Set from the host's greeting
-    /// before the stream starts; the frames carry nothing that says which
-    /// codec they are, so guessing wrong means a decoder that never outputs.
+    /**
+     * Which bitstream the host is sending. Set from the host's greeting
+     * before the stream starts; the frames carry nothing that says which
+     * codec they are, so guessing wrong means a decoder that never outputs.
+     */
     @Volatile var mimeType: String = MIME_TYPE
 
-    /// Host port to connect to for video stream. Defaults to PORT (8890).
+    /** Host port to connect to for video stream. Defaults to PORT (8890). */
     @Volatile var port: Int = PORT
 
-    /// Session token; written as the first 64 bytes on the socket. The host
-    /// sends nothing until it has seen it.
+    /**
+     * Session token; written as the first 64 bytes on the socket. The host
+     * sends nothing until it has seen it.
+     */
     @Volatile var token: String? = null
 
     private var frameCallbackThread: HandlerThread? = null
@@ -126,8 +154,10 @@ class VideoReceiver {
      * Ten milliseconds a step is monotonic, plausible, and still divides out.
      */
     private fun ptsFor(seq: Int): Long = (seq.toLong() and 0xFFFFFFFFL) * PTS_STEP_US
+    /** Inverse of `ptsFor`: the sequence number carried by a presentation timestamp. */
     private fun seqFromPts(pts: Long): Int = (pts / PTS_STEP_US).toInt()
 
+    /** The software decoder for the current codec, the last tier of decoder fallback. */
     private fun softwareDecoderName(): String =
         if (mimeType == MIME_TYPE_HEVC) "c2.android.hevc.decoder" else "c2.android.avc.decoder"
 
@@ -153,6 +183,7 @@ class VideoReceiver {
     private var splitCount = 0
     private var lastSplitLogNanos = 0L
 
+    /** Records when the decoder released frame [seq], searching the ring from the newest entry. */
     private fun noteReleased(seq: Int) {
         for (n in 0 until ARRIVAL_RING) {
             val i = (arrivalWrite - 1 - n + ARRIVAL_RING * 2) % ARRIVAL_RING
@@ -163,6 +194,9 @@ class VideoReceiver {
         }
     }
 
+    /**
+     * Records when frame [seq] finished arriving; the index wraps at a multiple of the ring size so the modulo lookups stay valid.
+     */
     private fun noteArrival(seq: Int) {
         val i = arrivalWrite % ARRIVAL_RING
         arrivalSeq[i] = seq
@@ -234,6 +268,9 @@ class VideoReceiver {
     private var job: Job? = null
     private var scope: CoroutineScope? = null
 
+    /**
+     * Provide the surface to decode onto; decoding starts once it is valid.
+     */
     fun setSurface(surfaceView: SurfaceView) {
         val surface = surfaceView.holder.surface
         if (surface == null || !surface.isValid) {
@@ -262,6 +299,9 @@ class VideoReceiver {
         releaseCodec()
     }
 
+    /**
+     * Creates and starts the decoder for the current codec and size on [surface], returning false if that failed; the decoder tier chooses between hardware low-latency, hardware and software.
+     */
     private fun setupCodec(surface: Surface): Boolean {
         var created: MediaCodec? = null
         try {
@@ -433,11 +473,9 @@ class VideoReceiver {
                     } else if (index == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
                         Log.i(TAG, "Decoder output format: ${codec.outputFormat}")
                     }
-                } catch (e: IllegalStateException) {
-                    if (codecAlive) Log.w(TAG, "Output thread: codec gone", e)
-                    break
                 } catch (e: Exception) {
-                    if (codecAlive) Log.w(TAG, "Output thread error", e)
+                    failCodec(codec, e)
+                    break
                 }
             }
         }, "uscreen-render").apply {
@@ -446,6 +484,25 @@ class VideoReceiver {
         }
     }
 
+    /**
+     * A decoder died under us (vendor decoders report fatal native errors in several shapes).
+     * Mark it failed and close the socket so the receive coroutine wakes up; that coroutine owns
+     * recovery because the render thread must never try to join itself in [releaseCodec].
+     */
+    private fun failCodec(codec: MediaCodec, error: Exception) {
+        synchronized(this) {
+            // A surface teardown or an old render thread must not invalidate the replacement
+            // decoder or close its new connection.
+            if (!codecAlive || mediaCodec !== codec) return
+            Log.w(TAG, "Decoder failed; reconnecting at the next fallback tier", error)
+            failedCodec.set(codec)
+            try { socket?.close() } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * Launch the connect/receive loop and the once-a-second FPS and bitrate counter. Idempotent.
+     */
     fun start() {
         synchronized(this) {
             if (isRunning) return
@@ -470,6 +527,9 @@ class VideoReceiver {
         }
     }
 
+    /**
+     * The receive loop: waits for a surface, honours the battery-saver pause, sets up the decoder (stepping down a tier after a failure), connects to the host, and reads packets until stopped.
+     */
     private suspend fun connectAndReceive() {
         while (isRunning) {
             try {
@@ -480,8 +540,22 @@ class VideoReceiver {
                 }
                 if (!isRunning) return
 
+                // Battery saver gave up on the host: stay quiet until the user retries.
+                if (!autoRetry) {
+                    delay(250)
+                    continue
+                }
+
                 // Ensure codec is set up
                 val codecReady = synchronized(this@VideoReceiver) {
+                    val failed = failedCodec.getAndSet(null)
+                    if (failed != null && mediaCodec === failed) {
+                        // Step down a decoder tier (hardware low-latency -> hardware -> software).
+                        if (decoderTier < 2) decoderTier++
+                        outputStalls = 0
+                        outputsSinceStall = 0
+                        releaseCodec()
+                    }
                     if (mediaCodec == null) {
                         val surface = pendingSurface.get()
                         if (surface != null && surface.isValid) {
@@ -575,6 +649,15 @@ class VideoReceiver {
                                 ptsFor(seq)
                             )
                         }
+                        PACKET_TYPE_HOST_SHUTDOWN -> {
+                            // Not an instant "Host Offline": the host may be restarting. The link
+                            // watchdog in the activity decides after two minutes of failures.
+                            Log.i(TAG, "Host announced shutdown — retrying every ${ReconnectPolicy.RETRY_INTERVAL_MS} ms")
+                            onDisconnected?.invoke()
+                            onDiagnosticUpdate?.invoke("The host is shutting down. Reconnecting…")
+                            delay(ReconnectPolicy.RETRY_INTERVAL_MS)
+                            break@receiveLoop
+                        }
                         else -> {
                             Log.w(TAG, "Unknown packet type: $packetType, reconnecting")
                             break@receiveLoop
@@ -586,28 +669,28 @@ class VideoReceiver {
                     Log.i(TAG, "Stream ended (server closed)")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke("Stream closed by host daemon.")
-                    delay(1000)
+                    delay(ReconnectPolicy.RETRY_INTERVAL_MS)
                 }
             } catch (e: java.net.SocketTimeoutException) {
                 if (isRunning) {
                     Log.w(TAG, "Stream read timeout, reconnecting")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke("USB connected, but no data received. Is the cable loose? Try a different port.")
-                    delay(500)
+                    delay(ReconnectPolicy.RETRY_INTERVAL_MS)
                 }
             } catch (e: java.net.ConnectException) {
                 if (isRunning) {
                     Log.w(TAG, "Connection refused: ${e.message}")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke("Connection refused. Is UScreen running on your PC?")
-                    delay(1000)
+                    delay(ReconnectPolicy.RETRY_INTERVAL_MS)
                 }
             } catch (e: Exception) {
                 if (isRunning) {
                     Log.e(TAG, "Stream error: ${e.message}")
                     onDisconnected?.invoke()
                     onDiagnosticUpdate?.invoke(e.message ?: "Connection error")
-                    delay(1000)
+                    delay(ReconnectPolicy.RETRY_INTERVAL_MS)
                 }
             } finally {
                 try {
@@ -696,9 +779,10 @@ class VideoReceiver {
                     return
                 }
             }
-        } catch (e: MediaCodec.CodecException) {
-            Log.e(TAG, "Decoder codec error: ${e.diagnosticInfo}", e)
-            resetCodec()
+        } catch (e: IllegalStateException) {
+            // CodecException is an IllegalStateException too. Some vendors report a fatal
+            // native error as a plain released-state exception.
+            failCodec(codec, e)
         } catch (e: Exception) {
             Log.w(TAG, "Decoder feed error", e)
         }
@@ -720,6 +804,7 @@ class VideoReceiver {
         }
     }
 
+    /** Rebuilds the decoder on the current surface, if there is a valid one. */
     private fun resetCodec() {
         synchronized(this) {
             releaseCodec()
@@ -730,6 +815,7 @@ class VideoReceiver {
         }
     }
 
+    /** Reads exactly [length] bytes into [buffer], throwing `EOFException` if the stream ends first. */
     private fun readExact(stream: InputStream, buffer: ByteArray, length: Int) {
         var offset = 0
         while (offset < length) {
@@ -739,9 +825,18 @@ class VideoReceiver {
         }
     }
 
+    /**
+     * Frames received during the last full second.
+     */
     fun getFps(): Float = currentFps
+    /**
+     * Megabits received during the last full second.
+     */
     fun getMbps(): Float = currentMbps
 
+    /**
+     * Stop the loops, close the socket first (to unblock pending reads) and release the decoder.
+     */
     fun stop() {
         isRunning = false
         codecAlive = false

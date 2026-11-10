@@ -1,3 +1,4 @@
+# Issue form for compatibility reports (what hardware and desktop UScreen was run on).
 name: Compatibility report
 description: It works (or almost works) on hardware not listed yet — tell others
 labels: [compatibility]

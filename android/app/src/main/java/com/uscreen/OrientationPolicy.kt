@@ -1,3 +1,7 @@
+/*
+ * Chooses which landscape direction the tilt sensor asks for, accounting for panels whose natural
+ * orientation is landscape.
+ */
 package com.uscreen
 
 import android.content.pm.ActivityInfo

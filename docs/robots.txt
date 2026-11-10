@@ -1,3 +1,4 @@
+# robots.txt of the existing GitHub Pages site (docs/index.html).
 User-agent: *
 Allow: /
 Sitemap: https://majmichu1.github.io/UScreen/sitemap.xml

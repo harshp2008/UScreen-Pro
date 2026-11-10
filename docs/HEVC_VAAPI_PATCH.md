@@ -1,3 +1,7 @@
+<!--
+  docs/HEVC_VAAPI_PATCH.md: notes on the HEVC VA-API hardware encoder support and its fallback to H.264 VA-API.
+  Owns the description of that change; encoder selection is in host/src/capture/.
+-->
 # HEVC VA-API Hardware Encoder Patch
 
 ## Summary
@@ -21,7 +25,7 @@ ERROR uscreen::capture: Failed to start encoder: Unknown encoder: hevc_vaapi. Us
 
 ## What Was Changed?
 
-### 1. `host/src/encoders.rs`
+### 1. `host/src/capture/encoders.rs`
 - **Candidate List**: Expanded `CANDIDATES` array size from 3 to 4 and added `"hevc_vaapi"`:
   ```rust
   pub const CANDIDATES: [&str; 4] = ["h264_nvenc", "h264_vaapi", "hevc_vaapi", "libx264"];
@@ -65,7 +69,7 @@ git checkout main
 ```
 
 ### Manual Reversion:
-1. In `host/src/encoders.rs`:
+1. In `host/src/capture/encoders.rs`:
    - Change `pub const CANDIDATES: [&str; 4]` back to:
      ```rust
      pub const CANDIDATES: [&str; 3] = ["h264_nvenc", "h264_vaapi", "libx264"];

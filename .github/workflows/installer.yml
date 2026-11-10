@@ -1,0 +1,85 @@
+name: Installer
+
+# Verifies the installer on every distribution family we claim to support, without hardware:
+#  * the test suite (scripts/tests/run.sh) inside a container of each family;
+#  * a real headless install on Ubuntu, twice (the second run must ask for nothing);
+#  * an optional AI second opinion on the install log (needs the DEEPSEEK_API_KEY secret).
+
+on:
+  push:
+    branches: [main, develop]
+    paths: ['scripts/**', 'packaging/**', 'extensions/**', '.github/workflows/installer.yml']
+  pull_request:
+    branches: [main]
+    paths: ['scripts/**', 'packaging/**', 'extensions/**', '.github/workflows/installer.yml']
+
+jobs:
+  suite:
+    name: Test suite on ${{ matrix.image }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: 'ubuntu:24.04', prep: 'apt-get update -qq && apt-get install -y -qq util-linux gawk findutils' }
+          - { image: 'ubuntu:22.04', prep: 'apt-get update -qq && apt-get install -y -qq util-linux gawk findutils' }
+          - { image: 'debian:12', prep: 'apt-get update -qq && apt-get install -y -qq util-linux gawk findutils' }
+          - { image: 'fedora:41', prep: 'dnf install -y -q util-linux gawk findutils' }
+          - { image: 'archlinux:latest', prep: 'pacman -Sy --noconfirm --needed util-linux gawk findutils' }
+          - { image: 'opensuse/tumbleweed:latest', prep: 'zypper -n -q install util-linux gawk findutils' }
+    container: ${{ matrix.image }}
+    steps:
+      - name: Tools the suite needs
+        run: ${{ matrix.prep }}
+      - uses: actions/checkout@v4
+      - name: Run the installer tests
+        run: bash scripts/tests/run.sh
+
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint the installer and its tests
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -x -S warning scripts/install.sh scripts/lib/*.sh scripts/lib/distros/*.sh scripts/tests/run.sh scripts/tests/in-containers.sh
+
+  extension:
+    name: Shell extension (syntax and version lists)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Syntax of every module, and metadata.json agrees with compat/versions.js
+        run: |
+          for f in extensions/uscreen-app-lock/extension.js extensions/uscreen-app-lock/lib/*.js extensions/uscreen-app-lock/compat/*.js; do node --check "$f"; done
+          node extensions/uscreen-app-lock/tests/check-versions.mjs
+
+  real-install-ubuntu:
+    name: Real headless install (Ubuntu runner)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fake binaries (the build jobs cover the real ones)
+        run: |
+          mkdir -p target/release
+          for b in uscreen uscreen-pro-gui evdi_helper uscreen-menu; do printf '#!/bin/sh\nexit 0\n' > target/release/$b; chmod +x target/release/$b; done
+      - name: Plan
+        run: ./scripts/install.sh --plan
+      - name: Install userspace parts only (a CI runner has no tablet and no EVDI hardware)
+        run: ./scripts/install.sh --headless --skip-system --skip-spawnat --no-build | tee install.log
+      - name: Install again (nothing changed, so nothing may need a restart)
+        run: |
+          ./scripts/install.sh --headless --skip-system --skip-spawnat --no-build | tee install2.log
+          grep -q 'relogin=no reboot=no' install2.log
+      - name: Files are where the app menu expects them
+        run: |
+          test -x ~/.local/bin/uscreen
+          grep -q "Exec=$HOME/.local/bin/uscreen-pro-gui" ~/.local/share/applications/uscreen-pro.desktop
+          test -f ~/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/extension.js
+          test -f ~/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/lib/penMenu.js
+          test -f ~/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/compat/index.js
+      - name: AI second opinion (skipped without the secret)
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: python3 -I scripts/ci/ai_review.py install.log install2.log --distro "Ubuntu 24.04 (CI runner)"

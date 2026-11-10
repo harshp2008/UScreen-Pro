@@ -44,6 +44,7 @@ def encode_manufacturer_id(s):
 
 
 def make_edid(width, height, refresh=60, name="UScreen"):
+    """Builds a 128-byte base EDID block for a [width] x [height] display at [refresh] Hz named [name] (manufacturer id `USC`), ending in a valid checksum."""
     edid = bytearray(128)
 
     # Header
@@ -167,12 +168,11 @@ def make_edid(width, height, refresh=60, name="UScreen"):
     # Byte 12: H_Image_Size[7:0]
     edid[idx+12] = h_image & 0xFF
 
-    # Byte 13: bits 7-4 = H_Image_Size[11:8], bits 3-0 = V_Image_Size[11:8]
-    #   FIXED: was incorrectly using (v_image & 0x0F) instead of (v_image >> 8)
-    edid[idx+13] = (((h_image >> 8) & 0x0F) << 4) | ((v_image >> 8) & 0x0F)
+    # Byte 13: V_Image_Size[7:0]
+    edid[idx+13] = v_image & 0xFF
 
-    # Byte 14: V_Image_Size[7:0]
-    edid[idx+14] = v_image & 0xFF
+    # Byte 14: bits 7-4 = H_Image_Size[11:8], bits 3-0 = V_Image_Size[11:8]
+    edid[idx+14] = (((h_image >> 8) & 0x0F) << 4) | ((v_image >> 8) & 0x0F)
 
     # Byte 15: H_Border = 0
     # Byte 16: V_Border = 0
@@ -221,6 +221,7 @@ def make_edid(width, height, refresh=60, name="UScreen"):
 
 
 def main():
+    """Command line: width, height, refresh and output file; writes the EDID and prints a summary."""
     width = int(sys.argv[1]) if len(sys.argv) > 1 else 2960
     height = int(sys.argv[2]) if len(sys.argv) > 2 else 1848
     refresh = int(sys.argv[3]) if len(sys.argv) > 3 else 60

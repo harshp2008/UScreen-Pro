@@ -1,0 +1,177 @@
+//! Cuts ffmpeg's AVI output back into encoded frames (ported from upstream UScreen 1.2.14).
+//!
+//! Raw Annex B has no end-of-frame marker: a frame only ends where a later one
+//! starts. UScreen sends frames only when the screen changes, so "later" can be
+//! hundreds of milliseconds away. An AVI chunk states its size up front and
+//! carries the encoder's packet untouched, so a frame can leave the moment it
+//! is complete.
+
+use anyhow::{bail, Result};
+
+/// Marker of the `movi` list: the frame chunks start right after it.
+const MOVI: &[u8] = b"movi";
+/// Chunk id of video stream 0 (`00dc`, compressed video). Chunks with any other id are skipped.
+const VIDEO_CHUNK: &[u8] = b"00dc";
+/// Size of an AVI chunk header in bytes: four id bytes plus a little-endian u32 payload size.
+const CHUNK_HEADER_BYTES: usize = 8;
+/// ffmpeg's AVI header is a few kilobytes. Anything past this is not AVI.
+const MAX_HEADER_BYTES: usize = 1 << 20;
+/// Far above any real frame. A larger size means the stream lost sync.
+const MAX_CHUNK_BYTES: usize = 256 << 20;
+
+/// Incremental demuxer for the AVI byte stream from ffmpeg: skips the header, then `push` returns
+/// the video frames each read completes. Chunks are read in order; nothing is seeked.
+#[derive(Default)]
+pub struct AviDemuxer {
+    buffer: Vec<u8>,
+    in_movi: bool,
+}
+
+impl AviDemuxer {
+    /// Add bytes from the encoder and return every frame they complete.
+    pub fn push(&mut self, data: &[u8]) -> Result<Vec<Vec<u8>>> {
+        self.buffer.extend_from_slice(data);
+        if !self.in_movi && !self.skip_header()? {
+            return Ok(Vec::new());
+        }
+
+        let mut frames = Vec::new();
+        let mut pos = 0;
+        while let Some(header) = self.buffer.get(pos..pos + CHUNK_HEADER_BYTES) {
+            let (tag, size) = header.split_at(4);
+            let size = u32::from_le_bytes([size[0], size[1], size[2], size[3]]) as usize;
+            if size > MAX_CHUNK_BYTES {
+                bail!("AVI chunk of {} bytes: the encoder stream lost sync", size);
+            }
+
+            let start = pos + CHUNK_HEADER_BYTES;
+            // AVI pads every chunk to an even length.
+            let next = start + size + (size & 1);
+            if next > self.buffer.len() {
+                break;
+            }
+            // ffmpeg writes empty chunks for skipped timestamps.
+            if tag == VIDEO_CHUNK && size > 0 {
+                frames.push(self.buffer[start..start + size].to_vec());
+            }
+            pos = next;
+        }
+        self.buffer.drain(..pos);
+        Ok(frames)
+    }
+
+    /// Drop everything up to the first chunk. Searches for the `movi` list
+    /// rather than walking the header: ffmpeg cannot seek back on a pipe to
+    /// fill in list sizes, so they are not reliable here.
+    fn skip_header(&mut self) -> Result<bool> {
+        match self.buffer.windows(MOVI.len()).position(|w| w == MOVI) {
+            Some(at) => {
+                self.buffer.drain(..at + MOVI.len());
+                self.in_movi = true;
+                Ok(true)
+            }
+            None if self.buffer.len() > MAX_HEADER_BYTES => {
+                bail!("no AVI frame data in the first {} bytes", MAX_HEADER_BYTES)
+            }
+            None => Ok(false),
+        }
+    }
+}
+
+/// Unit tests for the AVI demuxer, covering split reads, padding and bad streams.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Builds one AVI chunk: id, little-endian size, payload and the pad byte AVI requires after an odd-sized payload.
+    fn chunk(tag: &[u8], payload: &[u8]) -> Vec<u8> {
+        let mut data = tag.to_vec();
+        data.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        data.extend_from_slice(payload);
+        if payload.len() % 2 == 1 {
+            data.push(0);
+        }
+        data
+    }
+
+    /// Minimal AVI header: a RIFF/LIST `hdrl` block followed by the start of the `movi` list.
+    fn header() -> Vec<u8> {
+        let mut data = b"RIFF\0\0\0\0AVI LIST\xc0\0\0\0hdrl".to_vec();
+        data.extend_from_slice(&[0; 192]);
+        data.extend_from_slice(b"LIST\0\0\0\0movi");
+        data
+    }
+
+    /// A frame is returned as soon as its whole chunk has arrived.
+    #[test]
+    fn returns_a_frame_as_soon_as_its_chunk_is_complete() {
+        let mut avi = AviDemuxer::default();
+        assert!(avi.push(&header()).unwrap().is_empty());
+        assert_eq!(
+            avi.push(&chunk(b"00dc", b"frame")).unwrap(),
+            [b"frame".to_vec()]
+        );
+    }
+
+    /// A chunk split across two reads is reassembled.
+    #[test]
+    fn reassembles_a_frame_split_across_reads() {
+        let mut avi = AviDemuxer::default();
+        let mut data = header();
+        data.extend(chunk(b"00dc", b"frame"));
+        let (first, rest) = data.split_at(data.len() - 3);
+        assert!(avi.push(first).unwrap().is_empty());
+        assert_eq!(avi.push(rest).unwrap(), [b"frame".to_vec()]);
+    }
+
+    /// The `movi` marker may straddle two reads and must still be found.
+    #[test]
+    fn finds_the_frame_data_when_the_marker_is_split_across_reads() {
+        let mut avi = AviDemuxer::default();
+        let mut data = header();
+        data.extend(chunk(b"00dc", b"frame"));
+        let split = data.windows(4).position(|w| w == MOVI).unwrap() + 2;
+        assert!(avi.push(&data[..split]).unwrap().is_empty());
+        assert_eq!(avi.push(&data[split..]).unwrap(), [b"frame".to_vec()]);
+    }
+
+    /// Several frames in one read are split correctly and odd-sized payloads are followed by their pad byte.
+    #[test]
+    fn splits_several_frames_in_one_read_and_honours_padding() {
+        let mut avi = AviDemuxer::default();
+        let mut data = header();
+        data.extend(chunk(b"00dc", b"odd"));
+        data.extend(chunk(b"00dc", b"even"));
+        assert_eq!(
+            avi.push(&data).unwrap(),
+            [b"odd".to_vec(), b"even".to_vec()]
+        );
+    }
+
+    /// Zero-length video chunks and non-video chunks (`JUNK`) are skipped without producing a frame.
+    #[test]
+    fn skips_empty_and_unrelated_chunks() {
+        let mut avi = AviDemuxer::default();
+        let mut data = header();
+        data.extend(chunk(b"00dc", b""));
+        data.extend(chunk(b"JUNK", b"padding"));
+        data.extend(chunk(b"00dc", b"frame"));
+        assert_eq!(avi.push(&data).unwrap(), [b"frame".to_vec()]);
+    }
+
+    /// A chunk size above the sanity limit means the stream lost sync and is an error.
+    #[test]
+    fn rejects_a_chunk_size_that_means_lost_sync() {
+        let mut avi = AviDemuxer::default();
+        let mut data = header();
+        data.extend_from_slice(b"00dc\xff\xff\xff\xff");
+        assert!(avi.push(&data).is_err());
+    }
+
+    /// Data that never reaches `movi` within the header limit is rejected as not AVI.
+    #[test]
+    fn rejects_a_stream_that_is_not_avi() {
+        let mut avi = AviDemuxer::default();
+        assert!(avi.push(&vec![0; MAX_HEADER_BYTES + 1]).is_err());
+    }
+}

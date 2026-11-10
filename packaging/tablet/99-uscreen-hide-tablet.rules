@@ -1,0 +1,5 @@
+# UScreen: hide tablet 28bd:0931 from libinput (Mutter, KWin, X) so only UScreen's virtual devices remain.
+# Install as /etc/udev/rules.d/99-uscreen-hide-tablet.rules. While this is installed the tablet does nothing
+# unless the uscreen daemon runs with physical tablet support on: remove the file to get it back.
+ACTION!="remove", SUBSYSTEM=="input", KERNEL=="event[0-9]*", ENV{ID_VENDOR_ID}=="28bd", ENV{ID_MODEL_ID}=="0931", ENV{LIBINPUT_IGNORE_DEVICE}="1"
+

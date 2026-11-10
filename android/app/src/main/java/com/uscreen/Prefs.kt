@@ -1,3 +1,7 @@
+/*
+ * The tablet app's persisted settings (SharedPreferences): input mode, pen style, touchpad
+ * options, connection hints.
+ */
 package com.uscreen
 
 import android.content.Context
@@ -8,6 +12,9 @@ class Prefs(context: Context) {
     private val sp: SharedPreferences =
         context.getSharedPreferences("uscreen", Context.MODE_PRIVATE)
 
+    /**
+     * Preference value constants and the mapping between stored numbers and the names used on the wire.
+     */
     companion object {
         /**
          * Defaults deliberately match the host's own defaults. They used to be
@@ -28,11 +35,62 @@ class Prefs(context: Context) {
         const val ORIENTATION_CAMERA_UP = 1
         const val ORIENTATION_CAMERA_DOWN = 2
 
+        /** Values of [themeMode]; the numbers are AppCompatDelegate's own MODE_NIGHT_* constants' order, not their values. */
+        const val THEME_SYSTEM = 0
+        const val THEME_LIGHT = 1
+        const val THEME_DARK = 2
+
+        /** The wire names the host uses for [orientation] and [themeMode]. */
+        fun orientationName(v: Int) = when (v) {
+            ORIENTATION_CAMERA_UP -> "camera_up"
+            ORIENTATION_CAMERA_DOWN -> "camera_down"
+            else -> "auto"
+        }
+
+        /** Wire name to orientation value; unknown names give automatic. */
+        fun orientationFromName(n: String) = when (n) {
+            "camera_up" -> ORIENTATION_CAMERA_UP
+            "camera_down" -> ORIENTATION_CAMERA_DOWN
+            else -> ORIENTATION_AUTO
+        }
+
+        /** Theme value to wire name (`light`, `dark` or `system`). */
+        fun themeName(v: Int) = when (v) {
+            THEME_LIGHT -> "light"
+            THEME_DARK -> "dark"
+            else -> "system"
+        }
+
+        /** Wire name to theme value; unknown names give the system theme. */
+        fun themeFromName(n: String) = when (n) {
+            "light" -> THEME_LIGHT
+            "dark" -> THEME_DARK
+            else -> THEME_SYSTEM
+        }
+
         /** Values of [preferredTransport]. */
         const val TRANSPORT_AUTO = 0
         const val TRANSPORT_USB = 1
         const val TRANSPORT_WIFI = 2
     }
+
+    /** The host sent "unpaired" (Forget Device); cleared when the host greets this app again. */
+    var unpairedByHost: Boolean
+        get() = sp.getBoolean("unpaired_by_host", false)
+        set(v) = sp.edit().putBoolean("unpaired_by_host", v).apply()
+
+    /** Light, Dark or System default ([THEME_SYSTEM], the default). */
+    var themeMode: Int
+        get() = sp.getInt("theme_mode", THEME_SYSTEM)
+        set(v) = sp.edit().putInt("theme_mode", v).apply()
+
+    /**
+     * Forward touches while the device is locked. Off by default: a locked screen swallows taps meant for
+     * the lock screen, so the app covers the picture and sends nothing until it is unlocked.
+     */
+    var touchOnLockScreen: Boolean
+        get() = sp.getBoolean("touch_on_lock_screen", false)
+        set(v) = sp.edit().putBoolean("touch_on_lock_screen", v).apply()
 
     var preferredTransport: Int
         get() = sp.getInt("preferred_transport", TRANSPORT_AUTO)
@@ -69,6 +127,30 @@ class Prefs(context: Context) {
     var touchEnabled: Boolean
         get() = sp.getBoolean("touch_enabled", true)
         set(v) = sp.edit().putBoolean("touch_enabled", v).apply()
+
+    /** `display`, `touchpad` or `stylus`: exactly one is active, synced with the computer. */
+    var inputMode: String
+        get() = sp.getString("input_mode", null)
+            ?: if (sp.getBoolean("touchpad_mode", false)) HostConfig.MODE_TOUCHPAD else HostConfig.MODE_DISPLAY
+        set(v) = sp.edit().putString("input_mode", v).apply()
+
+    /** Battery saver also locks the screen with Device Admin (off: dim and stop retrying only). */
+    var batterySaverLock: Boolean
+        get() = sp.getBoolean("battery_saver_lock", false)
+        set(v) = sp.edit().putBoolean("battery_saver_lock", v).apply()
+
+    /** The computer has a Wi-Fi address for this tablet (so the pairing button stays hidden). */
+    var wifiConfigured: Boolean
+        get() = sp.getBoolean("wifi_configured", false)
+        set(v) = sp.edit().putBoolean("wifi_configured", v).apply()
+
+    /**
+     * After the host has been unreachable for two minutes: stop retrying, dim to 10% and lock the
+     * tablet. Synced with the computer (global default, per-device override).
+     */
+    var batterySaverOnDisconnect: Boolean
+        get() = sp.getBoolean("battery_saver_on_disconnect", false)
+        set(v) = sp.edit().putBoolean("battery_saver_on_disconnect", v).apply()
 
     /**
      * Opt-in immersive mode: hides the settings handle, expands into cutout,
@@ -120,4 +202,59 @@ class Prefs(context: Context) {
     var keepDisplayAliveWhenLocked: Boolean
         get() = sp.getBoolean("keep_display_alive_when_locked", true)
         set(v) = sp.edit().putBoolean("keep_display_alive_when_locked", v).apply()
+
+
+    /** Light vibration on touchpad clicks, synced with the computer. */
+    var touchpadHaptics: Boolean
+        get() = sp.getBoolean("touchpad_haptics", true)
+        set(v) = sp.edit().putBoolean("touchpad_haptics", v).apply()
+
+    /** Raw fingers for the computer's libinput instead of gestures recognised here; the host's effective value. */
+    var nativeGestures: Boolean
+        get() = sp.getBoolean("native_gestures", true)
+        set(v) = sp.edit().putBoolean("native_gestures", v).apply()
+
+    /** Touchpad sensitivity in percent (50-200), synced with the computer. */
+    var touchpadSensitivity: Int
+        get() = sp.getInt("touchpad_sensitivity", 100).coerceIn(50, 200)
+        set(v) = sp.edit().putInt("touchpad_sensitivity", v.coerceIn(50, 200)).apply()
+
+    /** `bottom_right_zone` or `two_finger_tap`, synced with the computer. */
+    var rightClickMethod: String
+        get() = sp.getString("right_click_method", HostConfig.RIGHT_CLICK_ZONE) ?: HostConfig.RIGHT_CLICK_ZONE
+        set(v) = sp.edit().putString("right_click_method", v).apply()
+
+    /** `full_screen`, `standard_rectangle` or `wide_rectangle`, synced with the computer. */
+    var touchpadShape: String
+        get() = sp.getString("touchpad_shape", TouchpadShape.FULL) ?: TouchpadShape.FULL
+        set(v) = sp.edit().putString("touchpad_shape", v).apply()
+
+    var stylusStyle: String
+        get() = sp.getString("stylus_style", HostConfig.STYLUS_AUTO) ?: HostConfig.STYLUS_AUTO
+        set(v) = sp.edit().putString("stylus_style", v).apply()
+
+    var stylusButtonPrimary: String
+        get() = sp.getString("stylus_button_primary", HostConfig.PEN_BUTTON_RIGHT) ?: HostConfig.PEN_BUTTON_RIGHT
+        set(v) = sp.edit().putString("stylus_button_primary", v).apply()
+
+    var stylusButtonSecondary: String
+        get() = sp.getString("stylus_button_secondary", HostConfig.PEN_BUTTON_MIDDLE) ?: HostConfig.PEN_BUTTON_MIDDLE
+        set(v) = sp.edit().putString("stylus_button_secondary", v).apply()
+
+    /** The pen's long-press menu on the computer, synced with it. */
+    var penMenu: Boolean
+        get() = sp.getBoolean("pen_menu", true)
+        set(v) = sp.edit().putBoolean("pen_menu", v).apply()
+
+    var penMenuStyle: String
+        get() = sp.getString("pen_menu_style", "text") ?: "text"
+        set(v) = sp.edit().putString("pen_menu_style", v).apply()
+
+    var penMenuHoldMs: Int
+        get() = sp.getInt("pen_menu_hold_ms", 500)
+        set(v) = sp.edit().putInt("pen_menu_hold_ms", v).apply()
+
+    var stylusIdleHideTimeout: Int
+        get() = sp.getInt("stylus_idle_hide_timeout", 0)
+        set(v) = sp.edit().putInt("stylus_idle_hide_timeout", v).apply()
 }

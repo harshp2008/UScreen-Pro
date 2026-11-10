@@ -1,3 +1,6 @@
+<!--
+  SECURITY.md: what UScreen does on your machine, what the installer and packages change, how to uninstall completely, how to report a vulnerability and how releases are verified.
+-->
 # Security
 
 ## What UScreen does on your machine
@@ -40,7 +43,7 @@ systemctl --user disable --now uscreen 2>/dev/null
 # package installs:
 sudo apt remove uscreen      # or: sudo dnf remove uscreen / sudo zypper rm uscreen / sudo pacman -R uscreen
 # script installs:
-rm -f ~/.local/bin/uscreen ~/.local/bin/uscreen-gui ~/.local/bin/evdi_helper ~/.local/bin/libevdi.so.1*
+rm -f ~/.local/bin/uscreen ~/.local/bin/uscreen-pro-gui ~/.local/bin/uscreen-menu ~/.local/bin/evdi_helper ~/.local/bin/libevdi.so.1*
 rm -f ~/.config/systemd/user/uscreen.service ~/.local/share/applications/uscreen.desktop
 # system changes (both kinds of install):
 sudo rm -f /etc/modprobe.d/uscreen-evdi.conf /etc/modules-load.d/uscreen.conf /etc/udev/rules.d/60-uscreen-uinput.rules

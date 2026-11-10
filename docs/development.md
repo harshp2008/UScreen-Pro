@@ -1,3 +1,7 @@
+<!--
+  docs/development.md: building from source, running and testing, the project layout, the command line, encoder tuning and releasing.
+  Owns the developer workflow; installing as a user is in docs/installation.md.
+-->
 # Development
 
 ## Building from source
@@ -39,29 +43,50 @@ second pipeline without a second device.
 ## Project layout
 
 ```
-host/              Rust daemon
-  src/main.rs        CLI, orchestration, adb monitor, per-tablet sessions
-  src/capture.rs     EVDI helper + encoder management, display placement
-  src/encoder.rs     optional in-process libavcodec encoder
-  src/stream.rs      TCP video server, session token, IDR-aware backlog skipping
-  src/input.rs       WebSocket input server, uinput devices, KWin mapping
-  src/config.rs      ~/.config/uscreen/config.toml
-  src/runtime.rs     per-user runtime dir: FIFO, session token
-  src/latency.rs     end-to-end latency measurement
-  src/tray.rs        StatusNotifierItem tray icon
-  src/update.rs      release check (report only)
-  src/doctor.rs      `uscreen doctor`
-  src/osk.rs         KDE on-screen keyboard suppression over D-Bus
-  src/kwin.rs        KWin D-Bus calls, through busctl or qdbus
-  src/vdisplay.rs    EVDI discovery via sysfs
-  src/edid.rs        EDID generation for the virtual display
-  evdi/              C helper: EVDI framebuffer capture → NV12 → FIFO
-gui/               egui desktop app: status, settings, start/stop
-android/           Kotlin/Compose app: MediaCodec decoder, touch/pen capture
-packaging/         deb control/postinst, rpm spec, PKGBUILD, udev/modprobe files
-scripts/           install.sh, release build, fake tablet
-docs/              this documentation and the GitHub Pages site
+host/                   Rust daemon (binary `uscreen`)
+  src/main.rs             entry point: parses the CLI and runs the chosen command
+  src/cli/                command line: `mod.rs` (clap), `commands.rs` (stop/status/...),
+                          `doctor/` (`uscreen doctor`, split into system/tablet/display/settings/latency)
+  src/config/             config.toml: `mod.rs` (FileConfig), `sanitize.rs` (clamps and migrates a loaded config),
+                          `profile.rs` (per-tablet profile), `modes.rs`, `limits.rs`, `curves.rs`, `clean.rs`;
+                          `handler.rs` (daemon control socket, PID file); `options/` (live per-tablet options
+                          and the idle-dim loop)
+  src/daemon/             the running daemon: `mod.rs` (startup/shutdown), `session/` (tablet sessions and
+                          the adb monitor), `guard/` (compositor-freeze safety), `runtime.rs`, `tray.rs`,
+                          `update.rs`
+  src/capture/            EVDI helper + encoders: frames in, H.264/HEVC packets out (`packetizer.rs`,
+                          `encoders.rs`, `latency.rs`, `timing.rs`)
+  src/desktop/            one directory per desktop environment (see below) plus the shared `DesktopBackend`
+                          trait in `mod.rs`
+  src/display/            what is not desktop specific: the generated EDID (`edid.rs`) and EVDI card
+                          discovery in sysfs (`vdisplay.rs`)
+  src/input/              input path: `server.rs` (WebSocket), `protocol/` (wire types, sequence filter),
+                          `events/` (one handler per message kind), `menu/` (the long-press pen menu),
+                          `ghost/` (pen routing: mouse vs tablet, auto style, click slop), `uinput/` (virtual
+                          devices), `stillness.rs` (resting-pen filter), `recorder.rs` (pen flight recorder),
+                          `physical.rs` (real drawing tablets), `mapping.rs` (binding devices to outputs)
+  src/net/                `adb/` (device discovery, `adb reverse` tunnels, wireless adb, the tablet app),
+                          `pairing.rs`, `installer.rs` (APK install queue), `stream.rs` (video server),
+                          `notices.rs`
+  evdi/                   C helper: `evdi_helper.c` (device discovery, `main`) includes `helper_*.h` (state,
+                          signals, X11 boundary sync, timing ring, NV12 conversion, writer, EVDI events)
+menu/                   `uscreen-menu`: the pen's long-press menu window (GTK 4), launched by the daemon
+uscreen-pro-gui/        Tauri + React desktop app (settings, pairing, status)
+  src/                    `App.tsx` (state, merge of tablet-side changes), `views/`, `components/`, `lib/`
+  src-tauri/src/          `adb/` (devices, install, intents), `config.rs`, `daemon.rs`, `forget.rs`, `pairing.rs`
+android/                Kotlin/Compose app: MediaCodec decoder, touch/pen capture, touchpad engine
+extensions/             GNOME Shell extension `uscreen-app-lock`: `extension.js` (entry), `lib/` (app lock,
+                          pen routing, context probe, pen menu), `compat/` (per-Shell-version code)
+packaging/              deb control/postinst, rpm spec, PKGBUILD, udev/modprobe files
+scripts/                `install.sh` and `lib/` (`platform.sh`, `evdi.sh`, `tui.sh`, `distros/<family>.sh`),
+                          release build, test tools (fake tablet, tablet_inject.py), `tests/` (installer tests)
+experiments_and_findings/  numbered write-ups of what was measured and decided
+docs/                   this documentation and the existing GitHub Pages site
 ```
+
+Where to change what: a new **distribution** is one file in `scripts/lib/distros/`, a new **desktop** is one
+directory in `host/src/desktop/`, a new **GNOME Shell version** is a row in
+`extensions/uscreen-app-lock/compat/versions.js`. See [adding-support.md](adding-support.md).
 
 ## Command line
 

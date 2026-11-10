@@ -1,0 +1,27 @@
+/* The pen's long-press menu, drawn inside the Shell by extension.js: a dark rounded pill. */
+.uscreen-menu {
+    background-color: rgba(34, 34, 38, 0.97);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    padding: 4px;
+    spacing: 2px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+.uscreen-menu-button {
+    color: #f2f2f2;
+    border-radius: 16px;
+    padding: 10px 16px;
+    min-height: 40px;
+    font-weight: 500;
+}
+
+.uscreen-menu-button:hover,
+.uscreen-menu-button:active {
+    background-color: rgba(255, 255, 255, 0.16);
+}
+
+.uscreen-menu-icon {
+    icon-size: 20px;
+    color: #f2f2f2;
+}

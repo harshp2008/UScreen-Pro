@@ -1,3 +1,6 @@
+<!--
+  CODE_OF_CONDUCT.md: behaviour expected of everyone taking part in the project (Contributor Covenant).
+-->
 # Code of Conduct
 
 Be decent. Concretely:

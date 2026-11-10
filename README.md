@@ -1,3 +1,7 @@
+<!--
+  README.md: the project's front page: what UScreen is, how to install and run it, and the map of the repository.
+  Owns the overview; the details are in docs/ and, later, the documentation site in website/.
+-->
 # UScreen for Linux — Android Tablet as a USB Second Monitor
 
 **UScreen is an open-source SuperDisplay alternative for Linux.** It turns an
@@ -125,11 +129,17 @@ extended display, pressure but no tilt.
 ## Settings
 
 Everything lives in `~/.config/uscreen/config.toml` and is reachable from
-`uscreen-gui`, the ⚙ sheet in the tablet app, the tray icon, or CLI flags.
+`uscreen-pro-gui`, the ⚙ sheet in the tablet app, the tray icon, or CLI flags.
 
 - **Graphics tablet mode** — flip *Graphics tablet* on the tablet: nothing is
   streamed, the pen drives your own screen, zero display latency. Switch back
   the same way; no restart.
+- **Touchpad mode** — in the tablet's settings: fingers move the pointer like
+  a laptop touchpad instead of touching where they land. Tap to click, tap and
+  drag to drag, two fingers to scroll, two-finger tap for right click, three
+  fingers for middle click. The pen is unchanged. With *Graphics tablet* on as
+  well, nothing is streamed and the screen goes dark: the whole tablet is a
+  touchpad, plus the pen on your own screen.
 - **Position** — `right` (default), `left`, `above`, `below` your real screens.
 - **Pen and mouse** — `pointer_handoff = false` (or the checkbox in the GUI)
   stops the pen from moving the desktop cursor: pen and touch drive the
@@ -198,6 +208,35 @@ More in [docs/faq.md](docs/faq.md).
 - [Architecture and protocol](docs/architecture.md) · [Development, building, releasing](docs/development.md)
 - [Benchmarks](docs/benchmarks.md) · [Compatibility](docs/compatibility.md) · [FAQ](docs/faq.md)
 - [Security](SECURITY.md) · [Changelog](CHANGELOG.md)
+- [Documentation site](https://harshp2008.github.io/UScreen-Pro/) (built from `website/`; see [website/README.md](website/README.md))
+
+## Codebase Architecture
+
+UScreen is architected as a modular, low-overhead system with decoupled backend, capture, and client subsystems. The full tree is in [docs/development.md](docs/development.md); adding a distribution, a desktop or a GNOME version is described in [docs/adding-support.md](docs/adding-support.md).
+
+- **Host Daemon (`host/src/`)**:
+  - `main.rs`, `cli/`: entry point and argument parsing; one-shot subcommands (`stop`, `status`, ...); `doctor/` is the environment diagnostic suite.
+  - `daemon/`: the daemon event loop (`mod.rs`), tablet sessions and the adb monitor (`session/`), the compositor-freeze guard (`guard/`), the tray icon and the update check.
+  - `net/`: `adb/` (device discovery, reverse port forwarding, wireless adb, the tablet app), `pairing.rs` (wireless pairing), `installer.rs` (APK install queue), `stream.rs` (video socket), `notices.rs` (status messages pushed to the tablet).
+  - `desktop/`: one directory per desktop environment (`gnome/`, `x11/`, `kde/`, `hyprland/`, `cosmic/`, `generic/`), each with its backend and its virtual-monitor code. `display/` holds the parts that are not desktop specific (`edid.rs`, `vdisplay.rs`).
+  - `capture/`: the video pipeline: `supervisor.rs` (restart loop), `helper.rs` (EVDI helper), `spawn.rs` (encoder process), `display.rs` (monitor placement), `reader.rs` and `packetizer.rs` (Annex B parsing). `encoders.rs` probes which encoders actually work.
+  - `input/`: WebSocket input server (`server.rs`, `protocol/`, `events/`), virtual devices (`uinput/`), pen routing and the Dynamic style (`ghost/`), the long-press pen menu (`menu/`) and `mapping.rs` (binding devices to the right output).
+  - `config/`: the `config.toml` schema, its validation (`sanitize.rs`), the daemon control socket (`handler.rs`) and live per-tablet options (`options/`).
+
+- **C EVDI Helper (`host/evdi/evdi_helper.c` and `helper_*.h`)**:
+  - Event-driven display grabber communicating directly with the `evdi` kernel module via `libevdi`; one translation unit made of `evdi_helper.c` and the `helper_*.h` parts it includes.
+  - Triple-buffered NV12 conversion with SIMD SWAR acceleration and per-buffer damage tracking.
+  - POSIX signal handling supporting active 60 FPS streaming, 1 FPS keep-alive standby throttle (`SIGUSR1`), and full keyframe refresh (`SIGUSR2`).
+
+- **Android Client (`android/`)**:
+  - `MainActivity.kt`: Thin Activity host managing Keyguard flags, WakeLocks, display refresh rate negotiation, and stylus hover event dispatching.
+  - `ui/Theme.kt`: Consistent high-contrast dark theme optimized for OLED tablet displays.
+  - `ui/ConnectionScreen.kt`: Primary video viewport (SurfaceView) and the top-level screen; `ui/ActiveScreens.kt` (graphics-tablet and touchpad screens) and `ui/HostOverlays.kt` (banners and host notices) are split out of it.
+  - `ui/Onboarding.kt`: Guided Developer Options setup, real-time connection diagnostics, and interactive Troubleshooter bottom sheet.
+  - `ui/SettingsSheet.kt`: Settings sheet for bitrate/FPS tuning, orientation locks, preferred transport, and wireless pairing (`ui/SettingsParts.kt` holds its building blocks).
+  - `PlatformSupport.kt`: small platform queries (Wi-Fi IP, lock-screen touch support).
+  - `VideoReceiver.kt`: Low-latency `MediaCodec` hardware video decoder rendering directly to a native Surface.
+  - `TouchCapture.kt`: MotionEvent interception forwarding touch and S Pen events back to the host over WebSocket.
 
 ## Releases
 

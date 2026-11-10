@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  GSettings schema of the GNOME Shell extension: the Ctrl+Alt+P toggle-tablet shortcut.
+-->
+<schemalist>
+  <schema id="org.gnome.shell.extensions.uscreen-app-lock" path="/org/gnome/shell/extensions/uscreen-app-lock/">
+    <key name="toggle-tablet" type="as">
+      <default><![CDATA[['<Control><Alt>p']]]></default>
+      <summary>Flip the pen between graphics-tablet and mouse routing for the focused app</summary>
+    </key>
+  </schema>
+</schemalist>

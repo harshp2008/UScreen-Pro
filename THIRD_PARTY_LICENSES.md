@@ -1,3 +1,7 @@
+<!--
+  THIRD_PARTY_LICENSES.md: licences of the third-party code and libraries that UScreen includes or links.
+  Owns the notices; the project's own licence is in LICENSE.
+-->
 # Third-party components
 - libevdi (host/evdi/evdi_lib.h, and libevdi.so.1 shipped next to the helper
   in release packages) is copyright DisplayLink (UK) Ltd. and licensed under

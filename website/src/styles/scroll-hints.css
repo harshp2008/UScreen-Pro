@@ -1,0 +1,49 @@
+/* Scroll hints: a table or a code block that is wider than the column scrolls inside its own box
+   (tables.css, custom.css). Without a hint, the cut-off edge looks like the end of the content.
+   The hint is a soft shadow at the edge that has more content behind it. It uses the "local
+   background" technique and no script: a shadow is fixed to the box (`background-attachment:
+   scroll`) and a cover in the colour of the box's background scrolls with the content (`local`)
+   and hides the shadow at an edge that is reached. At rest with no overflow both covers sit over
+   both shadows, so nothing shows; scrolled to the start, only the right shadow shows; in the
+   middle, both; at the end, only the left one.
+
+   The shadow colour is Starlight's text colour at 24%: dark on the light theme and light on the
+   dark theme (Starlight's "white" is the high-contrast colour of each theme), so the same rule
+   reads in both. The cover is the colour behind the box: the page for a table, the code frame's
+   background for a block.
+
+   Tables inside the cards of records.css are not tables any more and have no hint; a code piece
+   inside a card wraps instead of scrolling. */
+:root {
+  --hint-shadow: color-mix(in srgb, var(--sl-color-white) 24%, transparent);
+  --hint-size: 0.9rem;
+  --hint-cover: 2.5rem;
+}
+
+.sl-markdown-content table:not(:where(.not-content *)),
+.sl-markdown-content .expressive-code pre {
+  background-repeat: no-repeat;
+  background-position: left, right, left, right;
+  background-size:
+    var(--hint-cover) 100%,
+    var(--hint-cover) 100%,
+    var(--hint-size) 100%,
+    var(--hint-size) 100%;
+  background-attachment: local, local, scroll, scroll;
+}
+
+.sl-markdown-content table:not(:where(.not-content *)) {
+  --hint-bg: var(--sl-color-bg);
+}
+.sl-markdown-content .expressive-code pre {
+  --hint-bg: var(--ec-codeBg, var(--sl-color-bg-nav));
+}
+
+.sl-markdown-content table:not(:where(.not-content *)),
+.sl-markdown-content .expressive-code pre {
+  background-image:
+    linear-gradient(to right, var(--hint-bg) 35%, transparent),
+    linear-gradient(to left, var(--hint-bg) 35%, transparent),
+    radial-gradient(farthest-side at 0 50%, var(--hint-shadow), transparent),
+    radial-gradient(farthest-side at 100% 50%, var(--hint-shadow), transparent);
+}

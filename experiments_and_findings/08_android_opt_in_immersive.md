@@ -116,7 +116,7 @@ Artifact: android/app/build/outputs/apk/debug/app-debug.apk (8.5 MB)
 
 ### 2. ADB Deploy
 ```bash
-adb -s R52X708AEHK install -r android/app/build/outputs/apk/debug/app-debug.apk
+adb -s TABLET_SERIAL install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 **Output**:
 ```text
@@ -124,7 +124,7 @@ Performing Streamed Install
 Success
 ```
 
-### 3. Runtime Test Results on Tablet (`R52X708AEHK`)
+### 3. Runtime Test Results on Tablet (`TABLET_SERIAL`)
 
 1. **Default State (OFF)**:
    - App launched with `immersive_mode_enabled = false`.

@@ -1,14 +1,19 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
-  <!-- Charcoal tile + amber tablet with a stylus, the same palette as the website. -->
-  <rect width="108" height="108" rx="22" fill="#1c1b18"/>
-  <!-- tablet body -->
-  <rect x="26" y="34" width="56" height="40" rx="6" fill="#f0a742"/>
-  <!-- screen -->
-  <rect x="31" y="39" width="46" height="30" rx="3" fill="#1c1b18"/>
-  <!-- desktop that spilled onto the second screen: two window bars -->
-  <rect x="36" y="45" width="18" height="3" rx="1.5" fill="#f0a742" opacity=".55"/>
-  <rect x="36" y="52" width="26" height="3" rx="1.5" fill="#f0a742" opacity=".35"/>
-  <!-- stylus, from the lower right, tip on the screen -->
-  <path d="M64.5 63.5 L82 46 a3.2 3.2 0 0 1 4.5 4.5 L69 68 L62.5 69.5 Z" fill="#ece8df"/>
-  <path d="M64.5 63.5 L69 68 L62.5 69.5 Z" fill="#f0a742"/>
+<!--
+  Application icon (emerald tile with a monitor); uscreen-64.rgba is its 64-pixel RGBA bitmap used by the tray.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Emerald squircle tile -->
+  <rect width="1024" height="1024" rx="232" fill="#059669"/>
+  <!-- Monitor: bezel, screen, stand, foot -->
+  <rect x="192" y="232" width="640" height="448" rx="64" fill="#ECFDF5"/>
+  <rect x="236" y="276" width="552" height="360" rx="32" fill="#064E3B"/>
+  <rect x="452" y="680" width="120" height="64" fill="#ECFDF5"/>
+  <rect x="352" y="736" width="320" height="40" rx="20" fill="#ECFDF5"/>
+  <!-- Connection signal: dot plus three arcs radiating from the lower-left of the screen -->
+  <g fill="none" stroke="#6EE7B7" stroke-width="36" stroke-linecap="round">
+    <path d="M336 500 A80 80 0 0 1 416 580"/>
+    <path d="M336 430 A150 150 0 0 1 486 580"/>
+    <path d="M336 360 A220 220 0 0 1 556 580"/>
+  </g>
+  <circle cx="336" cy="580" r="34" fill="#34D399"/>
 </svg>

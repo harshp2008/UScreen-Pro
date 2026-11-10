@@ -1,0 +1,11 @@
+[package]
+name = "uscreen-menu"
+version = "1.3.0"
+edition = "2021"
+description = "The pen's long-press menu window (cut / copy / paste / ...), shown by the UScreen daemon at the cursor"
+license = "MIT"
+
+[dependencies]
+# GTK 4 (libgtk-4-dev to build, libgtk-4-1 to run). Plain GTK, no libadwaita: it starts fast and
+# the window is tiny.
+gtk4 = "0.9"

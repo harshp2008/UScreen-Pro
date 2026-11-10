@@ -1,3 +1,6 @@
+<!--
+  docs/assets/README.md: rules for the images in this directory (real photos only; no mock-ups).
+-->
 # Site and README images
 
 Nothing here yet on purpose: no image is referenced anywhere until a real one

@@ -1,0 +1,8 @@
+test installer::tests::reads_version_name_from_dumpsys ... ok
+test notices::tests::sticky_notice_is_replayed_until_released ... ok
+t=150ms {"test-a":{"detail":"installing","state":"installing"},"test-b":{"detail":"installing","state":"installing"},"test-c":{"detail":"waiting for a free install slot","state":"queued"}}
+test notices::tests::restart_is_live_only_after_a_new_encoder_delivers_a_frame ... ok
+t=550ms {"test-a":{"detail":"ok","state":"done"},"test-b":{"detail":"ok","state":"done"},"test-c":{"detail":"installing","state":"installing"}}
+t=1050ms {"test-a":{"detail":"ok","state":"done"},"test-b":{"detail":"ok","state":"done"},"test-c":{"detail":"ok","state":"done"}}
+test installer::tests::at_most_two_installs_run_and_the_third_waits ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 43 filtered out; finished in 1.06s

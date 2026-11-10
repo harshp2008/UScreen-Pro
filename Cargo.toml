@@ -1,3 +1,4 @@
+# Cargo workspace: the host daemon (host/), the desktop app's Rust side (uscreen-pro-gui/src-tauri) and the GTK pen menu (menu/). One Cargo.lock and one target/ for all three.
 [workspace]
-members = ["host", "gui"]
+members = ["host", "uscreen-pro-gui/src-tauri", "menu"]
 resolver = "2"

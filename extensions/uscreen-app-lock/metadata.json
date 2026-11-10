@@ -1,8 +1,16 @@
 {
   "name": "UScreen App Lock",
-  "description": "Restricts and enforces application window placement on the UScreen virtual display",
+  "description": "Restricts application window placement on the UScreen virtual display, and reports the focused app plus the Ctrl+Alt+P pen-routing hotkey to the host",
   "uuid": "uscreen-app-lock@uscreen.app",
-  "shell-version": ["42", "43", "44", "45", "46", "47"],
-  "version": 2,
-  "url": "https://github.com/majmichu1/UScreen"
+  "shell-version": [
+    "42",
+    "43",
+    "44",
+    "45",
+    "46",
+    "47"
+  ],
+  "version": 9,
+  "url": "https://github.com/majmichu1/UScreen",
+  "settings-schema": "org.gnome.shell.extensions.uscreen-app-lock"
 }

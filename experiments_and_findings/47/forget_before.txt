@@ -1,0 +1,15 @@
+=== BEFORE
+List of devices attached
+TABLET_SERIAL            device usb:3-6 product:gts9fepins model:SM_X616B device:gts9fep transport_id:24
+192.168.1.102:5555      device product:a55xnsins model:SM_A556E device:a55x transport_id:19
+wifi_address = "10.238.4.100:5555"
+[tablets.TABLET_SERIAL]
+[tablets.PHONE_SERIAL]
+[tablets."192.168.1.101:5555"]
+[tablets."10.238.4.100:5555"]
+[tablets."192.168.1.102:5555"]
+known_hosts bytes: 26
+ 524864 /home/harsh/Documents/GITHUB PROJECTS/UScreen/target
+ 524870 ffmpeg -hide_banner -vaapi_device /dev/dri/renderD12
+ 524942 /home/harsh/Documents/GITHUB PROJECTS/UScreen/target
+ 524949 ffmpeg -hide_banner -vaapi_device /dev/dri/renderD12

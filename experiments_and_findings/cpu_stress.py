@@ -4,6 +4,7 @@ import time
 import sys
 
 def worker(stop_time):
+    """Burns one CPU core with square roots until [stop_time]."""
     while time.time() < stop_time:
         _ = [x**0.5 for x in range(10000)]
 

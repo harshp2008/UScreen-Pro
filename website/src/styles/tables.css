@@ -1,0 +1,55 @@
+/* Table layout for the markdown content area. Starlight sets `display: block; overflow: auto` on
+   every table. The box then is as wide as the column, but the grid inside it is sized to its
+   content (measured: `width: 100%` on such a table gives a 600px box with columns of 27px), so a
+   table with short cells only fills the column if it is a real table. Two states:
+   - `data-fit` (set by src/scripts/toc-toggle.js on a table whose content fits the column):
+     `display: table; width: fit-content`, centered in the column (inside a list item, in the
+     item's text column). It is as wide as its content, at least 16rem (the narrowest table on the
+     site measured 293px, so the floor changes nothing today), and a table with long cell text grows
+     up to the column and wraps there. A 3-column table of labels and numbers thus keeps its
+     columns together instead of spreading them across the column.
+   - otherwise (and without JavaScript): Starlight's `display: block` box, as wide as the column
+     and left-aligned, scrolling inside itself when a row cannot wrap (a long unbroken path or
+     flag). The scroll hint of scroll-hints.css needs this box, which is why a table that
+     overflows is never made a real table.
+   Only the fit tables are centered; the scrolling block starts at the text's left edge. Colors and borders are left to
+   Starlight and custom.css; markdown column alignment (`align` attribute) is not touched. */
+.sl-markdown-content table:not(:where(.not-content *)) {
+  width: 100%;
+  max-width: 100%;
+  margin-inline: 0;
+}
+.sl-markdown-content table[data-fit]:not(:where(.not-content *)) {
+  display: table;
+  width: fit-content;
+  min-width: min(16rem, 100%);
+  margin-inline: auto;
+}
+
+/* Starlight drops the padding on the outer edge of the first and last column, which looks lopsided
+   in a table with a border. The same padding on every cell keeps a 2rem gap between columns and
+   the same inset on both sides. The block padding is 0.625rem (it was 0.5rem), so a cell of two or
+   more lines has room above and below its text. */
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  padding: 0.625rem 1rem;
+  overflow-wrap: break-word;
+}
+.sl-markdown-content :is(th:first-child, td:first-child):not(:where(.not-content *)) {
+  padding-inline-start: 1rem;
+}
+.sl-markdown-content :is(th:last-child, td:last-child):not(:where(.not-content *)) {
+  padding-inline-end: 1rem;
+}
+
+/* Column floor. A table is laid out by the browser's automatic algorithm: when the cells want
+   more than the column offers, each column gets its smallest width plus a share of the rest in
+   proportion to what it wants, so a column of short numbers whose smallest width is one word was
+   squeezed to a few characters (a 12-character floor fixed that). The smallest width of a cell
+   with inline code is its longest unbreakable piece (src/integrations/code-breaks.mjs), which is
+   why a code cell needs no floor of its own. The 2rem is the cell padding. Header cells wrap too
+   (they were set to `nowrap` in custom.css): the header "First step with value >= 4, vs the
+   final paint: before / median after / worst after" (experiments page 6.33) kept its whole
+   width, 580px, as a floor, which alone made that table scroll. */
+.sl-markdown-content :is(th, td):not(:where(.not-content *)) {
+  min-width: calc(12ch + 2rem);
+}

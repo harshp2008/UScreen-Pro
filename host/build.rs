@@ -1,6 +1,14 @@
+//! Host daemon build script.
+//!
+//! Stamps the git commit hash and dirty status into the compilation environment
+//! (`GIT_VERSION_STRING`), ensuring runtime version telemetry and mismatch detection
+//! reflect the exact repository state.
+
 use std::process::Command;
 
+/// Sets `GIT_VERSION_STRING` for the compiler: the environment value if set, else the short git hash (the crate version when git is unavailable), with `-dirty` appended when the tree has uncommitted changes. Re-runs when HEAD, the index, refs or the variable change.
 fn main() {
+    // Determine git commit hash and dirty status for runtime versioning
     let version_string = std::env::var("GIT_VERSION_STRING")
         .ok()
         .filter(|s| !s.is_empty())
@@ -11,7 +19,9 @@ fn main() {
                 .ok()
                 .and_then(|out| {
                     if out.status.success() {
-                        String::from_utf8(out.stdout).ok().map(|s| s.trim().to_string())
+                        String::from_utf8(out.stdout)
+                            .ok()
+                            .map(|s| s.trim().to_string())
                     } else {
                         None
                     }
@@ -32,7 +42,9 @@ fn main() {
                 .unwrap_or(false);
 
             if is_dirty {
-                println!("cargo:warning=WARNING: Building with uncommitted changes. Marking as dirty.");
+                println!(
+                    "cargo:warning=WARNING: Building with uncommitted changes. Marking as dirty."
+                );
                 format!("{}-dirty", git_hash)
             } else {
                 git_hash
@@ -41,6 +53,7 @@ fn main() {
 
     println!("cargo:rustc-env=GIT_VERSION_STRING={}", version_string);
 
+    // Watch git state to re-trigger build script when HEAD or refs change
     println!("cargo:rerun-if-changed=.git/HEAD");
     println!("cargo:rerun-if-changed=.git/index");
     println!("cargo:rerun-if-changed=.git/refs");

@@ -97,7 +97,7 @@ The UScreen daemon (`host/src/main.rs`) manages multiple display sessions:
 
 ### Task 0: Git Version Control & Lab Setup
 - Verify clean checkout on branch `main`.
-- Document baseline environment, connected hardware (`SM_X616B`, `R52X708AEHK`), and current package state.
+- Document baseline environment, connected hardware (`SM_X616B`, `TABLET_SERIAL`), and current package state.
 
 ### Task 1: Build-Time Commit ID Injection & Dirty Build Detection
 - Author `gui/build.rs` and `host/build.rs`:
@@ -405,29 +405,29 @@ This empirically verifies the clean vs dirty build state transitions.
 ### 6.2 Test Case 2: Multi-Device Package Inspection & Version Mismatch Detection
 
 Testing on dual physical hardware devices connected simultaneously via USB:
-1. `R52X708AEHK` (Samsung Galaxy Tab S9 FE+, model `SM_X616B`)
-2. `RZCX809Y0FT` (Samsung Galaxy A55 5G, model `SM_A556E`)
+1. `TABLET_SERIAL` (Samsung Galaxy Tab S9 FE+, model `SM_X616B`)
+2. `PHONE_SERIAL` (Samsung Galaxy A55 5G, model `SM_A556E`)
 
 #### Initial Hardware Inspection
 ```bash
 $ adb devices -l
 List of devices attached
-R52X708AEHK            device usb:3-1 product:gts9fepins model:SM_X616B device:gts9fep transport_id:221
-RZCX809Y0FT            device usb:3-6 product:a55xnsins model:SM_A556E device:a55x transport_id:223
+TABLET_SERIAL            device usb:3-1 product:gts9fepins model:SM_X616B device:gts9fep transport_id:221
+PHONE_SERIAL            device usb:3-6 product:a55xnsins model:SM_A556E device:a55x transport_id:223
 
-$ adb -s R52X708AEHK shell dumpsys package com.uscreen | grep versionName && \
-  adb -s RZCX809Y0FT shell dumpsys package com.uscreen | grep versionName
+$ adb -s TABLET_SERIAL shell dumpsys package com.uscreen | grep versionName && \
+  adb -s PHONE_SERIAL shell dumpsys package com.uscreen | grep versionName
     versionName=ef77bb7-dirty
     versionName=1.2.12
 ```
 
 #### Evaluation
 - **Host Version:** `ef77bb7-dirty`
-- **Device 1 (`R52X708AEHK`):** `versionName=ef77bb7-dirty` -> Match! UI renders `✅ Up to Date` badge with untracked build indicator.
-- **Device 2 (`RZCX809Y0FT`):** `versionName=1.2.12` -> Mismatch! UI renders prominent warning `⚠ Update APK to ef77bb7-dirty`.
+- **Device 1 (`TABLET_SERIAL`):** `versionName=ef77bb7-dirty` -> Match! UI renders `✅ Up to Date` badge with untracked build indicator.
+- **Device 2 (`PHONE_SERIAL`):** `versionName=1.2.12` -> Mismatch! UI renders prominent warning `⚠ Update APK to ef77bb7-dirty`.
 
 #### Surgical Update Execution on Device 2
-Performing the 5-step surgical pipeline on `RZCX809Y0FT`:
+Performing the 5-step surgical pipeline on `PHONE_SERIAL`:
 ```text
 Success (uninstall com.uscreen)
 Performing Streamed Install
@@ -436,7 +436,7 @@ Success (install app-debug.apk)
 ```
 Verification post-update:
 ```bash
-$ adb -s RZCX809Y0FT shell dumpsys package com.uscreen | grep versionName
+$ adb -s PHONE_SERIAL shell dumpsys package com.uscreen | grep versionName
     versionName=ef77bb7-dirty
 ```
 Both devices are now synchronized to the exact Git commit version.
@@ -474,13 +474,13 @@ test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; fini
 
 #### Experimental Setup
 The daemon was initiated with two active streaming sessions:
-- **Device A (Slot 1):** `R52X708AEHK` on `/run/user/1000/uscreen/capture.fifo`, encoding 2340x1080@90 via `evdi_helper` PID 1380469 and `ffmpeg` PID 1380555.
+- **Device A (Slot 1):** `TABLET_SERIAL` on `/run/user/1000/uscreen/capture.fifo`, encoding 2340x1080@90 via `evdi_helper` PID 1380469 and `ffmpeg` PID 1380555.
 - **Device B (Slot 2):** Secondary device on `/run/user/1000/uscreen/capture-1.fifo`, encoding 2560x1600@90 via `evdi_helper` PID 1379553 and `ffmpeg` PID 1379890.
 
 #### Command Execution
 ```bash
-$ ./target/debug/uscreen pause-device R52X708AEHK
-OK Device R52X708AEHK paused
+$ ./target/debug/uscreen pause-device TABLET_SERIAL
+OK Device TABLET_SERIAL paused
 ```
 
 #### Raw Process & Pipeline Inspection

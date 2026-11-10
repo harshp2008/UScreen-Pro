@@ -6,8 +6,8 @@ pkgdesc="Use an Android tablet as a USB second display and graphics tablet (KDE 
 arch=('x86_64')
 url="https://github.com/majmichu1/UScreen"
 license=('MIT')
-depends=('evdi-dkms' 'ffmpeg' 'android-tools')
-makedepends=('cargo' 'gcc' 'pkgconf' 'libdrm')
+depends=('evdi-dkms' 'ffmpeg' 'android-tools' 'gtk4')
+makedepends=('cargo' 'gcc' 'pkgconf' 'libdrm' 'nodejs' 'npm')
 install=uscreen.install
 _evdi=v1.15.0
 source=("$pkgname-$pkgver.tar.gz::https://github.com/majmichu1/UScreen/archive/refs/tags/v$pkgver.tar.gz"
@@ -17,7 +17,8 @@ sha256sums=('SKIP' 'SKIP')
 build() {
   cd "UScreen-$pkgver"
   cargo build --release --locked --manifest-path host/Cargo.toml
-  cargo build --release --locked --manifest-path gui/Cargo.toml
+  cargo build --release --locked --manifest-path menu/Cargo.toml
+  (cd uscreen-pro-gui && npm ci && npm run tauri build -- --no-bundle)
   # libevdi built from upstream and shipped next to the helper (rpath $ORIGIN),
   # so the only thing the system must provide is the evdi kernel module.
   make -C "$srcdir/evdi-${_evdi#v}/library"
@@ -28,7 +29,8 @@ build() {
 package() {
   cd "UScreen-$pkgver"
   install -Dm755 target/release/uscreen     "$pkgdir/usr/bin/uscreen"
-  install -Dm755 target/release/uscreen-gui "$pkgdir/usr/bin/uscreen-gui"
+  install -Dm755 target/release/uscreen-menu "$pkgdir/usr/bin/uscreen-menu"
+  install -Dm755 target/release/uscreen-pro-gui "$pkgdir/usr/bin/uscreen-pro-gui"
   install -Dm755 host/evdi/evdi_helper      "$pkgdir/usr/lib/uscreen/evdi_helper"
   install -Dm755 "$srcdir/evdi-${_evdi#v}/library/libevdi.so.1.15.0" "$pkgdir/usr/lib/uscreen/libevdi.so.1.15.0"
   ln -sf libevdi.so.1.15.0 "$pkgdir/usr/lib/uscreen/libevdi.so.1"

@@ -43,7 +43,7 @@ To resolve this architectural limitation, we implement **Per-Device Encoder Over
                                                 |
                +--------------------------------+--------------------------------+
                | Primary Session (Instance 0)                                     | Secondary Session (Instance 1)
-               | Device: R52X708AEHK                                             | Device: OLD_DEV_SERIAL
+               | Device: TABLET_SERIAL                                             | Device: OLD_DEV_SERIAL
                | Effective Encoder: hevc_vaapi                                   | Effective Encoder: h264_vaapi (Fallback)
                v                                                                 v
 +-------------------------------+                                 +-------------------------------+
@@ -169,7 +169,7 @@ width = 2560
 height = 1600
 quality = 17
 
-[tablets.R52X708AEHK]
+[tablets.TABLET_SERIAL]
 label = "SM-X616B"
 width = 2560
 height = 1600
@@ -196,7 +196,7 @@ Nov 05 01:20:03 harsh uscreen[345889]: 2026-11-04T19:50:03.106724Z  INFO uscreen
 ### 3.2 Test Case 2: Override Fallback to Global Default (`h264_vaapi`)
 
 **Configuration**:
-`encoder` removed from `[tablets.R52X708AEHK]`. Global `encoder = "h264_vaapi"`.
+`encoder` removed from `[tablets.TABLET_SERIAL]`. Global `encoder = "h264_vaapi"`.
 
 **Empirical Process Inspection (`ps aux | grep ffmpeg`)**:
 ```

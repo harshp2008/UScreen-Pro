@@ -1,0 +1,96 @@
+# CI: builds the documentation site (website/, Starlight) with the rustdoc API under /api/ on every pull request,
+# and deploys it to GitHub Pages on a push to main. The site is served from https://harshp2008.github.io/UScreen-Pro/
+# (the base path of a project site is the repository name; website/astro.config.mjs reads SITE_BASE to change it).
+#
+# Until the owner enables Pages (Settings, Pages, Source: GitHub Actions) the deploy job is skipped and the build still runs.
+name: Docs
+
+on:
+  pull_request:
+    paths: ['website/**', 'docs/**', 'CHANGELOG.md', 'SECURITY.md', 'THIRD_PARTY_LICENSES.md', 'experiments_and_findings/**', 'host/**', '.github/workflows/docs.yml']
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Astro sends anonymous usage data unless told not to.
+  ASTRO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  docs:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: website/.nvmrc
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      # The host's build needs the libraries of its dependencies; the CLI reference only needs the binary to print --help.
+      - name: System libraries for the host crate
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libdrm-dev libxkbcommon-dev libwayland-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libssl-dev libgtk-4-dev
+      - name: Build the daemon (the CLI reference is its --help)
+        run: cargo build -p uscreen
+      - name: Build the API documentation (warnings are errors)
+        run: RUSTDOCFLAGS="--document-private-items -D warnings" cargo doc --no-deps -p uscreen
+      - name: Build and check the site
+        working-directory: website
+        env:
+          REQUIRE_RUSTDOC: '1'
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+      - name: Upload the site
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+
+  # Reads whether the owner has enabled Pages with the "GitHub Actions" source; it only reads, so the deploy job
+  # (and its github-pages environment) is not touched while Pages is off.
+  pages-status:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: read
+    outputs:
+      enabled: ${{ steps.status.outputs.enabled }}
+    steps:
+      - id: status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if build_type="$(gh api "repos/${GITHUB_REPOSITORY}/pages" --jq .build_type 2>/dev/null)" \
+             && [ "$build_type" = "workflow" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Pages is not enabled::The site was built but not deployed. Enable it in Settings, Pages, Source: GitHub Actions."
+          fi
+
+  deploy:
+    needs: [docs, pages-status]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.pages-status.outputs.enabled == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

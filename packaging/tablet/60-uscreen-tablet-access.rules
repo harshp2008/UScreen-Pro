@@ -1,0 +1,4 @@
+# UScreen: let the logged-in user read the pen of tablet 28bd:0931 without root.
+# Install as /etc/udev/rules.d/60-uscreen-tablet-access.rules (must sort before 73-seat-late.rules).
+SUBSYSTEM=="input", KERNEL=="event[0-9]*", ENV{ID_INPUT_TABLET}=="1", ATTRS{idVendor}=="28bd", ATTRS{idProduct}=="0931", TAG+="uaccess"
+

@@ -1,8 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
-  <!-- Graphics-tablet mode: the screen goes dark and the stylus takes over. -->
-  <rect width="108" height="108" rx="22" fill="#1c1b18"/>
-  <rect x="26" y="34" width="56" height="40" rx="6" fill="#8a5f24"/>
-  <rect x="31" y="39" width="46" height="30" rx="3" fill="#1c1b18"/>
-  <path d="M58 70 L84 44 a4 4 0 0 1 5.5 5.5 L63.5 75.5 L55.5 77.5 Z" fill="#ece8df"/>
-  <path d="M58 70 L63.5 75.5 L55.5 77.5 Z" fill="#f0a742"/>
+<!--
+  Pen icon shown by the tray in Stylus mode; uscreen-pen-64.rgba is its 64-pixel RGBA bitmap.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Graphics-tablet mode: same emerald tile as the app icon; the screen goes dark and the stylus takes over. -->
+  <rect width="1024" height="1024" rx="232" fill="#059669"/>
+  <rect x="192" y="260" width="640" height="448" rx="64" fill="#ECFDF5"/>
+  <rect x="236" y="304" width="552" height="360" rx="32" fill="#064E3B"/>
+  <path d="M520 700 L800 400 a40 40 0 0 1 58 56 L578 756 L488 780 Z" fill="#6EE7B7" stroke="#064E3B" stroke-width="24" stroke-linejoin="round"/>
+  <path d="M520 700 L578 756 L488 780 Z" fill="#34D399" stroke="#064E3B" stroke-width="24" stroke-linejoin="round"/>
 </svg>
