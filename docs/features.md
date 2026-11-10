@@ -42,7 +42,7 @@ Nothing is claimed for another desktop, distribution or tablet than the one abov
 | **Menu drawn inside the Shell** | On GNOME it is drawn by the extension, so it is not a window and does not change focus; a GTK 4 window is the fallback | `penMenu.js`, `menu/` | run |
 | **Pen never reports zero pressure** | A touching pen always sends at least 1, so light taps are not dropped by libinput | `input/events/pen.rs` | inherited |
 | **Lift sends the last position** | The pen's last sample is delivered before it leaves proximity | `input/uinput/` | inherited |
-| **Physical drawing tablets** | A plugged-in XP-Pen, Wacom or Huion is read through evdev and driven through the same pen path; optional exclusive grab | `input/physical.rs` | run (one XP-Pen) |
+| **Physical drawing tablets** | A plugged-in drawing tablet is read through evdev and driven through the same pen path; optional exclusive grab. Only an XP-Pen was tried | `input/physical.rs` | run (one XP-Pen) |
 | **Palm rejection** | Fingers are ignored while the pen is in play, and anything a finger left pressed is lifted | `PalmFilter.kt` | inherited, run |
 | **Touch input switch** | Turn fingers off and keep the pen, for drawing with a resting hand | settings | inherited |
 | **S Pen button** | Read from every pen event, including while hovering | `TouchCapture.kt` | inherited |

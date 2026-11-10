@@ -1,0 +1,452 @@
+---
+// The landing page: a standalone page, not part of the documentation layout (no docs header, sidebar or pager).
+// Every picture and video on it is the real desktop app running its development mode (sample data: a made-up
+// tablet and serial, no connected device). The pen illustration is a drawing and says so. The documentation
+// starts at /what-is-uscreen-pro/. System fonts only; no third-party requests.
+const base = import.meta.env.BASE_URL;
+const docs = `${base}what-is-uscreen-pro/`;
+const img = (n: string) => `${base}real/${n}.webp`;
+const wizard = [
+  { id: 'wiz-1-prepare', label: 'Prepare Device', w: 960, h: 868, text: 'Turn on USB debugging on the tablet, once. The app shows you each tap.' },
+  { id: 'wiz-2-connect', label: 'Connect USB', w: 960, h: 983, text: 'Plug the tablet in and choose it. Identify makes it show a notification, so you know which one is which.' },
+  { id: 'wiz-3-install', label: 'Install', w: 960, h: 868, text: 'The app is installed on the tablet for you.' },
+  { id: 'wiz-4-wireless', label: 'Wireless', w: 960, h: 1300, text: 'Wi-Fi is set up over the same cable. Tailscale is an experimental alternative.' },
+  { id: 'wiz-5-finish', label: 'Finish', w: 960, h: 901, text: 'Choose how it connects: USB cable, Auto (USB first, Wi-Fi as a fallback) or Wi-Fi.' },
+  { id: 'wiz-blocked', label: 'If the router blocks it', w: 960, h: 1472, text: 'If your router stops the tablet and computer talking, it says so, explains why and offers the fix.' },
+];
+const modes = [
+  { id: 'set-display', label: 'Extended Display', w: 2080, h: 1090, text: 'A second monitor. The virtual display is encoded in hardware and streamed to the tablet; touch and pen come back.' },
+  { id: 'set-touchpad', label: 'Touchpad', w: 2080, h: 630, text: 'The tablet is a laptop touchpad. Sensitivity, shape, right-click method and haptics are settings. Nothing is streamed.' },
+  { id: 'set-stylus', label: 'Stylus', w: 2080, h: 810, text: 'A pen tablet for the screen you are already using. Nothing is streamed, so there is no display latency.' },
+];
+const tablet = [
+  { id: 'tab-display-input', label: 'Display & Input', w: 1600, h: 1000, text: "The tablet app's own settings, from a real tablet: input mode, touch, immersive mode, orientation, theme, bitrate and frame rate." },
+  { id: 'tab-connection-power', label: 'Connection and power', w: 1600, h: 600, text: 'Preferred transport, then battery saver, idle dimming and keeping the connection in the background.' },
+];
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>UScreen Pro</title>
+    <meta name="description" content="Turn an Android tablet into a second display, a laptop touchpad and a real pen tablet on Linux. One installer, a guided setup." />
+    <link rel="icon" href={`${base}favicon.svg`} type="image/svg+xml" />
+    <meta name="color-scheme" content="dark light" />
+  </head>
+  <body>
+    <header class="top">
+      <div class="w bar">
+        <a class="logo" href={base}><img src={`${base}logo.svg`} alt="" width="28" height="28" />UScreen Pro</a>
+        <nav>
+          <a href="#setup">Setup</a>
+          <a href="#modes">Modes</a>
+          <a href="#pen">Pen</a>
+          <a href="#tablet">Tablet</a>
+          <a href="#more">Features</a>
+          <a href={docs}>Docs</a>
+          <a class="gh" href="https://github.com/harshp2008/UScreen-Pro">GitHub</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="w hero-grid">
+          <div>
+            <h1>Your tablet.<br />Your pen.<br />Your Linux.</h1>
+            <p class="sub">A second display, a laptop touchpad and a real pen tablet, from one Android tablet. Set up in a few clicks.</p>
+            <div class="cta">
+              <a class="btn primary" href="#setup">Get started</a>
+              <a class="btn" href={docs}>Read the docs</a>
+            </div>
+          </div>
+          <figure class="media">
+            <div class="frame"><video id="hero-video" src={`${base}video/setup-wizard.mp4`} poster={`${base}video/setup-wizard.jpg`} width="960" height="600" autoplay muted loop playsinline preload="metadata" aria-label="Recording of the Add device wizard in the desktop app"></video></div>
+            <figcaption>The real app adding a tablet, recorded on sample data.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="setup">
+        <div class="w">
+          <h2>Set up in three steps</h2>
+          <p class="lead">No config files. The installer works out your system and the app does the tablet.</p>
+          <div class="setup">
+            <ol class="steps">
+              <li class="reveal">
+                <h3>Run the installer</h3>
+                <p>It detects your distribution, shows what it will install, asks before it does, and tells you if you need to log out.</p>
+                <code>./scripts/install.sh</code>
+              </li>
+              <li class="reveal" style="--d:1">
+                <h3>Add your tablet</h3>
+                <p>Open UScreen Pro, press <b>Add device</b> and plug the tablet in. The app is installed on it and wireless is set up for you. Click through the steps on the right to see each screen.</p>
+              </li>
+              <li class="reveal" style="--d:2">
+                <h3>Use it</h3>
+                <p>Plug in whenever you like and the display appears. The tablet app is kept in step with the computer on its own.</p>
+                <code>uscreen doctor</code>
+                <p class="small">checks everything if something looks off.</p>
+              </li>
+            </ol>
+            <div class="viewer reveal" id="wizard-viewer">
+              <div class="tabs" role="tablist" aria-label="Add device wizard screens">
+                {wizard.map((s, i) => <button type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-i={i}>{s.label}</button>)}
+              </div>
+              <div class="stage"><img id="wizard-img" src={img(wizard[0].id)} alt={`Add device wizard: ${wizard[0].label} (sample data)`} width={wizard[0].w} height={wizard[0].h} /></div>
+              <p class="cap" id="wizard-cap">{wizard[0].text}</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="modes">
+        <div class="w">
+          <h2>One tablet, three jobs</h2>
+          <p class="lead">Each tablet has its own mode. These are the real settings for each.</p>
+          <div class="viewer reveal" id="modes-viewer">
+            <div class="tabs" role="tablist" aria-label="Modes">
+              {modes.map((s, i) => <button type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-i={i}>{s.label}</button>)}
+            </div>
+            <div class="stage wide"><img id="modes-img" src={img(modes[0].id)} alt={`Settings for ${modes[0].label} (sample data)`} width={modes[0].w} height={modes[0].h} /></div>
+            <p class="cap" id="modes-cap">{modes[0].text}</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="pen">
+        <div class="w">
+          <h2>A pen for drawing and for clicking</h2>
+          <p class="lead">Pick a style and watch what the pen does in a drawing app and in a text editor.</p>
+          <div class="pen">
+            <div>
+              <div class="styles" role="group" aria-label="Pen style">
+                <button type="button" aria-pressed="true" data-style="dynamic">Dynamic</button>
+                <button type="button" aria-pressed="false" data-style="mouse">Mouse</button>
+                <button type="button" aria-pressed="false" data-style="tablet">Graphics tablet</button>
+              </div>
+              <p id="style-text" class="explain"></p>
+              <p class="small">Dynamic is experimental and tested only on GNOME. The pen menu belongs to Dynamic.</p>
+            </div>
+            <div>
+              <div class="demo" id="demo" data-style="dynamic" role="img" aria-label="Drawing of the three pen styles in a drawing app and a text editor">
+                <div class="win art">
+                  <div class="wbar"><b></b><b></b><b></b><span>Drawing app</span></div>
+                  <svg viewBox="0 0 240 110" class="canvas" aria-hidden="true">
+                    <path class="plain" d="M14 80 C 60 20, 110 110, 160 50 S 214 40, 226 56" />
+                    <path class="taper" d="M14 80 C 60 20, 110 110, 160 50 S 214 40, 226 56" />
+                  </svg>
+                  <div class="badge" id="badge-art"></div>
+                </div>
+                <div class="win txt">
+                  <div class="wbar"><b></b><b></b><b></b><span>Notes</span></div>
+                  <p>Reminders for this week.</p>
+                  <p class="sel-line">Renew the <mark id="sel">domain</mark> before Friday.</p>
+                  <p class="dim">Pick up the parcel on Thursday.</p>
+                  <svg class="cursor" id="cursor" viewBox="0 0 16 24" aria-hidden="true"><path d="M1.5 1.5 L1.5 18 L5.8 14.2 L8.6 20.8 L11.2 19.6 L8.4 13.2 L14 13 Z" /></svg>
+                  <div class="menu" id="menu" aria-hidden="true"><span>Cut</span><span>Copy</span><span>Paste</span><span>Select all</span><span>Undo</span></div>
+                  <div class="none" id="none">No cursor, no clicks in this app</div>
+                  <div class="badge" id="badge-txt"></div>
+                </div>
+              </div>
+              <p class="note">A drawing. The pointer is the normal system cursor; the real menu is drawn by the GNOME Shell extension.</p>
+            </div>
+          </div>
+          <figure class="shot reveal">
+            <div class="frame"><img src={img('set-stylus')} alt="The pen settings in the desktop app: pen style, side buttons, pen menu and hold time (sample data)" width="2080" height="810" loading="lazy" /></div>
+            <figcaption>The real pen settings: style, side buttons, the pen menu and how long to hold.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section id="tablet">
+        <div class="w">
+          <h2>On the tablet</h2>
+          <p class="lead">A redesigned Material 3 app with its settings in four cards: Display &amp; Input, Connection, Power &amp; Battery and Advanced. These are screenshots of the real app on a real tablet.</p>
+          <div class="viewer reveal" id="tablet-viewer">
+            <div class="tabs" role="tablist" aria-label="Tablet app screens">
+              {tablet.map((s, i) => <button type="button" role="tab" aria-selected={i === 0 ? 'true' : 'false'} data-i={i}>{s.label}</button>)}
+            </div>
+            <div class="stage wide"><img id="tablet-img" src={img(tablet[0].id)} alt={`Tablet app settings: ${tablet[0].label}`} width={tablet[0].w} height={tablet[0].h} loading="lazy" /></div>
+            <p class="cap" id="tablet-cap">{tablet[0].text}</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="more">
+        <div class="w">
+          <h2>What else Pro does</h2>
+          <div class="row reveal">
+            <div class="text">
+              <h3>Easy on the tablet's battery</h3>
+              <p>Dim the tablet while your pointer is elsewhere, with fade curves you choose. After two minutes without the computer it stops retrying and dims to 10 percent. Touch it and it wakes.</p>
+            </div>
+            <div class="frame"><img src={img('set-power')} alt="Android app settings: orientation, theme, battery saver, dim when idle and fade curves (sample data)" width="2080" height="1110" loading="lazy" /></div>
+          </div>
+          <div class="row flip reveal">
+            <div class="text">
+              <h3>Errors that tell you what to do</h3>
+              <p>If your router blocks the tablet, the wizard says so, explains MAC randomization and AP isolation, and offers a fix and a retry. The tablet app has its own screens for a host that is offline or debugging that is off.</p>
+            </div>
+            <div class="frame tall"><img src={img('wiz-blocked')} alt="The Add device wizard showing Connection Blocked by Router (sample data)" width="960" height="1472" loading="lazy" /></div>
+          </div>
+          <div class="row reveal">
+            <div class="text">
+              <h3>Settings for each tablet</h3>
+              <p>One file, two editors: the desktop app and the tablet app change the same settings, and the newest change wins. Click a grey value to override it for one tablet.</p>
+            </div>
+            <div class="frame"><img src={img('set-device')} alt="A device page with per-tablet overrides (sample data)" width="2080" height="1440" loading="lazy" /></div>
+          </div>
+          <div class="row flip reveal">
+            <div class="text">
+              <h3>Health at a glance</h3>
+              <p>Daemon, build and tools in one place: restart ADB, reinstall the tablet app, and see which devices are connected. The tablet app also updates itself when it stops matching the computer.</p>
+            </div>
+            <div class="frame"><img src={img('set-health')} alt="System health page (sample data)" width="2080" height="940" loading="lazy" /></div>
+          </div>
+          <p class="also reveal"><b>Also:</b> hardware encoding (VAAPI HEVC tuned and tested), several tablets at once, a safety guard so the virtual monitor never stalls your desktop, <code>uscreen doctor</code>, a plugged-in pen tablet (tried with an XP-Pen), a tested installer, and every experiment published.</p>
+        </div>
+      </section>
+
+      <section>
+        <div class="w">
+          <h2>The settings, in motion</h2>
+          <figure class="media">
+            <div class="frame"><video src={`${base}video/settings-tour.mp4`} poster={`${base}video/settings-tour.jpg`} width="1060" height="660" muted loop playsinline controls preload="none" aria-label="Recording of the settings pages of the desktop app"></video></div>
+            <figcaption>Recorded from the real app on sample data.</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section>
+        <div class="w two">
+          <div class="reveal">
+            <h3>Where it stands</h3>
+            <p><b>Run</b> on Ubuntu 24.04, GNOME 46, Wayland, with a Galaxy Tab S9 FE. <b>Not verified</b>: other desktops, distributions and tablets, pressure inside a drawing app, QR pairing, Tailscale and the release packages. Every feature is marked in <a href={`${base}project/features/`}>the full list</a>.</p>
+          </div>
+          <div class="reveal" style="--d:1">
+            <h3>Built on UScreen</h3>
+            <p>UScreen Pro started from <a href="https://github.com/majmichu1/UScreen">UScreen</a> by majmichu1 and keeps its idea, its virtual-display capture and its adb link. The desktop app, the tablet app, the input engine and the installer are new, and most of the rest has been reworked.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="w foot">
+      <a href={docs}>Docs</a> · <a href={`${base}project/features/`}>All features</a> · <a href={`${base}environments/`}>Where it works</a> · <a href="https://github.com/harshp2008/UScreen-Pro">GitHub</a> · MIT licence
+    </footer>
+
+    <script is:inline define:vars={{ wizard, modes, tablet, assetBase: `${base}real/` }}>
+      // Scroll reveal, the two viewers of real screens, the hero video and the pen drawing.
+      document.documentElement.classList.add('js');
+      var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var items = document.querySelectorAll('.reveal');
+      if ('IntersectionObserver' in window && !reduce) {
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+        }, { threshold: 0.12 });
+        items.forEach(function (el) { io.observe(el); });
+      } else items.forEach(function (el) { el.classList.add('in'); });
+
+      var hero = document.getElementById('hero-video');
+      if (hero && reduce) { hero.pause(); hero.removeAttribute('autoplay'); hero.setAttribute('controls', ''); }
+
+      // A viewer: tab buttons choose which real screen is shown, and its caption.
+      function viewer(rootId, imgId, capId, list) {
+        var root = document.getElementById(rootId), im = document.getElementById(imgId), cap = document.getElementById(capId);
+        var tabs = root.querySelectorAll('[role=tab]');
+        tabs.forEach(function (t) {
+          t.addEventListener('click', function () {
+            var s = list[Number(t.dataset.i)];
+            im.src = assetBase + s.id + '.webp'; im.width = s.w; im.height = s.h;
+            im.alt = s.label + (list === tablet ? '' : ' (sample data)'); cap.textContent = s.text;
+            tabs.forEach(function (o) { o.setAttribute('aria-selected', String(o === t)); });
+          });
+        });
+      }
+      viewer('wizard-viewer', 'wizard-img', 'wizard-cap', wizard);
+      viewer('modes-viewer', 'modes-img', 'modes-cap', modes);
+      viewer('tablet-viewer', 'tablet-img', 'tablet-cap', tablet);
+
+      // The pen drawing: what each style does in a drawing app and in a text editor.
+      var demo = document.getElementById('demo');
+      var TEXT = {
+        dynamic: 'The computer picks per app. In a drawing app the pen is a pressure and tilt tablet. In everything else it is a mouse with a visible cursor, and holding it still on selected text opens the pen menu.',
+        mouse: 'The pen is a mouse, everywhere. It clicks, drags and selects, with no pressure and no tilt. A side button can be right click or middle click.',
+        tablet: 'The pen is a pressure and tilt tablet, everywhere. Drawing apps get everything; other apps show no cursor and do not respond.'
+      };
+      var route = function (style, win) { return style === 'tablet' ? 'tablet' : style === 'mouse' ? 'mouse' : (win === 'art' ? 'tablet' : 'mouse'); };
+      var label = function (r) { return r === 'tablet' ? 'Pressure + tilt' : 'Mouse'; };
+      var styleText = document.getElementById('style-text');
+      var badgeArt = document.getElementById('badge-art'), badgeTxt = document.getElementById('badge-txt');
+      var menu = document.getElementById('menu'), cursor = document.getElementById('cursor'), sel = document.getElementById('sel');
+      var txt = demo.querySelector('.win.txt');
+      var style = 'dynamic', timers = [];
+      function later(fn, ms) { timers.push(setTimeout(fn, ms)); }
+      function applyStyle(s) {
+        style = s;
+        demo.dataset.style = s; demo.dataset.art = route(s, 'art'); demo.dataset.txt = route(s, 'txt');
+        styleText.textContent = TEXT[s];
+        badgeArt.textContent = label(route(s, 'art')); badgeTxt.textContent = label(route(s, 'txt'));
+        document.querySelectorAll('.styles button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.style === s)); });
+        restart();
+      }
+      // Cursor onto the selected word; the menu opens above it, kept 12px inside the window.
+      function place() {
+        var t = txt.getBoundingClientRect(), r = sel.getBoundingClientRect();
+        cursor.style.left = (r.left - t.left + r.width / 2 - 2) + 'px';
+        cursor.style.top = (r.top - t.top + r.height - 4) + 'px';
+        var mw = menu.offsetWidth, cx = r.left - t.left + r.width / 2;
+        menu.style.left = Math.max(mw / 2 + 12, Math.min(cx, t.width - mw / 2 - 12)) + 'px';
+        menu.style.top = (r.top - t.top - 12) + 'px';
+      }
+      function loop() {
+        txt.classList.remove('selected', 'menu-on');
+        cursor.classList.remove('on');
+        var mouse = route(style, 'txt') === 'mouse';
+        if (mouse) {
+          later(function () { place(); cursor.classList.add('on'); }, 400);
+          later(function () { txt.classList.add('selected'); }, 1300);
+          if (style === 'dynamic') later(function () { txt.classList.add('menu-on'); }, 2500);
+        }
+        later(loop, 6200);
+      }
+      function restart() {
+        timers.forEach(clearTimeout); timers = [];
+        txt.classList.remove('selected', 'menu-on'); cursor.classList.remove('on');
+        if (reduce) {
+          if (route(style, 'txt') === 'mouse') { place(); cursor.classList.add('on'); txt.classList.add('selected'); if (style === 'dynamic') txt.classList.add('menu-on'); }
+          return;
+        }
+        loop();
+      }
+      document.querySelectorAll('.styles button').forEach(function (b) { b.addEventListener('click', function () { applyStyle(b.dataset.style); }); });
+      addEventListener('resize', place);
+      applyStyle('dynamic');
+    </script>
+
+    <style is:global>
+      :root {
+        --bg: #0b0f0e; --surface: #121816; --line: #243029; --text: #c9d6d0; --strong: #f4f8f6; --muted: #8a9a93;
+        --accent: #34d399; --ink: #04281d; color-scheme: dark;
+      }
+      @media (prefers-color-scheme: light) {
+        :root { --bg: #fafcfb; --surface: #f0f4f2; --line: #d9e2de; --text: #26332d; --strong: #0a1511; --muted: #586861; --accent: #047857; --ink: #ffffff; color-scheme: light; }
+      }
+      * { box-sizing: border-box; }
+      html { scroll-behavior: smooth; scroll-padding-top: 4.5rem; overflow-x: clip; }
+      body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.65 system-ui, -apple-system, "Segoe UI", "Noto Sans", Roboto, sans-serif; overflow-x: clip; }
+      a { color: var(--accent); }
+      h1, h2, h3, p { margin: 0; }
+      b { color: var(--strong); }
+      code { font: 0.88em ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+      img, video { display: block; max-width: 100%; height: auto; }
+      .w { width: min(1120px, calc(100% - 2rem)); margin-inline: auto; }
+      section { padding: clamp(3.5rem, 8vw, 6rem) 0 0; }
+      h2 { font-size: clamp(1.8rem, 3.4vw, 2.5rem); line-height: 1.12; letter-spacing: -0.02em; color: var(--strong); margin-bottom: 0.7rem; }
+      h3 { color: var(--strong); font-size: 1.12rem; margin-bottom: 0.4rem; }
+      .lead { color: var(--muted); font-size: 1.12rem; max-width: 40rem; }
+      .small { color: var(--muted); font-size: 0.88rem; margin-top: 0.7rem; }
+      .note { color: var(--muted); font-size: 0.85rem; margin-top: 0.8rem; }
+      figcaption { color: var(--muted); font-size: 0.85rem; margin-top: 0.7rem; }
+
+      .top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+      .bar { display: flex; align-items: center; justify-content: space-between; height: 3.6rem; }
+      .logo { display: inline-flex; align-items: center; gap: 0.6rem; font-weight: 700; color: var(--strong); text-decoration: none; }
+      .logo img { border-radius: 7px; }
+      .top nav { display: flex; gap: 1.5rem; align-items: center; font-size: 0.92rem; }
+      .top nav a { color: var(--muted); text-decoration: none; }
+      .top nav a:hover { color: var(--strong); }
+      .top nav .gh { padding: 0.3rem 0.85rem; border: 1px solid var(--line); border-radius: 0.5rem; color: var(--strong); }
+      @media (max-width: 44rem) { .top nav a:not(.gh) { display: none; } }
+
+      .hero { padding-top: clamp(2.5rem, 6vw, 4.5rem); }
+      .hero-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 3rem; align-items: center; }
+      h1 { font-size: clamp(2.6rem, 6vw, 4.4rem); line-height: 1.03; letter-spacing: -0.035em; color: var(--strong); }
+      .sub { font-size: 1.2rem; color: var(--muted); max-width: 30rem; margin-top: 1.2rem; }
+      .cta { display: flex; flex-wrap: wrap; gap: 0.7rem; margin-top: 1.8rem; }
+      .btn { display: inline-flex; padding: 0.7rem 1.3rem; border-radius: 0.55rem; border: 1px solid var(--line); color: var(--strong); text-decoration: none; font-weight: 600; }
+      .btn:hover { border-color: var(--accent); }
+      .btn.primary { background: var(--accent); border-color: transparent; color: var(--ink); }
+      .media { margin: 0; }
+      .frame { border: 1px solid var(--line); border-radius: 0.7rem; overflow: hidden; background: #0e1815; }
+      .frame img, .frame video { width: 100%; }
+
+      .setup { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); gap: 3rem; margin-top: 2rem; align-items: start; }
+      .steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; gap: 1.6rem; }
+      .steps > li { counter-increment: s; padding-left: 3rem; position: relative; }
+      .steps > li::before { content: counter(s); position: absolute; left: 0; top: 0; width: 2rem; height: 2rem; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); font-weight: 700; }
+      .steps p { color: var(--muted); font-size: 0.96rem; }
+      .steps code { display: block; margin-top: 0.7rem; padding: 0.55rem 0.8rem; border-radius: 0.5rem; background: var(--surface); border: 1px solid var(--line); color: var(--strong); }
+
+      .viewer { min-width: 0; }
+      .tabs { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
+      .tabs button, .styles button { flex: 0 0 auto; padding: 0.4rem 0.9rem; border-radius: 0.5rem; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 0.9rem; cursor: pointer; }
+      .tabs button:hover, .styles button:hover { color: var(--strong); border-color: var(--accent); }
+      .tabs button[aria-selected="true"], .styles button[aria-pressed="true"] { background: var(--accent); border-color: transparent; color: var(--ink); font-weight: 600; }
+      button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .stage { display: grid; place-items: center; min-height: 20rem; padding: 1.2rem; border: 1px solid var(--line); border-radius: 0.7rem; background: #0a1210; }
+      .stage img { width: auto; max-height: 34rem; max-width: 100%; border-radius: 0.5rem; }
+      .stage.wide { padding: 0; min-height: 0; background: transparent; }
+      .stage.wide img { width: 100%; max-height: none; border-radius: 0.7rem; }
+      .cap { margin-top: 0.8rem; color: var(--text); }
+
+      .pen { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 3rem; margin-top: 1.6rem; align-items: start; }
+      .styles { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+      .explain { min-height: 7.5rem; margin-top: 1rem; }
+      .demo { display: grid; grid-template-columns: 1fr 1.5fr; gap: 0.8rem; }
+      .win { position: relative; min-height: 17rem; border-radius: 0.6rem; background: #fafafa; color: #2e3436; border: 1px solid #c9ccd0; overflow: hidden; font-size: 0.88rem; }
+      .wbar { display: flex; align-items: center; gap: 0.3rem; padding: 0.4rem 0.6rem; background: #e9eaec; border-bottom: 1px solid #d3d5d9; font-size: 0.72rem; color: #5e6266; }
+      .wbar b { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: #b7babf; }
+      .wbar span { margin-left: 0.4rem; }
+      .win.txt p { padding: 0.7rem 1.1rem 0; line-height: 1.6; color: #2e3436; }
+      .win.txt p:first-of-type { padding-top: 1.1rem; }
+      .win.txt p.dim { color: #7b8086; }
+      .win.txt p.sel-line { padding-top: 3.6rem; }
+      .win mark { background: transparent; color: inherit; transition: background .25s; }
+      .win.txt.selected mark { background: #a9c7ee; }
+      .canvas { display: block; width: 100%; height: auto; padding: 0.7rem; }
+      .canvas path { fill: none; stroke: #2e3436; stroke-linecap: round; stroke-dasharray: 400; animation: draw 4s ease-in-out infinite; }
+      .canvas .plain { stroke-width: 2; }
+      .canvas .taper { stroke-width: 7; opacity: 0; -webkit-mask: linear-gradient(90deg, transparent, #000 25%, #000 70%, transparent); mask: linear-gradient(90deg, transparent, #000 25%, #000 70%, transparent); }
+      .demo[data-art="tablet"] .canvas .taper { opacity: 1; }
+      .demo[data-art="tablet"] .canvas .plain { opacity: 0; }
+      .badge { position: absolute; left: 0.7rem; bottom: 0.7rem; padding: 0.15rem 0.6rem; border-radius: 0.4rem; background: #1f2a26; color: #e6f2ec; font-size: 0.72rem; font-weight: 600; }
+      .none { position: absolute; inset: 3.4rem 1rem auto; padding: 0.6rem; border: 1px dashed #b7babf; border-radius: 0.4rem; color: #7b8086; font-size: 0.8rem; text-align: center; opacity: 0; }
+      .demo[data-txt="tablet"] .none { opacity: 1; }
+      .demo[data-txt="tablet"] .win.txt p { opacity: .35; }
+      .cursor { position: absolute; left: 20%; top: 60%; width: 0.95rem; height: 1.45rem; opacity: 0; transition: left .8s ease, top .8s ease, opacity .3s; fill: #000; stroke: #fff; stroke-width: 1.2; pointer-events: none; }
+      .cursor.on { opacity: 1; }
+      .menu { position: absolute; left: 50%; top: 40%; display: flex; gap: 2px; padding: 4px; border-radius: 20px; background: rgba(34, 34, 38, 0.97); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 6px 20px rgba(0,0,0,.45); color: #f2f2f2; font-size: 0.72rem; font-weight: 500; white-space: nowrap; opacity: 0; transform: translate(-50%, -100%); transition: opacity .2s; pointer-events: none; }
+      .menu span { padding: 0.45rem 0.7rem; border-radius: 16px; }
+      .win.menu-on .menu { opacity: 1; }
+      .win.menu-on .menu span:nth-child(2) { animation: tap 2.4s 0.9s both; }
+      .shot { margin: 2.2rem 0 0; }
+
+      .row { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: 3rem; align-items: center; margin-top: 3.5rem; }
+      .row.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 4fr); }
+      .row.flip .text { order: 2; }
+      .row .text p { color: var(--muted); }
+      .frame.tall { max-width: 30rem; justify-self: center; }
+      .also { margin-top: 3.5rem; max-width: 50rem; color: var(--muted); }
+
+      .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); gap: 3rem; }
+      .two p { color: var(--muted); }
+      .foot { padding: 4.5rem 0 3rem; color: var(--muted); font-size: 0.88rem; }
+      .foot a { color: var(--accent); text-decoration: none; }
+
+      .js .reveal { opacity: 0; transform: translateY(14px); transition: opacity .55s ease, transform .55s ease; transition-delay: calc(var(--d, 0) * 80ms); }
+      .js .reveal.in { opacity: 1; transform: none; }
+      @keyframes draw { from { stroke-dashoffset: 400; } 40%, 100% { stroke-dashoffset: 0; } }
+      @keyframes tap { 0%, 40% { background: transparent; } 55%, 85% { background: rgba(255,255,255,.22); } 100% { background: transparent; } }
+
+      @media (max-width: 56rem) {
+        .hero-grid, .setup, .pen, .row, .row.flip { grid-template-columns: 1fr; gap: 2rem; }
+        .row.flip .text { order: 0; }
+      }
+      @media (max-width: 34rem) { .demo { grid-template-columns: 1fr; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before { animation: none !important; transition: none !important; } html { scroll-behavior: auto; } }
+    </style>
+  </body>
+</html>

@@ -23,33 +23,67 @@
   --sl-line-height-headings: 1.25;
 }
 
-/* Blue accent. Links use --sl-color-text-accent, which Starlight maps to the accent colours.
-   The inline-code chip is Starlight's gray-5 (dark) or gray-6 (light) pulled toward the page
-   colour, so a line with several pieces of code is not a row of boxes. */
+/* Emerald, the colour of the apps (uscreen-pro-gui/src/index.css and the tablet app's theme). Links use
+   --sl-color-text-accent, which Starlight maps to the accent colours. The page and panel greys are
+   pulled toward green so the site and the apps look like one product. The inline-code chip is
+   Starlight's gray-5 (dark) or gray-6 (light) pulled toward the page colour. */
 :root,
 :root[data-theme='dark'] {
-  --sl-color-accent-low: #0e2a52;
-  --sl-color-accent: #3b82f6;
-  --sl-color-accent-high: #9cc3ff;
+  --sl-color-accent-low: #0f3a2a;
+  --sl-color-accent: #10b981;
+  --sl-color-accent-high: #6ee7b7;
+  --sl-color-text-accent: #34d399;
+  --sl-color-black: #0c1512;
+  --sl-color-gray-6: #121f1b;
+  --sl-color-gray-5: #1c2b25;
+  --sl-color-gray-4: #3b4f46;
+  --sl-color-hairline-light: #1f302a;
+  --sl-color-hairline: #1a2823;
   --sl-color-bg-inline-code: color-mix(in srgb, var(--sl-color-gray-5) 55%, var(--sl-color-black));
 }
 
 :root[data-theme='light'] {
-  --sl-color-accent-low: #dbe8ff;
-  --sl-color-accent: #1f5fbf;
-  --sl-color-accent-high: #123d80;
-  --sl-color-text-accent: #1a56ad;
+  --sl-color-accent-low: #dcede3;
+  --sl-color-accent: #047857;
+  --sl-color-accent-high: #064e3b;
+  --sl-color-text-accent: #047857;
+  --sl-color-black: #f7fbf8;
+  --sl-color-gray-6: #edf5f0;
+  --sl-color-gray-7: #e3efe8;
   --sl-color-bg-inline-code: color-mix(in srgb, var(--sl-color-gray-6) 60%, var(--sl-color-black));
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
-    --sl-color-accent-low: #dbe8ff;
-    --sl-color-accent: #1f5fbf;
-    --sl-color-accent-high: #123d80;
-    --sl-color-text-accent: #1a56ad;
+    --sl-color-accent-low: #dcede3;
+    --sl-color-accent: #047857;
+    --sl-color-accent-high: #064e3b;
+    --sl-color-text-accent: #047857;
+    --sl-color-black: #f7fbf8;
+    --sl-color-gray-6: #edf5f0;
+    --sl-color-gray-7: #e3efe8;
     --sl-color-bg-inline-code: color-mix(in srgb, var(--sl-color-gray-6) 60%, var(--sl-color-black));
   }
+}
+
+/* The header: translucent glass over the page, and a theme picker that is a quiet pill. The focus ring
+   shows only for the keyboard, not after a click. */
+header.header {
+  background: color-mix(in srgb, var(--sl-color-black) 78%, transparent);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+starlight-theme-select select {
+  border-radius: 999px;
+  border: 1px solid var(--sl-color-hairline-light);
+  background-color: transparent;
+}
+starlight-theme-select select:focus {
+  outline: none;
+}
+starlight-theme-select select:focus-visible {
+  outline: 2px solid var(--sl-color-accent);
+  outline-offset: 2px;
 }
 
 /* Rhythm. Starlight puts 0.25rem between list items and 1.5em above a heading. Items several

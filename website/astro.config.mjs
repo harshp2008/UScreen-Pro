@@ -4,7 +4,6 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
-import mdx from '@astrojs/mdx';
 import codeBreaks from './src/integrations/code-breaks.mjs';
 import records from './src/integrations/records.mjs';
 
@@ -35,7 +34,6 @@ export default defineConfig({
         './src/styles/records.css',
         './src/styles/scroll-hints.css',
         './src/styles/toc-toggle.css',
-        './src/styles/landing.css',
       ],
       head: [{ tag: 'script', content: tocToggle }],
       // The order follows the reader's path: the introduction, then installing and using it (with
@@ -44,7 +42,6 @@ export default defineConfig({
       // group is `collapsed`: Starlight opens only the group that holds the current page. The
       // groups filled with `autogenerate` need no entry for a new page.
       sidebar: [
-        { slug: 'index', label: 'Home' },
         { slug: 'what-is-uscreen-pro', label: 'What is UScreen Pro' },
         {
           label: 'Using UScreen',
@@ -121,9 +118,6 @@ export default defineConfig({
         },
       ],
     }),
-    // MDX only for the landing page (src/content/docs/index.mdx), which uses Starlight's card components. After
-    // Starlight, because Starlight's code-block integration must come before it.
-    mdx(),
     // After Starlight on purpose: its build-done step makes the Pagefind index, and these then
     // rewrite the pages, so the search index is made from the text as written. Records come
     // before code-breaks, which then adds its break points inside the records as well.
