@@ -78,15 +78,24 @@ export const FADE_MAX_MS = 30_000;
 export const INPUT_MODES: Option[] = [
   { value: "display", label: "Extended Display" },
   { value: "touchpad", label: "Touchpad" },
-  { value: "stylus", label: "Stylus (Graphics Tablet)" },
+  { value: "stylus", label: "Stylus" },
 ];
 
 /** What each input mode does, shown under the selector. */
 export const INPUT_MODE_HELP: Record<string, string> = {
-  display: "A second screen: video is streamed to the tablet and touch is absolute.",
-  touchpad: "A laptop touchpad: no video is streamed, so USB bandwidth and battery are saved.",
-  stylus: "A graphics tablet: no video is streamed; the pen draws on this computer's own screen.",
+  display: "A second screen for this computer.",
+  touchpad: "A laptop touchpad. No video, so it saves battery.",
+  stylus: "The pen draws on this computer's own screen. No video.",
 };
+
+/** Short pen-style names for mode labels ("Stylus · Dynamic"). */
+const PEN_STYLE_SHORT: Record<string, string> = { auto: "Dynamic", mouse: "Mouse", tablet: "Graphics tablet" };
+
+/** Name of an input mode; Stylus carries its pen style, as in "Stylus · Dynamic". */
+export function modeLabel(mode: string, stylusStyle?: string): string {
+  const base = labelOf(INPUT_MODES, mode);
+  return mode === "stylus" && stylusStyle ? `${base} · ${PEN_STYLE_SHORT[stylusStyle] ?? stylusStyle}` : base;
+}
 
 /** Landscape direction the tablet app pins itself to. */
 export const ORIENTATIONS: Option[] = [
@@ -121,7 +130,6 @@ export const PEN_MENU_HOLD: Option[] = [
   { value: "800", label: "0.8 seconds" },
   { value: "1000", label: "1 second" },
   { value: "1500", label: "1.5 seconds" },
-  { value: "2000", label: "2 seconds" },
 ];
 
 /** How the pen menu's buttons look. */
@@ -130,14 +138,11 @@ export const PEN_MENU_STYLE: Option[] = [
   { value: "icons", label: "Icons" },
 ];
 
-/** How long the pen must be out of range before the desktop cursor hides (ghost tracking). */
-export const IDLE_HIDE: Option[] = [
-  { value: "0", label: "Never" },
-  { value: "5", label: "5 seconds" },
-  { value: "15", label: "15 seconds" },
-  { value: "30", label: "30 seconds" },
-  { value: "60", label: "1 minute" },
-  { value: "300", label: "5 minutes" },
+/** When the computer may open the app on the tablet by itself. */
+export const AUTO_OPEN: Option[] = [
+  { value: "never", label: "Never" },
+  { value: "idle", label: "From home or lock screen" },
+  { value: "always", label: "Always" },
 ];
 
 /** What a pen side button does when the pen acts as a mouse. */

@@ -6,7 +6,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow, Tabs } from "../components/ui/layout";
-import { ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL } from "../lib/options";
+import { AUTO_OPEN, ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL, modeLabel } from "../lib/options";
 import { ModePanel, ModeSection, TabletPanel } from "../components/PowerSettings";
 import type { AppConfig, CurvePreset, InputMode } from "../lib/types";
 
@@ -29,7 +29,10 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
   /* The tab and the mode being viewed are only view state: clicking them never changes a setting. */
   const [tab, setTab] = useState("general");
   const [viewMode, setViewMode] = useState<InputMode>(c.input_mode);
-  const modeOptions = INPUT_MODES.map((o) => ({ ...o, label: o.value === c.input_mode ? `${o.label} · Default` : o.label }));
+  const modeOptions = INPUT_MODES.map((o) => {
+    const name = modeLabel(o.value, c.stylus_style);
+    return { ...o, label: o.value === c.input_mode ? `${name} · Default` : name };
+  });
   const values = c;
 
   return (
@@ -56,12 +59,15 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
         <>
           <ModeSection values={values} onChange={onChange} title="Default mode" label="Default mode" />
           <Section title="General">
-          <SwitchRow
-            label="Auto-launch app"
-            tip="Start the UScreen app on the tablet when it is plugged in."
-            checked={c.auto_launch_app}
-            onChange={(auto_launch_app) => onChange({ auto_launch_app })}
-          />
+          <SettingRow label="Open app on connect" tip="When the computer opens UScreen on the tablet by itself.">
+            <Select
+              label="Open app on connect"
+              value={c.auto_open_app}
+              options={AUTO_OPEN}
+              className="w-56"
+              onValueChange={(auto_open_app) => onChange({ auto_open_app: auto_open_app as AppConfig["auto_open_app"] })}
+            />
+          </SettingRow>
           <SwitchRow
             label="Max performance scheduling"
             tip="Raise process priority and tune sockets for latency. Uses more CPU."
@@ -129,7 +135,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
               step={1000}
               onChange={(bitrate) => onChange({ bitrate })}
             />
-            <SettingRow label="Stream detail" tip="Full sends every pixel; Half renders at half resolution for the lowest latency.">
+            <SettingRow label="Stream detail" tip="Full sends every pixel. Half renders at half size for lower latency.">
               <Segmented
                 label="Stream detail"
                 value={String(c.stream_scale)}
@@ -156,7 +162,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           <Section title="Display and layout">
             <SwitchRow
               label="Use Software Mouse Cursor (Slower, more compatible)"
-              tip="Off (default): the fast path, with the 1x1 boundary window that clears the ghost cursor on GNOME/Xwayland. On: plain composited cursor with no compositor-specific helper; use it on KDE, Sway or anything where the cursor misbehaves."
+              tip="Draw the cursor in software. Slower; use it on KDE, Sway or if the cursor misbehaves."
               checked={c.software_cursor}
               onChange={(software_cursor) => onChange({ software_cursor })}
             />
@@ -214,7 +220,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
               <Section title="Pen and drawing tablets">
                 <SwitchRow
                   label="Physical tablet support"
-                  tip="Use a plugged-in drawing tablet (XP-Pen, Wacom, Huion, ...) with pressure, tilt and a visible cursor. UScreen takes the tablet exclusively while this is on. Off by default; not needed on X11."
+                  tip="Use a plugged-in drawing tablet (Wacom, XP-Pen, Huion). UScreen takes it exclusively."
                   checked={c.physical_tablet_support}
                   onChange={(physical_tablet_support) => onChange({ physical_tablet_support })}
                 />

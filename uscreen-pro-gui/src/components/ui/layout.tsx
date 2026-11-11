@@ -74,9 +74,9 @@ export function Section({
   );
 }
 
-/** Two cards side by side on a wide window, stacked on a narrow one. */
+/** Cards side by side while each column is at least 30rem wide, stacked below that (it follows the pane, not the window). */
 export function Columns({ children }: { children: ReactNode }) {
-  return <div className="grid items-start gap-x-4 lg:grid-cols-2">{children}</div>;
+  return <div className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,30rem),1fr))] items-start gap-x-4">{children}</div>;
 }
 
 /** Underlined tab strip. Only switches what is shown; it never changes a setting. */
@@ -151,7 +151,7 @@ export function Label({ label, tip, override }: { label: string; tip?: string; o
   const overridden = override?.enabled === true;
   return (
     <div className="flex min-w-0 items-center gap-1">
-      <span className={cn("truncate", overridden ? "font-medium text-primary" : "text-foreground")}>{label}</span>
+      <span className={cn("leading-tight", overridden ? "font-medium text-primary" : "text-foreground")}>{label}</span>
       {tip && <InfoTip text={tip} />}
       {overridden && (
         <button
@@ -168,23 +168,31 @@ export function Label({ label, tip, override }: { label: string; tip?: string; o
   );
 }
 
-/** Label (+ tooltip) on the left, control on the right. */
+/**
+ * Label (+ tooltip, + optional one-line hint under it) on the left, control on the right. The label wraps
+ * instead of clipping, and a control too wide for the row drops under its label.
+ */
 export function SettingRow({
   label,
   tip,
+  hint,
   override,
   children,
 }: {
   label: string;
   tip?: string;
+  hint?: string;
   override?: Override;
   children: ReactNode;
 }) {
   const showControl = !override || override.enabled;
   return (
-    <div className="flex min-h-10 items-center justify-between gap-4 px-3">
-      <Label label={label} tip={tip} override={override} />
-      <div className="flex shrink-0 items-center">
+    <div className="flex min-h-10 flex-wrap items-center justify-between gap-x-4 gap-y-1.5 px-3 py-1.5">
+      <div className="min-w-0 flex-1 basis-32">
+        <Label label={label} tip={tip} override={override} />
+        {hint && <p className="text-[11px] leading-snug text-muted-foreground">{hint}</p>}
+      </div>
+      <div className="ml-auto flex max-w-full shrink-0 items-center">
         {showControl ? children : <InheritedValue override={override} label={label} />}
       </div>
     </div>
@@ -329,7 +337,7 @@ export function QualityRow({
   return (
     <SliderRow
       label="Quality"
-      tip="Encoder CRF: lower is sharper and heavier. 12-15 maximum sharpness, 16-20 balanced (default 18), 21-25 efficient, 26+ low bandwidth."
+      tip="Lower is sharper and heavier. 18 is balanced."
       formatValue={(v) => `${v} — ${qualityLabel(v)}`}
       minLabel="Sharper"
       maxLabel="Smaller"

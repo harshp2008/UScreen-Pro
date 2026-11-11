@@ -117,7 +117,6 @@ export interface TabletProfile {
   pen_menu?: boolean;
   pen_menu_style?: string;
   pen_menu_hold_ms?: number;
-  stylus_idle_hide_timeout?: number;
   app_version?: string;
   preferred_transport?: string;
   /** false when the user skipped wireless setup in the wizard; absent on older profiles means configured. */
@@ -145,7 +144,7 @@ export interface AppConfig {
   auto_resolution: boolean;
   video_port: number;
   input_port: number;
-  auto_launch_app: boolean;
+  auto_open_app: "never" | "idle" | "always";
   max_performance_mode: boolean;
   hevc_low_latency_tuning: boolean;
   software_cursor: boolean;
@@ -187,8 +186,6 @@ export interface AppConfig {
   /** `right`, `middle` or `none`. */
   stylus_button_primary: string;
   stylus_button_secondary: string;
-  /** Seconds with the pen out of range before the cursor hides; 0 = never. */
-  stylus_idle_hide_timeout: number;
   /** The pen's long-press menu (cut, copy, paste, ...). */
   pen_menu: boolean;
   /** `text` or `icons`. */

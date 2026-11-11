@@ -8,7 +8,7 @@ import { AppLockList } from "../components/ui/AppLockList";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Tabs, Section, SettingRow, SliderRow, SwitchRow, type Override } from "../components/ui/layout";
-import { ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL, TRANSPORTS, labelOf, qualityLabel } from "../lib/options";
+import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL, TRANSPORTS, labelOf, modeLabel, qualityLabel } from "../lib/options";
 import { ModePanel, ModeSection, TabletPanel, POWER_TIP, type PowerValues } from "../components/PowerSettings";
 import type { AppConfig, ConnectedDevice, CurvePreset, TabletProfile } from "../lib/types";
 
@@ -93,7 +93,6 @@ export function DeviceSettings({
     pen_menu: p.pen_menu ?? g.pen_menu,
     pen_menu_style: p.pen_menu_style ?? g.pen_menu_style,
     pen_menu_hold_ms: p.pen_menu_hold_ms ?? g.pen_menu_hold_ms,
-    stylus_idle_hide_timeout: p.stylus_idle_hide_timeout ?? g.stylus_idle_hide_timeout,
   };
 
   /** The override switch builder of a power setting row, seeded with the global value. */
@@ -195,7 +194,7 @@ export function DeviceSettings({
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: "mode", label: labelOf(INPUT_MODES, power.input_mode) },
+          { value: "mode", label: modeLabel(power.input_mode, power.stylus_style) },
           { value: "tablet", label: "Android app" },
         ]}
       />
