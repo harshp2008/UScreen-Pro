@@ -112,8 +112,9 @@ pub struct FileConfig {
     pub auto_resolution: bool,
     pub video_port: u16,
     pub input_port: u16,
-    /// Launch the UScreen app on the tablet automatically when it's plugged in
-    pub auto_launch_app: bool,
+    /// When the daemon opens the UScreen app on the tablet by itself: `never` (default), `idle`
+    /// (only while the tablet shows its home or lock screen) or `always`.
+    pub auto_open_app: String,
     /// When enabled and system power profile is "performance", forces 60 FPS stream
     /// even when cursor is on the primary display.
     pub max_performance_mode: bool,
@@ -202,9 +203,6 @@ pub struct FileConfig {
     pub stylus_button_primary: String,
     /// Second pen side button in `mouse` style: `right`, `middle` or `none`.
     pub stylus_button_secondary: String,
-    /// Ghost tracking: seconds with the pen out of range after which the desktop cursor is hidden.
-    /// `0` (default) never hides it, so the pen's cursor behaves like a mouse cursor.
-    pub stylus_idle_hide_timeout: u32,
     /// The pen's long-press menu (cut, copy, paste, ...) in the mouse route. On by default.
     pub pen_menu: bool,
     /// How the pen menu's buttons look: `text` (labels) or `icons`.
@@ -257,7 +255,7 @@ impl Default for FileConfig {
             auto_resolution: true,
             video_port: 8890,
             input_port: 8891,
-            auto_launch_app: true,
+            auto_open_app: "never".into(),
             max_performance_mode: false,
             hevc_low_latency_tuning: true,
             keep_alive: false,
@@ -293,7 +291,6 @@ impl Default for FileConfig {
             stylus_style: "auto".into(),
             stylus_button_primary: "right".into(),
             stylus_button_secondary: "middle".into(),
-            stylus_idle_hide_timeout: 0,
             pen_menu: true,
             pen_menu_style: "text".into(),
             pen_menu_hold_ms: 500,

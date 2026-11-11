@@ -4,6 +4,7 @@
 //! `context.json`) and places windows with the `spawn-at` command. Verified on GNOME 46 (Ubuntu 24.04) only.
 
 pub mod display;
+pub mod pointer;
 pub mod spawn_at;
 
 use super::focus_file::FocusFile;

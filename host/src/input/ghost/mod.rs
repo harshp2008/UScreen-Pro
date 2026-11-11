@@ -11,10 +11,6 @@
 //! The same code serves the Android pen and a physical drawing tablet read through evdev (see
 //! `physical`). On X11 the tablet already drives the single core pointer, so nothing here applies.
 //!
-//! Optional idle hide: after the pen has been *out of range* for `stylus_idle_hide_timeout` seconds
-//! one tablet-class frame (proximity in/out) is sent with no pointer motion, and Mutter hides the
-//! pointer until the next pointer-class event.
-//!
 //! Layout: `route` (which app the pen draws into, per-app overrides), `pointer` (the two-device
 //! injection used by physical tablets), `auto` (the Android "auto" style: per-stroke routing, click
 //! slop, hover parking), `background` (the focus/idle threads), `control` (request files) and

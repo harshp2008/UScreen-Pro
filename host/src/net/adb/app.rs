@@ -16,6 +16,91 @@ pub async fn app_running(serial: &str) -> Option<bool> {
     Some(!String::from_utf8_lossy(&out.stdout).trim().is_empty())
 }
 
+/// What the tablet is showing, as far as opening the app by itself is concerned.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) struct ScreenState {
+    /// The lock screen is up.
+    pub keyguard: bool,
+    /// The screen is off or dozing.
+    pub asleep: bool,
+    /// Package that has the input focus, if any.
+    pub focus: Option<String>,
+    /// Package of the home screen (launcher).
+    pub launcher: Option<String>,
+}
+
+impl ScreenState {
+    /// Parse the output of the one `adb shell` command in [`screen_state`]: `dumpsys window`'s
+    /// `mCurrentFocus` and `isKeyguardShowing` lines, `cmd package resolve-activity`'s
+    /// `packageName=` line for the home activity and `dumpsys power`'s `mWakefulness=` line.
+    pub(super) fn parse(out: &str) -> Self {
+        let mut s = ScreenState {
+            keyguard: false,
+            asleep: false,
+            focus: None,
+            launcher: None,
+        };
+        for line in out.lines() {
+            let line = line.trim();
+            if line.contains("isKeyguardShowing=true") {
+                s.keyguard = true;
+            } else if let Some(rest) = line.strip_prefix("mCurrentFocus=") {
+                // `Window{4f60b6d u0 com.uscreen/com.uscreen.MainActivity}`
+                s.focus = rest
+                    .split_whitespace()
+                    .find_map(|w| w.split('/').next().filter(|_| w.contains('/')))
+                    .map(|p| p.trim_start_matches('{').to_string());
+            } else if let Some(pkg) = line.strip_prefix("packageName=") {
+                s.launcher.get_or_insert_with(|| pkg.to_string());
+            } else if let Some(w) = line.strip_prefix("mWakefulness=") {
+                s.asleep = matches!(w, "Asleep" | "Dozing");
+            }
+        }
+        s
+    }
+
+    /// Whether nothing the user is doing would be interrupted: the lock screen, an off screen,
+    /// the home screen, or the UScreen app itself.
+    pub(super) fn is_idle(&self) -> bool {
+        if self.keyguard || self.asleep {
+            return true;
+        }
+        match (&self.focus, &self.launcher) {
+            (Some(f), Some(l)) if f == l => true,
+            (Some(f), _) => f == "com.uscreen",
+            _ => false,
+        }
+    }
+}
+
+/// Ask the tablet what it is showing; `None` if adb could not tell.
+async fn screen_state(serial: &str) -> Option<ScreenState> {
+    let script = "dumpsys window | grep -E 'mCurrentFocus|isKeyguardShowing'; \
+        cmd package resolve-activity -a android.intent.action.MAIN -c android.intent.category.HOME | grep packageName= | head -1; \
+        dumpsys power | grep -E '^ *mWakefulness='";
+    let out = tokio::time::timeout(
+        Duration::from_secs(5),
+        Command::new("adb")
+            .args(["-s", serial, "shell", script])
+            .output(),
+    )
+    .await
+    .ok()?
+    .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    (!text.trim().is_empty()).then(|| ScreenState::parse(&text))
+}
+
+/// Whether the daemon may open the app on this tablet now, by the `auto_open_app` setting (read
+/// fresh, so a change applies at once): never, only from the home or lock screen, or always.
+pub async fn may_open_app(serial: &str) -> bool {
+    match config::FileConfig::load().auto_open_app.as_str() {
+        "always" => true,
+        "idle" => screen_state(serial).await.is_some_and(|s| s.is_idle()),
+        _ => false,
+    }
+}
+
 /// Emit diagnostic telemetry when a session is active over a Wi-Fi transport.
 pub fn announce_transport(serial: &str) {
     if transport_of(serial) == Transport::Network {
@@ -30,7 +115,6 @@ pub async fn on_tablet_connected(
     serial: &str,
     video_port: u16,
     input_port: u16,
-    auto_launch: bool,
     token: Option<&str>,
 ) {
     match setup_adb_forwarding(serial, video_port, input_port).await {
@@ -39,7 +123,7 @@ pub async fn on_tablet_connected(
                 "ADB port forwarding set up (video={}, input={})",
                 video_port, input_port
             );
-            if auto_launch {
+            if may_open_app(serial).await {
                 launch_app(serial, token, video_port, input_port).await;
             }
         }

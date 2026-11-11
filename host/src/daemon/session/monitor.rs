@@ -11,7 +11,6 @@ use super::*;
 pub async fn adb_monitor(
     video_port: u16,
     input_port: u16,
-    auto_launch: bool,
     tablet_tx: watch::Sender<bool>,
     token: Option<String>,
     relaunch: Arc<Notify>,
@@ -165,7 +164,6 @@ pub async fn adb_monitor(
                             &best_dev.serial,
                             video_port,
                             input_port,
-                            auto_launch,
                             token.as_deref(),
                         )
                         .await;
@@ -222,7 +220,6 @@ pub async fn adb_monitor(
                             &best_dev.serial,
                             sess.video_port,
                             sess.input_port,
-                            auto_launch,
                             token.as_deref(),
                         )
                         .await;
@@ -276,14 +273,8 @@ pub async fn adb_monitor(
                 apply_tablet_profile(&dev.serial, &settings_tx).await;
                 crate::config::options::bind(0, &[hw_id.as_str(), dev.serial.as_str()]);
                 if !is_fake_serial(&dev.serial) {
-                    on_tablet_connected(
-                        &dev.serial,
-                        video_port,
-                        input_port,
-                        auto_launch,
-                        token.as_deref(),
-                    )
-                    .await;
+                    on_tablet_connected(&dev.serial, video_port, input_port, token.as_deref())
+                        .await;
                     if dev.transport == Transport::Usb {
                         auto_provision_wifi(&dev.serial).await;
                     }
@@ -349,7 +340,6 @@ pub async fn adb_monitor(
                         &dev.serial,
                         sess.video_port,
                         sess.input_port,
-                        auto_launch,
                         token.as_deref(),
                     )
                     .await;
@@ -648,7 +638,7 @@ pub async fn adb_monitor(
                 }
 
                 // App Running Watchdog for Slot 0
-                if auto_launch && !slot_0_active_serial.is_empty() && !is_fake_serial(&slot_0_active_serial) && !paused_serials.contains(&slot_0_active_serial) {
+                if !slot_0_active_serial.is_empty() && !is_fake_serial(&slot_0_active_serial) && !paused_serials.contains(&slot_0_active_serial) && may_open_app(&slot_0_active_serial).await {
                     match app_running(&slot_0_active_serial).await {
                         Some(true) => {
                             slot_0_relaunch_wait = Duration::from_secs(5);
@@ -665,9 +655,9 @@ pub async fn adb_monitor(
                 }
 
                 // App Running Watchdog for Extra Sessions
-                if auto_launch {
+                {
                     for sess in extras.values_mut() {
-                        if is_fake_serial(&sess.active_serial) || paused_serials.contains(&sess.active_serial) { continue; }
+                        if is_fake_serial(&sess.active_serial) || paused_serials.contains(&sess.active_serial) || !may_open_app(&sess.active_serial).await { continue; }
                         match app_running(&sess.active_serial).await {
                             Some(true) => {
                                 sess.relaunch_wait = Duration::from_secs(5);

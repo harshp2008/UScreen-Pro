@@ -27,12 +27,10 @@ pub(super) async fn idle_loop(
     let mut dimmed = false;
     loop {
         let o = opts_rx.borrow().clone();
-        // Without Display mode there is no virtual screen for the pointer to be on, so it is always
-        // "away" and only the tablet's own input keeps the timer from running out.
-        let pointer_away = !*pointer_rx.borrow() || o.input_mode != InputMode::Display;
-        // Touchpad mode has no screen for the pointer to be on; there the timer is simply "no
-        // input from the tablet for the timeout".
-        let armed = o.idle_dim_enabled && pointer_away;
+        // Idle dimming belongs to Display mode: only there is the tablet a screen the pointer can
+        // leave. Touchpad and Stylus mode never dim (the tablet is the input device, not a display).
+        let armed =
+            o.idle_dim_enabled && o.input_mode == InputMode::Display && !*pointer_rx.borrow();
         if !armed {
             if dimmed {
                 dimmed = false;

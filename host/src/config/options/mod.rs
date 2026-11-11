@@ -311,28 +311,29 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(1400)).await;
         assert!(sent.lock().unwrap().is_empty());
     }
-    /// Touchpad and stylus modes have no pointer-crossing signal, so they dim on inactivity alone.
+    /// Idle dimming is a Display-mode feature: Touchpad and Stylus mode never dim, however long they are idle.
     #[tokio::test]
-    async fn touchpad_and_stylus_dim_on_inactivity_alone() {
-        let o = DeviceOptions {
-            input_mode: InputMode::Touchpad,
-            idle_dim_enabled: true,
-            idle_dim_timeout_secs: 1,
-            ..DeviceOptions::resolve(&FileConfig::default(), None)
-        };
-        let (_a, opts_rx) = watch::channel(o);
-        // The pointer flag still says "on the tablet" (no helper runs outside Display mode).
-        let (_b, pointer_rx) = watch::channel(true);
-        let sent = Arc::new(StdMutex::new(Vec::<Value>::new()));
-        let sink = sent.clone();
-        tokio::spawn(idle_loop(
-            opts_rx,
-            pointer_rx,
-            Arc::new(Notify::new()),
-            move |m| sink.lock().unwrap().push(m),
-        ));
-        tokio::time::sleep(Duration::from_millis(1400)).await;
-        assert_eq!(sent.lock().unwrap().len(), 1);
+    async fn touchpad_and_stylus_never_dim() {
+        for mode in [InputMode::Touchpad, InputMode::Stylus] {
+            let o = DeviceOptions {
+                input_mode: mode,
+                idle_dim_enabled: true,
+                idle_dim_timeout_secs: 1,
+                ..DeviceOptions::resolve(&FileConfig::default(), None)
+            };
+            let (_a, opts_rx) = watch::channel(o);
+            let (_b, pointer_rx) = watch::channel(false);
+            let sent = Arc::new(StdMutex::new(Vec::<Value>::new()));
+            let sink = sent.clone();
+            tokio::spawn(idle_loop(
+                opts_rx,
+                pointer_rx,
+                Arc::new(Notify::new()),
+                move |m| sink.lock().unwrap().push(m),
+            ));
+            tokio::time::sleep(Duration::from_millis(1400)).await;
+            assert!(sent.lock().unwrap().is_empty(), "{mode:?} must not dim");
+        }
     }
 
     /// The pen menu settings follow the device override and are included in the update sent to the tablet.
@@ -343,7 +344,6 @@ mod tests {
             pen_menu: Some(false),
             pen_menu_hold_ms: Some(900),
             pen_menu_style: Some("icons".into()),
-            stylus_idle_hide_timeout: Some(15),
             ..TabletProfile::default()
         };
         let o = DeviceOptions::resolve(&cfg, Some(&p));
@@ -352,7 +352,6 @@ mod tests {
         assert_eq!(m["pen_menu"], false);
         assert_eq!(m["pen_menu_hold_ms"], 900);
         assert_eq!(m["pen_menu_style"], "icons");
-        assert_eq!(m["stylus_idle_hide_timeout"], 15);
         let g = DeviceOptions::resolve(&cfg, None);
         assert!(g.pen_menu, "another device keeps the global value");
     }

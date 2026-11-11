@@ -39,8 +39,6 @@ pub struct DeviceOptions {
     /// `right`, `middle` or `none`.
     pub stylus_button_primary: String,
     pub stylus_button_secondary: String,
-    /// Ghost tracking: seconds out of range before the cursor is hidden (0 = never). Global.
-    pub stylus_idle_hide_timeout: u32,
     /// The pen's long-press menu is on. Global.
     pub pen_menu: bool,
     /// Pen menu buttons: `text` or `icons`.
@@ -96,7 +94,6 @@ impl DeviceOptions {
         g.pen_menu = pick!(pen_menu);
         g.pen_menu_style = pick!(pen_menu_style);
         g.pen_menu_hold_ms = pick!(pen_menu_hold_ms);
-        g.stylus_idle_hide_timeout = pick!(stylus_idle_hide_timeout);
         g.sanitize();
         let global_mode = CLI_MODE
             .get()
@@ -131,7 +128,6 @@ impl DeviceOptions {
             stylus_style: g.stylus_style.clone(),
             stylus_button_primary: g.stylus_button_primary.clone(),
             stylus_button_secondary: g.stylus_button_secondary.clone(),
-            stylus_idle_hide_timeout: g.stylus_idle_hide_timeout,
             pen_menu: g.pen_menu,
             pen_menu_style: g.pen_menu_style.clone(),
             pen_menu_hold_ms: g.pen_menu_hold_ms,
@@ -176,7 +172,6 @@ impl DeviceOptions {
             "pen_menu": self.pen_menu,
             "pen_menu_style": self.pen_menu_style,
             "pen_menu_hold_ms": self.pen_menu_hold_ms,
-            "stylus_idle_hide_timeout": self.stylus_idle_hide_timeout,
             "wifi_configured": self.wifi_configured,
         })
     }

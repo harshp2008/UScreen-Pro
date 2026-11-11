@@ -429,7 +429,6 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
         .await;
     });
 
-    let auto_launch = file_cfg.auto_launch_app;
     let adb_token = token.clone();
     let extra = ExtraSessionTemplate {
         max_tablets: file_cfg.max_tablets,
@@ -466,7 +465,6 @@ pub(crate) async fn run_daemon(cli: Cli) -> Result<()> {
         adb_monitor(
             video_port,
             input_port,
-            auto_launch,
             tablet_tx,
             adb_token,
             relaunch,

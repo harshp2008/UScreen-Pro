@@ -138,7 +138,7 @@ pub struct AppConfig {
     pub auto_resolution: bool,
     pub video_port: u16,
     pub input_port: u16,
-    pub auto_launch_app: bool,
+    pub auto_open_app: String,
     pub max_performance_mode: bool,
     pub hevc_low_latency_tuning: bool,
     #[serde(default)]
@@ -185,8 +185,6 @@ pub struct AppConfig {
     pub stylus_button_primary: String,
     /// Second pen side button in `mouse` style.
     pub stylus_button_secondary: String,
-    /// Ghost tracking: seconds with the pen out of range before the cursor hides (0 = never).
-    pub stylus_idle_hide_timeout: u32,
     /// Apps that get the pressure-sensitive pen under `auto`; the daemon owns the default list.
     pub stylus_art_apps: Vec<String>,
     /// Read a plugged-in drawing tablet (XP-Pen, Wacom, ...) through the daemon.
@@ -227,7 +225,7 @@ impl Default for AppConfig {
             auto_resolution: true,
             video_port: 8890,
             input_port: 8891,
-            auto_launch_app: true,
+            auto_open_app: "never".into(),
             max_performance_mode: false,
             hevc_low_latency_tuning: true,
             software_cursor: false,
@@ -261,7 +259,6 @@ impl Default for AppConfig {
             stylus_style: "auto".into(),
             stylus_button_primary: "right".into(),
             stylus_button_secondary: "middle".into(),
-            stylus_idle_hide_timeout: 0,
             stylus_art_apps: [
                 "krita",
                 "gimp",

@@ -132,9 +132,6 @@ pub struct TabletProfile {
     /// Milliseconds the pen is held still before the menu appears. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pen_menu_hold_ms: Option<u32>,
-    /// Seconds out of range before the idle pen cursor is hidden (0 = never). Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stylus_idle_hide_timeout: Option<u32>,
     /// Firmware/APK version reported by the connected Android client.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,

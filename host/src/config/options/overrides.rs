@@ -61,8 +61,7 @@ pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Resul
             m @ ("text" | "icons") => set(&mut p.pen_menu_style, m.to_string()),
             _ => return Err(()),
         },
-        "pen_menu_hold_ms" => set(&mut p.pen_menu_hold_ms, n?.clamp(300, 3000)),
-        "stylus_idle_hide_timeout" => set(&mut p.stylus_idle_hide_timeout, n?.min(3600)),
+        "pen_menu_hold_ms" => set(&mut p.pen_menu_hold_ms, n?.clamp(500, 1500)),
         "stylus_button_secondary" => match s?.as_str() {
             m @ ("right" | "middle" | "none") => set(&mut p.stylus_button_secondary, m.to_string()),
             _ => return Err(()),

@@ -55,6 +55,14 @@ pub fn clean_pen_button(v: &str, default: &str) -> String {
     }
 }
 
+/// `never` (default), `idle` or `always`; anything else falls back to `never`.
+pub(super) fn clean_auto_open(v: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        m @ ("idle" | "always") => m.to_string(),
+        _ => "never".into(),
+    }
+}
+
 /// `bottom_right_zone` (default) or `two_finger_tap`; anything else falls back to the default.
 pub(super) fn clean_right_click(v: &str) -> String {
     match v.trim().to_ascii_lowercase().as_str() {
