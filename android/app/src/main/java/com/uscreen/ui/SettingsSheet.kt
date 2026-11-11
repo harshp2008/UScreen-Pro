@@ -134,12 +134,9 @@ fun SettingsSheet(
                         }
                         Text(
                             when (mode) {
-                                HostConfig.MODE_TOUCHPAD ->
-                                    "The tablet is a laptop touchpad: tap to click, two fingers to scroll or right-click. " +
-                                        "No video is streamed, which saves USB bandwidth and battery."
-                                HostConfig.MODE_STYLUS ->
-                                    "Graphics tablet: the pen draws on the computer's own screen. No video is streamed here."
-                                else -> "A second screen: the computer streams its extra display here and touch is absolute."
+                                HostConfig.MODE_TOUCHPAD -> "A laptop touchpad. No video, so it saves battery."
+                                HostConfig.MODE_STYLUS -> "The pen draws on this computer's own screen. No video."
+                                else -> "A second screen for this computer."
                             },
                             fontSize = 11.sp,
                             color = Muted,
@@ -198,7 +195,7 @@ fun SettingsSheet(
                             if (hostConfig.penMenu) {
                                 ChipChoice(
                                     "Hold time for the menu",
-                                    listOf("500" to "0.5 s", "800" to "0.8 s", "1000" to "1 s", "1500" to "1.5 s", "2000" to "2 s"),
+                                    listOf("500" to "0.5 s", "800" to "0.8 s", "1000" to "1 s", "1500" to "1.5 s"),
                                     hostConfig.penMenuHoldMs.toString(),
                                 ) { onSetting("pen_menu_hold_ms", it.toInt()) }
                                 ChipChoice(
@@ -207,11 +204,6 @@ fun SettingsSheet(
                                     hostConfig.penMenuStyle,
                                 ) { onSetting("pen_menu_style", it) }
                             }
-                            ChipChoice(
-                                "Hide idle pen cursor",
-                                listOf("0" to "Never", "5" to "5 s", "15" to "15 s", "30" to "30 s", "60" to "1 min", "300" to "5 min"),
-                                hostConfig.stylusIdleHideTimeout.toString(),
-                            ) { onSetting("stylus_idle_hide_timeout", it.toInt()) }
                             SwitchRow(
                                 "Black screen in stylus mode",
                                 "Nothing is streamed, so the screen goes black a few seconds after it starts.",
@@ -439,13 +431,13 @@ fun SettingsSheet(
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text("Remove Device Admin", fontSize = 13.sp) }
                         }
-                        SwitchRow(
+                        if (hostConfig.inputMode == HostConfig.MODE_DISPLAY) SwitchRow(
                             "Idle dimming",
-                            "Dim the screen while the computer's pointer is elsewhere; touch to wake.",
+                            "Dim the tablet when the pointer is away and it is unused. Extended Display mode only.",
                             hostConfig.idleDimEnabled,
                             { onSetting("idle_dim_enabled", it) }
                         )
-                        if (hostConfig.idleDimEnabled) {
+                        if (hostConfig.inputMode == HostConfig.MODE_DISPLAY && hostConfig.idleDimEnabled) {
                             Text(
                                 "After ${hostConfig.idleDimTimeoutSecs} s · dim ${"%.1f".format(hostConfig.dimDurationMs / 1000f)} s " +
                                     "(${curveText(hostConfig.dimCurve)}) · undim ${"%.1f".format(hostConfig.undimDurationMs / 1000f)} s " +

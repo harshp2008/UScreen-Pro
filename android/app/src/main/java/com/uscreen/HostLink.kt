@@ -61,8 +61,6 @@ data class HostConfig(
     val penMenu: Boolean = true,
     val penMenuStyle: String = "text",
     val penMenuHoldMs: Int = 500,
-    /** Seconds out of range before the computer hides the idle pen cursor; 0 = never. */
-    val stylusIdleHideTimeout: Int = 0,
 ) {
     /** True while the host streams video to this tablet (only Display mode does). */
     val streamsVideo: Boolean get() = inputMode == MODE_DISPLAY
@@ -94,7 +92,6 @@ data class HostConfig(
         "pen_menu" -> (value as? Boolean)?.let { copy(penMenu = it) }
         "pen_menu_style" -> (value as? String)?.takeIf { it == "text" || it == "icons" }?.let { copy(penMenuStyle = it) }
         "pen_menu_hold_ms" -> (value as? Int)?.let { copy(penMenuHoldMs = it.coerceIn(300, 3000)) }
-        "stylus_idle_hide_timeout" -> (value as? Int)?.let { copy(stylusIdleHideTimeout = it.coerceIn(0, 3600)) }
         else -> null
     }
 
@@ -167,7 +164,6 @@ data class HostConfig(
             penMenuStyle = o.optString("pen_menu_style", base.penMenuStyle)
                 .takeIf { it == "text" || it == "icons" } ?: base.penMenuStyle,
             penMenuHoldMs = o.optInt("pen_menu_hold_ms", base.penMenuHoldMs).coerceIn(300, 3000),
-            stylusIdleHideTimeout = o.optInt("stylus_idle_hide_timeout", base.stylusIdleHideTimeout).coerceIn(0, 3600),
         )
 
         /** The saved copy of the synced settings, so a restart shows the last known values before the host answers. */
@@ -196,7 +192,6 @@ data class HostConfig(
             penMenu = prefs.penMenu,
             penMenuStyle = prefs.penMenuStyle,
             penMenuHoldMs = prefs.penMenuHoldMs,
-            stylusIdleHideTimeout = prefs.stylusIdleHideTimeout,
         )
     }
 }

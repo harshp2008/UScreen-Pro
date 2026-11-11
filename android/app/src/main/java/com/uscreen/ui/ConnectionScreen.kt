@@ -204,7 +204,14 @@ fun UScreenMain(
             exit = fadeOut(),
             modifier = Modifier.fillMaxSize()
         ) {
-            PenOnlyScreen(blankAfterSeconds = if (blankInPenMode) 8 else 0)
+            PenOnlyScreen(
+                blankAfterSeconds = if (blankInPenMode) 8 else 0,
+                penStyle = when (hostConfig.stylusStyle) {
+                    HostConfig.STYLUS_MOUSE -> "Mouse"
+                    HostConfig.STYLUS_TABLET -> "Graphics tablet"
+                    else -> "Dynamic"
+                },
+            )
         }
 
         AnimatedVisibility(

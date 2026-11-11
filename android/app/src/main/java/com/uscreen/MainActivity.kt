@@ -20,6 +20,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -138,6 +139,15 @@ class MainActivity : AppCompatActivity() {
             autoRetryDisabled -> dimmer.setNow(FadeCurve.BATTERY_SAVER_LEVEL)
             dimmedByHost -> dimmer.setNow(FadeCurve.DIM_LEVEL)
         }
+    }
+
+    /**
+     * Any touch on the app, the settings sheet included, counts as use of the tablet: in Display mode it tells the
+     * host (at most once a second) so its idle timer does not dim the screen under the user's finger.
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (hostConfig.inputMode == HostConfig.MODE_DISPLAY) touchCapture?.sendWake(force = false)
+        return super.dispatchTouchEvent(ev)
     }
 
     /** The user touched the dimmed screen: fade back up with the host's undim curve and tell the host. */
@@ -410,7 +420,6 @@ class MainActivity : AppCompatActivity() {
         prefs.penMenu = cfg.penMenu
         prefs.penMenuStyle = cfg.penMenuStyle
         prefs.penMenuHoldMs = cfg.penMenuHoldMs
-        prefs.stylusIdleHideTimeout = cfg.stylusIdleHideTimeout
         // Touchpad mode is made of finger input, so it overrides the "Touch input" switch.
         touchCapture?.setTouchEnabled(cfg.touchInput || cfg.inputMode == HostConfig.MODE_TOUCHPAD)
         touchCapture?.setTouchpadMode(cfg.inputMode == HostConfig.MODE_TOUCHPAD)

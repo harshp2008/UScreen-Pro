@@ -31,11 +31,11 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 /**
- * Screen displayed when running in Graphics Tablet mode.
+ * Screen displayed in Stylus mode; [penStyle] is the pen style's name (Dynamic, Mouse or Graphics tablet).
  * Shows informational guidance and blanks out the OLED screen after a timeout to conserve battery.
  */
 @Composable
-fun PenOnlyScreen(blankAfterSeconds: Int) {
+fun PenOnlyScreen(blankAfterSeconds: Int, penStyle: String) {
     var blank by remember { mutableStateOf(false) }
     LaunchedEffect(blankAfterSeconds) {
         blank = false
@@ -57,7 +57,7 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
                 modifier = Modifier.padding(32.dp)
             ) {
                 Text(
-                    "Graphics tablet mode",
+                    "Stylus mode · $penStyle",
                     fontSize = 20.sp,
                     color = OnSurface,
                     fontWeight = FontWeight.Bold

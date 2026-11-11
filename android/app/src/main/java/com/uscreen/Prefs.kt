@@ -253,8 +253,4 @@ class Prefs(context: Context) {
     var penMenuHoldMs: Int
         get() = sp.getInt("pen_menu_hold_ms", 500)
         set(v) = sp.edit().putInt("pen_menu_hold_ms", v).apply()
-
-    var stylusIdleHideTimeout: Int
-        get() = sp.getInt("stylus_idle_hide_timeout", 0)
-        set(v) = sp.edit().putInt("stylus_idle_hide_timeout", v).apply()
 }
