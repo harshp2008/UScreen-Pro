@@ -68,6 +68,24 @@ The user reports that GNOME's own **Print Screen overlay takes about 0.4 s** wit
 not tested here: the overlay keeps the capture as an in-memory image and encodes a PNG only for the area or screen you choose, whereas the portal always writes the whole desktop
 to a file first. That would make the PNG write of the full canvas, not the capture, the expensive step.
 
+### 8. The screen-cast portal: one frame from one monitor
+A standalone Python script (portal `org.freedesktop.portal.ScreenCast`, `types = monitor`, `persist_mode = 2`, then `pipewiresrc num-buffers=1` in GStreamer 1.24) took one frame
+of a single monitor (the tablet's virtual display, chosen in the dialog; its stream was 1464x915 logical, position 2856,0):
+
+| Step | First run (dialog shown) | Next runs (permission remembered with the restore token) |
+|---|---|---|
+| CreateSession + SelectSources + Start | 106.7 s (waiting for the user to press Share) | 0.01 s, no dialog |
+| OpenPipeWireRemote | 0.00 s | 0.00 s |
+| First frame, raw | 0.20 s | 0.11 s and 0.15 s |
+| First frame encoded to PNG (5.5 MB) | 1.04 s | 0.97 s and 1.02 s |
+| Whole script, wall time | | 1.23 s and 1.26 s |
+
+So the frame itself is in memory about 0.15 s after the request. Almost all of the rest is the PNG encode (about 0.85 s for this one frame), which a screenshot tool does not need if it
+keeps the frame as an image. A capture through this route is one monitor at its own size, so it does not pay for the other monitors or for the largest scale of the stage.
+**Not measured:** the laptop's own screen (only the tablet's display was chosen), a `pipewiresrc` frame being the *current* picture for an idle screen, and whether GNOME keeps the
+shared-screen indicator up between frames. The permission is stored per monitor, so a tool would need one restore token per monitor. A patched Flameshot could pick the monitor the
+pointer is on; the Screenshot portal has no such choice.
+
 ## What it is not (tested)
 * **Not a frame clock stall on the idle EVDI outputs.** Constant redraw on the virtual monitors did not change the time (about 10 s either way). The test windows
   may not have landed on those monitors, so this is weak evidence; the linear model in table 4 is the stronger one.
@@ -82,6 +100,7 @@ Everything that makes the picture smaller helps, in this order of effect:
 | Lower the scale of the virtual displays (largest one counts) | 29 MP to 18.9 MP to 10.9 MP, measured above (10 s to 6.2 s) | smaller text on the phone and tablet |
 | Lower the virtual display's resolution (Stream detail Half) | e.g. 1280x800 + 1170x540 at 1x: 4.7 MP, about 3 s *(predicted from the line above, not measured)* | a softer picture on the tablet |
 | Capture a window or a region, not the desktop | 0.8 s, measured | none |
+| Capture one monitor through the screen-cast portal (needs Flameshot to be patched) | about 0.15 s for the frame, measured on the tablet's display | a one-time Share dialog per monitor, then remembered |
 | GNOME's own Print Screen overlay | about 0.4 s as reported by the user, not measured here | none; it is not a tool Flameshot can use |
 | A fast capture inside the shell (for example from UScreen's GNOME extension: capture the stage as an image and write the PNG with low compression) | would cut the shell's 3.6 s; not built, and a Shell extension change only loads after logging out and in | patches GNOME internals, GNOME 46 only |
 
