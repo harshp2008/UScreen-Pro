@@ -59,6 +59,15 @@ PNG encode in the shell and the decode and re-save in the client; I did not prof
 `flameshot screen -n 0` (laptop only) still took 5.7 s: it renders the whole stage and crops afterwards.
 `QT_QPA_PLATFORM=xcb flameshot full` was faster (6.4 s against 11 s) but goes through XWayland; I did not check what it captures.
 
+### 7. The portal alone, and GNOME's own Print Screen
+A small Python script asked `org.freedesktop.portal.Screenshot` for a non-interactive screenshot and timed the `Response` signal, with no client tool involved:
+**3.56 s and 3.58 s**, writing an 8.4 MB PNG. So of the roughly 10 s that `gnome-screenshot` takes, about 3.6 s is the shell (capture and PNG write) and the rest is the
+client loading and re-saving the file; Flameshot's GUI (5.6 s) adds about 2 s on top of the portal. The shell's own `org.gnome.Shell.Screenshot.Screenshot` call is not
+allowed for ordinary clients (`AccessDenied`), so the shell-only time could not be measured directly.
+The user reports that GNOME's own **Print Screen overlay takes about 0.4 s** with the same three monitors. I did not measure it. My explanation, from how GNOME 46 is built and
+not tested here: the overlay keeps the capture as an in-memory image and encodes a PNG only for the area or screen you choose, whereas the portal always writes the whole desktop
+to a file first. That would make the PNG write of the full canvas, not the capture, the expensive step.
+
 ## What it is not (tested)
 * **Not a frame clock stall on the idle EVDI outputs.** Constant redraw on the virtual monitors did not change the time (about 10 s either way). The test windows
   may not have landed on those monitors, so this is weak evidence; the linear model in table 4 is the stronger one.
@@ -73,7 +82,8 @@ Everything that makes the picture smaller helps, in this order of effect:
 | Lower the scale of the virtual displays (largest one counts) | 29 MP to 18.9 MP to 10.9 MP, measured above (10 s to 6.2 s) | smaller text on the phone and tablet |
 | Lower the virtual display's resolution (Stream detail Half) | e.g. 1280x800 + 1170x540 at 1x: 4.7 MP, about 3 s *(predicted from the line above, not measured)* | a softer picture on the tablet |
 | Capture a window or a region, not the desktop | 0.8 s, measured | none |
-| A tool that only captures the monitor under the pointer | not available for the portal path in GNOME 46 | |
+| GNOME's own Print Screen overlay | about 0.4 s as reported by the user, not measured here | none; it is not a tool Flameshot can use |
+| A fast capture inside the shell (for example from UScreen's GNOME extension: capture the stage as an image and write the PNG with low compression) | would cut the shell's 3.6 s; not built, and a Shell extension change only loads after logging out and in | patches GNOME internals, GNOME 46 only |
 
 The EDID UScreen generates carries the tablet's *real* physical size on purpose (the compositor derives DPI from it), and that is what makes GNOME pick 2.5 for
 the phone. Changing the scale therefore means either a per-device "interface size" that overrides GNOME's choice through `DisplayConfig`, or a different
