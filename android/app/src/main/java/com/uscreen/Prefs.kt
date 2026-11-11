@@ -209,6 +209,16 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("touchpad_haptics", true)
         set(v) = sp.edit().putBoolean("touchpad_haptics", v).apply()
 
+    /** Strength of the touchpad vibration (`light`, `medium`, `strong`), synced with the computer. */
+    var touchpadHapticStrength: String
+        get() = sp.getString("touchpad_haptic_strength", Haptics.MEDIUM) ?: Haptics.MEDIUM
+        set(v) = sp.edit().putString("touchpad_haptic_strength", v).apply()
+
+    /** A short click sound on touchpad clicks, synced with the computer. */
+    var touchpadClickSound: Boolean
+        get() = sp.getBoolean("touchpad_click_sound", false)
+        set(v) = sp.edit().putBoolean("touchpad_click_sound", v).apply()
+
     /** Raw fingers for the computer's libinput instead of gestures recognised here; the host's effective value. */
     var nativeGestures: Boolean
         get() = sp.getBoolean("native_gestures", true)

@@ -48,6 +48,10 @@ data class HostConfig(
     val undimDurationMs: Long = 500,
     val wifiConfigured: Boolean = false,
     val touchpadHaptics: Boolean = true,
+    /** `light`, `medium` or `strong`. */
+    val touchpadHapticStrength: String = Haptics.MEDIUM,
+    /** A short click sound on touchpad clicks. */
+    val touchpadClickSound: Boolean = false,
     /** Touchpad mode sends raw fingers for the computer's libinput to recognise (the host's effective value). */
     val nativeGestures: Boolean = true,
     /** Touchpad sensitivity in percent (50-200): how far things move per finger travel. */
@@ -83,6 +87,8 @@ data class HostConfig(
         "idle_dim_timeout_secs" -> (value as? Int)?.let { copy(idleDimTimeoutSecs = it) }
         "touchpad_shape" -> (value as? String)?.takeIf { it in TouchpadShape.SHAPES }?.let { copy(touchpadShape = it) }
         "touchpad_haptics" -> (value as? Boolean)?.let { copy(touchpadHaptics = it) }
+        "touchpad_haptic_strength" -> (value as? String)?.takeIf { it in Haptics.STRENGTHS }?.let { copy(touchpadHapticStrength = it) }
+        "touchpad_click_sound" -> (value as? Boolean)?.let { copy(touchpadClickSound = it) }
         "native_gestures" -> (value as? Boolean)?.let { copy(nativeGestures = it) }
         "touchpad_sensitivity" -> (value as? Int)?.let { copy(touchpadSensitivity = it.coerceIn(50, 200)) }
         "right_click_method" -> (value as? String)?.takeIf { it in RIGHT_CLICK_METHODS }?.let { copy(rightClickMethod = it) }
@@ -148,6 +154,9 @@ data class HostConfig(
             undimDurationMs = o.optLong("undim_duration_ms", base.undimDurationMs),
             wifiConfigured = o.optBoolean("wifi_configured", base.wifiConfigured),
             touchpadHaptics = o.optBoolean("touchpad_haptics", base.touchpadHaptics),
+            touchpadHapticStrength = o.optString("touchpad_haptic_strength", base.touchpadHapticStrength)
+                .takeIf { it in Haptics.STRENGTHS } ?: base.touchpadHapticStrength,
+            touchpadClickSound = o.optBoolean("touchpad_click_sound", base.touchpadClickSound),
             nativeGestures = o.optBoolean("native_gestures", base.nativeGestures),
             touchpadSensitivity = o.optInt("touchpad_sensitivity", base.touchpadSensitivity).coerceIn(50, 200),
             rightClickMethod = o.optString("right_click_method", base.rightClickMethod)
@@ -182,6 +191,8 @@ data class HostConfig(
             batterySaverLock = prefs.batterySaverLock,
             wifiConfigured = prefs.wifiConfigured,
             touchpadHaptics = prefs.touchpadHaptics,
+            touchpadHapticStrength = prefs.touchpadHapticStrength,
+            touchpadClickSound = prefs.touchpadClickSound,
             nativeGestures = prefs.nativeGestures,
             touchpadSensitivity = prefs.touchpadSensitivity,
             rightClickMethod = prefs.rightClickMethod,

@@ -99,6 +99,21 @@ class HostLinkTest {
         assertEquals(null, FadeCurve.parseBezier("bezier:a,b,c,d"))
     }
 
+    /** Haptic strength and click sound: defaults, validation and JSON. */
+    @Test
+    fun hapticStrengthAndClickSoundAreValidated() {
+        val base = HostConfig()
+        assertEquals("medium", base.touchpadHapticStrength)
+        assertFalse(base.touchpadClickSound)
+        assertEquals("strong", base.withSetting("touchpad_haptic_strength", "strong")?.touchpadHapticStrength)
+        assertEquals(null, base.withSetting("touchpad_haptic_strength", "extreme"))
+        assertTrue(base.withSetting("touchpad_click_sound", true)?.touchpadClickSound == true)
+        val c = HostConfig.fromJson(org.json.JSONObject("""{"touchpad_haptic_strength":"light","touchpad_click_sound":true}"""), base)
+        assertEquals("light", c.touchpadHapticStrength)
+        assertTrue(c.touchpadClickSound)
+        assertEquals("medium", HostConfig.fromJson(org.json.JSONObject("""{"touchpad_haptic_strength":"x"}"""), base).touchpadHapticStrength)
+    }
+
     /**
      * The newer settings (touchpad haptics, right-click method) follow the same rules as the older ones: defaults, validation and JSON.
      */

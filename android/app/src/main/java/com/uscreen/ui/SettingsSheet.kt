@@ -47,6 +47,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.uscreen.Haptics
 import com.uscreen.BuildConfig
 import com.uscreen.ChargingStatus
 import com.uscreen.HostConfig
@@ -227,11 +228,25 @@ fun SettingsSheet(
                             )
                         }
                         if (mode == HostConfig.MODE_TOUCHPAD) {
+                            val hasMotor = remember { Haptics.hasMotor(context) }
                             SwitchRow(
                                 "Touchpad Haptics",
-                                "A light 50 ms vibration on left, right and middle clicks.",
+                                if (hasMotor) "Vibrate on clicks." else "No vibration motor detected on this device, so nothing will vibrate.",
                                 hostConfig.touchpadHaptics,
                                 { onSetting("touchpad_haptics", it) }
+                            )
+                            if (hostConfig.touchpadHaptics && hasMotor) {
+                                ChipChoice(
+                                    "Haptic strength",
+                                    listOf("light" to "Light", "medium" to "Medium", "strong" to "Strong"),
+                                    hostConfig.touchpadHapticStrength,
+                                ) { onSetting("touchpad_haptic_strength", it) }
+                            }
+                            SwitchRow(
+                                "Click sound",
+                                "A short tick from the speaker on clicks.",
+                                hostConfig.touchpadClickSound,
+                                { onSetting("touchpad_click_sound", it) }
                             )
                             SwitchRow(
                                 "Use Native Gestures (Wayland/libinput)",

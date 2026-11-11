@@ -239,9 +239,12 @@ class MainActivity : AppCompatActivity() {
             it.setStylusMode(hostConfig.inputMode == HostConfig.MODE_STYLUS)
             it.setTouchpadShape(hostConfig.touchpadShape)
             it.hostConfig = hostConfig
-            // Touchpad clicks tick lightly when the setting is on (it is on by default).
+            // Touchpad clicks give the feedback the settings ask for: a vibration of the chosen strength and/or a click sound.
             it.onHaptic = {
-                if (hostConfig.touchpadHaptics && hostConfig.inputMode == HostConfig.MODE_TOUCHPAD) Haptics.click(this)
+                if (hostConfig.inputMode == HostConfig.MODE_TOUCHPAD) {
+                    if (hostConfig.touchpadHaptics) Haptics.click(this, hostConfig.touchpadHapticStrength)
+                    if (hostConfig.touchpadClickSound) ClickSound.play()
+                }
             }
         }
         touchCapture?.onHostConfig = { cfg -> runOnUiThread { applyHostConfig(cfg) } }
@@ -410,6 +413,8 @@ class MainActivity : AppCompatActivity() {
         prefs.batterySaverLock = cfg.batterySaverLock
         prefs.wifiConfigured = cfg.wifiConfigured
         prefs.touchpadHaptics = cfg.touchpadHaptics
+        prefs.touchpadHapticStrength = cfg.touchpadHapticStrength
+        prefs.touchpadClickSound = cfg.touchpadClickSound
         prefs.nativeGestures = cfg.nativeGestures
         prefs.touchpadSensitivity = cfg.touchpadSensitivity
         prefs.rightClickMethod = cfg.rightClickMethod

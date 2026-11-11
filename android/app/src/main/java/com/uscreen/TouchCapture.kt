@@ -1193,12 +1193,24 @@ and consults it when choosing between the device's adb entries.
     private fun sendRaw(slots: org.json.JSONArray) {
         val empty = slots.length() == 0
         if (empty && !rawDown) return
+        // The computer's libinput makes the click from these fingers, so the tablet watches for a tap itself to tick.
+        val tapped = nativeTaps.update(
+            (0 until slots.length()).map {
+                val s = slots.getJSONObject(it)
+                NativeTapDetector.Point(s.getInt("id"), s.getDouble("x").toFloat(), s.getDouble("y").toFloat())
+            },
+            android.os.SystemClock.uptimeMillis(),
+        )
         rawDown = !empty
         sendSeq(JSONObject().apply {
             put("type", "touchpad_raw")
             put("slots", slots)
         })
+        if (tapped) onHaptic?.invoke()
     }
+
+    /** Finds taps in the raw fingers so the tablet can give click feedback in native-gesture mode. */
+    private val nativeTaps = NativeTapDetector()
 
     /** Right click from the click strip: the host's relative mouse, since the pad only sees fingers. */
     private fun sendRightClick() {

@@ -1,5 +1,5 @@
 /*
- * The short vibration that confirms a touchpad click.
+ * The tick that confirms a touchpad click, with a strength, and a check for whether the device has a vibration motor at all.
  */
 package com.uscreen
 
@@ -10,17 +10,21 @@ import android.os.Vibrator
 import android.os.VibratorManager
 
 /**
- * The tick that confirms a touchpad click. Uses [VibratorManager] on Android 12+ and the
- * older [Vibrator] service before that; a tablet without a vibration motor simply gets nothing.
+ * The tick that confirms a touchpad click. Uses [VibratorManager] on Android 12+ and the older [Vibrator] service
+ * before that.
  *
- * Measured on a Galaxy Tab S9 FE (SM-X616B): its vibrator reports no amplitude control
- * (`capabilitiesFlags = 0`), so the old 50 ms pulse "at amplitude 80" was one short, fixed-strength
- * burst that is barely felt. The tick is now the system's own heavy click where the vibrator
- * supports it, and otherwise a longer pulse at full strength.
+ * Measured on a Galaxy Tab S9 FE+ (SM-X616B): Android reports no vibrator at all there (`vibratorIds = []`, and
+ * `hasVibrator()` is false), so nothing can be felt on that tablet whatever the code does. [hasMotor] lets the
+ * settings say so instead of staying silent. Where a motor exists the tick is the system's own effect for the
+ * chosen strength, else a pulse whose length grows with the strength.
  */
 object Haptics {
-    /** Length of the fallback pulse, long enough for a tablet motor to spin up and be felt. */
-    const val CLICK_MS = 70L
+    /** Pulse length when the hardware has no built-in effect, by strength. */
+    private fun pulseMs(strength: String) = when (strength) {
+        STRONG -> 90L
+        LIGHT -> 30L
+        else -> 55L
+    }
 
     /**
      * The system vibrator: the default one of the `VibratorManager` on Android 12 (S) and later, the legacy service before that; null when the device has none.
@@ -33,24 +37,49 @@ object Haptics {
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }
 
-    /** The effect for one click on [v]: the heavy click if the hardware has it, else a full-strength pulse. */
-    private fun clickEffect(v: Vibrator): VibrationEffect {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-            v.areAllEffectsSupported(VibrationEffect.EFFECT_HEAVY_CLICK) == Vibrator.VIBRATION_EFFECT_SUPPORT_YES
-        ) {
-            return VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
-        }
-        val amplitude = if (v.hasAmplitudeControl()) 255 else VibrationEffect.DEFAULT_AMPLITUDE
-        return VibrationEffect.createOneShot(CLICK_MS, amplitude)
+    /** Whether this device has a vibration motor Android knows about. */
+    fun hasMotor(context: Context): Boolean = try {
+        vibrator(context)?.hasVibrator() == true
+    } catch (_: Exception) {
+        false
     }
 
-    /** One click tick. Safe to call from any thread. */
-    fun click(context: Context) {
+    /** The effect for one click of [strength] on [v]. */
+    private fun clickEffect(v: Vibrator, strength: String): VibrationEffect {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val builtIn = when (strength) {
+                STRONG -> VibrationEffect.EFFECT_HEAVY_CLICK
+                LIGHT -> VibrationEffect.EFFECT_TICK
+                else -> VibrationEffect.EFFECT_CLICK
+            }
+            if (v.areAllEffectsSupported(builtIn) == Vibrator.VIBRATION_EFFECT_SUPPORT_YES) {
+                return VibrationEffect.createPredefined(builtIn)
+            }
+        }
+        val amplitude = if (v.hasAmplitudeControl()) {
+            when (strength) {
+                STRONG -> 255
+                LIGHT -> 90
+                else -> 170
+            }
+        } else {
+            VibrationEffect.DEFAULT_AMPLITUDE
+        }
+        return VibrationEffect.createOneShot(pulseMs(strength), amplitude)
+    }
+
+    /** One click tick of [strength] (`light`, `medium` or `strong`). Safe to call from any thread. */
+    fun click(context: Context, strength: String = MEDIUM) {
         try {
             val v = vibrator(context)?.takeIf { it.hasVibrator() } ?: return
-            v.vibrate(clickEffect(v))
+            v.vibrate(clickEffect(v, strength))
         } catch (_: Exception) {
             // Vibration is a nicety; never let it break input.
         }
     }
+
+    const val LIGHT = "light"
+    const val MEDIUM = "medium"
+    const val STRONG = "strong"
+    val STRENGTHS = listOf(LIGHT, MEDIUM, STRONG)
 }
