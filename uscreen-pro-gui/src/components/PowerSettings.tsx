@@ -22,6 +22,7 @@ import {
   STYLUS_STYLES,
   PEN_BUTTONS,
   THEME_MODES,
+  HAPTIC_STRENGTHS,
   labelOf,
   modeLabel,
 } from "../lib/options";
@@ -48,6 +49,8 @@ export interface PowerValues {
   dim_duration_ms: number;
   undim_duration_ms: number;
   touchpad_haptics: boolean;
+  touchpad_haptic_strength: string;
+  touchpad_click_sound: boolean;
   native_gestures: boolean;
   touchpad_sensitivity: number;
   right_click_method: string;
@@ -162,10 +165,31 @@ export function ModePanel({
           />
           <SwitchRow
             label="Touchpad Haptics"
-            tip="A light 50 ms vibration on the tablet for left, right and middle clicks."
+            tip="Vibrate the tablet on clicks. Needs a vibration motor; the tablet app says if it has none."
             checked={v.touchpad_haptics}
             onChange={(touchpad_haptics) => onChange({ touchpad_haptics })}
             override={ov("touchpad_haptics", onOff(v.touchpad_haptics))}
+          />
+          {v.touchpad_haptics && (
+            <SettingRow
+              label="Haptic strength"
+              tip="How firm the vibration is."
+              override={ov("touchpad_haptic_strength", labelOf(HAPTIC_STRENGTHS, v.touchpad_haptic_strength))}
+            >
+              <Segmented
+                label="Haptic strength"
+                value={v.touchpad_haptic_strength}
+                options={HAPTIC_STRENGTHS}
+                onValueChange={(touchpad_haptic_strength) => onChange({ touchpad_haptic_strength })}
+              />
+            </SettingRow>
+          )}
+          <SwitchRow
+            label="Click sound"
+            tip="A short tick from the tablet's speaker on clicks."
+            checked={v.touchpad_click_sound}
+            onChange={(touchpad_click_sound) => onChange({ touchpad_click_sound })}
+            override={ov("touchpad_click_sound", onOff(v.touchpad_click_sound))}
           />
           <SwitchRow
             label="Use Native Gestures (Wayland/libinput)"

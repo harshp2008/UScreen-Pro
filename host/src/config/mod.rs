@@ -183,8 +183,12 @@ pub struct FileConfig {
     pub dim_duration_ms: u32,
     /// Length of the undim fade in milliseconds.
     pub undim_duration_ms: u32,
-    /// Light vibration on touchpad clicks.
+    /// Vibration on touchpad clicks.
     pub touchpad_haptics: bool,
+    /// How strong that vibration is: `light`, `medium` (default) or `strong`.
+    pub touchpad_haptic_strength: String,
+    /// A short click sound on the tablet for touchpad clicks. Off by default.
+    pub touchpad_click_sound: bool,
     /// Use native gestures (Wayland / libinput) in Touchpad mode: the tablet's fingers are replayed
     /// on a virtual multi-touch touchpad and GNOME / KDE handle swipes and pinches themselves.
     /// Off, or on X11 and desktops without libinput gestures, the tablet recognises gestures and
@@ -284,6 +288,8 @@ impl Default for FileConfig {
             dim_duration_ms: 3000,
             undim_duration_ms: 500,
             touchpad_haptics: true,
+            touchpad_haptic_strength: "medium".into(),
+            touchpad_click_sound: false,
             native_gestures: true,
             touchpad_sensitivity: 100,
             right_click_method: "bottom_right_zone".into(),

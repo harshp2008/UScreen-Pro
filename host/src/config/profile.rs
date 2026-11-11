@@ -101,6 +101,12 @@ pub struct TabletProfile {
     /// Light vibration on touchpad clicks. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_haptics: Option<bool>,
+    /// Strength of the touchpad vibration: `light`, `medium` or `strong`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_haptic_strength: Option<String>,
+    /// Click sound on touchpad clicks. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_click_sound: Option<bool>,
     /// Touchpad mode replays the tablet's fingers on a virtual multi-touch touchpad so the desktop
     /// recognises swipes and pinches itself. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]

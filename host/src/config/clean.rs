@@ -55,6 +55,14 @@ pub fn clean_pen_button(v: &str, default: &str) -> String {
     }
 }
 
+/// `light`, `medium` (default) or `strong`; anything else falls back to `medium`.
+pub(super) fn clean_haptic_strength(v: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        s @ ("light" | "strong") => s.to_string(),
+        _ => "medium".into(),
+    }
+}
+
 /// `never` (default), `idle` or `always`; anything else falls back to `never`.
 pub(super) fn clean_auto_open(v: &str) -> String {
     match v.trim().to_ascii_lowercase().as_str() {

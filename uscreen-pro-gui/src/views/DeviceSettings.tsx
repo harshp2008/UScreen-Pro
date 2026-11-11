@@ -83,6 +83,8 @@ export function DeviceSettings({
     dim_duration_ms: p.dim_duration_ms ?? g.dim_duration_ms,
     undim_duration_ms: p.undim_duration_ms ?? g.undim_duration_ms,
     touchpad_haptics: p.touchpad_haptics ?? g.touchpad_haptics,
+    touchpad_haptic_strength: p.touchpad_haptic_strength ?? g.touchpad_haptic_strength,
+    touchpad_click_sound: p.touchpad_click_sound ?? g.touchpad_click_sound,
     native_gestures: p.native_gestures ?? g.native_gestures,
     touchpad_sensitivity: p.touchpad_sensitivity ?? g.touchpad_sensitivity,
     right_click_method: p.right_click_method ?? g.right_click_method,

@@ -87,6 +87,10 @@ pub struct TabletProfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_haptics: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_haptic_strength: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_click_sound: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub native_gestures: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_sensitivity: Option<u32>,
@@ -169,8 +173,12 @@ pub struct AppConfig {
     pub undim_curve: String,
     pub dim_duration_ms: u32,
     pub undim_duration_ms: u32,
-    /// Light vibration on touchpad clicks.
+    /// Vibration on touchpad clicks.
     pub touchpad_haptics: bool,
+    /// Strength of that vibration: `light`, `medium` or `strong`.
+    pub touchpad_haptic_strength: String,
+    /// A short click sound on the tablet for touchpad clicks.
+    pub touchpad_click_sound: bool,
     /// Use native gestures (Wayland / libinput): the tablet's fingers are replayed on a virtual touchpad.
     pub native_gestures: bool,
     /// Touchpad sensitivity in percent (50-200).
@@ -252,6 +260,8 @@ impl Default for AppConfig {
             dim_duration_ms: 3000,
             undim_duration_ms: 500,
             touchpad_haptics: true,
+            touchpad_haptic_strength: "medium".into(),
+            touchpad_click_sound: false,
             native_gestures: true,
             touchpad_sensitivity: 100,
             right_click_method: "bottom_right_zone".into(),

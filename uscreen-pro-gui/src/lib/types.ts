@@ -107,6 +107,8 @@ export interface TabletProfile {
   dim_duration_ms?: number;
   undim_duration_ms?: number;
   touchpad_haptics?: boolean;
+  touchpad_haptic_strength?: string;
+  touchpad_click_sound?: boolean;
   native_gestures?: boolean;
   touchpad_sensitivity?: number;
   right_click_method?: string;
@@ -174,6 +176,8 @@ export interface AppConfig {
   undim_duration_ms: number;
   /** Light vibration on touchpad clicks. */
   touchpad_haptics: boolean;
+  touchpad_haptic_strength: string;
+  touchpad_click_sound: boolean;
   native_gestures: boolean;
   /** Touchpad sensitivity in percent (50-200). */
   touchpad_sensitivity: number;

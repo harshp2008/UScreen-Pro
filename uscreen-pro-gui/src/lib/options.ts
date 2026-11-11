@@ -145,6 +145,13 @@ export const AUTO_OPEN: Option[] = [
   { value: "always", label: "Always" },
 ];
 
+/** How strong the touchpad vibration is. */
+export const HAPTIC_STRENGTHS: Option[] = [
+  { value: "light", label: "Light" },
+  { value: "medium", label: "Medium" },
+  { value: "strong", label: "Strong" },
+];
+
 /** What a pen side button does when the pen acts as a mouse. */
 export const PEN_BUTTONS: Option[] = [
   { value: "right", label: "Right click" },

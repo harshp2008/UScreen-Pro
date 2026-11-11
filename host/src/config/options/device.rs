@@ -25,6 +25,8 @@ pub struct DeviceOptions {
     pub dim_duration_ms: u32,
     pub undim_duration_ms: u32,
     pub touchpad_haptics: bool,
+    pub touchpad_haptic_strength: String,
+    pub touchpad_click_sound: bool,
     /// The setting "Use Native Gestures (Wayland/libinput)". Whether it is in effect also depends
     /// on the desktop: see [`DeviceOptions::native_gestures_effective`].
     pub native_gestures: bool,
@@ -84,6 +86,8 @@ impl DeviceOptions {
         g.dim_duration_ms = pick!(dim_duration_ms);
         g.undim_duration_ms = pick!(undim_duration_ms);
         g.touchpad_haptics = pick!(touchpad_haptics);
+        g.touchpad_haptic_strength = pick!(touchpad_haptic_strength);
+        g.touchpad_click_sound = pick!(touchpad_click_sound);
         g.native_gestures = p.native_gestures.unwrap_or(cfg.native_gestures);
         g.touchpad_sensitivity = pick!(touchpad_sensitivity);
         g.right_click_method = pick!(right_click_method);
@@ -121,6 +125,8 @@ impl DeviceOptions {
             dim_duration_ms: g.dim_duration_ms,
             undim_duration_ms: g.undim_duration_ms,
             touchpad_haptics: g.touchpad_haptics,
+            touchpad_haptic_strength: g.touchpad_haptic_strength.clone(),
+            touchpad_click_sound: g.touchpad_click_sound,
             native_gestures: g.native_gestures,
             touchpad_sensitivity: g.touchpad_sensitivity,
             right_click_method: g.right_click_method.clone(),
@@ -160,6 +166,8 @@ impl DeviceOptions {
             "dim_duration_ms": self.dim_duration_ms,
             "undim_duration_ms": self.undim_duration_ms,
             "touchpad_haptics": self.touchpad_haptics,
+            "touchpad_haptic_strength": self.touchpad_haptic_strength,
+            "touchpad_click_sound": self.touchpad_click_sound,
             "right_click_method": self.right_click_method,
             // What the tablet acts on is the effective value, so it falls back to its own gesture
             // recogniser on X11 and on desktops that do nothing with libinput gestures.

@@ -57,6 +57,8 @@ const config: AppConfig = {
   dim_duration_ms: 3000,
   undim_duration_ms: 500,
   touchpad_haptics: true,
+  touchpad_haptic_strength: "medium",
+  touchpad_click_sound: false,
   native_gestures: true,
   touchpad_sensitivity: 100,
   right_click_method: "bottom_right_zone",

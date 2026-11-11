@@ -189,6 +189,8 @@ mod tests {
             "dim_duration_ms",
             "undim_duration_ms",
             "touchpad_haptics",
+            "touchpad_haptic_strength",
+            "touchpad_click_sound",
             "right_click_method",
             "native_gestures",
             "touchpad_sensitivity",

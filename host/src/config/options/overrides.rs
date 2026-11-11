@@ -40,6 +40,13 @@ pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Resul
         "idle_dim_enabled" => set(&mut p.idle_dim_enabled, b?),
         "idle_dim_timeout_secs" => set(&mut p.idle_dim_timeout_secs, n?),
         "touchpad_haptics" => set(&mut p.touchpad_haptics, b?),
+        "touchpad_haptic_strength" => match s?.as_str() {
+            m @ ("light" | "medium" | "strong") => {
+                set(&mut p.touchpad_haptic_strength, m.to_string())
+            }
+            _ => return Err(()),
+        },
+        "touchpad_click_sound" => set(&mut p.touchpad_click_sound, b?),
         "native_gestures" => set(&mut p.native_gestures, b?),
         "touchpad_sensitivity" => set(&mut p.touchpad_sensitivity, n?.clamp(50, 200)),
         "touchpad_shape" => match s?.as_str() {
