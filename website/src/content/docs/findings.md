@@ -40,5 +40,5 @@ The records name their own gaps. In general: real hardware other than the mainta
 
 - `experiments_and_findings/INVESTIGATION_SUMMARY.md` and records 01 to 04
 - `experiments_and_findings/56_evdi_mutter_freeze_rca.md`
-- `experiments_and_findings/100_hover_park_and_recorder.md`, `101_click_slop.md`, `102_pen_menu_and_desktop_layer.md`, `103_scanout_capture_dropped.md`
+- `experiments_and_findings/100_hover_park_and_recorder.md`, `101_click_slop.md`, `102_pen_menu_and_desktop_layer.md`, `103_scanout_capture_dropped.md`, `104_screenshots_slow_with_virtual_displays.md`
 - `docs/benchmarks.md`

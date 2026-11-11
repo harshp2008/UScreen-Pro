@@ -75,6 +75,10 @@ It is a fallback. Median latency matches USB, but the tail does not — see
 You have binaries from a release before 1.1.0. Current releases are built
 against Debian 12's glibc and run on anything since; update.
 
+## Screenshots of the whole desktop take 5 to 10 seconds
+
+Flameshot's GUI is slow to open, or `gnome-screenshot` takes ages, while a tablet is connected as a second display. The tool is not at fault: the desktop is captured as one picture at the largest display scale of any monitor, and a high-scale virtual display makes that picture huge (a 4320 x 1080 desktop with a 2.5x phone became a 10800 x 2700 PNG). Time grows with the pixel count, about 0.65 s per megapixel. A window or region screenshot stays fast (0.8 s). Lowering the scale of the virtual displays helps (10 s to 6 s in the measurement) at the price of smaller text. Details and numbers: `experiments_and_findings/104_screenshots_slow_with_virtual_displays.md`.
+
 ## Two EVDI devices, wrong one used
 
 With `max_tablets = 1` the helper picks any free EVDI card. That is fine; the
