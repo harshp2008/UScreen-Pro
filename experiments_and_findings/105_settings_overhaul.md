@@ -46,7 +46,10 @@ Related: record 104 (slow whole-desktop screenshots).
 * The pen button actions with a real pen (unit tests cover the name to keys mapping only).
 * **A first version of Interface size claimed a different physical size in the EDID and did nothing**: nothing it generated was ever used (no scaled EDID file appeared), and GNOME
   keeps the scale it chose for a monitor, so it was replaced by the Mutter call above. Its planning (parse, nearest supported scale, re-packing the monitors to the right, the busctl
-  arguments) has unit tests; the live result is recorded below.
+  arguments) has unit tests. **Live test on the tablet's display (GNOME 46 Wayland), changing `interface_scale` in config.toml:** 100 % gave scale 1.000, 150 % gave 1.502 (the
+  nearest supported scale), and Automatic returned it to its preferred 1.749, each within a few seconds and with the laptop's layout unchanged. The first live attempt failed
+  with busctl's "Failed to parse 'true' number of array entries": the call signature lacked the second `uint32` (serial and method), which the unit tests had not caught
+  because they checked the argument values and not the signature string; a check for it was added. The config was restored afterwards.
 * The flash is a plain Android toast, not exercised on a device.
 
 ## Not done (planned)
