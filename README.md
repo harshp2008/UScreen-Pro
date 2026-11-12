@@ -57,4 +57,4 @@ Run on **Ubuntu 24.04, GNOME 46, Wayland** with a Galaxy Tab S9 FE+ and its S Pe
 
 ## Credits
 
-UScreen Pro started from **[UScreen](https://github.com/majmichu1/UScreen)** by majmichu1 and keeps its idea, its virtual-display capture and its adb link. The desktop app, the tablet app, the input engine and the installer are new, and most of the rest has been reworked. MIT licence, see [`LICENSE`](LICENSE) and [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md).
+UScreen Pro started from **[UScreen](https://github.com/majmichu1/UScreen)** by majmichu1 and keeps its idea, its virtual-display capture and its adb link. The desktop app, the tablet app, the input engine and the installer are new, and most of the rest has been reworked. MIT licence, see [`LICENSE`](LICENSE) and [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md). Contributing: [`CONTRIBUTING.md`](CONTRIBUTING.md). How the pieces fit: [`docs/architecture/overview.md`](docs/architecture/overview.md); adding a desktop or distribution: [`docs/architecture/platform-modularity.md`](docs/architecture/platform-modularity.md).
