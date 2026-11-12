@@ -1,6 +1,7 @@
 /*
  * The global Settings page: the defaults every device inherits. Presentational; state arrives as props from App.tsx.
  */
+import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -184,7 +185,12 @@ export function GlobalSettings({ config: c, dirty, saveNote = "", autostart, onC
                   { value: "custom", label: "Custom" },
                 ]}
                 className="w-36"
-                onValueChange={(v) => onChange({ interface_scale: v === "auto" ? 0 : 100 })}
+                onValueChange={async (v) => {
+                  if (v === "auto") return onChange({ interface_scale: 0 });
+                  // Start where Automatic already is, so choosing Custom changes nothing on screen.
+                  const pct = await invoke<number | null>("display_auto_percent", { width: null, height: null }).catch(() => null);
+                  onChange({ interface_scale: Math.min(300, Math.max(50, Math.round((pct ?? 100) / 5) * 5)) });
+                }}
               />
             </SettingRow>
             {c.interface_scale > 0 && (

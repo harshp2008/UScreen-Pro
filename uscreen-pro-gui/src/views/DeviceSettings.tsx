@@ -1,6 +1,7 @@
 /*
  * The page of one device: identity, connection, stream and input overrides, and its actions (pause, install, forget). Presentational; state arrives as props from App.tsx.
  */
+import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { AlertTriangle, Check, Pause, Play, Trash2, Wifi } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -285,7 +286,15 @@ export function DeviceSettings({
                   { value: "custom", label: "Custom" },
                 ]}
                 className="w-36"
-                onValueChange={(v) => onChange({ interface_scale: v === "auto" ? 0 : 100 })}
+                onValueChange={async (v) => {
+                  if (v === "auto") return onChange({ interface_scale: 0 });
+                  // Start where Automatic already is, so choosing Custom changes nothing on screen.
+                  const pct = await invoke<number | null>("display_auto_percent", {
+                    width: p.width ?? null,
+                    height: p.height ?? null,
+                  }).catch(() => null);
+                  onChange({ interface_scale: Math.min(300, Math.max(50, Math.round((pct ?? 100) / 5) * 5)) });
+                }}
               />
             </SettingRow>
             {(p.interface_scale ?? 0) > 0 && (

@@ -4,6 +4,9 @@
 //! the EDID changes it reliably. Mutter's `ApplyMonitorsConfig` does: the same call the Settings app makes. The monitors to the right of
 //! the one that changes are moved so the layout keeps no gap and no overlap.
 //!
+//! The layout is applied as a temporary configuration (method 1): Mutter asks "Keep changes?" only for a persistent one, and a scale that is
+//! set again from the settings every time the display is created does not need to be remembered.
+//!
 //! Percent 0 means "leave it to GNOME": the monitor's preferred scale is applied, which also undoes an earlier custom value.
 
 use std::collections::HashMap;
@@ -174,7 +177,7 @@ pub fn plan(state: &State, serial: &str, percent: u32) -> Option<Vec<Logical>> {
     Some(out)
 }
 
-/// The `busctl call` arguments of `ApplyMonitorsConfig(serial, method, logical monitors, {})`; method 2 is persistent.
+/// The `busctl call` arguments of `ApplyMonitorsConfig(serial, method, logical monitors, {})`; method 1 is temporary, 2 persistent.
 pub fn busctl_args(serial: u32, method: u32, layout: &[Logical]) -> Vec<String> {
     let mut a: Vec<String> = [
         "--user",
@@ -241,7 +244,7 @@ pub async fn apply(instance: u32, percent: u32) -> bool {
         return true;
     };
     let out = tokio::process::Command::new("busctl")
-        .args(busctl_args(state.serial, 2, &layout))
+        .args(busctl_args(state.serial, 1, &layout))
         .output()
         .await;
     match out {
@@ -342,10 +345,13 @@ mod tests {
     #[test]
     fn busctl_arguments_have_the_signature_shape() {
         let s = parse_state(STATE).unwrap();
-        let a = busctl_args(26, 2, &s.logical);
-        assert_eq!(a[6], "uua(iiduba(ssa{sv}))a{sv}", "serial and method are both uint32");
+        let a = busctl_args(26, 1, &s.logical);
+        assert_eq!(
+            a[6], "uua(iiduba(ssa{sv}))a{sv}",
+            "serial and method are both uint32"
+        );
         let tail = &a[7..];
-        assert_eq!(&tail[..3], ["26", "2", "3"]);
+        assert_eq!(&tail[..3], ["26", "1", "3"]);
         // first logical monitor: x y scale transform primary count, then connector mode 0 props
         assert_eq!(
             &tail[3..12],

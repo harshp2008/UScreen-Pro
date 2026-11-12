@@ -138,6 +138,8 @@ export function installDevMock() {
           return config;
         case "get_autostart_status":
           return false;
+        case "display_auto_percent":
+          return 175;
         case "launch_daemon":
           running = true;
           return "Daemon started";
