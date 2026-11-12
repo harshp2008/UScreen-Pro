@@ -39,21 +39,23 @@ ladder in three files. The plan below puts it behind the same pattern.
 
 ## Capability by platform
 
-Status: **yes** = implemented and used; **partly** = a piece exists; **no** = nothing, and the feature quietly does less;
-**n/a** = the platform has no such concept. "Untested" means the code is written and its command building or parsing is unit
-tested, but it has not been run on that desktop by the maintainer.
+Status: **yes** = the code exists and is wired in; **partly** = a piece exists; **no** = nothing, and the feature quietly does less;
+**n/a** = the platform has no such concept. A "yes" is not a claim that it was run on that desktop. What was run is recorded in
+[../compatibility.md](../compatibility.md): KDE Plasma on Wayland is the best exercised desktop (the maintainer's own, plus several
+reports); GNOME on Wayland and Cinnamon on X11 have one report each; Hyprland and COSMIC are written against documented tools and
+are not confirmed on hardware; the interface scale is recorded as run on GNOME 46 only (`desktop/scale.rs`).
 
 | Capability | GNOME (Wayland) | X11 | KDE Plasma | Hyprland | COSMIC | Other (Sway, ...) | Windows / macOS |
 |---|---|---|---|---|---|---|---|
-| Frame capture (EVDI virtual display) | yes | yes | yes | yes, untested | yes, untested | untested | no (EVDI is a Linux kernel module) |
-| Enable, disable and place the virtual output | yes (the compositor does it) | yes (xrandr) | yes (kscreen-doctor, inline in `capture/display.rs`) | yes, untested | partly (enable and disable, no placement) | no | no |
-| Map touch and pen devices to the output | yes (gsettings; Cinnamon too) | yes (xinput) | yes (KWin D-Bus), untested for current Plasma | yes, untested | no | no | no |
-| Pointer area of the output (for ghost tracking) | yes | n/a (one core pointer) | yes (kscreen-doctor) | yes, untested | no | no | no |
-| Interface scale of the virtual display | yes (GNOME 46) | n/a | yes, untested | yes, untested | no | no | no |
+| Frame capture (EVDI virtual display) | yes | yes | yes | yes | yes | yes, where EVDI works | no (EVDI is a Linux kernel module) |
+| Enable, disable and place the virtual output | yes (the compositor does it) | yes (xrandr) | yes (kscreen-doctor, inline in `capture/display.rs`) | yes | partly (enable and disable, no placement) | no (assign by hand) | no |
+| Map touch and pen devices to the output | yes (gsettings; Cinnamon too) | yes (xinput) | yes (KWin D-Bus) | yes | no (manual) | no (assign by hand) | no |
+| Pointer area of the output (for ghost tracking) | yes | n/a (one core pointer) | yes (kscreen-doctor) | yes | no | no | no |
+| Interface scale of the virtual display | yes (run on GNOME 46) | n/a | yes (command building tested, not run) | yes (command building tested, not run) | no | no | no |
 | Focus tracking (art-app pen route) | yes (Shell extension) | yes (`_NET_ACTIVE_WINDOW`) | no (generic) | no (generic) | no (generic) | file written by a helper, if any | no |
 | Pointer context and pen menu in the shell | yes (extension) | no | no | no | no | no | no |
 | Window placement at the pointer (menu window) | yes, needs `spawn-at` | no | no | no | no | no | no |
-| Pointer tracking for idle dimming | yes (`spawn-at` pointer watcher) and X11 boundary thread in the EVDI helper | yes (helper) | partly (helper only on X11) | no | no | no | no |
+| Pointer tracking for idle dimming | yes (the compositor is asked through `spawn-at`) | yes (the helper reads the X pointer) | partly (the helper reads the X pointer, which goes stale over native Wayland windows) | partly (same) | partly (same) | partly (same) | no |
 | Compositor freeze watchdog | yes | no | no | no | no | no | no |
 | Native touchpad gestures (libinput) | yes | no (host-side gestures) | yes | no | no | no | no |
 | On-screen keyboard suppression | no | n/a | yes | no | no | no | no |
