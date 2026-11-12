@@ -113,7 +113,7 @@ export const THEME_MODES: Option[] = [
 
 /** How a touchpad right click is made on the tablet. */
 export const RIGHT_CLICK_METHODS: Option[] = [
-  { value: "bottom_right_zone", label: "Bottom Right Zone" },
+  { value: "bottom_right_zone", label: "Bottom Right Corner" },
   { value: "two_finger_tap", label: "Two-Finger Tap" },
 ];
 

@@ -1159,50 +1159,13 @@ and consults it when choosing between the device's adb entries.
         for (id in buttonFingers.keys.toList()) releaseButton(id)
     }
 
-    /** Frames of a new touch not yet sent, while it could still be a tap (Classic without tap-to-click). */
-    private val heldFrames = ArrayList<org.json.JSONArray>()
-    private var heldSinceMs = 0L
-    private var tapReleased = false
-    private val heldOrigin = HashMap<Int, Pair<Float, Float>>()
-
-    /**
-     * Without tap-to-click a touch is held back until it moves more than 3 mm or lasts longer than 220 ms; a touch that does
-     * neither is dropped whole, so the computer never sees a tap. Returns true when this frame was taken (held or dropped).
-     */
-    private fun deferTapFrame(slots: org.json.JSONArray, empty: Boolean): Boolean {
-        if (empty) {
-            val dropped = heldFrames.isNotEmpty() && !tapReleased
-            heldFrames.clear()
-            heldOrigin.clear()
-            tapReleased = false
-            return dropped
+    /** Classic without tap-to-click: holds back a new touch until it is more than a tap, and drops a tap whole. */
+    private val tapGate = TapGate<org.json.JSONArray>(points = { slots ->
+        (0 until slots.length()).map {
+            val s = slots.getJSONObject(it)
+            NativeTapDetector.Point(s.getInt("id"), s.getDouble("x").toFloat(), s.getDouble("y").toFloat())
         }
-        if (tapReleased) return false
-        val now = android.os.SystemClock.uptimeMillis()
-        if (heldFrames.isEmpty()) heldSinceMs = now
-        heldFrames.add(slots)
-        var moved = now - heldSinceMs > NativeTapDetector.TAP_MS
-        for (i in 0 until slots.length()) {
-            val s = slots.getJSONObject(i)
-            val id = s.getInt("id")
-            val p = Pair(s.getDouble("x").toFloat(), s.getDouble("y").toFloat())
-            val o = heldOrigin.getOrPut(id) { p }
-            if (kotlin.math.hypot(p.first - o.first, p.second - o.second) > NativeTapDetector.SLOP_MM) moved = true
-        }
-        if (!moved) return true
-        // It is a real gesture: send what was held, then let this frame go the normal way.
-        tapReleased = true
-        val earlier = heldFrames.dropLast(1)
-        heldFrames.clear()
-        rawDown = true
-        for (f in earlier) {
-            sendSeq(JSONObject().apply {
-                put("type", "touchpad_raw")
-                put("slots", f)
-            })
-        }
-        return false
-    }
+    })
 
     /** True when Touchpad mode should send raw fingers instead of running the gesture engine. */
     private fun nativeActive(): Boolean = touchpadMode && hostConfig.nativeGestures
@@ -1227,7 +1190,7 @@ and consults it when choosing between the device's adb entries.
         if (downIndex >= 0 && zoneOn && zoneFinger == null && rawDown.not()) {
             val x = event.getX(downIndex)
             val y = event.getY(downIndex)
-            val inZone = x >= bounds.left + bounds.width / 2f && y >= bounds.top + bounds.height * (1f - TouchpadShape.ZONE_FRACTION)
+            val inZone = x >= bounds.left + bounds.width * TouchpadShape.CLICKPAD_ZONE_LEFT && y >= bounds.top + bounds.height * (1f - TouchpadShape.ZONE_FRACTION)
             if (inZone && countPadFingers(event, excludeIndex) == 1) {
                 zoneFinger = ZoneFinger(event.getPointerId(downIndex), now, x, y, false)
             }
@@ -1294,9 +1257,18 @@ and consults it when choosing between the device's adb entries.
      * Sends the raw touchpad slots for the host's native touchpad; an empty list lifts all fingers and is only sent if some were down.
      */
     private fun sendRaw(slots: org.json.JSONArray) {
-        val empty = slots.length() == 0
         // Classic without tap-to-click: a touch that does not move is held back and dropped, so libinput never sees a tap.
-        if (suppressTaps() && deferTapFrame(slots, empty)) return
+        if (suppressTaps()) {
+            for (frame in tapGate.offer(slots, android.os.SystemClock.uptimeMillis())) sendRawFrame(frame)
+        } else {
+            tapGate.reset()
+            sendRawFrame(slots)
+        }
+    }
+
+    /** Sends one raw frame to the computer; an empty frame lifts all fingers and is only sent if some were down. */
+    private fun sendRawFrame(slots: org.json.JSONArray) {
+        val empty = slots.length() == 0
         if (empty && !rawDown) return
         // The computer's libinput makes the click from these fingers, so the tablet watches for a tap itself to tick.
         val tapped = if (suppressTaps()) {
@@ -1336,8 +1308,7 @@ and consults it when choosing between the device's adb entries.
 
     /** Lift every finger the host's touchpad still holds, and forget a click-strip finger. */
     private fun liftRaw() {
-        heldFrames.clear()
-        tapReleased = false
+        tapGate.reset()
         zoneFinger = null
         if (rawDown) sendRaw(org.json.JSONArray())
     }

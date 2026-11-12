@@ -232,11 +232,11 @@ internal class TouchpadEngine(
     }
 
     /**
-     * Whether [f] is in the right-click zone: the right half of the pad, within the bottom `ZONE_FRACTION` of its height. False when the pad size is unknown.
+     * Whether [f] is in the right-click corner: the right third of the pad, within the bottom `ZONE_FRACTION` of its height. False when the pad size is unknown.
      */
     private fun inRightZone(f: FingerState?): Boolean {
         if (f == null || padWidthMm <= 0f || padHeightMm <= 0f) return false
-        return f.x >= padWidthMm / 2f && f.y >= padHeightMm * (1f - TouchpadShape.ZONE_FRACTION)
+        return f.x >= padWidthMm * TouchpadShape.CLICKPAD_ZONE_LEFT && f.y >= padHeightMm * (1f - TouchpadShape.ZONE_FRACTION)
     }
 
     // ---------------------------------------------------------------------------------------

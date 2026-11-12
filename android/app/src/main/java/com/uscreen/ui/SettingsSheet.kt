@@ -299,10 +299,10 @@ fun SettingsSheet(
                                     color = Muted
                                 )
                             }
-                            ChipChoice(
+                            if (hostConfig.touchpadStyle == HostConfig.STYLE_CLICKPAD) ChipChoice(
                                 "Right Click Method",
                                 listOf(
-                                    HostConfig.RIGHT_CLICK_ZONE to "Bottom Right Zone",
+                                    HostConfig.RIGHT_CLICK_ZONE to "Bottom Right Corner",
                                     HostConfig.RIGHT_CLICK_TWO_FINGER to "Two-Finger Tap",
                                 ),
                                 hostConfig.rightClickMethod,

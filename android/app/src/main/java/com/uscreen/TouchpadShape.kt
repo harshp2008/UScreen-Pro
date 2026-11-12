@@ -14,6 +14,9 @@ object TouchpadShape {
     /** Height of the right-click strip along the bottom edge, as a fraction of the touch area. */
     const val ZONE_FRACTION = 0.15f
 
+    /** Where the right-click corner of the Clickpad begins, as a fraction of the pad's width (the right third). */
+    const val CLICKPAD_ZONE_LEFT = 2f / 3f
+
     /** Height of the button strip of the Classic style, as a fraction of the touch area. */
     const val CLASSIC_STRIP = 0.2f
 

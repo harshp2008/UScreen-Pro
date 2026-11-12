@@ -195,10 +195,15 @@ private fun TouchpadArea(shape: String, showRightClickZone: Boolean) {
                 drawRect(line, topLeft, area, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
             }
             if (showRightClickZone) {
-                val y = b.bottom - b.height * com.uscreen.TouchpadShape.ZONE_FRACTION
-                val mid = (b.left + b.right) / 2f
-                drawLine(line, androidx.compose.ui.geometry.Offset(b.left, y), androidx.compose.ui.geometry.Offset(b.right, y), strokeWidth = 2f)
-                drawLine(line, androidx.compose.ui.geometry.Offset(mid, y), androidx.compose.ui.geometry.Offset(mid, b.bottom), strokeWidth = 2f)
+                // Only a faint corner marks where a tap right-clicks: a modern pad has no button strip.
+                val zl = b.left + b.width * com.uscreen.TouchpadShape.CLICKPAD_ZONE_LEFT
+                val zt = b.bottom - b.height * com.uscreen.TouchpadShape.ZONE_FRACTION
+                drawRoundRect(
+                    Color(0x14FFFFFF),
+                    androidx.compose.ui.geometry.Offset(zl, zt),
+                    androidx.compose.ui.geometry.Size(b.right - zl, b.bottom - zt),
+                    androidx.compose.ui.geometry.CornerRadius(12f, 12f),
+                )
             }
         }
         if (showRightClickZone) {
