@@ -274,7 +274,7 @@ export function DeviceSettings({
             </SettingRow>
             <SettingRow
               label="Interface size"
-              tip="Size of text and windows on this device's screen. Compact speeds up whole-desktop screenshots. Applies when the display restarts."
+              tip="Size of text and windows on this device's screen. Compact speeds up whole-desktop screenshots. Restarts the display."
               override={ov("interface_size", g.interface_size, labelOf(INTERFACE_SIZES, g.interface_size))}
             >
               <Segmented

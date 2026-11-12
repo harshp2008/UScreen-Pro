@@ -401,6 +401,7 @@ fn stream_args_differ(a: &AppConfig, b: &AppConfig) -> bool {
         a.height,
         a.hevc_low_latency_tuning,
         a.software_cursor,
+        &a.interface_size,
     ) != (
         &b.encoder,
         b.fps,
@@ -412,6 +413,7 @@ fn stream_args_differ(a: &AppConfig, b: &AppConfig) -> bool {
         b.height,
         b.hevc_low_latency_tuning,
         b.software_cursor,
+        &b.interface_size,
     )
 }
 
@@ -429,6 +431,7 @@ fn profile_args_differ(a: Option<&TabletProfile>, b: &TabletProfile) -> bool {
             p.height,
             p.width_mm,
             p.height_mm,
+            p.interface_size.clone(),
         )
     };
     a.map(key) != Some(key(b))

@@ -63,7 +63,9 @@ impl CaptureManager {
         let edid_path = match &self.config.edid_path {
             Some(p) => p.clone(),
             None => {
-                // `interface_size` changes the size the display claims, and with it the scale the compositor picks.
+                // `interface_size` changes the size the display claims, and with it the scale the compositor picks. The options are
+                // re-read first: the save that asked for this restart may be newer than the last poll of the file.
+                crate::config::options::refresh_all();
                 let f = crate::display::edid::interface_factor(
                     &crate::config::options::current_options(self.config.instance).interface_size,
                 );

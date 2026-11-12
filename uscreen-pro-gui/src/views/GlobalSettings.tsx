@@ -172,7 +172,7 @@ export function GlobalSettings({ config: c, dirty, saveNote = "", autostart, onC
               checked={c.software_cursor}
               onChange={(software_cursor) => onChange({ software_cursor })}
             />
-            <SettingRow label="Interface size" tip="Size of text and windows on the tablet's screen. Compact is smaller and speeds up whole-desktop screenshots. Applies when the display restarts.">
+            <SettingRow label="Interface size" tip="Size of text and windows on the tablet's screen. Compact is smaller and speeds up whole-desktop screenshots. Restarts the display.">
               <Segmented
                 label="Interface size"
                 value={c.interface_size}

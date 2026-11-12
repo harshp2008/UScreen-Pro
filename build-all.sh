@@ -146,6 +146,17 @@ if systemctl --user is-active --quiet uscreen.service 2>/dev/null; then
     systemctl --user restart uscreen.service && echo "  ✓ uscreen.service restarted"
 fi
 
+# 5d. The build closes the desktop app; open it again so the new version is what is on screen. A terminal without a
+#     graphical environment borrows the session's from systemd.
+if [ -z "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]; then
+    eval "$(systemctl --user show-environment 2>/dev/null | grep -E '^(WAYLAND_DISPLAY|DISPLAY|XDG_RUNTIME_DIR|DBUS_SESSION_BUS_ADDRESS)=' | sed 's/^/export /')"
+fi
+if [ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]; then
+    nohup setsid "$BIN_DIR/uscreen-pro-gui" >/dev/null 2>&1 &
+    sleep 2
+    if pgrep -x uscreen-pro-gui >/dev/null; then echo "  ✓ UScreen Pro reopened"; else echo "  ! UScreen Pro did not reopen; start it from the app grid" >&2; fi
+fi
+
 # 6. Desktop integration: launcher icon (hicolor theme) and .desktop entry, so the dock and the
 #    app grid show the UScreen Pro icon instead of a generic one.
 echo ""
