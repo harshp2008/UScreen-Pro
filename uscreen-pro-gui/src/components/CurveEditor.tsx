@@ -1,9 +1,9 @@
 import { Save, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NumberInput, Select, TextInput } from "./ui/controls";
 import { BlockRow, type Override } from "./ui/layout";
-import { clampBezier, curveFn, curvePath, formatBezier, parseBezier, type Bezier } from "../lib/curves";
+import { bezierFn, clampBezier, curveFn, curvePath, formatBezier, parseBezier, type Bezier } from "../lib/curves";
 import { CURVES } from "../lib/options";
 import type { CurvePreset } from "../lib/types";
 
@@ -54,6 +54,98 @@ function CurvePreview({ fn }: { fn: ((t: number) => number) | null }) {
   );
 }
 
+/** Visible vertical range of the draggable plot; the host accepts more (-2..3), the numbers below reach it. */
+const PLOT_Y_MIN = -0.5;
+const PLOT_Y_MAX = 1.5;
+
+/**
+ * The editable curve: drag the two round handles (or focus one and use the arrow keys) to shape the fade. Time runs left to
+ * right, the fade's progress bottom to top. It reports the changed control points of the cubic Bezier.
+ */
+function DragPlot({ bezier, onChange }: { bezier: Bezier; onChange: (patch: Partial<Bezier>) => void }) {
+  const W = 220;
+  const H = 170;
+  const PAD = 16;
+  const ref = useRef<SVGSVGElement>(null);
+  const [drag, setDrag] = useState<1 | 2 | null>(null);
+  const px = (x: number) => PAD + x * (W - 2 * PAD);
+  const py = (y: number) => H - PAD - ((y - PLOT_Y_MIN) / (PLOT_Y_MAX - PLOT_Y_MIN)) * (H - 2 * PAD);
+  const fn = bezierFn(bezier);
+  const path = Array.from({ length: 49 }, (_, i) => {
+    const t = i / 48;
+    return `${i === 0 ? "M" : "L"}${px(t).toFixed(1)},${py(fn(t)).toFixed(1)}`;
+  }).join(" ");
+
+  /** Sets handle [which] to the pointer position. */
+  const moveTo = (which: 1 | 2, clientX: number, clientY: number) => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r || r.width === 0) return;
+    const cx = ((clientX - r.left) / r.width) * W;
+    const cy = ((clientY - r.top) / r.height) * H;
+    const x = Math.min(1, Math.max(0, (cx - PAD) / (W - 2 * PAD)));
+    const y = PLOT_Y_MIN + ((H - PAD - cy) / (H - 2 * PAD)) * (PLOT_Y_MAX - PLOT_Y_MIN);
+    onChange(which === 1 ? { x1: x, y1: y } : { x2: x, y2: y });
+  };
+
+  /** Nudges handle [which] by the arrow key pressed. */
+  const nudge = (which: 1 | 2, e: React.KeyboardEvent) => {
+    const step = e.shiftKey ? 0.1 : 0.02;
+    const dx = e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
+    const dy = e.key === "ArrowUp" ? step : e.key === "ArrowDown" ? -step : 0;
+    if (!dx && !dy) return;
+    e.preventDefault();
+    onChange(which === 1 ? { x1: bezier.x1 + dx, y1: bezier.y1 + dy } : { x2: bezier.x2 + dx, y2: bezier.y2 + dy });
+  };
+
+  const handles = [
+    { which: 1 as const, x: bezier.x1, y: bezier.y1, from: [0, 0] },
+    { which: 2 as const, x: bezier.x2, y: bezier.y2, from: [1, 1] },
+  ];
+  return (
+    <svg
+      ref={ref}
+      role="group"
+      aria-label="Drag the two handles to shape the curve"
+      viewBox={`0 0 ${W} ${H}`}
+      width={W}
+      height={H}
+      className="max-w-full shrink-0 touch-none select-none rounded-md border border-border bg-muted/40"
+      onPointerMove={(e) => drag && moveTo(drag, e.clientX, e.clientY)}
+      onPointerUp={() => setDrag(null)}
+      onPointerCancel={() => setDrag(null)}
+    >
+      <line x1={px(0)} y1={py(0)} x2={px(1)} y2={py(0)} className="stroke-border" />
+      <line x1={px(0)} y1={py(1)} x2={px(1)} y2={py(1)} className="stroke-border" />
+      <line x1={px(0)} y1={py(0)} x2={px(1)} y2={py(1)} className="stroke-border" strokeDasharray="3 3" />
+      {handles.map((h) => (
+        <line key={`l${h.which}`} x1={px(h.from[0])} y1={py(h.from[1])} x2={px(h.x)} y2={py(h.y)} className="stroke-muted-foreground" strokeWidth="1" />
+      ))}
+      <path d={path} fill="none" className="stroke-primary" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx={px(0)} cy={py(0)} r="3" className="fill-muted-foreground" />
+      <circle cx={px(1)} cy={py(1)} r="3" className="fill-muted-foreground" />
+      {handles.map((h) => (
+        <circle
+          key={h.which}
+          tabIndex={0}
+          role="slider"
+          aria-label={`Handle ${h.which}: time ${h.x.toFixed(2)}, progress ${h.y.toFixed(2)}`}
+          aria-valuenow={Math.round(h.y * 100)}
+          cx={px(h.x)}
+          cy={py(Math.min(PLOT_Y_MAX, Math.max(PLOT_Y_MIN, h.y)))}
+          r="7"
+          className={`cursor-grab fill-background stroke-primary outline-none focus-visible:stroke-foreground ${drag === h.which ? "cursor-grabbing" : ""}`}
+          strokeWidth="2.5"
+          onPointerDown={(e) => {
+            (e.currentTarget as SVGCircleElement).setPointerCapture(e.pointerId);
+            setDrag(h.which);
+          }}
+          onKeyDown={(e) => nudge(h.which, e)}
+        />
+      ))}
+    </svg>
+  );
+}
+
 /**
  * Fade curve picker: the five built-in curves, the user's saved presets and "Custom". Custom shows four
  * number inputs for the control points of a cubic Bezier and a live preview; a custom curve can be saved
@@ -97,7 +189,7 @@ export function CurveEditor({ label, tip, value, onChange, presets, onPresetsCha
       summary={options.find((o) => o.value === current)?.label}
     >
       <div className="flex flex-wrap items-start gap-4">
-        <CurvePreview fn={curveFn(value, presets)} />
+        {current === CUSTOM ? <DragPlot bezier={bezier} onChange={setPoint} /> : <CurvePreview fn={curveFn(value, presets)} />}
         <div className="min-w-0 flex-1 space-y-2">
           <Select
             label={label}
@@ -113,29 +205,34 @@ export function CurveEditor({ label, tip, value, onChange, presets, onPresetsCha
 
           {current === CUSTOM && (
             <>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                {(
-                  [
-                    ["x1", 0, 1],
-                    ["y1", -2, 3],
-                    ["x2", 0, 1],
-                    ["y2", -2, 3],
-                  ] as const
-                ).map(([k, min, max]) => (
-                  <label key={k} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {k}
-                    <NumberInput
-                      label={`${label} ${k}`}
-                      value={bezier[k]}
-                      min={min}
-                      max={max}
-                      step={0.05}
-                      className="w-16"
-                      onCommit={(n) => setPoint({ [k]: n })}
-                    />
-                  </label>
-                ))}
-              </div>
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Exact values</summary>
+                <div className="pt-1.5">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    {(
+                      [
+                        ["x1", 0, 1],
+                        ["y1", -2, 3],
+                        ["x2", 0, 1],
+                        ["y2", -2, 3],
+                      ] as const
+                    ).map(([k, min, max]) => (
+                      <label key={k} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        {k}
+                        <NumberInput
+                          label={`${label} ${k}`}
+                          value={bezier[k]}
+                          min={min}
+                          max={max}
+                          step={0.05}
+                          className="w-16"
+                          onCommit={(n) => setPoint({ [k]: n })}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              </details>
               {saving ? (
                 <div className="flex items-center gap-2">
                   <TextInput
