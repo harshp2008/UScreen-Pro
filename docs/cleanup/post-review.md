@@ -41,9 +41,9 @@ Ordered by value. "Needs hardware" means the change cannot be checked by the com
 | O | The Android `uses-permission` and component list is one `PLATFORM(android)` tag; nothing checks it against use | low | none | tooling decision |
 | P | No automated test that the display dispatcher picks the right backend; `backend()` reads the environment and `PATH` | low | none | needs an injectable environment |
 
-## Checked and found fine
+## Checked
 
-* Error handling: the 46 non-test `.unwrap()` calls counted by a first search were nearly all inside inline test modules
-  (`avi.rs`, `scale.rs`); no production `unwrap` was found on a path that handles external input.
-* Logging: `println!` outside `cli/` is only command output (`main.rs`, the control socket reply), not diagnostics.
-* No file mixes a protocol type with its handler; `input/protocol/` holds only wire types.
+* `.unwrap()` outside test code: three calls in the whole Rust tree (`desktop/x11/display.rs`, `daemon/guard/detectors.rs`,
+  `capture/supervisor.rs`), counted with the inline `#[cfg(test)]` modules and `tests/` directories left out. A first count of
+  46 had included test code. The three were not audited for whether their input can be external.
+* `println!` outside `cli/` is only command output (`main.rs`, the control socket reply), not diagnostics.
