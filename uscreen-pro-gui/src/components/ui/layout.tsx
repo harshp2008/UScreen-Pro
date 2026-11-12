@@ -2,7 +2,7 @@
  * Layout building blocks of the settings pages: sections, rows with an info tip, the inherited-value control of per-device overrides, switch rows and page headers.
  */
 import { ChevronRight, Info, RotateCcw } from "lucide-react";
-import type { ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider as UiTooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -10,6 +10,21 @@ import { QUALITY_MAX, QUALITY_MIN, qualityLabel } from "@/lib/options";
 import { Slider } from "./controls";
 
 export const TooltipProvider = UiTooltipProvider;
+
+/** Labels of the settings that were changed here and wait for Apply; their rows show a glowing dot. Provided by the app, empty elsewhere. */
+export const PendingContext = createContext<ReadonlySet<string>>(new Set());
+
+/** The dot beside a setting that is not applied yet. */
+function PendingDot() {
+  return (
+    <span
+      role="img"
+      aria-label="Needs Apply"
+      title="Not applied yet. Press Apply."
+      className="ml-1 inline-block size-2 shrink-0 animate-pulse rounded-full bg-amber-400 shadow-[0_0_8px_2px_rgba(251,191,36,0.65)]"
+    />
+  );
+}
 
 /** A small info icon whose tooltip shows [text]. */
 export function InfoTip({ text }: { text: string }) {
@@ -149,10 +164,12 @@ export function InheritedValue({ override, label }: { override: Override; label:
  */
 export function Label({ label, tip, override }: { label: string; tip?: string; override?: Override }) {
   const overridden = override?.enabled === true;
+  const pending = useContext(PendingContext).has(label);
   return (
     <div className="flex min-w-0 items-center gap-1">
       <span className={cn("leading-tight", overridden ? "font-medium text-primary" : "text-foreground")}>{label}</span>
       {tip && <InfoTip text={tip} />}
+      {pending && <PendingDot />}
       {overridden && (
         <button
           type="button"

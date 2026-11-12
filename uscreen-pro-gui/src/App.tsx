@@ -12,7 +12,8 @@ import { Badge } from "@/components/ui/badge";
 import { AddDeviceWizard } from "./components/AddDeviceWizard";
 import { Sidebar } from "./components/Sidebar";
 import { TitleBar } from "./components/TitleBar";
-import { TooltipProvider } from "./components/ui/layout";
+import { PendingContext, TooltipProvider } from "./components/ui/layout";
+import { APPLY_LABELS } from "./lib/pending";
 import { Notifications, toast } from "./lib/toast";
 import type { AppConfig, CurvePreset, DaemonStatus, ForgetReport, PipelineEvent, TabletProfile, View } from "./lib/types";
 import { DeviceSettings } from "./views/DeviceSettings";
@@ -437,6 +438,12 @@ export default function App() {
   }, [serial, profile, savedProfiles, device?.model]);
   const profileNeedsApply = profilePending.some((k) => HEAVY.has(k));
 
+  /** Labels of the rows that wait for Apply, so each shows a glowing dot (global edits on the global page, the device's on its page). */
+  const pendingLabels = useMemo(() => {
+    const keys = (view === "settings" ? globalPending : serial ? profilePending : []).filter((k) => HEAVY.has(k));
+    return new Set(keys.flatMap((k) => APPLY_LABELS[k] ?? []));
+  }, [view, globalPending, profilePending, serial]);
+
   /* Autosave of the open device's profile, with the same rule as the global settings. */
   useEffect(() => {
     if (!serial || !profile || !profileDirty || profileNeedsApply || busy) return;
@@ -570,6 +577,7 @@ export default function App() {
             onAddDevice={(target) => setWizard({ serial: target })}
           />
 
+          <PendingContext.Provider value={pendingLabels}>
           <main className="flex min-w-0 flex-1 flex-col bg-background">
             <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
               <div className="mx-auto w-full max-w-5xl">
@@ -625,6 +633,7 @@ export default function App() {
               </span>
             </footer>
           </main>
+          </PendingContext.Provider>
         </div>
       </div>
     </TooltipProvider>
