@@ -372,7 +372,6 @@ impl CaptureManager {
             // Events that need no restart at all send us back here without
             // rebuilding the encoder, which now owns the stream and must not be
             // torn down for something spurious.
-            #[allow(unused_labels)]
             'session: loop {
                 let mut resume_same_encoder = false;
                 tokio::select! {

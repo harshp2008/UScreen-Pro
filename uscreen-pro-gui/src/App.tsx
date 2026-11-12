@@ -20,6 +20,7 @@ import { DeviceSettings } from "./views/DeviceSettings";
 import { Advanced } from "./views/Advanced";
 import { GlobalSettings } from "./views/GlobalSettings";
 import { Health } from "./views/Health";
+import { errText } from "@/lib/utils";
 import "./index.css";
 
 /** sessionStorage key prefix under which each view remembers its scroll position. */
@@ -98,9 +99,6 @@ function mergeConfig(base: AppConfig, local: AppConfig, remote: AppConfig): AppC
   }
   return { ...(merged as unknown as AppConfig), tablets };
 }
-
-/** A readable message from a thrown value. */
-const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
  * Settings whose change restarts the video stream or the daemon. Every other setting saves by itself a moment after it

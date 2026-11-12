@@ -9,10 +9,8 @@ import { useState } from "react";
 import type { ManualPairResult } from "../lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { errText } from "@/lib/utils";
 import { TextInput } from "./ui/controls";
-
-/** A readable message from a thrown value. */
-const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
  * Manual Setup: pair a device that is not plugged in, with the pairing IP:port and 6-digit code from

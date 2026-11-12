@@ -77,7 +77,6 @@ val ErrorTone: Color @Composable @ReadOnlyComposable get() = LocalPalette.curren
 val Surface0: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.surface0
 val SurfaceLow: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.surfaceLow
 val SurfaceMid: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.surfaceMid
-val SurfaceHigh: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.surfaceHigh
 val OnSurface: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.onSurface
 val Muted: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.muted
 val Subtle: Color @Composable @ReadOnlyComposable get() = LocalPalette.current.subtle

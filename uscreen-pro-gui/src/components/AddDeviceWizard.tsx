@@ -38,7 +38,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { cn, errText } from "@/lib/utils";
 import { TextInput } from "./ui/controls";
 import { ManualPairDialog } from "./ManualPairDialog";
 import { DebugTimeline, Instructions, Note, StepLog } from "./wizard/WizardParts";
@@ -79,9 +79,6 @@ interface Props {
   reconfigure?: { serial: string; profile: TabletProfile };
   onDeviceAdded: (serial: string) => void | Promise<void>;
 }
-
-/** A readable message from a thrown value. */
-const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 /**
  * Multi-step dialog that onboards a tablet: pick the device, install the APK over USB, then set up
