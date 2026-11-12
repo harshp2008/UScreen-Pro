@@ -5,6 +5,7 @@
 
 pub mod display;
 pub mod pointer;
+pub mod scale;
 pub mod spawn_at;
 
 use super::focus_file::FocusFile;

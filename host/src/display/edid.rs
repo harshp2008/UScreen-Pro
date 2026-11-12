@@ -15,16 +15,6 @@ fn encode_manufacturer_id(s: &[u8; 3]) -> (u8, u8) {
     (byte8 as u8, byte9 as u8)
 }
 
-/// How much the physical size is scaled for an `interface_size` setting: compositors derive the interface scale from the DPI, so a
-/// larger claimed size means a smaller interface (`compact`) and a smaller one a larger interface (`large`).
-pub fn interface_factor(setting: &str) -> f32 {
-    match setting {
-        "compact" => 1.6,
-        "large" => 0.75,
-        _ => 1.0,
-    }
-}
-
 /// Physical size assumed when the tablet has not reported its own, in mm.
 /// Roughly a 14.6" 16:10 panel.
 pub const DEFAULT_WIDTH_MM: u32 = 310;
@@ -213,13 +203,6 @@ mod tests {
     use super::*;
 
     /// The detailed timing block encodes a physical size that matches the pixel size for several resolutions.
-    #[test]
-    fn interface_factor_grows_for_compact_and_shrinks_for_large() {
-        assert_eq!(interface_factor("auto"), 1.0);
-        assert!(interface_factor("compact") > 1.0 && interface_factor("large") < 1.0);
-        assert_eq!(interface_factor("nonsense"), 1.0);
-    }
-
     #[test]
     fn detailed_timing_preserves_physical_size() {
         for (width_px, height_px) in [(1536, 960), (2560, 1600), (2960, 1848)] {

@@ -32,9 +32,11 @@ Settings overhaul (desktop app and tablet app, kept in step; see
   hold time is 0.5 to 1.5 s. The pen-cursor hide setting is removed.
 - Pen side buttons can send undo, redo, copy, paste, cut or select all, or
   open the pen menu, as well as right click, middle click or nothing.
-- A new Interface size option (Compact, Auto, Large) for virtual displays. It
-  changes the physical size the display claims, so the compositor picks a
-  different scale; it applies when the display restarts.
+- A new Interface size setting for virtual displays: Automatic, or a custom
+  scale from 50 % to 300 %. On GNOME Wayland the daemon sets it through
+  Mutter's display service (the same call the Settings app makes), snaps it to
+  a scale the display supports and moves the monitors to its right along. It
+  applies as soon as the setting is saved.
 - The tablet app confirms a setting that changed while it is running with a
   short "Settings updated" note.
 - Rows wrap instead of clipping, columns follow the pane width, hints are

@@ -37,7 +37,7 @@ pub struct TabletProfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub interface_size: Option<String>,
+    pub interface_scale: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -140,8 +140,8 @@ pub struct AppConfig {
     pub stream_scale: u32,
     pub pen_only: bool,
     pub position: String,
-    /// `auto`, `compact` or `large`.
-    pub interface_size: String,
+    /// Interface scale of the virtual display in percent, 0 for automatic.
+    pub interface_scale: u32,
     pub ten_bit: bool,
     pub require_token: bool,
     pub check_updates: bool,
@@ -239,7 +239,7 @@ impl Default for AppConfig {
             stream_scale: 1,
             pen_only: false,
             position: "right".into(),
-            interface_size: "auto".into(),
+            interface_scale: 0,
             ten_bit: false,
             require_token: true,
             check_updates: true,
@@ -401,7 +401,6 @@ fn stream_args_differ(a: &AppConfig, b: &AppConfig) -> bool {
         a.height,
         a.hevc_low_latency_tuning,
         a.software_cursor,
-        &a.interface_size,
     ) != (
         &b.encoder,
         b.fps,
@@ -413,7 +412,6 @@ fn stream_args_differ(a: &AppConfig, b: &AppConfig) -> bool {
         b.height,
         b.hevc_low_latency_tuning,
         b.software_cursor,
-        &b.interface_size,
     )
 }
 
@@ -431,7 +429,6 @@ fn profile_args_differ(a: Option<&TabletProfile>, b: &TabletProfile) -> bool {
             p.height,
             p.width_mm,
             p.height_mm,
-            p.interface_size.clone(),
         )
     };
     a.map(key) != Some(key(b))

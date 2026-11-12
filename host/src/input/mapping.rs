@@ -281,11 +281,17 @@ pub(super) async fn map_devices_on_x11(
 
 /// Map, then tell the pointer device where that output sits on the desktop.
 pub(super) async fn map_and_note_area(
+    instance: u32,
     pen_only: bool,
     ident: &DeviceIdentity,
     card: Option<u32>,
     devices: &Arc<std::sync::Mutex<InjectDevices>>,
 ) {
+    // The interface scale comes first: it changes the size of the display on the desktop, which the pointer area below reads back.
+    if !pen_only && crate::desktop::gnome::scale::available() {
+        let percent = crate::config::options::current_options(instance).interface_scale;
+        crate::desktop::gnome::scale::apply(instance, percent).await;
+    }
     let output = map_devices_to_output(pen_only, ident, card).await;
     let area = match output.as_deref() {
         Some(o) if crate::desktop::hyprland::display::active() => {

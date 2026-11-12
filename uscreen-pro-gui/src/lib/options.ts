@@ -145,13 +145,6 @@ export const AUTO_OPEN: Option[] = [
   { value: "always", label: "Always" },
 ];
 
-/** How large the interface of the virtual display is. Compact (smaller text) makes whole-desktop screenshots faster. */
-export const INTERFACE_SIZES: Option[] = [
-  { value: "compact", label: "Compact" },
-  { value: "auto", label: "Auto" },
-  { value: "large", label: "Large" },
-];
-
 /** How the touchpad looks and behaves. */
 export const TOUCHPAD_STYLES: Option[] = [
   { value: "clickpad", label: "Clickpad" },

@@ -6,7 +6,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow, Tabs } from "../components/ui/layout";
-import { AUTO_OPEN, ENCODERS, INTERFACE_SIZES, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL, modeLabel } from "../lib/options";
+import { AUTO_OPEN, ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL, modeLabel } from "../lib/options";
 import { ModePanel, ModeSection, TabletPanel } from "../components/PowerSettings";
 import type { AppConfig, CurvePreset, InputMode } from "../lib/types";
 
@@ -172,14 +172,35 @@ export function GlobalSettings({ config: c, dirty, saveNote = "", autostart, onC
               checked={c.software_cursor}
               onChange={(software_cursor) => onChange({ software_cursor })}
             />
-            <SettingRow label="Interface size" tip="Size of text and windows on the tablet's screen. Compact is smaller and speeds up whole-desktop screenshots. Restarts the display.">
-              <Segmented
-                label="Interface size"
-                value={c.interface_size}
-                options={INTERFACE_SIZES}
-                onValueChange={(interface_size) => onChange({ interface_size })}
+            <SettingRow
+              label="Interface size"
+              tip="Scale of text and windows on the tablet's screen, like GNOME's display scale. Automatic lets GNOME choose."
+            >
+              <Select
+                label="Interface size mode"
+                value={c.interface_scale === 0 ? "auto" : "custom"}
+                options={[
+                  { value: "auto", label: "Automatic" },
+                  { value: "custom", label: "Custom" },
+                ]}
+                className="w-36"
+                onValueChange={(v) => onChange({ interface_scale: v === "auto" ? 0 : 100 })}
               />
             </SettingRow>
+            {c.interface_scale > 0 && (
+              <SliderRow
+                label="Scale"
+                tip="Smaller is faster for whole-desktop screenshots. Snaps to a scale the display supports."
+                formatValue={(n) => `${Math.round(n)}%`}
+                minLabel="50%"
+                maxLabel="300%"
+                value={c.interface_scale}
+                min={50}
+                max={300}
+                step={5}
+                onChange={(interface_scale) => onChange({ interface_scale })}
+              />
+            )}
             <SettingRow label="Position" tip="Where the virtual display sits relative to your primary monitor.">
               <Segmented
                 label="Position"

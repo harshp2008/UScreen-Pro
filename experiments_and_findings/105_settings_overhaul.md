@@ -17,7 +17,7 @@ Related: record 104 (slow whole-desktop screenshots).
 | Stylus tab in three cards, dropdowns | `PowerSettings.tsx` |
 | Settings parity check | `scripts/tests/settings_parity.py` |
 | Pen side button actions (undo, redo, copy, paste, cut, select all, open pen menu), host and both apps | `host/src/input/ghost/button_action.rs`, `config/clean.rs` |
-| Interface size (compact / auto / large): scales the physical size in the generated EDID | `host/src/display/edid.rs`, `capture/helper.rs`, both settings pages |
+| Interface size (automatic, or 50 to 300 %): set through Mutter's `ApplyMonitorsConfig`, live | `host/src/desktop/gnome/scale.rs`, `input/mapping.rs`, `input/server.rs`, both settings pages |
 | "Settings updated" note on the tablet when a setting changes while it runs | `MainActivity.kt` |
 
 ## Findings that drove it
@@ -43,8 +43,10 @@ Related: record 104 (slow whole-desktop screenshots).
 * The desktop app's autosave on a real daemon (only the dev mock).
 
 ## Not verified (added later)
-* The pen button actions with a real pen (unit tests cover the name to keys mapping only), and Interface size on a real display: the scale GNOME picks for a changed physical
-  size was not observed, and the option applies only when the display is created (Pause then Resume, or restart the daemon).
+* The pen button actions with a real pen (unit tests cover the name to keys mapping only).
+* **A first version of Interface size claimed a different physical size in the EDID and did nothing**: nothing it generated was ever used (no scaled EDID file appeared), and GNOME
+  keeps the scale it chose for a monitor, so it was replaced by the Mutter call above. Its planning (parse, nearest supported scale, re-packing the monitors to the right, the busctl
+  arguments) has unit tests; the live result is recorded below.
 * The flash is a plain Android toast, not exercised on a device.
 
 ## Not done (planned)

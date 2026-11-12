@@ -28,8 +28,8 @@ pub struct DeviceOptions {
     pub touchpad_haptic_strength: String,
     pub touchpad_click_sound: bool,
     pub touchpad_style: String,
-    /// `auto`, `compact` or `large`: the physical size the virtual display claims. Host only (the tablet is not told).
-    pub interface_size: String,
+    /// Interface scale of the virtual display in percent, 0 for automatic. Host only (the tablet is not told).
+    pub interface_scale: u32,
     pub touchpad_middle_button: bool,
     pub touchpad_classic_tap: bool,
     /// The setting "Use Native Gestures (Wayland/libinput)". Whether it is in effect also depends
@@ -94,7 +94,7 @@ impl DeviceOptions {
         g.touchpad_haptic_strength = pick!(touchpad_haptic_strength);
         g.touchpad_click_sound = pick!(touchpad_click_sound);
         g.touchpad_style = pick!(touchpad_style);
-        g.interface_size = pick!(interface_size);
+        g.interface_scale = pick!(interface_scale);
         g.touchpad_middle_button = pick!(touchpad_middle_button);
         g.touchpad_classic_tap = pick!(touchpad_classic_tap);
         g.native_gestures = p.native_gestures.unwrap_or(cfg.native_gestures);
@@ -137,7 +137,7 @@ impl DeviceOptions {
             touchpad_haptic_strength: g.touchpad_haptic_strength.clone(),
             touchpad_click_sound: g.touchpad_click_sound,
             touchpad_style: g.touchpad_style.clone(),
-            interface_size: g.interface_size.clone(),
+            interface_scale: g.interface_scale,
             touchpad_middle_button: g.touchpad_middle_button,
             touchpad_classic_tap: g.touchpad_classic_tap,
             native_gestures: g.native_gestures,

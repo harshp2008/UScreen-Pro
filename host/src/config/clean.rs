@@ -72,14 +72,6 @@ pub fn clean_pen_button(v: &str, default: &str) -> String {
     }
 }
 
-/// `auto` (default), `compact` or `large`; anything else falls back to `auto`.
-pub(super) fn clean_interface_size(v: &str) -> String {
-    match v.trim().to_ascii_lowercase().as_str() {
-        s @ ("compact" | "large") => s.to_string(),
-        _ => "auto".into(),
-    }
-}
-
 /// `clickpad` (default) or `classic`; anything else falls back to `clickpad`.
 pub(super) fn clean_touchpad_style(v: &str) -> String {
     match v.trim().to_ascii_lowercase().as_str() {

@@ -81,7 +81,7 @@ export interface TabletProfile {
   quality?: number;
   stream_scale?: number;
   position?: string;
-  interface_size?: string;
+  interface_scale?: number;
   encoder?: string;
   ten_bit?: boolean;
   wifi_address?: string;
@@ -140,7 +140,7 @@ export interface AppConfig {
   stream_scale: number;
   pen_only: boolean;
   position: string;
-  interface_size: string;
+  interface_scale: number;
   ten_bit: boolean;
   require_token: boolean;
   check_updates: boolean;

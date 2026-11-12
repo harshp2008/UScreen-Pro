@@ -62,23 +62,14 @@ impl CaptureManager {
         let edid_fps = self.config.fps.min(90);
         let edid_path = match &self.config.edid_path {
             Some(p) => p.clone(),
-            None => {
-                // `interface_size` changes the size the display claims, and with it the scale the compositor picks. The options are
-                // re-read first: the save that asked for this restart may be newer than the last poll of the file.
-                crate::config::options::refresh_all();
-                let f = crate::display::edid::interface_factor(
-                    &crate::config::options::current_options(self.config.instance).interface_size,
-                );
-                let scaled = |mm: u32| ((mm as f32 * f).round() as u32).clamp(1, 2550);
-                crate::display::edid::ensure_edid_sized(
-                    self.config.width,
-                    self.config.height,
-                    edid_fps,
-                    scaled(self.config.width_mm),
-                    scaled(self.config.height_mm),
-                    self.config.instance + 1,
-                )?
-            }
+            None => crate::display::edid::ensure_edid_sized(
+                self.config.width,
+                self.config.height,
+                edid_fps,
+                self.config.width_mm,
+                self.config.height_mm,
+                self.config.instance + 1,
+            )?,
         };
 
         let mut cmd = Command::new(&self.config.helper_path);

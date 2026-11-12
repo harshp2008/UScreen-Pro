@@ -136,6 +136,7 @@ impl InputServer {
             let mut card_rx = self.card_rx.clone();
             let devices = uinput.clone();
             let ident_map = ident.clone();
+            let instance = self.config.instance;
             let initial = *mode_rx.borrow_and_update();
             let card0 = *card_rx.borrow_and_update();
             // RandR changes (Xorg re-numbering or moving the virtual output) re-run the mapping.
@@ -147,7 +148,7 @@ impl InputServer {
                 if let Ok(mut guard) = devices.lock() {
                     guard.set_stylus_mode(initial);
                 }
-                map_and_note_area(initial, &ident_map, card0, &devices).await;
+                map_and_note_area(instance, initial, &ident_map, card0, &devices).await;
                 loop {
                     tokio::select! {
                         r = mode_rx.changed() => { if r.is_err() { break; } }
@@ -183,7 +184,7 @@ impl InputServer {
                         },
                         card.map(|c| format!(" (card{})", c)).unwrap_or_default()
                     );
-                    map_and_note_area(pen_only, &ident_map, card, &devices).await;
+                    map_and_note_area(instance, pen_only, &ident_map, card, &devices).await;
                 }
             });
         }
@@ -193,10 +194,23 @@ impl InputServer {
         {
             let mut opts_rx = crate::config::options::options_rx(self.config.instance);
             let devices = uinput.clone();
+            let instance = self.config.instance;
+            let ident_scale = ident.clone();
+            let card_rx_scale = self.card_rx.clone();
+            let pen_only_scale = crate::config::options::pen_only_rx(self.config.instance);
             tokio::spawn(async move {
                 // What the pen/touch routing was last told, to notice a change of mode or style.
                 let mut prev: Option<(crate::config::InputMode, String)> = None;
+                // The interface scale last applied; a later change re-applies it while the display is up.
+                let mut prev_scale: Option<u32> = None;
                 loop {
+                    let scale = opts_rx.borrow().interface_scale;
+                    if prev_scale.is_some_and(|p| p != scale) {
+                        let pen_only = *pen_only_scale.borrow();
+                        let card = *card_rx_scale.borrow();
+                        map_and_note_area(instance, pen_only, &ident_scale, card, &devices).await;
+                    }
+                    prev_scale = Some(scale);
                     let (mode, native, style) = {
                         let o = opts_rx.borrow_and_update();
                         (

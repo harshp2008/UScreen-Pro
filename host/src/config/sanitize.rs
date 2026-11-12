@@ -66,7 +66,10 @@ impl FileConfig {
         self.auto_open_app = clean_auto_open(&self.auto_open_app);
         self.touchpad_haptic_strength = clean_haptic_strength(&self.touchpad_haptic_strength);
         self.touchpad_style = clean_touchpad_style(&self.touchpad_style);
-        self.interface_size = clean_interface_size(&self.interface_size);
+        self.interface_scale = match self.interface_scale {
+            0 => 0,
+            n => n.clamp(50, 300),
+        };
         self.right_click_method = clean_right_click(&self.right_click_method);
         self.touchpad_shape = clean_shape(&self.touchpad_shape);
         self.stylus_style = clean_stylus_style(&self.stylus_style);
