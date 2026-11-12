@@ -7,6 +7,7 @@
 #
 # Needs from the caller: `run` (executes or, in a dry run, only prints), `info`, `warn`, `$SUDO`.
 # Sets US_EVDI_NEEDS_REBOOT=1 when the module cannot be (re)loaded in the running system.
+# PLATFORM(evdi): getting the EVDI kernel module: packages, DKMS or a source build
 
 # 0 when an EVDI module for the running kernel can be loaded.
 evdi_module_available() { modinfo evdi >/dev/null 2>&1; }

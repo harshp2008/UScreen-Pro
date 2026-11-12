@@ -14,6 +14,7 @@
  * All files live in ~/.local/share/uscreen/ (lib/dataFiles.js). Differences between GNOME Shell versions are
  * confined to compat/.
  */
+// PLATFORM(gnome): runs inside GNOME Shell; the supported Shell versions are listed in compat/versions.js and metadata.json
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import {describeShell} from './compat/index.js';

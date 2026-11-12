@@ -9,6 +9,7 @@
 //! Written from `cosmic-randr`'s documented `list` / `enable` / `disable`
 //! commands without a COSMIC machine to try them on, so every call logs what
 //! the tool answered.
+// PLATFORM(cosmic): virtual display on COSMIC through the cosmic-randr command
 
 use tracing::{info, warn};
 

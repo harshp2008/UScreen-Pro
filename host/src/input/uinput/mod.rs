@@ -7,6 +7,7 @@
 //!
 //! Layout: `consts` (numbers), `identity` (names/ids), `pad` (multi-touch pad), `device` (one
 //! device), `inject` (touch/pen frames), `devices` (the per-tablet set).
+// PLATFORM(uinput): virtual pen, touch and pointer devices created through /dev/uinput (needs the uinput module and permission)
 
 use super::*;
 

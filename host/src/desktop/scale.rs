@@ -38,6 +38,7 @@ pub struct Target {
     pub card: Option<u32>,
 }
 
+// PLATFORM(linux): detection order is Hyprland, GNOME, X11, then "kscreen-doctor is on PATH" as the KDE signal; any other desktop gets no scale support
 /// The backend for this session, or `None` when the desktop is unknown. The order is the one the input mapping uses.
 pub fn backend() -> Option<Backend> {
     if crate::desktop::hyprland::display::active() {

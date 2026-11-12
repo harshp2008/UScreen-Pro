@@ -3,6 +3,7 @@
 #
 # Owns everything specific to zypper systems: the os-release IDs, the package names and the packaged EVDI
 # kernel module. Does not own the shared EVDI steps (evdi.sh) or detection (platform.sh). Interface: see _template.sh.
+# PLATFORM(suse): package manager, GTK runtime and EVDI strategy of the suse family
 
 # Tried fourth.
 suse_order() { echo 40; }

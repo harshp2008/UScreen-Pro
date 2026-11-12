@@ -23,6 +23,7 @@ import kotlin.math.abs
  * battery charges, and locking the device once battery saver gives up on the host.
  */
 
+// PLATFORM(android): dims by changing the window's own screenBrightness, not the system setting
 /**
  * Fades the window's own brightness (`screenBrightness`), which needs no permission and affects
  * only this app's window. Call every method on the UI thread.
@@ -85,6 +86,7 @@ class ScreenDimmer(private val window: () -> Window?, private val context: Conte
     }
 }
 
+// PLATFORM(android): BatteryManager properties
 /** What the settings sheet says about charging. */
 object ChargingStatus {
     /** Below this a tablet with its screen on barely gains charge. */
@@ -124,9 +126,11 @@ object ChargingStatus {
     }
 }
 
+// PLATFORM(android): Device Admin receiver, needed to lock the screen
 /** Device-admin receiver; holding the admin role is what lets the app lock the screen (`force-lock` policy only). */
 class UScreenAdminReceiver : DeviceAdminReceiver()
 
+// PLATFORM(android): DevicePolicyManager.lockNow
 /** Locks the tablet for battery saver. */
 object ScreenLock {
     /** The device-admin component of this app. */

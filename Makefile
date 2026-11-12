@@ -64,6 +64,7 @@ install: build edid
 	@echo "✓ Desktop entry and icons installed (UScreen in the app menu)"
 	mkdir -p ${HOME}/.config/systemd/user/ 2>/dev/null || true
 	cp scripts/uscreen.service ${HOME}/.config/systemd/user/ 2>/dev/null || true
+	# PLATFORM(systemd): reload user units after install
 	systemctl --user daemon-reload 2>/dev/null || true
 	@echo "✓ systemd user service installed"
 	mkdir -p ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/ 2>/dev/null || true
@@ -73,6 +74,7 @@ install: build edid
 	cp extensions/uscreen-app-lock/compat/*.js ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/compat/ 2>/dev/null || true
 	mkdir -p ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/schemas 2>/dev/null || true
 	cp extensions/uscreen-app-lock/schemas/*.gschema.xml ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/schemas/ 2>/dev/null || true
+	# PLATFORM(gnome): compiles the extension schema
 	glib-compile-schemas ${HOME}/.local/share/gnome-shell/extensions/uscreen-app-lock@uscreen.app/schemas 2>/dev/null || true
 	@echo "✓ GNOME Shell extension installed: uscreen-app-lock@uscreen.app"
 

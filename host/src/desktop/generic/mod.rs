@@ -1,6 +1,7 @@
 //! The fallback backend for a desktop we have no integration for (KDE Wayland, Sway, Hyprland, ...).
 //! It still reads `focus.json`, so a user script can feed it, but it claims no capabilities: the
 //! pen stays on the mouse route unless the route is flipped by hand (`uscreen toggle-tablet`).
+// PLATFORM(linux): fallback for every desktop without a backend: focus only from a file a helper script may write
 
 use super::focus_file::FocusFile;
 use super::{Capabilities, DesktopBackend, FocusUpdate};

@@ -127,6 +127,7 @@ pub trait DesktopBackend: Send {
     }
 }
 
+// PLATFORM(linux): chooses the backend from XDG_SESSION_TYPE (X11 first) and XDG_CURRENT_DESKTOP (GNOME); every other desktop gets the generic backend
 /// Pick the backend for this session: X11 if it is one and connects, GNOME if the desktop says
 /// so, otherwise the generic one.
 pub fn detect() -> Box<dyn DesktopBackend> {
@@ -145,11 +146,13 @@ pub fn detect() -> Box<dyn DesktopBackend> {
     }
 }
 
+// PLATFORM(x11): reads XDG_SESSION_TYPE; X11 has one core pointer, so ghost-pointer tracking is switched off
 /// Whether the session is X11, where ghost tracking is unnecessary (one core pointer).
 pub fn session_is_x11() -> bool {
     std::env::var("XDG_SESSION_TYPE").is_ok_and(|s| s.eq_ignore_ascii_case("x11"))
 }
 
+// PLATFORM(linux): files exchanged with the Shell extension and the CLI live under $HOME/.local/share/uscreen
 /// `~/.local/share/uscreen/<name>`: where the Shell extension, the CLI and the daemon exchange small
 /// files (focus, route toggle, recorder requests).
 pub fn data_file(name: &str) -> Option<std::path::PathBuf> {

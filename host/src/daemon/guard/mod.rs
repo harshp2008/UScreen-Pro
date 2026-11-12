@@ -232,6 +232,7 @@ impl Guard {
     }
 }
 
+// PLATFORM(gnome): the stall watchdog runs only on GNOME Wayland
 /// Spawn the stall watchdog. It only probes while `active` is true. The
 /// returned receiver carries a counter that increments on every trip, and a
 /// second one pulses when the display has been healthy for `HEALTHY_AFTER`.

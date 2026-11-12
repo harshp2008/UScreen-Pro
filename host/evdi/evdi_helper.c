@@ -30,6 +30,7 @@
 #include "helper_writer.h"
 #include "helper_events.h"
 
+// PLATFORM(evdi): finds the EVDI card by scanning /sys/devices/platform/evdi.*/drm (Linux sysfs)
 /*
  * Index N of the first EVDI card (/dev/dri/cardN) found under /sys/devices/platform/evdi.*, or -1 if there is none.
  */

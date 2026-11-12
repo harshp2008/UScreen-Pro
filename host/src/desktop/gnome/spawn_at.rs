@@ -1,6 +1,7 @@
 //! Thin wrapper around the `spawn-at` command (<https://github.com/harshp2008/spawn-at>): put a new
 //! window at an exact spot (the pointer) on GNOME Wayland, list windows, and hand focus back.
 //! Used by the GNOME backend; nothing else in the host calls `spawn-at`.
+// PLATFORM(gnome): window focus and placement at the pointer through the spawn-at tool
 
 use std::process::{Command, Stdio};
 

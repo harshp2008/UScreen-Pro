@@ -3,6 +3,7 @@
 //!
 //! Kept in one place so the numbers can be checked against `linux/input-event-codes.h` and
 //! `linux/uinput.h` without reading any logic.
+// PLATFORM(linux): Linux input-event-codes.h values (EV_*, BTN_*, ABS_*)
 
 // Linux input event constants
 pub(in crate::input) const EV_SYN: u16 = 0x00;

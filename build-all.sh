@@ -140,6 +140,7 @@ done
 
 # 5c. A daemon that is still running keeps the old binary (and its old tray icon) in memory, so
 #     restart it when it runs under the user service; the new binary takes over.
+# PLATFORM(systemd): restarts the user service after deploying new binaries
 if systemctl --user is-active --quiet uscreen.service 2>/dev/null; then
     echo ""
     echo "==> Restarting uscreen.service so the new daemon (and tray) replaces the old one..."

@@ -197,6 +197,7 @@ install_files() {
 
     run mkdir -p "${HOME}/.config/systemd/user"
     run cp "$SCRIPT_DIR/uscreen.service" "${HOME}/.config/systemd/user/"
+    # PLATFORM(systemd): reload user units after installing uscreen.service
     run systemctl --user daemon-reload 2>/dev/null || true
 }
 
@@ -219,6 +220,7 @@ install_extension() {
     run cp "$src"/compat/*.js "$EXT_DIR/compat/"
     if ls "$src"/schemas/*.gschema.xml >/dev/null 2>&1; then
         run cp "$src"/schemas/*.gschema.xml "$EXT_DIR/schemas/"
+        # PLATFORM(gnome): compiles the extension's gsettings schema
         run glib-compile-schemas "$EXT_DIR/schemas" 2>/dev/null || true
     fi
     if [ "$have" != "$want" ]; then
@@ -270,6 +272,7 @@ system_setup() {
     evdi_ensure || warn "No EVDI module could be installed: Extended Display mode will not work (stylus and touchpad modes do not need it)"
     evdi_activate
     run $SUDO mkdir -p /etc/udev/rules.d
+    # PLATFORM(uinput): loads the uinput module; the udev rule below makes /dev/uinput usable without root
     run $SUDO modprobe uinput 2>/dev/null || true
     # /dev/uinput is root-only on a stock system; Bazzite ships its own rule.
     if [ ! -e /etc/udev/rules.d/60-uscreen-uinput.rules ] && [ ! -e /usr/lib/udev/rules.d/60-uscreen-uinput.rules ]; then

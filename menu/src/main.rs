@@ -11,6 +11,7 @@
 //!
 //! The result file gets one line, `{"action":"copy"}` for a tapped button or `{"action":"none"}`
 //! when the menu was dismissed (Escape, focus lost to another window, or the timeout).
+// PLATFORM(linux): GTK 4 window; the daemon starts it and reads its answer from a file
 
 use gtk4::prelude::*;
 use gtk4::{glib, Application, ApplicationWindow, Box as GtkBox, Button, CssProvider, Orientation};

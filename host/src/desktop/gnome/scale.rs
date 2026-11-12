@@ -8,6 +8,7 @@
 //! set again from the settings every time the display is created does not need to be remembered.
 //!
 //! Percent 0 means "leave it to GNOME": the monitor's preferred scale is applied, which also undoes an earlier custom value.
+// PLATFORM(gnome): interface scale through Mutter ApplyMonitorsConfig (busctl), as a temporary layout
 
 use std::collections::HashMap;
 use tracing::{info, warn};

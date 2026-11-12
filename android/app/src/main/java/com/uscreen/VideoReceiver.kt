@@ -157,6 +157,7 @@ class VideoReceiver {
     /** Inverse of `ptsFor`: the sequence number carried by a presentation timestamp. */
     private fun seqFromPts(pts: Long): Int = (pts / PTS_STEP_US).toInt()
 
+    // PLATFORM(android): picks a software decoder by MediaCodecList names
     /** The software decoder for the current codec, the last tier of decoder fallback. */
     private fun softwareDecoderName(): String =
         if (mimeType == MIME_TYPE_HEVC) "c2.android.hevc.decoder" else "c2.android.avc.decoder"
@@ -299,6 +300,7 @@ class VideoReceiver {
         releaseCodec()
     }
 
+    // PLATFORM(android): MediaCodec; KEY_LOW_LATENCY needs Android 11 (API 30), and vendor-specific keys cover some Samsung decoders
     /**
      * Creates and starts the decoder for the current codec and size on [surface], returning false if that failed; the decoder tier chooses between hardware low-latency, hardware and software.
      */

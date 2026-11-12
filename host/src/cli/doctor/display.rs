@@ -2,6 +2,7 @@
 
 use super::*;
 
+// PLATFORM(linux): if-ladder over desktop backends for the "is the virtual display on" report
 /// Doctor check of the EVDI virtual display: its connector, mode and placement.
 pub(super) async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
     let connectors = vdisplay::evdi_connectors();
@@ -105,6 +106,7 @@ pub(super) async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
     }
 }
 
+// PLATFORM(kde): parses `kwin_wayland --version` style banner text
 /// `kwin 6.8.2` (the output of `kwin_wayland --version`) as (6, 8, 2).
 pub(super) fn kwin_version(text: &str) -> Option<(u32, u32, u32)> {
     let v = text.split_whitespace().last()?;
@@ -116,6 +118,7 @@ pub(super) fn kwin_version(text: &str) -> Option<(u32, u32, u32)> {
     ))
 }
 
+// PLATFORM(kde): on-screen keyboard check; says nothing useful off KDE
 /// The on-screen keyboard pops up whenever a touchscreen is used, and the
 /// tablet's touch device is exactly that as far as the desktop is concerned.
 /// Reported because it is a global desktop setting, not something the daemon
@@ -234,6 +237,7 @@ pub(super) async fn check_osk(r: &mut Report) {
     }
 }
 
+// PLATFORM(systemd): asks systemctl --user whether uscreen.service is enabled
 /// Whether plugging the cable in is actually enough on its own.
 pub(super) async fn check_autostart(r: &mut Report) {
     match output_of("systemctl", &["--user", "is-enabled", "uscreen.service"]).await {

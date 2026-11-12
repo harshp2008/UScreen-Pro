@@ -12,6 +12,7 @@
 //!
 //! Written from the `xrandr` and `xinput` manuals without an X11 desktop to
 //! run it on; every command's outcome is logged.
+// PLATFORM(x11): virtual display on X11: RandR through the xrandr command, input mapping through xinput
 
 use tracing::{info, warn};
 

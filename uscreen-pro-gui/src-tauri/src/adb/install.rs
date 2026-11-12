@@ -6,6 +6,7 @@ use super::*;
 /// The APK compiled into this app (empty when built without one, see `build.rs`).
 static EMBEDDED_APK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/app.apk"));
 
+// PLATFORM(linux): copies the embedded APK to ~/.local/share/uscreen/app-debug.apk
 /// The APK to install: the one carried inside this app, written to `~/.local/share/uscreen/app-debug.apk`
 /// (only when that file differs, so the background daemon's update path uses the same build); an app built
 /// without an embedded APK falls back to searching the usual locations.

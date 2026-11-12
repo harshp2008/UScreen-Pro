@@ -5,6 +5,7 @@
 //! position. Measured here: `xdotool getmouselocation` said 1464,540 while the compositor said
 //! 1088,527. So the idle-dim timer could not see the mouse arrive on the tablet's screen and the
 //! tablet stayed dimmed. This watcher asks the compositor instead, a few times a second.
+// PLATFORM(gnome): pointer position and monitor layout come from the spawn-at tool (a GNOME Shell extension)
 
 use crate::capture::DetectedMode;
 use std::time::Duration;

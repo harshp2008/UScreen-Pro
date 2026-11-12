@@ -7,6 +7,7 @@
 # Does not own detection of the desktop or the restart rules (platform.sh), nor the steps shared by all
 # families (evdi.sh: dkms from upstream source, activating the module).
 # The interface every family file implements is described in _template.sh.
+# PLATFORM(debian): package manager, GTK runtime and EVDI strategy of the debian family
 
 # Tried first among the families.
 debian_order() { echo 10; }

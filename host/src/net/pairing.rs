@@ -63,6 +63,7 @@ pub async fn discover_mdns_tls_connect_endpoint(
     None
 }
 
+// PLATFORM(android): Android before 11 has no wireless pairing; the fallback is an adb tcpip port allocated per device
 /// Allocates the next available collision-free legacy TCP port for Android <11.
 /// Starts at 5556 to prevent collisions with the standard default 5555.
 pub fn allocate_unique_legacy_port(existing_ports: &[u16]) -> u16 {
@@ -76,6 +77,7 @@ pub fn allocate_unique_legacy_port(existing_ports: &[u16]) -> u16 {
     5556
 }
 
+// PLATFORM(android): `adb tcpip <port>` on an Android 10 or older device
 /// Configures legacy ADB over TCP/IP on a specific dynamic port.
 pub async fn enable_legacy_tcpip(serial: &str, port: u16) -> Result<()> {
     info!("Setting legacy ADB tcpip port for {} to {}", serial, port);

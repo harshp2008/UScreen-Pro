@@ -4,6 +4,7 @@
  * and each try is isolated so a missing API on one Shell version cannot break the others. Nothing else in the extension
  * touches these APIs.
  */
+// PLATFORM(gnome): runs inside GNOME Shell; the supported Shell versions are listed in compat/versions.js and metadata.json
 
 import Meta from 'gi://Meta';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';

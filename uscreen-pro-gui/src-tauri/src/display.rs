@@ -29,6 +29,7 @@ fn auto_percent_from(json: &str, width: Option<u32>, height: Option<u32>) -> Opt
     None
 }
 
+// PLATFORM(gnome): asks Mutter (busctl DisplayConfig.GetCurrentState) for the preferred scale; on other desktops the call fails and there is no answer
 /// Tauri command: the automatic interface scale in percent of the virtual display of a device with this panel size.
 #[tauri::command]
 pub async fn display_auto_percent(width: Option<u32>, height: Option<u32>) -> Option<u32> {

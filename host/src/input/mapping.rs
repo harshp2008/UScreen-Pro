@@ -9,6 +9,7 @@ use super::*;
 /// D-Bus interface name of a KWin input device.
 pub(super) const KWIN_INPUT_IFACE: &str = "org.kde.KWin.InputDevice";
 
+// PLATFORM(kde): finds the laptop panel with kscreen-doctor
 /// The screen the user is actually looking at: the first enabled output that is
 /// not one of ours. In pen-only mode the tablet drives this one, so the pen has
 /// to be mapped onto it rather than onto the virtual display.
@@ -48,6 +49,7 @@ pub(super) async fn primary_non_evdi_output() -> Option<String> {
     best.map(|(_, n)| n).or(fallback)
 }
 
+// PLATFORM(kde): reads a property of a KWin input device over D-Bus
 /// Read one property of a KWin input device by its sysname.
 pub(super) async fn kwin_device_property(sysname: &str, property: &str) -> Option<String> {
     crate::desktop::kde::display::get_property(
@@ -58,6 +60,10 @@ pub(super) async fn kwin_device_property(sysname: &str, property: &str) -> Optio
     .await
 }
 
+// PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
+// PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
+// PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
+// PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
 /// Pin the virtual input devices to the virtual display.
 ///
 /// An absolute-positioning device is meaningless without knowing which screen
@@ -279,6 +285,7 @@ pub(super) async fn map_devices_on_x11(
     Some(output)
 }
 
+// PLATFORM(linux): area lookup differs per desktop: Hyprland, GNOME, X11 (none) and kscreen-doctor for the rest
 /// Map, then tell the pointer device where that output sits on the desktop.
 pub(super) async fn map_and_note_area(
     instance: u32,
@@ -328,6 +335,7 @@ pub(super) async fn map_and_note_area(
     }
 }
 
+// PLATFORM(kde): output rectangle from kscreen-doctor JSON
 /// Where `output` sits on the desktop, as fractions of the whole desktop:
 /// (x, y, width, height). `None` when the layout cannot be read.
 ///
@@ -371,6 +379,7 @@ pub(super) async fn output_area_on_desktop(output: &str) -> Option<(f64, f64, f6
     (max_x > 0.0 && max_y > 0.0).then(|| (x / max_x, y / max_y, w / max_x, h / max_y))
 }
 
+// PLATFORM(kde): runs kscreen-doctor -j and parses its JSON
 /// The outputs KWin currently knows, as reported by `kscreen-doctor -j`.
 /// `None` when the tool is not there at all (not a KDE session).
 pub(super) async fn kscreen_outputs() -> Option<Vec<serde_json::Value>> {

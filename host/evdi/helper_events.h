@@ -5,6 +5,7 @@
  * whole helper is still one translation unit (static functions stay static and the hot loops still inline).
  * It is not a header and cannot be compiled on its own. It owns buffer (re)allocation on a mode change and the request/grab pacing.
  */
+// PLATFORM(evdi): callbacks and event loop of libevdi (mode change, update ready, DPMS, cursor)
 
 static void on_dpms(int dpms_mode, void *user_data) {
   (void)user_data;

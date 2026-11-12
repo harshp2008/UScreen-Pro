@@ -2,6 +2,7 @@
 
 use super::*;
 
+// PLATFORM(gnome): GNOME on Wayland is the only compositor the freeze guard watches
 /// Whether `XDG_CURRENT_DESKTOP` says GNOME.
 pub(super) fn is_gnome_wayland() -> bool {
     std::env::var("XDG_CURRENT_DESKTOP")
@@ -11,6 +12,7 @@ pub(super) fn is_gnome_wayland() -> bool {
         && std::env::var("XDG_SESSION_TYPE").is_ok_and(|t| t == "wayland")
 }
 
+// PLATFORM(gnome): calls org.gnome.Mutter.DisplayConfig.GetCurrentState, which GNOME Shell answers from its main loop
 /// Round-trip of a call that GNOME Shell serves from its main loop.
 pub(super) async fn probe_main_loop(conn: &zbus::Connection) -> Sample {
     let t0 = Instant::now();
@@ -27,6 +29,7 @@ pub(super) async fn probe_main_loop(conn: &zbus::Connection) -> Sample {
     }
 }
 
+// PLATFORM(gnome): owner of org.gnome.Shell on the session bus, uptime from /proc/<pid>/stat
 /// GNOME Shell's uptime according to the session bus, `None` if it is not running.
 pub(super) async fn shell_uptime(conn: &zbus::Connection) -> Option<Duration> {
     let dbus = zbus::fdo::DBusProxy::new(conn).await.ok()?;
@@ -51,6 +54,7 @@ pub(super) async fn shell_uptime(conn: &zbus::Connection) -> Option<Duration> {
     ))
 }
 
+// PLATFORM(gnome): org.gnome.SessionManager method
 /// Whether the GNOME session manager reports the session as running.
 pub(super) async fn session_running(conn: &zbus::Connection) -> Option<bool> {
     // A method, not a property, on org.gnome.SessionManager (verified with
@@ -68,6 +72,7 @@ pub(super) async fn session_running(conn: &zbus::Connection) -> Option<bool> {
     reply.body().deserialize::<bool>().ok()
 }
 
+// PLATFORM(gnome): waits for GNOME Shell and its session manager; other compositors are not waited for
 /// Block until it is safe to touch the display topology. Returns false if a
 /// shutdown was requested first. Never "fails": the answer to an unready
 /// compositor is to wait.

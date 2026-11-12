@@ -7,6 +7,7 @@
 
 use super::*;
 
+// PLATFORM(evdi): explains a missing evdi kernel module or missing devices by reading /sys/module/evdi and /sys/devices/evdi
 /// Why the helper cannot get an EVDI device, in the words of someone who can
 /// fix it. Returns None when the state looks fine and the failure was
 /// something else.
@@ -67,6 +68,9 @@ impl CaptureManager {
         Ok(())
     }
 
+    // PLATFORM(linux): if-ladder over desktop backends: Hyprland, COSMIC, GNOME (does it by itself), X11, then inline kscreen-doctor code for KDE
+    // PLATFORM(linux): if-ladder over desktop backends: Hyprland, COSMIC, GNOME (does it by itself), X11, then inline kscreen-doctor code for KDE
+    // PLATFORM(linux): if-ladder over desktop backends: Hyprland, COSMIC, GNOME (does it by itself), X11, then inline kscreen-doctor code for KDE
     /// Enable the EVDI output and place it to the right of every other screen.
     ///
     /// The output is identified by the DRM connector names sysfs reports for
@@ -276,6 +280,7 @@ impl CaptureManager {
         warn!("EVDI output did not appear in kscreen-doctor within 3s");
     }
 
+    // PLATFORM(linux): same ladder as enable_evdi_display; the KDE branch is inline kscreen-doctor code
     /// Turn the virtual output back off so its windows return to the real
     /// screens. Without this the desktop keeps a monitor nobody can see after
     /// the tablet is unplugged, and windows left there are effectively lost.

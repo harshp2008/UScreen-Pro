@@ -2,6 +2,7 @@
 //! device kind (touchscreen, pen, pointer, touchpad, mouse, keyboard), small helpers (key taps,
 //! relative moves, scroll), and the single `emit` choke point that also tracks which keys the device
 //! holds (`DevState`), so a forced release can always let go of exactly what is down.
+// PLATFORM(uinput): Linux uinput ABI: struct input_event and the ioctl numbers used to create virtual devices
 
 use super::*;
 

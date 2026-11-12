@@ -4,6 +4,7 @@
 # Owns the fallback: install UScreen's own files, say which packages to install by hand, and build EVDI from
 # upstream source if possible. It never claims an os-release ID, so it is not asked in `us_distro_family`.
 # Interface: see _template.sh.
+# PLATFORM(linux): package manager, GTK runtime and EVDI strategy of the unknown family
 
 # Never tried: this family is the fallback.
 unknown_order() { echo 99; }

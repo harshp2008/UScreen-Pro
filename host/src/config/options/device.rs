@@ -200,6 +200,7 @@ impl DeviceOptions {
         })
     }
 
+    // PLATFORM(wayland): reads XDG_SESSION_TYPE and XDG_CURRENT_DESKTOP to decide whether the tablet may send raw touchpad frames
     /// Whether touchpad mode really uses the virtual multi-touch touchpad: the setting is on and
     /// the desktop turns libinput's swipe and pinch events into something (GNOME and KDE on
     /// Wayland). On X11, Cinnamon, wlroots compositors and the like the tablet recognises the
@@ -225,6 +226,7 @@ impl DeviceOptions {
     }
 }
 
+// PLATFORM(wayland): libinput gestures reach apps only on a Wayland session of GNOME or KDE; X11 and other desktops get host-side gestures
 /// Whether this session's compositor consumes libinput swipe / pinch events itself: GNOME (Mutter)
 /// and KDE (KWin), both on Wayland. `session` is `XDG_SESSION_TYPE`, `desktop` is
 /// `XDG_CURRENT_DESKTOP` (a colon-separated list such as `ubuntu:GNOME`).

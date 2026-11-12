@@ -1,3 +1,6 @@
+# systemd user unit that runs the UScreen daemon with the graphical session (`uscreen --helper ... start`, stopped by `uscreen stop`).
+# Owns start/stop and ordering; the installer and `make install` copy it to ~/.config/systemd/user. Does not own the daemon's settings.
+# PLATFORM(systemd): user unit; %h is systemd's home specifier
 [Unit]
 Description=UScreen - USB Second Display Server
 Documentation=https://github.com/majmichu1/UScreen

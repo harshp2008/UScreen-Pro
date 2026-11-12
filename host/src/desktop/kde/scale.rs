@@ -1,4 +1,5 @@
 //! The interface scale of a virtual display on KDE Plasma, through `kscreen-doctor`.
+// PLATFORM(kde): scale through kscreen-doctor output.NAME.scale.S
 
 /// The `kscreen-doctor` argument that gives `connector` `percent`, read from `kscreen-doctor -j`; `None` when the output is not listed or
 /// already has that scale.

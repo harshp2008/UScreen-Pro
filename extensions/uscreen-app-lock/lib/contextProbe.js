@@ -2,6 +2,7 @@
  * lib/contextProbe.js: the context probe for the pen's long-press menu.
  * Owns context_request (read) and context.json (written): where the pointer is, what is under it, and only the lengths of the selection and the clipboard, never the text.
  */
+// PLATFORM(gnome): runs inside GNOME Shell; the supported Shell versions are listed in compat/versions.js and metadata.json
 
 import Shell from 'gi://Shell';
 import Gio from 'gi://Gio';

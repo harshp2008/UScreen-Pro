@@ -9,6 +9,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 
+// PLATFORM(android): Vibrator and VibrationEffect, which exist from different API levels
 /**
  * The tick that confirms a touchpad click. Uses [VibratorManager] on Android 12+ and the older [Vibrator] service
  * before that.

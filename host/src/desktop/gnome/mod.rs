@@ -2,6 +2,7 @@
 //! the `uscreen-app-lock` Shell extension (see `extensions/`) reports it in `focus.json`; this
 //! backend reads that file. It also asks the extension for the pointer context (`context_request` /
 //! `context.json`) and places windows with the `spawn-at` command. Verified on GNOME 46 (Ubuntu 24.04) only.
+// PLATFORM(gnome): focus, pointer context and the pen menu come from the uscreen-app-lock Shell extension through files in ~/.local/share/uscreen; GNOME Shell on Wayland only
 
 pub mod display;
 pub mod pointer;

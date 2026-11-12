@@ -2,6 +2,7 @@
  * lib/penMenu.js: the pen's long-press menu, drawn inside the Shell so it is not a window (nothing in the dock, no focus change).
  * Owns menu_request.json and menu_close (read) and menu_shown and menu_result (written). Its look is in ../stylesheet.css.
  */
+// PLATFORM(gnome): runs inside GNOME Shell; the supported Shell versions are listed in compat/versions.js and metadata.json
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';

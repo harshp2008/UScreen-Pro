@@ -1,4 +1,5 @@
 //! The interface scale of a virtual display on Hyprland, through `hyprctl keyword monitor`.
+// PLATFORM(hyprland): scale through a hyprctl "monitor" keyword rule
 
 use super::display::{hyprctl, keyword};
 

@@ -7,6 +7,7 @@ package com.uscreen
 import android.content.pm.ActivityInfo
 import android.view.Surface
 
+// PLATFORM(android): Surface rotation constants and panels whose natural orientation is landscape
 /**
  * Which landscape direction the tilt sensor asks for.
  *

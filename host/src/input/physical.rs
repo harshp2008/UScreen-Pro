@@ -257,6 +257,7 @@ fn read_range(dev: &Device) -> AbsRange {
     r
 }
 
+// PLATFORM(linux): reads a physical tablet through evdev (/dev/input/event*), which needs access granted by the udev rule
 /// Run the physical tablet reader for the daemon's lifetime. It follows `physical_tablet_support`
 /// in `config.toml` live (checked every second), finds the pen, grabs it, and feeds the shared
 /// injector until the tablet is unplugged or support is switched off.
@@ -382,6 +383,7 @@ fn read_loop(
     }
 }
 
+// PLATFORM(linux): udev rules text for 60-uscreen-tablet-access.rules; the rule file name must sort before 73-seat-late.rules
 /// The udev rules that make a tablet usable without root and, optionally, invisible to the desktop:
 ///
 /// * `access`: gives the logged-in seat user the pen's event node (`uaccess`), no `input` group needed;

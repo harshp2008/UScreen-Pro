@@ -11,6 +11,7 @@
 //! `busctl` ships with systemd, so it is present on every distribution this
 //! project targets, and it is tried first; the qdbus family stays as a
 //! fallback for systems without it.
+// PLATFORM(kde): virtual display on KDE Plasma: kscreen-doctor for outputs, KWin D-Bus (busctl) for input device properties
 
 use tokio::sync::OnceCell;
 use tracing::{debug, info, warn};

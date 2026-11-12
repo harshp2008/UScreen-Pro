@@ -32,6 +32,7 @@ class TouchCapture {
     companion object {
         const val TAG = "UScreenTouch"
         const val DEFAULT_PORT = 8891
+        // PLATFORM(android): a hidden constant of MotionEvent
         // MotionEvent.TOOL_TYPE_PALM is @hide, so it has to be spelled out;
         // it is 5 in AOSP (0 unknown, 1 finger, 2 stylus, 3 mouse, 4 eraser,
         // 5 palm). It was 6 here until 1.2.5, so no palm was ever filtered.

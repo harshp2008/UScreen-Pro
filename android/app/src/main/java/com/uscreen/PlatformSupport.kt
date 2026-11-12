@@ -15,6 +15,7 @@ import java.util.Collections
  * the troubleshooting UI, and kept apart so MainActivity stays about lifecycle and window policy.
  */
 
+// PLATFORM(android): assumes the Wi-Fi interface is named wlan*, which holds on most but not all devices
 /**
  * Retrieve the active IPv4 address assigned to the device's wireless (`wlan`) interface.
  */
@@ -34,6 +35,7 @@ fun getLocalWifiIp(@Suppress("UNUSED_PARAMETER") context: Context? = null): Stri
     return null
 }
 
+// PLATFORM(android): Android 8.1 (O_MR1) or later
 /**
  * Whether touches can reach the app while the keyguard is up. The activity can only be drawn over the
  * lock screen through `setShowWhenLocked`, which arrived in API 27; below that the window is never
