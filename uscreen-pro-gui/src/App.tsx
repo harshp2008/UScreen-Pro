@@ -22,6 +22,7 @@ import { GlobalSettings } from "./views/GlobalSettings";
 import { Health } from "./views/Health";
 import "./index.css";
 
+/** sessionStorage key prefix under which each view remembers its scroll position. */
 const SCROLL_PREFIX = "uscreen-scroll:";
 
 /**

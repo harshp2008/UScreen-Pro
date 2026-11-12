@@ -56,6 +56,7 @@ export function Instructions({ items }: { items: ReactNode[] }) {
   );
 }
 
+/** The steps that switch on Developer options and USB debugging on the device, in order. */
 const DEBUG_STEPS: { icon: LucideIcon; text: ReactNode }[] = [
   { icon: Settings, text: <>Open <b>Settings</b> on your device.</> },
   { icon: Info, text: <>Go to <b>About Phone</b> (or About Tablet).</> },

@@ -9,6 +9,7 @@ import type { AppConfig, DaemonStatus } from "./types";
 
 let running = false;
 
+/** The fake host configuration the browser-only dev mock serves in place of `config.toml`. */
 const config: AppConfig = {
   encoder: "hevc_nvenc",
   fps: 90,
@@ -88,6 +89,7 @@ const config: AppConfig = {
  * each command was given.
  */
 const scenario = new URLSearchParams(location.search).get("scenario") ?? "two";
+/** Fake devices of the mock; serials are placeholders, models are real Samsung model codes. */
 const TABLET = { serial: "TABLET_SERIAL", model: "SM-X616B" };
 const PHONE = { serial: "PHONE_SERIAL", model: "SM-A556E" };
 

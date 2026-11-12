@@ -45,7 +45,9 @@ import { DebugTimeline, Instructions, Note, StepLog } from "./wizard/WizardParts
 
 /* Step 0 is the landing screen; steps 1-5 are the USB flow (the no-cable wireless path jumps to Finish). */
 const STEPS = ["Prepare Device", "Connect USB", "Install", "Wireless", "Finish"] as const;
+/** Index of the wireless-pairing step in the wizard (steps are zero-based). */
 const WIRELESS_STEP = 4;
+/** Index of the final step of the wizard. */
 const FINISH_STEP = 5;
 /** Wizard step: 0 landing, 1 Prepare Device, 2 Connect USB, 3 Install, 4 Wireless, 5 Finish. */
 type Step = 0 | 1 | 2 | 3 | 4 | 5;
@@ -59,6 +61,7 @@ type Transport = "auto" | "usb" | "wifi";
 type WirelessTab = "auto" | "tailscale";
 /* Backend error prefix of a failed router reachability check (see pairing.rs). */
 const ROUTER_BLOCKED_PREFIX = "ROUTER_BLOCKED|";
+/** Tailscale download page, opened from a button in the wireless step. */
 const TAILSCALE_DOWNLOAD_URL = "https://tailscale.com/download";
 
 /** Props of the wizard. It is mounted only while open, so every field starts from its initial value. */

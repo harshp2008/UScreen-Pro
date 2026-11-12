@@ -1,3 +1,8 @@
+/**
+ * ManualPairDialog.tsx: the "Manual Setup" dialog that pairs a device which is not plugged in.
+ * Input: the pairing IP:port and 6-digit code typed by the user; output: a Tauri `invoke` of the pairing command.
+ * Does not own the guided wizard (AddDeviceWizard.tsx).
+ */
 import { invoke } from "@tauri-apps/api/core";
 import { KeyRound, LoaderCircle, Wifi } from "lucide-react";
 import { useState } from "react";

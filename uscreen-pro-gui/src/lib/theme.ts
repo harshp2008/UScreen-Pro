@@ -3,7 +3,9 @@ import { useCallback, useEffect, useState } from "react";
 /** User's theme choice; `system` follows the OS. */
 export type ThemePref = "light" | "dark" | "system";
 
+/** localStorage key holding the chosen theme ("light", "dark" or "system"). */
 const KEY = "uscreen-theme";
+/** Media query that reports whether the operating system prefers a dark theme. */
 const QUERY = "(prefers-color-scheme: dark)";
 
 /** Stored theme preference, defaulting to `system` when storage is unavailable or holds junk. */

@@ -10,10 +10,12 @@ export interface Bezier {
 
 /** Limits the host applies: x in 0..1, y in -2..3. */
 export const BEZIER_Y_MIN = -2;
+/** Largest y a Bezier handle may have (the range is stated above). */
 export const BEZIER_Y_MAX = 3;
 
 /** Limits [n] to [lo]..[hi]. */
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+/** Round to three decimals so stored curve strings stay short and compare equal. */
 const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
 /** The stored form of a custom curve: `bezier:x1,y1,x2,y2`. */

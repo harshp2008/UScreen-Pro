@@ -1,3 +1,7 @@
+/**
+ * Sidebar.tsx: left navigation. Lists the views, the connected devices with their state, and the
+ * start/stop button of the host daemon. Pure presentation: all state and callbacks arrive as props from App.tsx.
+ */
 import { Activity, FlaskConical, LoaderCircle, Play, Plus, Sliders, Square, Tablet, Usb, WifiOff } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";

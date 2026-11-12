@@ -1,3 +1,8 @@
+/**
+ * CurveEditor.tsx: edits one fade or response curve as a preset or a custom cubic Bezier.
+ * Inputs: the stored curve value and the saved presets. Output: `onChange` with a preset name, `preset:<name>` or `bezier:x1,y1,x2,y2`.
+ * Does not own the preset list (lib/options.ts) or the Bezier maths (lib/curves.ts).
+ */
 import { Save, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -7,8 +12,11 @@ import { bezierFn, clampBezier, curveFn, curvePath, formatBezier, parseBezier, t
 import { CURVES } from "../lib/options";
 import type { CurvePreset } from "../lib/types";
 
+/** Select value meaning "the curve is a hand-made Bezier, not a named preset". */
 const CUSTOM = "custom";
+/** Select value for a saved preset name that no longer exists in the list. */
 const MISSING = "missing";
+/** Starting handles for a new custom curve (CSS "ease": quick start, long gentle finish). */
 const DEFAULT_BEZIER: Bezier = { x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 };
 
 /**
@@ -56,6 +64,7 @@ function CurvePreview({ fn }: { fn: ((t: number) => number) | null }) {
 
 /** Visible vertical range of the draggable plot; the host accepts more (-2..3), the numbers below reach it. */
 const PLOT_Y_MIN = -0.5;
+/** Top edge of the plot, in curve units (1 is a finished fade), so a handle above 1 is still drawn. */
 const PLOT_Y_MAX = 1.5;
 
 /**
