@@ -16,13 +16,13 @@
 | a script counting how often every declared name (Rust, Kotlin, TS, shell, Python, JS) appears in the repository | left only test names, framework overrides (`onOpen`, `onBind`, ...) and the installer's `<family>_*` functions that `scripts/lib/platform.sh` calls by name, plus the one item removed below |
 | exported TypeScript names used once; CSS classes in `index.css` never named in a source file | none |
 | `grep` for commented-out code, `TODO`, `FIXME`, `HACK` | none (the matches were prose or `.toDouble()`) |
-| `cargo +nightly udeps` | not run: nightly tooling is not part of this project's setup |
+| `cargo +nightly udeps` | not available (`cargo-udeps` is not installed; `cargo machete` was used instead) |
 
 ## Removed or merged
 
 | Item | File | Evidence that nothing used it |
 |---|---|---|
-| `#[allow(unused_labels)]` on the `'session` loop | `host/src/capture/supervisor.rs` | the label is used by `continue 'session` four lines of control flow later; clippy with `-D warnings` is clean without the attribute |
+| `#[allow(unused_labels)]` on the `'session` loop | `host/src/capture/supervisor.rs` | the label is used by `continue 'session` further down the same loop (`supervisor.rs`); clippy with `-D warnings` is clean without the attribute |
 | `val SurfaceHigh` (a `@Composable` colour getter) | `android/.../ui/Theme.kt` | the name appears once in the whole repository, at its declaration. Compose has no reflection lookup of it. The palette field `surfaceHigh` it read is still used by both colour schemes |
 | three copies of `errText` | `App.tsx`, `ManualPairDialog.tsx`, `AddDeviceWizard.tsx` | identical one-line helpers; now one exported `errText` in `lib/utils.ts`. `tsc` is clean |
 
