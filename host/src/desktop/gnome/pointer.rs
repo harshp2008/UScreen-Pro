@@ -153,6 +153,7 @@ pub async fn watch_pointer(instance: u32, mode_rx: watch::Receiver<Option<Detect
 mod tests {
     use super::*;
 
+    /// A two-monitor `spawn-at query layout` table: the laptop panel and the tablet.
     const LAYOUT: &str = "MON  NAME          PRIMARY  SCALE  SCREEN             WORKAREA           INSETS (T/R/B/L)\n0    -             yes      1      1920x1080@0,0      1920x1040@0,40     40/0/0/0\n1    -             no       1.748633861541748  1464x915@1920,81   1464x915@1920,81   0/0/0/0\n";
 
     /// The table of `spawn-at query layout` is read from its end, and the header is skipped.

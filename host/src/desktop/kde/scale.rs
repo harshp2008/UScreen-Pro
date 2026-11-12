@@ -45,6 +45,7 @@ pub async fn apply(connectors: &[String], percent: u32) -> bool {
 mod tests {
     use super::*;
 
+    /// `kscreen-doctor -j` output with the laptop panel and one virtual output.
     const OUTPUTS: &str =
         r#"{"outputs":[{"name":"eDP-1","scale":1.0},{"name":"DVI-I-1","scale":1.0}]}"#;
 

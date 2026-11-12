@@ -47,6 +47,7 @@ pub async fn apply(connectors: &[String], percent: u32) -> bool {
 mod tests {
     use super::*;
 
+    /// `hyprctl monitors -j` output with the laptop panel and one virtual monitor.
     const MONITORS: &str = r#"[{"name":"eDP-1","width":1920,"height":1080,"refreshRate":60.0,"x":0,"y":0,"scale":1.0},
         {"name":"DVI-I-1","width":2560,"height":1600,"refreshRate":89.999,"x":1920,"y":0,"scale":1.0}]"#;
 
