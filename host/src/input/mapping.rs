@@ -61,9 +61,6 @@ pub(super) async fn kwin_device_property(sysname: &str, property: &str) -> Optio
 }
 
 // PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
-// PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
-// PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
-// PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
 /// Pin the virtual input devices to the virtual display.
 ///
 /// An absolute-positioning device is meaningless without knowing which screen
