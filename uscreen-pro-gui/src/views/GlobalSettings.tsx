@@ -175,7 +175,7 @@ export function GlobalSettings({ config: c, dirty, saveNote = "", autostart, onC
             />
             <SettingRow
               label="Interface size"
-              tip="Scale of text and windows on the tablet's screen, like GNOME's display scale. Automatic lets GNOME choose."
+              tip="Scale of text and windows on the tablet's screen, like GNOME's display scale. Automatic lets the desktop choose. Works on GNOME, Hyprland and KDE Plasma."
             >
               <Select
                 label="Interface size mode"

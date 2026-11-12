@@ -198,6 +198,13 @@ impl InputServer {
             let ident_scale = ident.clone();
             let card_rx_scale = self.card_rx.clone();
             let pen_only_scale = crate::config::options::pen_only_rx(self.config.instance);
+            // A custom scale is put back when the desktop forgets it (it reconfigures its monitors).
+            tokio::spawn(crate::desktop::scale::keep(
+                instance,
+                crate::config::options::options_rx(instance),
+                self.card_rx.clone(),
+                crate::config::options::pen_only_rx(instance),
+            ));
             tokio::spawn(async move {
                 // What the pen/touch routing was last told, to notice a change of mode or style.
                 let mut prev: Option<(crate::config::InputMode, String)> = None;

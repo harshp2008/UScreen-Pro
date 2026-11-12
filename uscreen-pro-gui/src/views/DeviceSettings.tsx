@@ -275,7 +275,7 @@ export function DeviceSettings({
             </SettingRow>
             <SettingRow
               label="Interface size"
-              tip="Scale of text and windows on this device's screen. Automatic lets GNOME choose."
+              tip="Scale of text and windows on this device's screen. Automatic lets the desktop choose. Works on GNOME, Hyprland and KDE Plasma."
               override={ov("interface_scale", g.interface_scale, g.interface_scale === 0 ? "Automatic" : `${g.interface_scale}%`)}
             >
               <Select

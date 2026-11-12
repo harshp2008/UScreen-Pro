@@ -38,7 +38,11 @@ Settings overhaul (desktop app and tablet app, kept in step; see
   scale from 50 % to 300 %. On GNOME Wayland the daemon sets it through
   Mutter's display service (the same call the Settings app makes), snaps it to
   a scale the display supports and moves the monitors to its right along. It
-  applies as soon as the setting is saved.
+  applies as soon as the setting is saved, and the daemon puts it back within a
+  few seconds if the desktop forgets it. The same setting works on Hyprland
+  (`hyprctl`) and KDE Plasma (`kscreen-doctor`); those two are built and unit
+  tested but not yet run on those desktops. X11 has no per-output scale.
+- Settings that wait for Apply show a glowing dot beside their label.
 - The tablet app confirms a setting that changed while it is running with a
   short "Settings updated" note.
 - Rows wrap instead of clipping, columns follow the pane width, hints are

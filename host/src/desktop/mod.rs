@@ -25,6 +25,7 @@ mod generic;
 pub mod gnome;
 pub mod hyprland;
 pub mod kde;
+pub mod scale;
 pub mod x11;
 
 #[cfg(test)]

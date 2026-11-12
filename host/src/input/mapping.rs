@@ -288,9 +288,10 @@ pub(super) async fn map_and_note_area(
     devices: &Arc<std::sync::Mutex<InjectDevices>>,
 ) {
     // The interface scale comes first: it changes the size of the display on the desktop, which the pointer area below reads back.
-    if !pen_only && crate::desktop::gnome::scale::available() {
+    if !pen_only && crate::desktop::scale::supported() {
         let percent = crate::config::options::current_options(instance).interface_scale;
-        crate::desktop::gnome::scale::apply(instance, percent).await;
+        crate::desktop::scale::apply(&crate::desktop::scale::Target { instance, card }, percent)
+            .await;
     }
     let output = map_devices_to_output(pen_only, ident, card).await;
     let area = match output.as_deref() {

@@ -50,6 +50,9 @@ Related: record 104 (slow whole-desktop screenshots).
   whether the app was running and the daemon opens it once afterwards. Verified live: the next build updated the tablet 5ea08cc to 18a6726, the app process went away and came back
   about 20 s later without any action.
 
+* **Modular scale backends** (`host/src/desktop/scale.rs`): GNOME (`gnome/scale.rs`), Hyprland (`hyprland/scale.rs`), KDE (`kde/scale.rs`), X11 (none). A keeper loop re-applies a
+  custom scale every 3 s, which is a no-op when nothing differs. Hyprland and KDE: only the command building has unit tests.
+
 ## Not verified (added later)
 * The pen button actions with a real pen (unit tests cover the name to keys mapping only).
 * **A first version of Interface size claimed a different physical size in the EDID and did nothing**: nothing it generated was ever used (no scaled EDID file appeared), and GNOME
