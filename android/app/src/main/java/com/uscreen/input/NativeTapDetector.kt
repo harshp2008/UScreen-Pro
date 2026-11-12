@@ -1,7 +1,7 @@
 /*
  * Spots a tap on the touchpad in native-gesture mode, where the computer's libinput makes the click and the tablet never hears of it, so the tablet can still tick.
  */
-package com.uscreen
+package com.uscreen.input
 
 import kotlin.math.hypot
 import kotlin.math.max

@@ -2,7 +2,7 @@
  * Touchpad tap-to-click, tap-and-drag and two/three-finger taps: a port of the ChromeOS
  * libgestures state machine.
  */
-package com.uscreen
+package com.uscreen.input
 
 import kotlin.math.hypot
 

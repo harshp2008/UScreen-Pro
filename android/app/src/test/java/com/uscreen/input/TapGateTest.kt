@@ -1,4 +1,4 @@
-package com.uscreen
+package com.uscreen.input
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue

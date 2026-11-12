@@ -1,7 +1,7 @@
 /*
  * A short click sound for touchpad clicks, generated in code so no sound file is needed.
  */
-package com.uscreen
+package com.uscreen.input
 
 import android.media.AudioAttributes
 import android.media.AudioFormat

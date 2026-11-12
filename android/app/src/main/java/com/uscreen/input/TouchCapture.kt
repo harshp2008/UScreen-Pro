@@ -2,7 +2,12 @@
  * Input path to the host: a WebSocket client that translates touch, pen and touchpad events into
  * the JSON messages the host injects, numbers them, and handles host notices and reconnects.
  */
-package com.uscreen
+package com.uscreen.input
+
+import com.uscreen.BuildConfig
+import com.uscreen.HostConfig
+import com.uscreen.HostNotice
+import com.uscreen.ReconnectPolicy
 
 import android.os.Handler
 import android.os.Looper

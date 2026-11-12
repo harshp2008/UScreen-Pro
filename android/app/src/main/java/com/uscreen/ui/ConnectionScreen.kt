@@ -4,6 +4,9 @@
  */
 package com.uscreen.ui
 
+import com.uscreen.input.TouchCapture
+import com.uscreen.video.VideoReceiver
+
 import android.content.Intent
 import android.net.Uri
 import android.view.SurfaceHolder
@@ -62,8 +65,6 @@ import com.uscreen.HostNotice
 import com.uscreen.MainActivity
 import com.uscreen.Prefs
 import com.uscreen.lockScreenTouchSupported
-import com.uscreen.TouchCapture
-import com.uscreen.VideoReceiver
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue

@@ -1,4 +1,4 @@
-package com.uscreen
+package com.uscreen.input
 
 import kotlin.math.abs
 import kotlin.math.hypot

@@ -6,7 +6,7 @@
 -keep class okio.** { *; }
 
 # Keep WebSocket listener
--keep class com.uscreen.TouchCapture$* { *; }
+-keep class com.uscreen.input.TouchCapture$* { *; }
 
 # JSON
 -keep class org.json.** { *; }

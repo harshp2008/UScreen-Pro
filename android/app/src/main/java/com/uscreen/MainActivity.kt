@@ -4,6 +4,11 @@
  */
 package com.uscreen
 
+import com.uscreen.input.ClickSound
+import com.uscreen.input.Haptics
+import com.uscreen.input.TouchCapture
+import com.uscreen.video.VideoReceiver
+
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context

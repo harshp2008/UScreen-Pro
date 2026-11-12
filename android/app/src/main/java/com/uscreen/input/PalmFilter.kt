@@ -2,7 +2,7 @@
  * Palm rejection for the touchpad (a port of libgestures' palm classifier) and the
  * finger/hardware-state types the touchpad engine uses.
  */
-package com.uscreen
+package com.uscreen.input
 
 import kotlin.math.hypot
 

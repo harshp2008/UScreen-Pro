@@ -1,7 +1,7 @@
 /*
  * The tick that confirms a touchpad click, with a strength, and a check for whether the device has a vibration motor at all.
  */
-package com.uscreen
+package com.uscreen.input
 
 import android.content.Context
 import android.os.Build

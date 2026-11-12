@@ -2,7 +2,7 @@
  * Pen tilt maths: turns Android's stylus tilt axes into the signed X/Y tilt angles a Wacom-style tablet reports.
  * Pure functions with no Android types, so the geometry can be unit tested without a device.
  */
-package com.uscreen
+package com.uscreen.input
 
 import kotlin.math.atan2
 import kotlin.math.cos

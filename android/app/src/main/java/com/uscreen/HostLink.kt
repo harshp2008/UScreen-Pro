@@ -4,6 +4,9 @@
  */
 package com.uscreen
 
+import com.uscreen.input.Haptics
+import com.uscreen.input.TouchpadShape
+
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.DecelerateInterpolator

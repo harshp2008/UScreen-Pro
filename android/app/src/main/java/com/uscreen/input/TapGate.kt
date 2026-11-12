@@ -1,7 +1,7 @@
 /*
  * Holds back the first frames of a new touch so a tap can be dropped before the computer ever sees it (the Classic touchpad without tap-to-click).
  */
-package com.uscreen
+package com.uscreen.input
 
 import kotlin.math.hypot
 

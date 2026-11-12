@@ -1,4 +1,4 @@
-package com.uscreen
+package com.uscreen.input
 
 /**
  * The part of the screen that acts as the touchpad. `full_screen` is all of it; the two rectangles

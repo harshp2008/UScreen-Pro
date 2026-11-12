@@ -1,7 +1,7 @@
 /*
  * Tests of [PenTilt]: the signs and magnitudes of the tilt angles the host receives.
  */
-package com.uscreen
+package com.uscreen.input
 
 import kotlin.math.PI
 import org.junit.Assert.assertEquals
