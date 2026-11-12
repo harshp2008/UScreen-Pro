@@ -288,11 +288,16 @@ pub fn enqueue(req: Request) -> bool {
             device_version,
             host
         );
+        // An update closes the app; if it was open, it is opened again afterwards.
+        let was_running = crate::net::adb::app_running(&serial).await.unwrap_or(false);
         let result = adb_install(&serial, &apk).await;
         if let Some(i) = instance {
             crate::net::notices::release(i, crate::net::notices::update_done());
         }
         result?;
+        if was_running {
+            crate::net::adb::reopen_after_update(&serial);
+        }
         let now = installed_version(&serial).await.unwrap_or_default();
         if now == host {
             Ok(format!("updated {device_version} -> {now}"))

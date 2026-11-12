@@ -97,6 +97,14 @@ pub struct DiscoveredDevice {
 /// Tests for device-serial handling and USB-first deduplication.
 #[cfg(test)]
 mod tests {
+    /// A device marked after an update is reopened once, and the mark goes when the app is launched for it.
+    #[test]
+    fn an_updated_device_is_marked_for_reopening() {
+        assert!(!super::app::marked_for_reopen_for_test("unmarked"));
+        super::reopen_after_update("marked-serial");
+        assert!(super::app::marked_for_reopen_for_test("marked-serial"));
+    }
+
     use super::app::ScreenState;
 
     const FOCUS_APP: &str = "  mCurrentFocus=Window{4f60b6d u0 com.uscreen/com.uscreen.MainActivity}\n    isKeyguardShowing=false\npackageName=com.sec.android.app.launcher\nmWakefulness=Awake\n";

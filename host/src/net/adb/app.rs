@@ -91,9 +91,43 @@ async fn screen_state(serial: &str) -> Option<ScreenState> {
     (!text.trim().is_empty()).then(|| ScreenState::parse(&text))
 }
 
+/// Devices whose app was running when an update replaced it, and when: the update closes the app, so it is opened again once, whatever
+/// "Open app on connect" says. The mark expires after a minute.
+fn reopen_marks() -> &'static std::sync::Mutex<HashMap<String, std::time::Instant>> {
+    /// The marks, created on first use.
+    static MARKS: std::sync::OnceLock<std::sync::Mutex<HashMap<String, std::time::Instant>>> =
+        std::sync::OnceLock::new();
+    MARKS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
+/// Remember that the app of [serial] was running when it was updated and should be opened again.
+pub fn reopen_after_update(serial: &str) {
+    if let Ok(mut m) = reopen_marks().lock() {
+        m.insert(serial.to_string(), std::time::Instant::now());
+    }
+}
+
+/// Whether [serial] is marked for reopening (and not stale).
+fn marked_for_reopen(serial: &str) -> bool {
+    reopen_marks()
+        .lock()
+        .ok()
+        .and_then(|m| m.get(serial).copied())
+        .is_some_and(|t| t.elapsed() < Duration::from_secs(60))
+}
+
+/// [`marked_for_reopen`] for the tests of the parent module.
+#[cfg(test)]
+pub(super) fn marked_for_reopen_for_test(serial: &str) -> bool {
+    marked_for_reopen(serial)
+}
+
 /// Whether the daemon may open the app on this tablet now, by the `auto_open_app` setting (read
 /// fresh, so a change applies at once): never, only from the home or lock screen, or always.
 pub async fn may_open_app(serial: &str) -> bool {
+    if marked_for_reopen(serial) {
+        return true;
+    }
     match config::FileConfig::load().auto_open_app.as_str() {
         "always" => true,
         "idle" => screen_state(serial).await.is_some_and(|s| s.is_idle()),
@@ -133,6 +167,9 @@ pub async fn on_tablet_connected(
 
 /// Launch or front the UScreen Android client application, passing the security token and port parameters.
 pub async fn launch_app(serial: &str, token: Option<&str>, video_port: u16, input_port: u16) {
+    if let Ok(mut m) = reopen_marks().lock() {
+        m.remove(serial);
+    }
     let mut cmd = format!(
         "am start -n com.uscreen/.MainActivity --ei video_port {} --ei input_port {}",
         video_port, input_port
