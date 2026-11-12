@@ -113,7 +113,7 @@ pub fn parse_state(json: &str) -> Option<State> {
     })
 }
 
-/// The supported scale nearest to [wanted].
+/// The supported scale nearest to `wanted`.
 pub fn nearest_scale(wanted: f64, supported: &[f64]) -> Option<f64> {
     supported
         .iter()
@@ -132,7 +132,7 @@ fn logical_width(state: &State, l: &Logical, scale: f64) -> i32 {
     (w / scale).round() as i32
 }
 
-/// The layout with the monitor of [serial] (an EDID serial such as `0x00000001`) at [percent] (0 = its preferred scale), the monitors
+/// The layout with the monitor of `serial` (an EDID serial such as `0x00000001`) at `percent` (0 = its preferred scale), the monitors
 /// that sat directly right of it moved along, or `None` when it is not listed or already has that scale.
 pub fn plan(state: &State, serial: &str, percent: u32) -> Option<Vec<Logical>> {
     let connector = state
@@ -211,7 +211,7 @@ pub fn busctl_args(serial: u32, method: u32, layout: &[Logical]) -> Vec<String> 
     a
 }
 
-/// Set the interface scale of the virtual display of [instance] to [percent] (0 = automatic). Returns whether the layout is now as asked
+/// Set the interface scale of the virtual display of `instance` to `percent` (0 = automatic). Returns whether the layout is now as asked
 /// (also true when it already was).
 pub async fn apply(instance: u32, percent: u32) -> bool {
     let get = tokio::process::Command::new("busctl")

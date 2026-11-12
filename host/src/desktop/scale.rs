@@ -65,7 +65,7 @@ pub fn supported() -> bool {
     )
 }
 
-/// The connector names of the virtual displays of [target]'s card (all of them when the card is not known yet).
+/// The connector names of the virtual displays of `target`'s card (all of them when the card is not known yet).
 fn connectors(target: &Target) -> Vec<String> {
     crate::display::vdisplay::evdi_connectors()
         .into_iter()
@@ -74,7 +74,7 @@ fn connectors(target: &Target) -> Vec<String> {
         .collect()
 }
 
-/// Set the interface scale of the display of [target] to [percent] (0 = automatic). True when the display is as asked afterwards, also
+/// Set the interface scale of the display of `target` to `percent` (0 = automatic). True when the display is as asked afterwards, also
 /// when it already was.
 pub async fn apply(target: &Target, percent: u32) -> bool {
     match backend() {

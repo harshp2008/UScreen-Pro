@@ -2,7 +2,7 @@
 
 use super::display::{hyprctl, keyword};
 
-/// The monitor rule that gives [connector] [percent] (0 = `auto`) and keeps everything else about it, read from `hyprctl -j monitors`;
+/// The monitor rule that gives `connector` `percent` (0 = `auto`) and keeps everything else about it, read from `hyprctl -j monitors`;
 /// `None` when the monitor is not listed or already has that scale.
 pub fn rule(monitors_json: &str, connector: &str, percent: u32) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(monitors_json).ok()?;
@@ -26,7 +26,7 @@ pub fn rule(monitors_json: &str, connector: &str, percent: u32) -> Option<String
     Some(format!("{connector},{w}x{h}@{hz:.2},{x}x{y},{scale}"))
 }
 
-/// Set the scale of the first of [connectors] Hyprland lists. True when it is as asked afterwards.
+/// Set the scale of the first of `connectors` Hyprland lists. True when it is as asked afterwards.
 pub async fn apply(connectors: &[String], percent: u32) -> bool {
     let Some(json) = hyprctl(&["-j", "monitors"]).await else {
         return false;

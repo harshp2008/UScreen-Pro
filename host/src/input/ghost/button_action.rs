@@ -28,7 +28,7 @@ pub(in crate::input) fn parse(name: &str) -> Option<ButtonAction> {
 }
 
 impl InjectDevices {
-    /// Carry out the action named [name] when its button goes [down] (the release does nothing). Returns whether [name] is such an
+    /// Carry out the action named `name` when its button goes `down` (the release does nothing). Returns whether `name` is such an
     /// action at all, so the caller leaves the mouse buttons to their own code.
     pub(in crate::input) fn run_button_action(&mut self, name: &str, down: bool) -> bool {
         let Some(action) = parse(name) else {

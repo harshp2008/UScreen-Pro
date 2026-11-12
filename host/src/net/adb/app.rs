@@ -107,7 +107,7 @@ pub fn update_done() -> &'static tokio::sync::Notify {
     DONE.get_or_init(tokio::sync::Notify::new)
 }
 
-/// Remember that the app of [serial] was running when it was updated and should be opened again, and say so.
+/// Remember that the app of `serial` was running when it was updated and should be opened again, and say so.
 pub fn reopen_after_update(serial: &str) {
     if let Ok(mut m) = reopen_marks().lock() {
         m.insert(serial.to_string(), std::time::Instant::now());
@@ -115,7 +115,7 @@ pub fn reopen_after_update(serial: &str) {
     update_done().notify_one();
 }
 
-/// Whether [serial] is marked for reopening (and not stale).
+/// Whether `serial` is marked for reopening (and not stale).
 pub fn marked_for_reopen(serial: &str) -> bool {
     reopen_marks()
         .lock()

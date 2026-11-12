@@ -1,6 +1,6 @@
 //! The interface scale of a virtual display on KDE Plasma, through `kscreen-doctor`.
 
-/// The `kscreen-doctor` argument that gives [connector] [percent], read from `kscreen-doctor -j`; `None` when the output is not listed or
+/// The `kscreen-doctor` argument that gives `connector` `percent`, read from `kscreen-doctor -j`; `None` when the output is not listed or
 /// already has that scale.
 pub fn argument(kscreen_json: &str, connector: &str, percent: u32) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(kscreen_json).ok()?;
@@ -16,7 +16,7 @@ pub fn argument(kscreen_json: &str, connector: &str, percent: u32) -> Option<Str
     Some(format!("output.{connector}.scale.{wanted:.2}"))
 }
 
-/// Set the scale of the first of [connectors] KDE lists. Automatic (0) leaves it as it is: Plasma has no "automatic" to go back to.
+/// Set the scale of the first of `connectors` KDE lists. Automatic (0) leaves it as it is: Plasma has no "automatic" to go back to.
 pub async fn apply(connectors: &[String], percent: u32) -> bool {
     if percent == 0 {
         return true;
