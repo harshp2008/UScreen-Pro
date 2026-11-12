@@ -6,7 +6,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow, Tabs } from "../components/ui/layout";
-import { AUTO_OPEN, ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL, modeLabel } from "../lib/options";
+import { AUTO_OPEN, ENCODERS, INTERFACE_SIZES, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL, modeLabel } from "../lib/options";
 import { ModePanel, ModeSection, TabletPanel } from "../components/PowerSettings";
 import type { AppConfig, CurvePreset, InputMode } from "../lib/types";
 
@@ -172,6 +172,14 @@ export function GlobalSettings({ config: c, dirty, saveNote = "", autostart, onC
               checked={c.software_cursor}
               onChange={(software_cursor) => onChange({ software_cursor })}
             />
+            <SettingRow label="Interface size" tip="Size of text and windows on the tablet's screen. Compact is smaller and speeds up whole-desktop screenshots. Applies when the display restarts.">
+              <Segmented
+                label="Interface size"
+                value={c.interface_size}
+                options={INTERFACE_SIZES}
+                onValueChange={(interface_size) => onChange({ interface_size })}
+              />
+            </SettingRow>
             <SettingRow label="Position" tip="Where the virtual display sits relative to your primary monitor.">
               <Segmented
                 label="Position"

@@ -400,9 +400,15 @@ class MainActivity : AppCompatActivity() {
      * Mirror the host's per-device settings into [Prefs], the live input handling and the UI. Runs on the
      * UI thread; the host sends it on connect and whenever a setting changes there (or here).
      */
+    /** Whether a host config has been applied yet; the first one on connect is not announced. */
+    private var configSeen = false
+
     private fun applyHostConfig(cfg: HostConfig) {
         val prev = hostConfig
         hostConfig = cfg
+        // A change that arrives once the app is running (made here or on the computer) is confirmed briefly, so it is clear it took effect.
+        if (configSeen && prev != cfg) android.widget.Toast.makeText(this, "Settings updated", android.widget.Toast.LENGTH_SHORT).show()
+        configSeen = true
         touchCapture?.hostConfig = cfg
         prefs.inputMode = cfg.inputMode
         prefs.immersiveModeEnabled = cfg.immersiveMode

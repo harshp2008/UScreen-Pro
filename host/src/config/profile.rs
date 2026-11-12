@@ -28,6 +28,9 @@ pub struct TabletProfile {
     pub stream_scale: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<String>,
+    /// `auto`, `compact` or `large`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface_size: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

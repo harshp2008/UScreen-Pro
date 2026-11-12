@@ -8,7 +8,7 @@ import { AppLockList } from "../components/ui/AppLockList";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Tabs, Section, SettingRow, SliderRow, SwitchRow, type Override } from "../components/ui/layout";
-import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL, TRANSPORTS, labelOf, modeLabel, qualityLabel } from "../lib/options";
+import { ENCODERS, FPS, INTERFACE_SIZES, POSITIONS, STREAM_DETAIL, TRANSPORTS, labelOf, modeLabel, qualityLabel } from "../lib/options";
 import { ModePanel, ModeSection, TabletPanel, POWER_TIP, type PowerValues } from "../components/PowerSettings";
 import type { AppConfig, ConnectedDevice, CurvePreset, TabletProfile } from "../lib/types";
 
@@ -270,6 +270,18 @@ export function DeviceSettings({
                 value={String(p.stream_scale ?? g.stream_scale)}
                 options={STREAM_DETAIL}
                 onValueChange={(v) => onChange({ stream_scale: Number(v) })}
+              />
+            </SettingRow>
+            <SettingRow
+              label="Interface size"
+              tip="Size of text and windows on this device's screen. Compact speeds up whole-desktop screenshots. Applies when the display restarts."
+              override={ov("interface_size", g.interface_size, labelOf(INTERFACE_SIZES, g.interface_size))}
+            >
+              <Segmented
+                label="Interface size"
+                value={p.interface_size ?? g.interface_size}
+                options={INTERFACE_SIZES}
+                onValueChange={(interface_size) => onChange({ interface_size })}
               />
             </SettingRow>
             <SettingRow

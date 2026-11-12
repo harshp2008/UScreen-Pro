@@ -63,6 +63,10 @@ pub struct FileConfig {
     /// "right" (default), "left", "above" or "below". Anything else is
     /// treated as "right" rather than refusing to start over a typo.
     pub position: String,
+    /// How large the interface of the virtual display is: `auto` (the compositor's choice from the tablet's real size), `compact`
+    /// (smaller text, and faster whole-desktop screenshots) or `large`. It changes the physical size the generated EDID claims, so it
+    /// applies when the display is created.
+    pub interface_size: String,
     /// Encode in 10 bits (HEVC Main10). The captured desktop is 8-bit and
     /// cannot be otherwise, so this adds no colour — it gives the encoder
     /// more precision to work in, which is what removes banding from
@@ -255,6 +259,7 @@ impl Default for FileConfig {
             stream_scale: 1,
             pen_only: false,
             position: "right".into(),
+            interface_size: "auto".into(),
             ten_bit: false,
             require_token: true,
             check_updates: true,

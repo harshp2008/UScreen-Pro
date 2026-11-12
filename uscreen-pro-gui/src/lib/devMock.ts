@@ -19,6 +19,7 @@ const config: AppConfig = {
   stream_scale: 1,
   pen_only: false,
   position: "right",
+  interface_size: "auto",
   ten_bit: false,
   require_token: false,
   check_updates: true,

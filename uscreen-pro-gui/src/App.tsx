@@ -108,7 +108,7 @@ const HEAVY = new Set([
   "encoder", "fps", "bitrate", "quality", "stream_scale", "width", "height", "position", "ten_bit", "vaapi_device",
   "pointer_handoff", "auto_resolution", "video_port", "input_port", "max_tablets", "max_performance_mode",
   "hevc_low_latency_tuning", "software_cursor", "keep_alive", "input_mode", "pen_only", "require_token", "wifi_address",
-  "preferred_transport", "wireless_configured", "allow_legacy_fallback", "auto_enable_wifi_adb", "locked_apps",
+  "interface_size", "preferred_transport", "wireless_configured", "allow_legacy_fallback", "auto_enable_wifi_adb", "locked_apps",
 ]);
 
 /** The top-level keys whose values differ between two objects. */

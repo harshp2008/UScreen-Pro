@@ -37,6 +37,8 @@ pub struct TabletProfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface_size: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub encoder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ten_bit: Option<bool>,
@@ -138,6 +140,8 @@ pub struct AppConfig {
     pub stream_scale: u32,
     pub pen_only: bool,
     pub position: String,
+    /// `auto`, `compact` or `large`.
+    pub interface_size: String,
     pub ten_bit: bool,
     pub require_token: bool,
     pub check_updates: bool,
@@ -235,6 +239,7 @@ impl Default for AppConfig {
             stream_scale: 1,
             pen_only: false,
             position: "right".into(),
+            interface_size: "auto".into(),
             ten_bit: false,
             require_token: true,
             check_updates: true,
