@@ -68,7 +68,7 @@ impl CaptureManager {
         Ok(())
     }
 
-    // PLATFORM(linux): if-ladder over desktop backends: Hyprland, COSMIC, GNOME (does it by itself), X11, then inline kscreen-doctor code for KDE
+    // PLATFORM(linux): thin wrapper; desktop::display::enable_output picks Hyprland, COSMIC, GNOME (does it by itself), X11 or the KDE fall-through
     /// Enable the EVDI output and place it to the right of every other screen.
     ///
     /// The output is identified by the DRM connector names sysfs reports for
