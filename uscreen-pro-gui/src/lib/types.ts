@@ -109,6 +109,9 @@ export interface TabletProfile {
   touchpad_haptics?: boolean;
   touchpad_haptic_strength?: string;
   touchpad_click_sound?: boolean;
+  touchpad_style?: string;
+  touchpad_middle_button?: boolean;
+  touchpad_classic_tap?: boolean;
   native_gestures?: boolean;
   touchpad_sensitivity?: number;
   right_click_method?: string;
@@ -178,6 +181,9 @@ export interface AppConfig {
   touchpad_haptics: boolean;
   touchpad_haptic_strength: string;
   touchpad_click_sound: boolean;
+  touchpad_style: string;
+  touchpad_middle_button: boolean;
+  touchpad_classic_tap: boolean;
   native_gestures: boolean;
   /** Touchpad sensitivity in percent (50-200). */
   touchpad_sensitivity: number;

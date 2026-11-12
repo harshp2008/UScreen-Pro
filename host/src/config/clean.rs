@@ -55,6 +55,14 @@ pub fn clean_pen_button(v: &str, default: &str) -> String {
     }
 }
 
+/// `clickpad` (default) or `classic`; anything else falls back to `clickpad`.
+pub(super) fn clean_touchpad_style(v: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        "classic" => "classic".into(),
+        _ => "clickpad".into(),
+    }
+}
+
 /// `light`, `medium` (default) or `strong`; anything else falls back to `medium`.
 pub(super) fn clean_haptic_strength(v: &str) -> String {
     match v.trim().to_ascii_lowercase().as_str() {

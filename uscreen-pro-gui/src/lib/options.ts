@@ -145,6 +145,12 @@ export const AUTO_OPEN: Option[] = [
   { value: "always", label: "Always" },
 ];
 
+/** How the touchpad looks and behaves. */
+export const TOUCHPAD_STYLES: Option[] = [
+  { value: "clickpad", label: "Clickpad" },
+  { value: "classic", label: "Classic buttons" },
+];
+
 /** How strong the touchpad vibration is. */
 export const HAPTIC_STRENGTHS: Option[] = [
   { value: "light", label: "Light" },

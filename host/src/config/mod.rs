@@ -189,6 +189,13 @@ pub struct FileConfig {
     pub touchpad_haptic_strength: String,
     /// A short click sound on the tablet for touchpad clicks. Off by default.
     pub touchpad_click_sound: bool,
+    /// The touchpad's look and feel: `clickpad` (default: tap anywhere, a modern laptop pad) or
+    /// `classic` (a pad that only moves the pointer, with real buttons along the bottom edge).
+    pub touchpad_style: String,
+    /// Classic style: a middle button between the left and right ones. Off by default.
+    pub touchpad_middle_button: bool,
+    /// Classic style: tapping the pad clicks. Off by default, as on the old pads.
+    pub touchpad_classic_tap: bool,
     /// Use native gestures (Wayland / libinput) in Touchpad mode: the tablet's fingers are replayed
     /// on a virtual multi-touch touchpad and GNOME / KDE handle swipes and pinches themselves.
     /// Off, or on X11 and desktops without libinput gestures, the tablet recognises gestures and
@@ -290,6 +297,9 @@ impl Default for FileConfig {
             touchpad_haptics: true,
             touchpad_haptic_strength: "medium".into(),
             touchpad_click_sound: false,
+            touchpad_style: "clickpad".into(),
+            touchpad_middle_button: false,
+            touchpad_classic_tap: false,
             native_gestures: true,
             touchpad_sensitivity: 100,
             right_click_method: "bottom_right_zone".into(),

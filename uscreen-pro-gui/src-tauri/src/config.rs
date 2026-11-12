@@ -91,6 +91,12 @@ pub struct TabletProfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_click_sound: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_style: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_middle_button: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_classic_tap: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub native_gestures: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_sensitivity: Option<u32>,
@@ -179,6 +185,12 @@ pub struct AppConfig {
     pub touchpad_haptic_strength: String,
     /// A short click sound on the tablet for touchpad clicks.
     pub touchpad_click_sound: bool,
+    /// `clickpad` (tap anywhere) or `classic` (a pad that moves the pointer plus real buttons).
+    pub touchpad_style: String,
+    /// Classic style: a middle button.
+    pub touchpad_middle_button: bool,
+    /// Classic style: tapping the pad clicks.
+    pub touchpad_classic_tap: bool,
     /// Use native gestures (Wayland / libinput): the tablet's fingers are replayed on a virtual touchpad.
     pub native_gestures: bool,
     /// Touchpad sensitivity in percent (50-200).
@@ -262,6 +274,9 @@ impl Default for AppConfig {
             touchpad_haptics: true,
             touchpad_haptic_strength: "medium".into(),
             touchpad_click_sound: false,
+            touchpad_style: "clickpad".into(),
+            touchpad_middle_button: false,
+            touchpad_classic_tap: false,
             native_gestures: true,
             touchpad_sensitivity: 100,
             right_click_method: "bottom_right_zone".into(),

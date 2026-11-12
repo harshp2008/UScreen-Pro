@@ -23,6 +23,7 @@ import {
   PEN_BUTTONS,
   THEME_MODES,
   HAPTIC_STRENGTHS,
+  TOUCHPAD_STYLES,
   labelOf,
   modeLabel,
 } from "../lib/options";
@@ -51,6 +52,9 @@ export interface PowerValues {
   touchpad_haptics: boolean;
   touchpad_haptic_strength: string;
   touchpad_click_sound: boolean;
+  touchpad_style: string;
+  touchpad_middle_button: boolean;
+  touchpad_classic_tap: boolean;
   native_gestures: boolean;
   touchpad_sensitivity: number;
   right_click_method: string;
@@ -163,6 +167,36 @@ export function ModePanel({
             onChange={(touchpad_sensitivity) => onChange({ touchpad_sensitivity })}
             override={ov("touchpad_sensitivity", `${v.touchpad_sensitivity}%`)}
           />
+          <SettingRow
+            label="Touchpad style"
+            tip="Clickpad: tap anywhere to click. Classic: the pad only moves the pointer and real buttons sit along the bottom."
+            override={ov("touchpad_style", labelOf(TOUCHPAD_STYLES, v.touchpad_style))}
+          >
+            <Segmented
+              label="Touchpad style"
+              value={v.touchpad_style}
+              options={TOUCHPAD_STYLES}
+              onValueChange={(touchpad_style) => onChange({ touchpad_style })}
+            />
+          </SettingRow>
+          {v.touchpad_style === "classic" && (
+            <>
+              <SwitchRow
+                label="Middle button"
+                tip="Add a middle button between the left and right ones."
+                checked={v.touchpad_middle_button}
+                onChange={(touchpad_middle_button) => onChange({ touchpad_middle_button })}
+                override={ov("touchpad_middle_button", onOff(v.touchpad_middle_button))}
+              />
+              <SwitchRow
+                label="Tap to click"
+                tip="Let a tap on the pad click, as on a modern laptop. Off, like old pads: use the buttons."
+                checked={v.touchpad_classic_tap}
+                onChange={(touchpad_classic_tap) => onChange({ touchpad_classic_tap })}
+                override={ov("touchpad_classic_tap", onOff(v.touchpad_classic_tap))}
+              />
+            </>
+          )}
           <SwitchRow
             label="Touchpad Haptics"
             tip="Vibrate the tablet on clicks. Needs a vibration motor; the tablet app says if it has none."
@@ -210,6 +244,7 @@ export function ModePanel({
               onValueChange={(touchpad_shape) => onChange({ touchpad_shape })}
             />
           </SettingRow>
+          {v.touchpad_style === "clickpad" && (
           <SettingRow
             label="Right Click Method"
             tip="Tap the bottom-right zone, or tap with two fingers. Three fingers is a middle click."
@@ -222,6 +257,7 @@ export function ModePanel({
               onValueChange={(right_click_method) => onChange({ right_click_method })}
             />
           </SettingRow>
+          )}
         </Section>
     );
   }

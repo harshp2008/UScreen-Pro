@@ -107,6 +107,15 @@ pub struct TabletProfile {
     /// Click sound on touchpad clicks. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_click_sound: Option<bool>,
+    /// Touchpad style: `clickpad` or `classic`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_style: Option<String>,
+    /// Classic style: show a middle button. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_middle_button: Option<bool>,
+    /// Classic style: tapping the pad clicks. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_classic_tap: Option<bool>,
     /// Touchpad mode replays the tablet's fingers on a virtual multi-touch touchpad so the desktop
     /// recognises swipes and pinches itself. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]

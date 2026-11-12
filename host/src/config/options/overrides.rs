@@ -47,6 +47,12 @@ pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Resul
             _ => return Err(()),
         },
         "touchpad_click_sound" => set(&mut p.touchpad_click_sound, b?),
+        "touchpad_style" => match s?.as_str() {
+            m @ ("clickpad" | "classic") => set(&mut p.touchpad_style, m.to_string()),
+            _ => return Err(()),
+        },
+        "touchpad_middle_button" => set(&mut p.touchpad_middle_button, b?),
+        "touchpad_classic_tap" => set(&mut p.touchpad_classic_tap, b?),
         "native_gestures" => set(&mut p.native_gestures, b?),
         "touchpad_sensitivity" => set(&mut p.touchpad_sensitivity, n?.clamp(50, 200)),
         "touchpad_shape" => match s?.as_str() {

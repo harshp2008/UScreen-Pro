@@ -27,6 +27,9 @@ pub struct DeviceOptions {
     pub touchpad_haptics: bool,
     pub touchpad_haptic_strength: String,
     pub touchpad_click_sound: bool,
+    pub touchpad_style: String,
+    pub touchpad_middle_button: bool,
+    pub touchpad_classic_tap: bool,
     /// The setting "Use Native Gestures (Wayland/libinput)". Whether it is in effect also depends
     /// on the desktop: see [`DeviceOptions::native_gestures_effective`].
     pub native_gestures: bool,
@@ -88,6 +91,9 @@ impl DeviceOptions {
         g.touchpad_haptics = pick!(touchpad_haptics);
         g.touchpad_haptic_strength = pick!(touchpad_haptic_strength);
         g.touchpad_click_sound = pick!(touchpad_click_sound);
+        g.touchpad_style = pick!(touchpad_style);
+        g.touchpad_middle_button = pick!(touchpad_middle_button);
+        g.touchpad_classic_tap = pick!(touchpad_classic_tap);
         g.native_gestures = p.native_gestures.unwrap_or(cfg.native_gestures);
         g.touchpad_sensitivity = pick!(touchpad_sensitivity);
         g.right_click_method = pick!(right_click_method);
@@ -127,6 +133,9 @@ impl DeviceOptions {
             touchpad_haptics: g.touchpad_haptics,
             touchpad_haptic_strength: g.touchpad_haptic_strength.clone(),
             touchpad_click_sound: g.touchpad_click_sound,
+            touchpad_style: g.touchpad_style.clone(),
+            touchpad_middle_button: g.touchpad_middle_button,
+            touchpad_classic_tap: g.touchpad_classic_tap,
             native_gestures: g.native_gestures,
             touchpad_sensitivity: g.touchpad_sensitivity,
             right_click_method: g.right_click_method.clone(),
@@ -168,6 +177,9 @@ impl DeviceOptions {
             "touchpad_haptics": self.touchpad_haptics,
             "touchpad_haptic_strength": self.touchpad_haptic_strength,
             "touchpad_click_sound": self.touchpad_click_sound,
+            "touchpad_style": self.touchpad_style,
+            "touchpad_middle_button": self.touchpad_middle_button,
+            "touchpad_classic_tap": self.touchpad_classic_tap,
             "right_click_method": self.right_click_method,
             // What the tablet acts on is the effective value, so it falls back to its own gesture
             // recogniser on X11 and on desktops that do nothing with libinput gestures.
