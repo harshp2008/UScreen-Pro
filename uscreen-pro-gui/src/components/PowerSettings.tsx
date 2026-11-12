@@ -282,7 +282,7 @@ export function ModePanel({
             <>
               <SettingRow
                 label="Pen button"
-                tip="What the pen's side button does while the pen acts as a mouse."
+                tip="What the pen's side button does: click, send a shortcut, or open the pen menu."
                 override={ov("stylus_button_primary", labelOf(PEN_BUTTONS, v.stylus_button_primary))}
               >
                 <Select

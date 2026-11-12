@@ -399,6 +399,12 @@ impl InjectDevices {
         secondary: &str,
     ) {
         let (px, py) = self.desktop_xy(x, y);
+        if (5..=8).contains(&action) {
+            let name = if action <= 6 { primary } else { secondary };
+            if self.run_button_action(name, action == 5 || action == 7) {
+                return;
+            }
+        }
         let side = |name: &str| match name {
             "right" => Some((BTN_RIGHT, 2u8)),
             "middle" => Some((BTN_MIDDLE, 4u8)),

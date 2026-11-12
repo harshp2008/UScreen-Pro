@@ -38,6 +38,7 @@ pub(in crate::input) const BTN_RIGHT: u16 = 0x111;
 pub(in crate::input) const BTN_MIDDLE: u16 = 0x112;
 
 pub(in crate::input) const KEY_LEFTCTRL: u16 = 29;
+pub(in crate::input) const KEY_LEFTSHIFT: u16 = 42;
 pub(in crate::input) const KEY_LEFTMETA: u16 = 125;
 pub(in crate::input) const KEY_A: u16 = 30;
 pub(in crate::input) const KEY_Z: u16 = 44;

@@ -147,11 +147,15 @@ internal fun SwitchRow(
 }
 
 /** A row of mutually exclusive chips with a caption. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 internal fun <T> ChipChoice(title: String, options: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
     Text(title, fontSize = 14.sp, color = OnSurface, modifier = Modifier.padding(top = 12.dp))
     Spacer(Modifier.height(8.dp))
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
         options.forEach { (value, label) ->
             FilterChip(
                 selected = selected == value,

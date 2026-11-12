@@ -163,6 +163,13 @@ export const PEN_BUTTONS: Option[] = [
   { value: "right", label: "Right click" },
   { value: "middle", label: "Middle click" },
   { value: "none", label: "Nothing" },
+  { value: "undo", label: "Undo" },
+  { value: "redo", label: "Redo" },
+  { value: "copy", label: "Copy" },
+  { value: "paste", label: "Paste" },
+  { value: "cut", label: "Cut" },
+  { value: "select-all", label: "Select all" },
+  { value: "menu", label: "Open pen menu" },
 ];
 
 /** Which part of the tablet acts as the touchpad; touches outside the shape are ignored. */

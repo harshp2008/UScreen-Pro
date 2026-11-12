@@ -1,6 +1,7 @@
 //! Applying one setting changed on the tablet to its profile in config.toml
 
 use super::*;
+use crate::config::clean::PEN_BUTTON_ACTIONS;
 
 /// Store one setting pushed by the tablet as the device's override. `Ok(true)` when it changed.
 pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Result<bool, ()> {
@@ -66,7 +67,9 @@ pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Resul
             _ => return Err(()),
         },
         "stylus_button_primary" => match s?.as_str() {
-            m @ ("right" | "middle" | "none") => set(&mut p.stylus_button_primary, m.to_string()),
+            m if PEN_BUTTON_ACTIONS.contains(&m) => {
+                set(&mut p.stylus_button_primary, m.to_string())
+            }
             _ => return Err(()),
         },
         "pen_menu" => set(&mut p.pen_menu, b?),
@@ -76,7 +79,9 @@ pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Resul
         },
         "pen_menu_hold_ms" => set(&mut p.pen_menu_hold_ms, n?.clamp(500, 1500)),
         "stylus_button_secondary" => match s?.as_str() {
-            m @ ("right" | "middle" | "none") => set(&mut p.stylus_button_secondary, m.to_string()),
+            m if PEN_BUTTON_ACTIONS.contains(&m) => {
+                set(&mut p.stylus_button_secondary, m.to_string())
+            }
             _ => return Err(()),
         },
         "right_click_method" => match s?.as_str() {

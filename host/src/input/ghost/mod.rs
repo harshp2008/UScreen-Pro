@@ -20,6 +20,7 @@ use super::*;
 
 mod auto;
 mod background;
+mod button_action;
 mod control;
 mod pointer;
 mod route;

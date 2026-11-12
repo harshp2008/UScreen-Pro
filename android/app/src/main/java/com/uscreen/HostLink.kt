@@ -146,7 +146,11 @@ data class HostConfig(
         const val PEN_BUTTON_RIGHT = "right"
         const val PEN_BUTTON_MIDDLE = "middle"
         const val PEN_BUTTON_NONE = "none"
-        val PEN_BUTTONS = listOf(PEN_BUTTON_RIGHT, PEN_BUTTON_MIDDLE, PEN_BUTTON_NONE)
+        /** What a pen side button may do: the mouse buttons, nothing, a key combination, or the pen menu (same names as the computer). */
+        val PEN_BUTTONS = listOf(
+            PEN_BUTTON_RIGHT, PEN_BUTTON_MIDDLE, PEN_BUTTON_NONE,
+            "undo", "redo", "copy", "paste", "cut", "select-all", "menu",
+        )
 
         /** Read a `config_update` message; fields it does not carry keep [base]'s value. */
         fun fromJson(o: JSONObject, base: HostConfig): HostConfig = HostConfig(

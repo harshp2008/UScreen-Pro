@@ -47,11 +47,28 @@ pub fn default_art_apps() -> Vec<String> {
     .collect()
 }
 
-/// `right`, `middle` or `none`; anything else falls back to `default`.
+/// What a pen side button may do: the mouse buttons `right` and `middle`, `none`, a key combination (`undo`, `redo`, `copy`, `paste`,
+/// `cut`, `select-all`) or `menu` (open the pen menu).
+pub const PEN_BUTTON_ACTIONS: [&str; 10] = [
+    "right",
+    "middle",
+    "none",
+    "undo",
+    "redo",
+    "copy",
+    "paste",
+    "cut",
+    "select-all",
+    "menu",
+];
+
+/// One of [`PEN_BUTTON_ACTIONS`]; anything else falls back to `default`.
 pub fn clean_pen_button(v: &str, default: &str) -> String {
-    match v.trim().to_ascii_lowercase().as_str() {
-        b @ ("right" | "middle" | "none") => b.to_string(),
-        _ => default.to_string(),
+    let v = v.trim().to_ascii_lowercase();
+    if PEN_BUTTON_ACTIONS.contains(&v.as_str()) {
+        v
+    } else {
+        default.to_string()
     }
 }
 

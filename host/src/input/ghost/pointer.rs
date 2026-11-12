@@ -122,6 +122,9 @@ impl InjectDevices {
             5..=8 => {
                 let name = if s.action <= 6 { primary } else { secondary };
                 let down = s.action == 5 || s.action == 7;
+                if self.run_button_action(name, down) {
+                    return;
+                }
                 let (code, bit) = match name {
                     "right" => (BTN_RIGHT, 2u8),
                     "middle" => (BTN_MIDDLE, 4u8),

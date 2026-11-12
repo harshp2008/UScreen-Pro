@@ -173,6 +173,13 @@ fun SettingsSheet(
                                     HostConfig.PEN_BUTTON_RIGHT to "Right click",
                                     HostConfig.PEN_BUTTON_MIDDLE to "Middle click",
                                     HostConfig.PEN_BUTTON_NONE to "Nothing",
+                                    "undo" to "Undo",
+                                    "redo" to "Redo",
+                                    "copy" to "Copy",
+                                    "paste" to "Paste",
+                                    "cut" to "Cut",
+                                    "select-all" to "Select all",
+                                    "menu" to "Open pen menu",
                                 )
                                 ChipChoice("Pen button", penButtons, hostConfig.stylusButtonPrimary) {
                                     onSetting("stylus_button_primary", it)
