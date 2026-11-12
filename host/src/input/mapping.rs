@@ -7,6 +7,12 @@
 use super::*;
 use crate::desktop::display::DisplayBackend;
 
+/// How many times a compositor is asked to map the input devices before giving up: the devices appear in its list a moment
+/// after uinput creates them, and a mapping it accepted can be lost again.
+const MAP_ATTEMPTS: u32 = 20;
+/// Pause between those attempts. `MAP_ATTEMPTS` x `MAP_RETRY_DELAY` is the 5 s the warnings below mention.
+const MAP_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(250);
+
 // PLATFORM(linux): dispatches on desktop::display::backend(): Hyprland, GNOME, X11, and the KWin code below for KDE and for COSMIC (which has no mapping)
 /// Pin the virtual input devices to the virtual display.
 ///
@@ -53,9 +59,9 @@ pub(super) async fn map_devices_to_output(
     // KWin registers a device slightly after uinput creates it, so retry
     // rather than racing it. The same loop also covers a mapping that KWin
     // accepted but did not keep, which is what the read-back below catches.
-    for attempt in 0..20 {
+    for attempt in 0..MAP_ATTEMPTS {
         if attempt > 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            tokio::time::sleep(MAP_RETRY_DELAY).await;
         }
 
         let Some(devices) = crate::desktop::kde::display::list_strings(
@@ -144,9 +150,9 @@ pub(super) async fn map_devices_on_hyprland(
         return None;
     };
     let names = [ident.touch.as_str(), ident.pen.as_str()];
-    for attempt in 0..20 {
+    for attempt in 0..MAP_ATTEMPTS {
         if attempt > 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            tokio::time::sleep(MAP_RETRY_DELAY).await;
         }
         if crate::desktop::hyprland::display::map_devices(&names, &output).await >= names.len() {
             return Some(output);
@@ -213,9 +219,9 @@ pub(super) async fn map_devices_on_x11(
     if ident.device_count > 2 {
         names.push(ident.pointer.as_str());
     }
-    for attempt in 0..20 {
+    for attempt in 0..MAP_ATTEMPTS {
         if attempt > 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            tokio::time::sleep(MAP_RETRY_DELAY).await;
         }
         if crate::desktop::x11::display::map_devices(&names, &output).await >= names.len() {
             return Some(output);
