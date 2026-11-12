@@ -58,14 +58,18 @@ fn main() {
 /// missing (a plain `cargo check`, CI) an empty file is written and the app falls back to searching for an APK.
 fn embed_apk() {
     let out = std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR")).join("app.apk");
-    let manifest = std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
+    let manifest =
+        std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let src = std::env::var("USCREEN_APK")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|_| manifest.join("../../dist/app-debug.apk"));
     println!("cargo:rerun-if-env-changed=USCREEN_APK");
     println!("cargo:rerun-if-changed={}", src.display());
     if std::fs::copy(&src, &out).is_err() {
-        println!("cargo:warning=no APK at {}; the app will not embed one", src.display());
+        println!(
+            "cargo:warning=no APK at {}; the app will not embed one",
+            src.display()
+        );
         std::fs::write(&out, []).expect("write placeholder APK");
     }
 }
