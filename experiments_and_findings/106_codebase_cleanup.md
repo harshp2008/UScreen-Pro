@@ -40,8 +40,9 @@ Can the tree be made easier to read and to port without changing what it does, a
 * The settings-parity script read `PowerSettings.tsx`; after the split it reported 32 differences until it was pointed at
   `power/shared.ts`. Its desktop key count went from 35 to 33 because the old regex also counted two props of `ModeSection`.
 * Fully qualified `com.uscreen.TouchpadShape` in a default argument was not caught by the import rewrite; the Kotlin compiler was.
-* `cargo +nightly udeps` was run once to look for unused crates; `cargo-udeps` is not installed and rustup refreshed the nightly
-  toolchain that was already there. `cargo machete` was used instead.
+* `cargo +nightly udeps` was run once to look for unused crates; `cargo-udeps` is not installed, and rustup synced the nightly
+  toolchain as a side effect (`rustup toolchain list` shows a nightly now; whether it existed before was not checked).
+  `cargo machete` was used instead.
 
 ## Result
 
