@@ -26,7 +26,7 @@ import {
 import { QRCodeSVG } from "qrcode.react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { toast } from "../lib/toast";
+import { toast } from "../../lib/toast";
 import type {
   AdbEntry,
   PairingEvent,
@@ -34,12 +34,12 @@ import type {
   QrPairingSession,
   TabletProfile,
   WirelessDeviceInfo,
-} from "../lib/types";
+} from "../../lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn, errText } from "@/lib/utils";
-import { TextInput } from "./ui/controls";
+import { TextInput } from "../ui/controls";
 import { ManualPairDialog } from "./ManualPairDialog";
 import {
   FINISH_STEP,
@@ -52,8 +52,8 @@ import {
   type Transport,
   type Via,
   type WirelessTab,
-} from "./wizard/model";
-import { DebugTimeline, Instructions, Note, StepLog } from "./wizard/WizardParts";
+} from "./model";
+import { DebugTimeline, Instructions, Note, StepLog } from "./WizardParts";
 
 /** Props of the wizard. It is mounted only while open, so every field starts from its initial value. */
 interface Props {

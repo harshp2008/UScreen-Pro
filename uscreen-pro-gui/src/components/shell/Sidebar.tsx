@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import type { AppConfig, ConnectedDevice, View } from "../lib/types";
+import type { AppConfig, ConnectedDevice, View } from "../../lib/types";
 
 /**
  * Props of the sidebar: current view, connected devices, config, daemon state and navigation callbacks.

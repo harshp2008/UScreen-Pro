@@ -6,11 +6,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import { KeyRound, LoaderCircle, Wifi } from "lucide-react";
 import { useState } from "react";
-import type { ManualPairResult } from "../lib/types";
+import type { ManualPairResult } from "../../lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { errText } from "@/lib/utils";
-import { TextInput } from "./ui/controls";
+import { TextInput } from "../ui/controls";
 
 /**
  * Manual Setup: pair a device that is not plugged in, with the pairing IP:port and 6-digit code from

@@ -6,11 +6,11 @@
 import { Save, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { NumberInput, Select, TextInput } from "./ui/controls";
-import { BlockRow, type Override } from "./ui/layout";
-import { bezierFn, clampBezier, curveFn, curvePath, formatBezier, parseBezier, type Bezier } from "../lib/curves";
-import { CURVES } from "../lib/options";
-import type { CurvePreset } from "../lib/types";
+import { NumberInput, Select, TextInput } from "../ui/controls";
+import { BlockRow, type Override } from "../ui/layout";
+import { bezierFn, clampBezier, curveFn, curvePath, formatBezier, parseBezier, type Bezier } from "../../lib/curves";
+import { CURVES } from "../../lib/options";
+import type { CurvePreset } from "../../lib/types";
 
 /** Select value meaning "the curve is a hand-made Bezier, not a named preset". */
 const CUSTOM = "custom";

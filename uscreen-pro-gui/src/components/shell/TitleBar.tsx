@@ -13,7 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { ThemePref } from "@/lib/theme";
-import appIcon from "../assets/uscreen-pro.svg";
+import appIcon from "../../assets/uscreen-pro.svg";
 import { cn } from "@/lib/utils";
 
 /** A window control button (minimise, maximise, close); `danger` gives the close button its red hover. */

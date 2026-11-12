@@ -2,7 +2,7 @@
  * Tablet-app, power and idle-dimming settings, the same for every input mode.
  * Owns the rows and their wording; the values and saving live in App.tsx.
  */
-import { CurveEditor } from "../CurveEditor";
+import { CurveEditor } from "./CurveEditor";
 import { NumberInput, Segmented } from "../ui/controls";
 import { Columns, Section, SettingRow, SwitchRow } from "../ui/layout";
 import {
