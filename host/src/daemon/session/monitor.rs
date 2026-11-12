@@ -674,6 +674,20 @@ pub async fn adb_monitor(
                     }
                 }
             }
+            _ = update_done().notified() => {
+                // An update has just replaced the app of a device whose app was open: open it again now.
+                if !slot_0_active_serial.is_empty() && !paused_serials.contains(&slot_0_active_serial) && marked_for_reopen(&slot_0_active_serial) {
+                    info!("App updated on Slot 1 ({}) — opening it again", slot_0_active_serial);
+                    let _ = setup_adb_forwarding(&slot_0_active_serial, video_port, input_port).await;
+                    launch_app(&slot_0_active_serial, token.as_deref(), video_port, input_port).await;
+                }
+                for sess in extras.values_mut() {
+                    if paused_serials.contains(&sess.active_serial) || !marked_for_reopen(&sess.active_serial) { continue; }
+                    info!("App updated on Slot {} ({}) — opening it again", sess.instance + 1, sess.active_serial);
+                    let _ = setup_adb_forwarding(&sess.active_serial, sess.video_port, sess.input_port).await;
+                    launch_app(&sess.active_serial, token.as_deref(), sess.video_port, sess.input_port).await;
+                }
+            }
             _ = relaunch.notified() => {
                 if !slot_0_active_serial.is_empty()
                     && !paused_serials.contains(&slot_0_active_serial)

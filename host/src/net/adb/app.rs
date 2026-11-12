@@ -100,15 +100,23 @@ fn reopen_marks() -> &'static std::sync::Mutex<HashMap<String, std::time::Instan
     MARKS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
 }
 
-/// Remember that the app of [serial] was running when it was updated and should be opened again.
+/// Woken when an update has finished for a device marked for reopening, so the monitor opens the app at once instead of at its next check.
+pub fn update_done() -> &'static tokio::sync::Notify {
+    /// The notification, created on first use.
+    static DONE: std::sync::OnceLock<tokio::sync::Notify> = std::sync::OnceLock::new();
+    DONE.get_or_init(tokio::sync::Notify::new)
+}
+
+/// Remember that the app of [serial] was running when it was updated and should be opened again, and say so.
 pub fn reopen_after_update(serial: &str) {
     if let Ok(mut m) = reopen_marks().lock() {
         m.insert(serial.to_string(), std::time::Instant::now());
     }
+    update_done().notify_one();
 }
 
 /// Whether [serial] is marked for reopening (and not stale).
-fn marked_for_reopen(serial: &str) -> bool {
+pub fn marked_for_reopen(serial: &str) -> bool {
     reopen_marks()
         .lock()
         .ok()
