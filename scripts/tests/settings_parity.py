@@ -2,7 +2,7 @@
 """
 Checks that the settings synced between the computer and the tablet exist on every side:
 the host's `config_update` message (host/src/config/options/device.rs), the tablet app's `HostConfig.withSetting`
-(android .../HostLink.kt) and the desktop app's per-device settings type (uscreen-pro-gui/src/components/PowerSettings.tsx).
+(android .../HostLink.kt) and the desktop app's per-device settings type (uscreen-pro-gui/src/components/power/shared.ts).
 Exits 1 and lists the differences, minus the known one-sided settings below.
 """
 import re
@@ -27,7 +27,7 @@ def tablet_keys() -> set[str]:
     return set(re.findall(r'^\s*"([a-z_0-9]+)" ->', src, re.M)) | set(re.findall(r'\.opt[A-Za-z]+\("([a-z_0-9]+)"', src))
 
 def desktop_keys() -> set[str]:
-    src = (ROOT / "uscreen-pro-gui/src/components/PowerSettings.tsx").read_text()
+    src = (ROOT / "uscreen-pro-gui/src/components/power/shared.ts").read_text()
     block = src[src.index("interface Values"):] if "interface Values" in src else src
     return set(re.findall(r"^\s+([a-z_0-9]+)\??: (?:boolean|number|string);", block, re.M))
 
