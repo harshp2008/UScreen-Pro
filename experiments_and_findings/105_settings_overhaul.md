@@ -42,6 +42,14 @@ Related: record 104 (slow whole-desktop screenshots).
 * Haptic feel and the click sound, the undim on a real mouse crossing, the "home or lock screen" check beyond parsing real dumpsys output, and the phone (not connected).
 * The desktop app's autosave on a real daemon (only the dev mock).
 
+## Found after the first review
+* **Interface size applies as a temporary layout** (Mutter method 1). A persistent one (method 2) made GNOME ask "Keep changes?" and is saved by GNOME; the daemon re-applies
+  the scale from config.toml whenever the display is created or the setting changes, so it never needs to be remembered. Limit: if GNOME reconfigures the monitors for another reason
+  the scale is back to GNOME's choice until the daemon next re-applies it. "Custom" starts at the percentage Automatic already gives (`display_auto_percent`, unit-tested).
+* **After an update the tablet app stayed closed.** Making the watchdog follow "Open app on connect" (default Never) removed the relaunch the update relied on. The installer now notes
+  whether the app was running and the daemon opens it once afterwards. Verified live: the next build updated the tablet 5ea08cc to 18a6726, the app process went away and came back
+  about 20 s later without any action.
+
 ## Not verified (added later)
 * The pen button actions with a real pen (unit tests cover the name to keys mapping only).
 * **A first version of Interface size claimed a different physical size in the EDID and did nothing**: nothing it generated was ever used (no scaled EDID file appeared), and GNOME

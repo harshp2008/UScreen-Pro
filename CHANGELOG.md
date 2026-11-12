@@ -24,6 +24,8 @@ Settings overhaul (desktop app and tablet app, kept in step; see
   click sound, and a button that lights up; left taps in native-gesture mode
   now tick too. The tablet app says when the device has no vibration motor.
 - "Open app on connect" is Never (default), From home or lock screen, or Always.
+  An update that replaces the tablet app while it is open reopens it afterwards,
+  whatever that setting says.
 - Idle dimming applies in Extended Display mode only, touches in the tablet
   app count as use, and the pointer position comes from the compositor on
   GNOME Wayland, so moving the mouse onto the tablet's screen wakes it.
