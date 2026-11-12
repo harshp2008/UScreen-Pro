@@ -211,11 +211,6 @@ pub fn busctl_args(serial: u32, method: u32, layout: &[Logical]) -> Vec<String> 
     a
 }
 
-/// Whether Mutter's display service is the one to talk to (GNOME on Wayland).
-pub fn available() -> bool {
-    super::display::active()
-}
-
 /// Set the interface scale of the virtual display of [instance] to [percent] (0 = automatic). Returns whether the layout is now as asked
 /// (also true when it already was).
 pub async fn apply(instance: u32, percent: u32) -> bool {
