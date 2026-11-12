@@ -1,7 +1,7 @@
 <!--
   docs/codebase-changes.md: what the cleanup branch (chore/cleanup-and-docs) changed and why.
   Owns: the old-path to new-path table, removals, splits, and what was kept on purpose.
-  Does not own: release notes (CHANGELOG.md) or how the code works (docs/architecture.md).
+  Does not own: release notes (CHANGELOG.md) or how the code works (docs/architecture/overview.md).
 -->
 
 # Codebase changes (cleanup and documentation branch)

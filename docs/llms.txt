@@ -16,7 +16,7 @@ Maintainer: majmichu1 (https://github.com/majmichu1). Current version: 1.2.12 (2
 - Benchmarks and method: https://github.com/majmichu1/UScreen/blob/main/docs/benchmarks.md
 - FAQ: https://github.com/majmichu1/UScreen/blob/main/docs/faq.md
 - Troubleshooting: https://github.com/majmichu1/UScreen/blob/main/docs/troubleshooting.md
-- Architecture and protocol: https://github.com/majmichu1/UScreen/blob/main/docs/architecture.md
+- Architecture and protocol: https://github.com/majmichu1/UScreen/blob/main/docs/architecture/overview.md
 - Security model and uninstall: https://github.com/majmichu1/UScreen/blob/main/SECURITY.md
 - Changelog: https://github.com/majmichu1/UScreen/blob/main/CHANGELOG.md
 
