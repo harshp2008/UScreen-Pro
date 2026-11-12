@@ -25,6 +25,9 @@
 | `#[allow(unused_labels)]` on the `'session` loop | `host/src/capture/supervisor.rs` | the label is used by `continue 'session` further down the same loop (`supervisor.rs`); clippy with `-D warnings` is clean without the attribute |
 | `val SurfaceHigh` (a `@Composable` colour getter) | `android/.../ui/Theme.kt` | the name appears once in the whole repository, at its declaration. Compose has no reflection lookup of it. The palette field `surfaceHigh` it read is still used by both colour schemes |
 | three copies of `errText` | `App.tsx`, `ManualPairDialog.tsx`, `AddDeviceWizard.tsx` | identical one-line helpers; now one exported `errText` in `lib/utils.ts`. `tsc` is clean |
+| five copies of the `$PATH` lookup | `desktop/gnome/display.rs`, `desktop/x11/display.rs`, `desktop/cosmic/display.rs`, `cli/doctor/mod.rs`, `desktop/scale.rs` | identical bodies; now `desktop::command_exists`. Clippy and all tests pass |
+| four copies of "the connector names of this tablet's card" | `capture/display.rs` (twice), `input/mapping.rs` (three times), `desktop/scale.rs` | identical filter over `vdisplay::evdi_connectors`; now `desktop::display::connector_names`. All tests pass |
+| the KDE if-ladder branches of `enable_evdi_display` / `disable_evdi_display` | `capture/display.rs` | not deleted: moved into `desktop/kde/display.rs` as `enable_output` / `disable_output`, called through `desktop::display` |
 
 ## Suspicious but kept
 
