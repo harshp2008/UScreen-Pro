@@ -47,11 +47,7 @@ pub fn backend() -> Option<Backend> {
         Some(Backend::Gnome)
     } else if crate::desktop::x11::display::active() {
         Some(Backend::X11)
-    } else if std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|d| std::path::Path::new(d).join("kscreen-doctor").exists())
-    {
+    } else if crate::desktop::command_exists("kscreen-doctor") {
         Some(Backend::Kde)
     } else {
         None

@@ -16,15 +16,8 @@
 //! back like the KWin mapping is.
 // PLATFORM(gnome): virtual display on GNOME: Mutter DisplayConfig over busctl, and device-to-monitor mapping through gsettings (also used for Cinnamon)
 
+use crate::desktop::command_exists;
 use tracing::{info, warn};
-
-/// Whether a file called `name` exists in any directory of `$PATH`.
-fn command_exists(name: &str) -> bool {
-    std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|d| std::path::Path::new(d).join(name).exists())
-}
 
 /// A GNOME Wayland session with the two tools this needs. On GNOME's X11
 /// session `desktop/x11/display.rs` does the mapping instead.

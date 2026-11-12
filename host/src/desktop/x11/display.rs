@@ -14,6 +14,7 @@
 //! run it on; every command's outcome is logged.
 // PLATFORM(x11): virtual display on X11: RandR through the xrandr command, input mapping through xinput
 
+use crate::desktop::command_exists;
 use tracing::{info, warn};
 
 /// One native RandR subscription for the daemon. Polling the connection is nonblocking and
@@ -69,14 +70,6 @@ pub fn output_changes() -> Option<tokio::sync::watch::Receiver<()>> {
             Some(rx)
         })
         .clone()
-}
-
-/// Whether a file called `name` exists in any directory of `$PATH`.
-fn command_exists(name: &str) -> bool {
-    std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|d| std::path::Path::new(d).join(name).exists())
 }
 
 /// Is this an X11 session in which `xrandr` is the right tool to place the virtual monitor?

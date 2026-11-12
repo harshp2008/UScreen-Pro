@@ -21,10 +21,7 @@ pub fn active() -> bool {
 
 /// Whether `cosmic-randr` is on `$PATH`.
 fn tool_exists() -> bool {
-    std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|d| std::path::Path::new(d).join("cosmic-randr").exists())
+    crate::desktop::command_exists("cosmic-randr")
 }
 
 /// Run `cosmic-randr` with `args`: (success, output), or `None` if it could not be run.

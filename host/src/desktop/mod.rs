@@ -155,6 +155,15 @@ pub fn session_is_x11() -> bool {
 }
 
 // PLATFORM(linux): files exchanged with the Shell extension and the CLI live under $HOME/.local/share/uscreen
+/// Whether a file called `name` exists in any directory of `$PATH`. The one place that asks, so every backend's
+/// `active()` and the doctor agree on what "installed" means.
+pub fn command_exists(name: &str) -> bool {
+    std::env::var("PATH")
+        .unwrap_or_default()
+        .split(':')
+        .any(|d| std::path::Path::new(d).join(name).exists())
+}
+
 /// `~/.local/share/uscreen/<name>`: where the Shell extension, the CLI and the daemon exchange small
 /// files (focus, route toggle, recorder requests).
 pub fn data_file(name: &str) -> Option<std::path::PathBuf> {
