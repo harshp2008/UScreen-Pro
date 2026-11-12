@@ -41,6 +41,9 @@ import androidx.compose.runtime.getValue
 class MainActivity : AppCompatActivity() {
     private var hostVersion by mutableStateOf<String?>(null)
     private var hostNotice by mutableStateOf<HostNotice?>(null)
+
+    /** Classic touchpad buttons held now, for the on-screen highlight. */
+    private var padButtons by mutableStateOf(0)
     /** Set when the host forgot this device; survives restarts until the host talks to us again. */
     private var unpairedByHost by mutableStateOf(false)
     private var showThanks by mutableStateOf(false)
@@ -248,6 +251,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         touchCapture?.onHostConfig = { cfg -> runOnUiThread { applyHostConfig(cfg) } }
+        touchCapture?.onPadButtons = { mask -> runOnUiThread { padButtons = mask } }
         touchCapture?.onDimCommand = { dim, durationMs, curve ->
             runOnUiThread {
                 dimmedByHost = dim
@@ -363,6 +367,7 @@ class MainActivity : AppCompatActivity() {
                     hostOffline = hostOffline,
                     autoRetryDisabled = autoRetryDisabled,
                     onRetry = { retryHostLink() },
+                    padButtons = padButtons,
                     idleDimmed = dimmedByHost,
                     onWake = { wakeFromIdle() },
                     onSetting = { key, value -> onUserSetting(key, value) },
@@ -415,6 +420,9 @@ class MainActivity : AppCompatActivity() {
         prefs.touchpadHaptics = cfg.touchpadHaptics
         prefs.touchpadHapticStrength = cfg.touchpadHapticStrength
         prefs.touchpadClickSound = cfg.touchpadClickSound
+        prefs.touchpadStyle = cfg.touchpadStyle
+        prefs.touchpadMiddleButton = cfg.touchpadMiddleButton
+        prefs.touchpadClassicTap = cfg.touchpadClassicTap
         prefs.nativeGestures = cfg.nativeGestures
         prefs.touchpadSensitivity = cfg.touchpadSensitivity
         prefs.rightClickMethod = cfg.rightClickMethod

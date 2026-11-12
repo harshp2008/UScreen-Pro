@@ -219,6 +219,21 @@ class Prefs(context: Context) {
         get() = sp.getBoolean("touchpad_click_sound", false)
         set(v) = sp.edit().putBoolean("touchpad_click_sound", v).apply()
 
+    /** Touchpad style (`clickpad` or `classic`), synced with the computer. */
+    var touchpadStyle: String
+        get() = sp.getString("touchpad_style", HostConfig.STYLE_CLICKPAD) ?: HostConfig.STYLE_CLICKPAD
+        set(v) = sp.edit().putString("touchpad_style", v).apply()
+
+    /** Classic style: show a middle button, synced with the computer. */
+    var touchpadMiddleButton: Boolean
+        get() = sp.getBoolean("touchpad_middle_button", false)
+        set(v) = sp.edit().putBoolean("touchpad_middle_button", v).apply()
+
+    /** Classic style: a tap on the pad clicks, synced with the computer. */
+    var touchpadClassicTap: Boolean
+        get() = sp.getBoolean("touchpad_classic_tap", false)
+        set(v) = sp.edit().putBoolean("touchpad_classic_tap", v).apply()
+
     /** Raw fingers for the computer's libinput instead of gestures recognised here; the host's effective value. */
     var nativeGestures: Boolean
         get() = sp.getBoolean("native_gestures", true)

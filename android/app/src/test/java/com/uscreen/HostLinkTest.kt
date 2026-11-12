@@ -99,6 +99,22 @@ class HostLinkTest {
         assertEquals(null, FadeCurve.parseBezier("bezier:a,b,c,d"))
     }
 
+    /** The touchpad style settings: defaults, validation and JSON. */
+    @Test
+    fun touchpadStyleSettingsAreValidated() {
+        val base = HostConfig()
+        assertEquals(HostConfig.STYLE_CLICKPAD, base.touchpadStyle)
+        assertFalse(base.touchpadMiddleButton)
+        assertFalse(base.touchpadClassicTap)
+        assertEquals("classic", base.withSetting("touchpad_style", "classic")?.touchpadStyle)
+        assertEquals(null, base.withSetting("touchpad_style", "wide"))
+        assertTrue(base.withSetting("touchpad_middle_button", true)?.touchpadMiddleButton == true)
+        val c = HostConfig.fromJson(org.json.JSONObject("""{"touchpad_style":"classic","touchpad_classic_tap":true}"""), base)
+        assertEquals("classic", c.touchpadStyle)
+        assertTrue(c.touchpadClassicTap)
+        assertEquals("clickpad", HostConfig.fromJson(org.json.JSONObject("""{"touchpad_style":"x"}"""), base).touchpadStyle)
+    }
+
     /** Haptic strength and click sound: defaults, validation and JSON. */
     @Test
     fun hapticStrengthAndClickSoundAreValidated() {

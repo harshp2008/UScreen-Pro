@@ -52,6 +52,12 @@ data class HostConfig(
     val touchpadHapticStrength: String = Haptics.MEDIUM,
     /** A short click sound on touchpad clicks. */
     val touchpadClickSound: Boolean = false,
+    /** `clickpad` (tap anywhere) or `classic` (a pad that moves the pointer, with buttons along the bottom). */
+    val touchpadStyle: String = STYLE_CLICKPAD,
+    /** Classic style: a middle button between left and right. */
+    val touchpadMiddleButton: Boolean = false,
+    /** Classic style: a tap on the pad clicks. */
+    val touchpadClassicTap: Boolean = false,
     /** Touchpad mode sends raw fingers for the computer's libinput to recognise (the host's effective value). */
     val nativeGestures: Boolean = true,
     /** Touchpad sensitivity in percent (50-200): how far things move per finger travel. */
@@ -89,6 +95,9 @@ data class HostConfig(
         "touchpad_haptics" -> (value as? Boolean)?.let { copy(touchpadHaptics = it) }
         "touchpad_haptic_strength" -> (value as? String)?.takeIf { it in Haptics.STRENGTHS }?.let { copy(touchpadHapticStrength = it) }
         "touchpad_click_sound" -> (value as? Boolean)?.let { copy(touchpadClickSound = it) }
+        "touchpad_style" -> (value as? String)?.takeIf { it in TOUCHPAD_STYLES }?.let { copy(touchpadStyle = it) }
+        "touchpad_middle_button" -> (value as? Boolean)?.let { copy(touchpadMiddleButton = it) }
+        "touchpad_classic_tap" -> (value as? Boolean)?.let { copy(touchpadClassicTap = it) }
         "native_gestures" -> (value as? Boolean)?.let { copy(nativeGestures = it) }
         "touchpad_sensitivity" -> (value as? Int)?.let { copy(touchpadSensitivity = it.coerceIn(50, 200)) }
         "right_click_method" -> (value as? String)?.takeIf { it in RIGHT_CLICK_METHODS }?.let { copy(rightClickMethod = it) }
@@ -116,6 +125,13 @@ data class HostConfig(
         /** A two-finger tap right-clicks. */
         const val RIGHT_CLICK_TWO_FINGER = "two_finger_tap"
         val RIGHT_CLICK_METHODS = listOf(RIGHT_CLICK_ZONE, RIGHT_CLICK_TWO_FINGER)
+
+        /** A modern pad: tap anywhere to click. */
+        const val STYLE_CLICKPAD = "clickpad"
+
+        /** An old pad: it only moves the pointer, and real buttons sit along the bottom. */
+        const val STYLE_CLASSIC = "classic"
+        val TOUCHPAD_STYLES = listOf(STYLE_CLICKPAD, STYLE_CLASSIC)
 
         /**
          * What the pen is: `auto` (default; the computer keeps a visible cursor under the pen and gives
@@ -157,6 +173,10 @@ data class HostConfig(
             touchpadHapticStrength = o.optString("touchpad_haptic_strength", base.touchpadHapticStrength)
                 .takeIf { it in Haptics.STRENGTHS } ?: base.touchpadHapticStrength,
             touchpadClickSound = o.optBoolean("touchpad_click_sound", base.touchpadClickSound),
+            touchpadStyle = o.optString("touchpad_style", base.touchpadStyle)
+                .takeIf { it in TOUCHPAD_STYLES } ?: base.touchpadStyle,
+            touchpadMiddleButton = o.optBoolean("touchpad_middle_button", base.touchpadMiddleButton),
+            touchpadClassicTap = o.optBoolean("touchpad_classic_tap", base.touchpadClassicTap),
             nativeGestures = o.optBoolean("native_gestures", base.nativeGestures),
             touchpadSensitivity = o.optInt("touchpad_sensitivity", base.touchpadSensitivity).coerceIn(50, 200),
             rightClickMethod = o.optString("right_click_method", base.rightClickMethod)
@@ -193,6 +213,9 @@ data class HostConfig(
             touchpadHaptics = prefs.touchpadHaptics,
             touchpadHapticStrength = prefs.touchpadHapticStrength,
             touchpadClickSound = prefs.touchpadClickSound,
+            touchpadStyle = prefs.touchpadStyle,
+            touchpadMiddleButton = prefs.touchpadMiddleButton,
+            touchpadClassicTap = prefs.touchpadClassicTap,
             nativeGestures = prefs.nativeGestures,
             touchpadSensitivity = prefs.touchpadSensitivity,
             rightClickMethod = prefs.rightClickMethod,

@@ -228,6 +228,25 @@ fun SettingsSheet(
                             )
                         }
                         if (mode == HostConfig.MODE_TOUCHPAD) {
+                            ChipChoice(
+                                "Touchpad style",
+                                listOf("clickpad" to "Clickpad", "classic" to "Classic buttons"),
+                                hostConfig.touchpadStyle,
+                            ) { onSetting("touchpad_style", it) }
+                            if (hostConfig.touchpadStyle == HostConfig.STYLE_CLASSIC) {
+                                SwitchRow(
+                                    "Middle button",
+                                    "Add a middle button between the left and right ones.",
+                                    hostConfig.touchpadMiddleButton,
+                                    { onSetting("touchpad_middle_button", it) }
+                                )
+                                SwitchRow(
+                                    "Tap to click",
+                                    "Let a tap on the pad click. Off, like old pads: use the buttons.",
+                                    hostConfig.touchpadClassicTap,
+                                    { onSetting("touchpad_classic_tap", it) }
+                                )
+                            }
                             val hasMotor = remember { Haptics.hasMotor(context) }
                             SwitchRow(
                                 "Touchpad Haptics",

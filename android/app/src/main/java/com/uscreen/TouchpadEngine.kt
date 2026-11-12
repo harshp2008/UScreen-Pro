@@ -81,6 +81,9 @@ internal class TouchpadEngine(
     /** Taps in the bottom-right zone are right clicks. */
     var rightClickZone = false
 
+    /** False in the Classic style without tap-to-click: taps are recognised (so they are not motion) but click nothing. */
+    var tapClicks = true
+
     /** Diagnostic hook; one line per decision. */
     var log: ((String) -> Unit)? = null
 
@@ -198,8 +201,8 @@ internal class TouchpadEngine(
      * Turns a tap result into button events; a left tap whose first finger landed in the right-click zone becomes a right tap. Schedules the next evaluation when the tap machine asked for a timeout.
      */
     private fun applyTap(res: TapToClick.Result, now: Double) {
-        var down = res.down
-        var up = res.up
+        var down = if (tapClicks) res.down else 0
+        var up = if (tapClicks) res.up else 0
         if (down == TapToClick.LEFT && up == TapToClick.LEFT && tap.rightZoneHit) {
             down = TapToClick.RIGHT; up = TapToClick.RIGHT
         }

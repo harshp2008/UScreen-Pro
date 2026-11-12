@@ -95,6 +95,8 @@ fun UScreenMain(
     /** Battery saver stopped the retry loops; only [onRetry] reconnects. */
     autoRetryDisabled: Boolean = false,
     onRetry: () -> Unit = {},
+    /** Classic touchpad buttons held now (bits 1 left, 2 right, 4 middle). */
+    padButtons: Int = 0,
     /** A synced setting was changed on this tablet (the value is a Boolean, Int or String, as the key requires). */
     onSetting: (key: String, value: Any) -> Unit = { _, _ -> },
     /** The screen is faded down by idle dimming; a touch should only wake it. */
@@ -223,6 +225,9 @@ fun UScreenMain(
             TouchpadActiveScreen(
                 showRightClickZone = hostConfig.rightClickMethod == com.uscreen.HostConfig.RIGHT_CLICK_ZONE,
                 shape = hostConfig.touchpadShape,
+                classic = hostConfig.touchpadStyle == com.uscreen.HostConfig.STYLE_CLASSIC,
+                middleButton = hostConfig.touchpadMiddleButton,
+                pressed = padButtons,
             )
         }
 
