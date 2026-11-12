@@ -4,5 +4,6 @@
 // PLATFORM(kde): KDE Plasma has display handling and the keyboard policy only; focus and the pen menu use the generic backend
 
 pub mod display;
+pub mod kwin;
 pub mod osk;
 pub mod scale;

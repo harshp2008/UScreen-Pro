@@ -109,13 +109,13 @@ platform implements, how the backend is chosen, and what happens when there is n
 | `host/src/desktop/gnome/display.rs:268` | gnome | Cinnamon keeps the same per-device schema under org.cinnamon.desktop.peripherals |
 | `host/src/desktop/hyprland/display.rs:11` | hyprland | virtual display on Hyprland: monitors, placement and input mapping through hyprctl |
 | `host/src/desktop/hyprland/mod.rs:2` | hyprland | Hyprland has display handling only; focus and the pen menu use the generic backend |
-| `host/src/desktop/kde/display.rs:14` | kde | virtual display on KDE Plasma: kscreen-doctor for outputs, KWin D-Bus (busctl) for input device properties |
-| `host/src/desktop/kde/display.rs:253` | kde | finds the laptop panel with kscreen-doctor |
-| `host/src/desktop/kde/display.rs:293` | kde | reads a property of a KWin input device over D-Bus |
-| `host/src/desktop/kde/display.rs:304` | kde | output rectangle from kscreen-doctor JSON |
-| `host/src/desktop/kde/display.rs:348` | kde | runs kscreen-doctor -j and parses its JSON |
-| `host/src/desktop/kde/display.rs:427` | kde | enable the EVDI output and place it beside the other screens with one atomic kscreen-doctor call |
-| `host/src/desktop/kde/display.rs:607` | kde | turn the EVDI output back off with kscreen-doctor |
+| `host/src/desktop/kde/display.rs:5` | kde | virtual display on KDE Plasma: kscreen-doctor for outputs; KWin D-Bus (busctl) is in kwin.rs |
+| `host/src/desktop/kde/display.rs:13` | kde | finds the laptop panel with kscreen-doctor |
+| `host/src/desktop/kde/display.rs:53` | kde | reads a property of a KWin input device over D-Bus |
+| `host/src/desktop/kde/display.rs:64` | kde | output rectangle from kscreen-doctor JSON |
+| `host/src/desktop/kde/display.rs:108` | kde | runs kscreen-doctor -j and parses its JSON |
+| `host/src/desktop/kde/display.rs:187` | kde | enable the EVDI output and place it beside the other screens with one atomic kscreen-doctor call |
+| `host/src/desktop/kde/display.rs:367` | kde | turn the EVDI output back off with kscreen-doctor |
 | `host/src/desktop/kde/mod.rs:4` | kde | KDE Plasma has display handling and the keyboard policy only; focus and the pen menu use the generic backend |
 | `host/src/desktop/x11/display.rs:15` | x11 | virtual display on X11: RandR through the xrandr command, input mapping through xinput |
 | `host/src/input/mapping.rs:16` | linux | dispatches on desktop::display::backend(): Hyprland, GNOME, X11, and the KWin code below for KDE and for COSMIC (which has no mapping) |
