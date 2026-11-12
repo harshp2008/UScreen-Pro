@@ -68,11 +68,7 @@ pub fn supported() -> bool {
 
 /// The connector names of the virtual displays of `target`'s card (all of them when the card is not known yet).
 fn connectors(target: &Target) -> Vec<String> {
-    crate::display::vdisplay::evdi_connectors()
-        .into_iter()
-        .filter(|c| target.card.is_none_or(|want| c.card == want))
-        .map(|c| c.name)
-        .collect()
+    crate::desktop::display::connector_names(target.card)
 }
 
 /// Set the interface scale of the display of `target` to `percent` (0 = automatic). True when the display is as asked afterwards, also

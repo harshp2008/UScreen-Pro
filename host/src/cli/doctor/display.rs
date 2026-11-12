@@ -28,7 +28,7 @@ pub(super) async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
     }
 
     let names: Vec<&str> = connectors.iter().map(|c| c.name.as_str()).collect();
-    if crate::desktop::hyprland::display::active() {
+    if crate::desktop::display::backend() == crate::desktop::display::DisplayBackend::Hyprland {
         let Some(monitors) = crate::desktop::hyprland::display::monitors().await else {
             r.line(Level::Warn, "Hyprland", "hyprctl did not answer");
             return;
@@ -124,30 +124,34 @@ pub(super) fn kwin_version(text: &str) -> Option<(u32, u32, u32)> {
 /// Reported because it is a global desktop setting, not something the daemon
 /// should quietly decide on the user's behalf.
 pub(super) async fn check_osk(r: &mut Report) {
-    // Hyprland has no KWin to ask; hyprctl does the mapping there.
-    if crate::desktop::hyprland::display::active() {
-        r.line(
-            Level::Ok,
-            "Hyprland",
-            "hyprctl maps touch and pen onto the tablet's output",
-        );
-        return;
-    }
-    if crate::desktop::gnome::display::active() {
-        r.line(
-            Level::Ok,
-            "GNOME",
-            "pen and touch are mapped through GNOME's per-device settings",
-        );
-        return;
-    }
-    if crate::desktop::x11::display::active() {
-        r.line(
-            Level::Ok,
-            "X11",
-            "pen and touch are mapped with xinput map-to-output",
-        );
-        return;
+    use crate::desktop::display::{backend, DisplayBackend};
+    match backend() {
+        // Hyprland has no KWin to ask; hyprctl does the mapping there.
+        DisplayBackend::Hyprland => {
+            r.line(
+                Level::Ok,
+                "Hyprland",
+                "hyprctl maps touch and pen onto the tablet's output",
+            );
+            return;
+        }
+        DisplayBackend::Gnome => {
+            r.line(
+                Level::Ok,
+                "GNOME",
+                "pen and touch are mapped through GNOME's per-device settings",
+            );
+            return;
+        }
+        DisplayBackend::X11 => {
+            r.line(
+                Level::Ok,
+                "X11",
+                "pen and touch are mapped with xinput map-to-output",
+            );
+            return;
+        }
+        DisplayBackend::Cosmic | DisplayBackend::Kde => {}
     }
     // KWin is only there on Plasma. On COSMIC or GNOME its absence is not a
     // fault, and a FAIL sent people hunting for a qdbus package (#26).

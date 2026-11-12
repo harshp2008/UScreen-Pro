@@ -12,6 +12,7 @@
 //! * `kde` - KDE Plasma: virtual monitor through KWin and the on-screen keyboard policy. No backend
 //!   yet, so the pen menu and focus routing fall back to `generic`.
 //! * `hyprland`, `cosmic` - virtual monitor placement only, for the same reason.
+//! * `display` - not a desktop but the dispatcher for the virtual output: which of the above enables, places and removes it.
 //! * `generic` - an unknown desktop: reads the same focus file a helper script may write, otherwise
 //!   knows nothing. Every feature that needs the desktop is simply unavailable there.
 //!
@@ -20,6 +21,7 @@
 
 mod context;
 pub mod cosmic;
+pub mod display;
 mod focus_file;
 mod generic;
 pub mod gnome;

@@ -5,6 +5,7 @@
 //! GNOME, X11) has its own way to express this, so each gets its own function here.
 
 use super::*;
+use crate::desktop::display::DisplayBackend;
 
 // PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
 /// Pin the virtual input devices to the virtual display.
@@ -26,14 +27,13 @@ pub(super) async fn map_devices_to_output(
     ident: &DeviceIdentity,
     card: Option<u32>,
 ) -> Option<String> {
-    if crate::desktop::hyprland::display::active() {
-        return map_devices_on_hyprland(pen_only, ident, card).await;
-    }
-    if crate::desktop::gnome::display::active() {
-        return map_devices_on_gnome(pen_only, ident, card).await;
-    }
-    if crate::desktop::x11::display::active() {
-        return map_devices_on_x11(pen_only, ident, card).await;
+    match crate::desktop::display::backend() {
+        DisplayBackend::Hyprland => return map_devices_on_hyprland(pen_only, ident, card).await,
+        DisplayBackend::Gnome => return map_devices_on_gnome(pen_only, ident, card).await,
+        DisplayBackend::X11 => return map_devices_on_x11(pen_only, ident, card).await,
+        // COSMIC has no input mapping of its own (docs/compatibility.md: manual there), so it takes the KWin path, which finds
+        // no kscreen-doctor and gives up with a warning, exactly like any other desktop without a case.
+        DisplayBackend::Cosmic | DisplayBackend::Kde => {}
     }
     let Some(output) = crate::desktop::kde::display::target_output(
         pen_only,
@@ -136,11 +136,7 @@ pub(super) async fn map_devices_on_hyprland(
         let all: Vec<String> = connectors.into_iter().map(|c| c.name).collect();
         crate::desktop::hyprland::display::primary_output(&all).await
     } else {
-        let mine: Vec<String> = connectors
-            .into_iter()
-            .filter(|c| card.is_none_or(|want| c.card == want))
-            .map(|c| c.name)
-            .collect();
+        let mine = crate::desktop::display::connector_names(card);
         crate::desktop::hyprland::display::wait_on(&mine, std::time::Duration::from_secs(10)).await
     };
     let Some(output) = output else {
@@ -168,11 +164,7 @@ pub(super) async fn map_devices_on_gnome(
     ident: &DeviceIdentity,
     card: Option<u32>,
 ) -> Option<String> {
-    let mine: Vec<String> = crate::display::vdisplay::evdi_connectors()
-        .into_iter()
-        .filter(|c| card.is_none_or(|want| c.card == want))
-        .map(|c| c.name)
-        .collect();
+    let mine = crate::desktop::display::connector_names(card);
     crate::desktop::gnome::display::map_devices(
         UINPUT_VENDOR,
         ident.product_touch,
@@ -194,11 +186,7 @@ pub(super) async fn map_devices_on_x11(
         let all: Vec<String> = connectors.into_iter().map(|c| c.name).collect();
         crate::desktop::x11::display::primary_output(&all).await
     } else {
-        let mine: Vec<String> = connectors
-            .into_iter()
-            .filter(|c| card.is_none_or(|want| c.card == want))
-            .map(|c| c.name)
-            .collect();
+        let mine = crate::desktop::display::connector_names(card);
         crate::desktop::x11::display::wait_active(&mine, std::time::Duration::from_secs(10)).await
     };
     let Some(output) = output else {
@@ -253,18 +241,20 @@ pub(super) async fn map_and_note_area(
             .await;
     }
     let output = map_devices_to_output(pen_only, ident, card).await;
-    let area = match output.as_deref() {
-        Some(o) if crate::desktop::hyprland::display::active() => {
+    let backend = crate::desktop::display::backend();
+    let area = match (output.as_deref(), backend) {
+        (None, _) => None,
+        (Some(o), DisplayBackend::Hyprland) => {
             crate::desktop::hyprland::display::output_area(o).await
         }
-        Some(o) if crate::desktop::gnome::display::active() => {
-            crate::desktop::gnome::display::output_area(o).await
+        (Some(o), DisplayBackend::Gnome) => crate::desktop::gnome::display::output_area(o).await,
+        // X11 has one core pointer, so there is no area to note.
+        (Some(_), DisplayBackend::X11) => None,
+        (Some(o), DisplayBackend::Cosmic | DisplayBackend::Kde) => {
+            crate::desktop::kde::display::output_area(o).await
         }
-        Some(_) if crate::desktop::x11::display::active() => None,
-        Some(o) => crate::desktop::kde::display::output_area(o).await,
-        None => None,
     };
-    let snap_grid = if crate::desktop::gnome::display::active() {
+    let snap_grid = if backend == DisplayBackend::Gnome {
         crate::desktop::gnome::display::desktop_pixels().await
     } else {
         None
