@@ -30,6 +30,13 @@ Settings overhaul (desktop app and tablet app, kept in step; see
 - The dim and undim curves are edited by dragging two handles.
 - The Stylus tab is grouped into Pen, Pen menu and Screen cards. The pen menu
   hold time is 0.5 to 1.5 s. The pen-cursor hide setting is removed.
+- Pen side buttons can send undo, redo, copy, paste, cut or select all, or
+  open the pen menu, as well as right click, middle click or nothing.
+- A new Interface size option (Compact, Auto, Large) for virtual displays. It
+  changes the physical size the display claims, so the compositor picks a
+  different scale; it applies when the display restarts.
+- The tablet app confirms a setting that changed while it is running with a
+  short "Settings updated" note.
 - Rows wrap instead of clipping, columns follow the pane width, hints are
   shorter, durations are in seconds, and the mode tab names the pen style.
 

@@ -16,6 +16,9 @@ Related: record 104 (slow whole-desktop screenshots).
 | Draggable Bezier handles for the dim and undim curves | `components/CurveEditor.tsx` |
 | Stylus tab in three cards, dropdowns | `PowerSettings.tsx` |
 | Settings parity check | `scripts/tests/settings_parity.py` |
+| Pen side button actions (undo, redo, copy, paste, cut, select all, open pen menu), host and both apps | `host/src/input/ghost/button_action.rs`, `config/clean.rs` |
+| Interface size (compact / auto / large): scales the physical size in the generated EDID | `host/src/display/edid.rs`, `capture/helper.rs`, both settings pages |
+| "Settings updated" note on the tablet when a setting changes while it runs | `MainActivity.kt` |
 
 ## Findings that drove it
 * **Left-click gave no feedback** because in native-gesture mode the computer's libinput makes the click from raw fingers, so the tablet never learns of it. Only the
@@ -39,6 +42,11 @@ Related: record 104 (slow whole-desktop screenshots).
 * Haptic feel and the click sound, the undim on a real mouse crossing, the "home or lock screen" check beyond parsing real dumpsys output, and the phone (not connected).
 * The desktop app's autosave on a real daemon (only the dev mock).
 
+## Not verified (added later)
+* The pen button actions with a real pen (unit tests cover the name to keys mapping only), and Interface size on a real display: the scale GNOME picks for a changed physical
+  size was not observed, and the option applies only when the display is created (Pause then Resume, or restart the daemon).
+* The flash is a plain Android toast, not exercised on a device.
+
 ## Not done (planned)
-Pen gesture list (press or hold, modifiers, hold ring), the Quick menu, an "Interface size" setting for virtual displays (record 104 shows it only buys part of the screenshot time),
-a visual "applied" flash on the tablet after a setting change, per-app gestures.
+Hold gestures with a progress ring, modifier combinations, the Quick menu (an icon panel with apps, key combos and scripts), per-app gestures. Record 104 found the screenshot
+slowness is mostly fixed by capturing one monitor through the screen-cast portal (the flameshot-fast project), so Interface size is only an option.
