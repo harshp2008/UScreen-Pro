@@ -53,7 +53,7 @@ pub fn active() -> bool {
 }
 
 /// Run `hyprctl` against the running Hyprland instance; its stdout, or `None`.
-async fn hyprctl(args: &[&str]) -> Option<String> {
+pub(super) async fn hyprctl(args: &[&str]) -> Option<String> {
     let sig = instance()?;
     let out = tokio::process::Command::new("hyprctl")
         .env("HYPRLAND_INSTANCE_SIGNATURE", sig)
@@ -66,7 +66,7 @@ async fn hyprctl(args: &[&str]) -> Option<String> {
 
 /// `hyprctl keyword`, logged with Hyprland's answer: it says "ok" or the
 /// reason, and exits 0 either way.
-async fn keyword(key: &str, value: &str) -> bool {
+pub(super) async fn keyword(key: &str, value: &str) -> bool {
     match hyprctl(&["keyword", key, value]).await {
         Some(reply) if reply == "ok" => {
             info!("hyprctl keyword {} {}: ok", key, value);

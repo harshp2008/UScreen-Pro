@@ -63,14 +63,20 @@ impl FileConfig {
             t @ ("system" | "light" | "dark") => t.to_string(),
             _ => "system".into(),
         };
+        self.auto_open_app = clean_auto_open(&self.auto_open_app);
+        self.touchpad_haptic_strength = clean_haptic_strength(&self.touchpad_haptic_strength);
+        self.touchpad_style = clean_touchpad_style(&self.touchpad_style);
+        self.interface_scale = match self.interface_scale {
+            0 => 0,
+            n => n.clamp(50, 300),
+        };
         self.right_click_method = clean_right_click(&self.right_click_method);
         self.touchpad_shape = clean_shape(&self.touchpad_shape);
         self.stylus_style = clean_stylus_style(&self.stylus_style);
         self.stylus_button_primary = clean_pen_button(&self.stylus_button_primary, "right");
         self.stylus_button_secondary = clean_pen_button(&self.stylus_button_secondary, "middle");
-        self.stylus_idle_hide_timeout = self.stylus_idle_hide_timeout.min(3600);
         self.pen_menu_style = clean_menu_style(&self.pen_menu_style);
-        self.pen_menu_hold_ms = self.pen_menu_hold_ms.clamp(300, 3000);
+        self.pen_menu_hold_ms = self.pen_menu_hold_ms.clamp(500, 1500);
         self.pen_click_hold_ms = self.pen_click_hold_ms.min(300);
         self.stylus_art_apps = self
             .stylus_art_apps

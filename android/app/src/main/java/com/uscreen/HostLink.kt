@@ -48,6 +48,16 @@ data class HostConfig(
     val undimDurationMs: Long = 500,
     val wifiConfigured: Boolean = false,
     val touchpadHaptics: Boolean = true,
+    /** `light`, `medium` or `strong`. */
+    val touchpadHapticStrength: String = Haptics.MEDIUM,
+    /** A short click sound on touchpad clicks. */
+    val touchpadClickSound: Boolean = false,
+    /** `clickpad` (tap anywhere) or `classic` (a pad that moves the pointer, with buttons along the bottom). */
+    val touchpadStyle: String = STYLE_CLICKPAD,
+    /** Classic style: a middle button between left and right. */
+    val touchpadMiddleButton: Boolean = false,
+    /** Classic style: a tap on the pad clicks. */
+    val touchpadClassicTap: Boolean = false,
     /** Touchpad mode sends raw fingers for the computer's libinput to recognise (the host's effective value). */
     val nativeGestures: Boolean = true,
     /** Touchpad sensitivity in percent (50-200): how far things move per finger travel. */
@@ -61,8 +71,6 @@ data class HostConfig(
     val penMenu: Boolean = true,
     val penMenuStyle: String = "text",
     val penMenuHoldMs: Int = 500,
-    /** Seconds out of range before the computer hides the idle pen cursor; 0 = never. */
-    val stylusIdleHideTimeout: Int = 0,
 ) {
     /** True while the host streams video to this tablet (only Display mode does). */
     val streamsVideo: Boolean get() = inputMode == MODE_DISPLAY
@@ -85,6 +93,11 @@ data class HostConfig(
         "idle_dim_timeout_secs" -> (value as? Int)?.let { copy(idleDimTimeoutSecs = it) }
         "touchpad_shape" -> (value as? String)?.takeIf { it in TouchpadShape.SHAPES }?.let { copy(touchpadShape = it) }
         "touchpad_haptics" -> (value as? Boolean)?.let { copy(touchpadHaptics = it) }
+        "touchpad_haptic_strength" -> (value as? String)?.takeIf { it in Haptics.STRENGTHS }?.let { copy(touchpadHapticStrength = it) }
+        "touchpad_click_sound" -> (value as? Boolean)?.let { copy(touchpadClickSound = it) }
+        "touchpad_style" -> (value as? String)?.takeIf { it in TOUCHPAD_STYLES }?.let { copy(touchpadStyle = it) }
+        "touchpad_middle_button" -> (value as? Boolean)?.let { copy(touchpadMiddleButton = it) }
+        "touchpad_classic_tap" -> (value as? Boolean)?.let { copy(touchpadClassicTap = it) }
         "native_gestures" -> (value as? Boolean)?.let { copy(nativeGestures = it) }
         "touchpad_sensitivity" -> (value as? Int)?.let { copy(touchpadSensitivity = it.coerceIn(50, 200)) }
         "right_click_method" -> (value as? String)?.takeIf { it in RIGHT_CLICK_METHODS }?.let { copy(rightClickMethod = it) }
@@ -94,7 +107,6 @@ data class HostConfig(
         "pen_menu" -> (value as? Boolean)?.let { copy(penMenu = it) }
         "pen_menu_style" -> (value as? String)?.takeIf { it == "text" || it == "icons" }?.let { copy(penMenuStyle = it) }
         "pen_menu_hold_ms" -> (value as? Int)?.let { copy(penMenuHoldMs = it.coerceIn(300, 3000)) }
-        "stylus_idle_hide_timeout" -> (value as? Int)?.let { copy(stylusIdleHideTimeout = it.coerceIn(0, 3600)) }
         else -> null
     }
 
@@ -114,6 +126,13 @@ data class HostConfig(
         const val RIGHT_CLICK_TWO_FINGER = "two_finger_tap"
         val RIGHT_CLICK_METHODS = listOf(RIGHT_CLICK_ZONE, RIGHT_CLICK_TWO_FINGER)
 
+        /** A modern pad: tap anywhere to click. */
+        const val STYLE_CLICKPAD = "clickpad"
+
+        /** An old pad: it only moves the pointer, and real buttons sit along the bottom. */
+        const val STYLE_CLASSIC = "classic"
+        val TOUCHPAD_STYLES = listOf(STYLE_CLICKPAD, STYLE_CLASSIC)
+
         /**
          * What the pen is: `auto` (default; the computer keeps a visible cursor under the pen and gives
          * drawing programs pressure and tilt), a mouse pointer, or a pressure and tilt graphics tablet.
@@ -127,7 +146,11 @@ data class HostConfig(
         const val PEN_BUTTON_RIGHT = "right"
         const val PEN_BUTTON_MIDDLE = "middle"
         const val PEN_BUTTON_NONE = "none"
-        val PEN_BUTTONS = listOf(PEN_BUTTON_RIGHT, PEN_BUTTON_MIDDLE, PEN_BUTTON_NONE)
+        /** What a pen side button may do: the mouse buttons, nothing, a key combination, or the pen menu (same names as the computer). */
+        val PEN_BUTTONS = listOf(
+            PEN_BUTTON_RIGHT, PEN_BUTTON_MIDDLE, PEN_BUTTON_NONE,
+            "undo", "redo", "copy", "paste", "cut", "select-all", "menu",
+        )
 
         /** Read a `config_update` message; fields it does not carry keep [base]'s value. */
         fun fromJson(o: JSONObject, base: HostConfig): HostConfig = HostConfig(
@@ -151,6 +174,13 @@ data class HostConfig(
             undimDurationMs = o.optLong("undim_duration_ms", base.undimDurationMs),
             wifiConfigured = o.optBoolean("wifi_configured", base.wifiConfigured),
             touchpadHaptics = o.optBoolean("touchpad_haptics", base.touchpadHaptics),
+            touchpadHapticStrength = o.optString("touchpad_haptic_strength", base.touchpadHapticStrength)
+                .takeIf { it in Haptics.STRENGTHS } ?: base.touchpadHapticStrength,
+            touchpadClickSound = o.optBoolean("touchpad_click_sound", base.touchpadClickSound),
+            touchpadStyle = o.optString("touchpad_style", base.touchpadStyle)
+                .takeIf { it in TOUCHPAD_STYLES } ?: base.touchpadStyle,
+            touchpadMiddleButton = o.optBoolean("touchpad_middle_button", base.touchpadMiddleButton),
+            touchpadClassicTap = o.optBoolean("touchpad_classic_tap", base.touchpadClassicTap),
             nativeGestures = o.optBoolean("native_gestures", base.nativeGestures),
             touchpadSensitivity = o.optInt("touchpad_sensitivity", base.touchpadSensitivity).coerceIn(50, 200),
             rightClickMethod = o.optString("right_click_method", base.rightClickMethod)
@@ -167,7 +197,6 @@ data class HostConfig(
             penMenuStyle = o.optString("pen_menu_style", base.penMenuStyle)
                 .takeIf { it == "text" || it == "icons" } ?: base.penMenuStyle,
             penMenuHoldMs = o.optInt("pen_menu_hold_ms", base.penMenuHoldMs).coerceIn(300, 3000),
-            stylusIdleHideTimeout = o.optInt("stylus_idle_hide_timeout", base.stylusIdleHideTimeout).coerceIn(0, 3600),
         )
 
         /** The saved copy of the synced settings, so a restart shows the last known values before the host answers. */
@@ -186,6 +215,11 @@ data class HostConfig(
             batterySaverLock = prefs.batterySaverLock,
             wifiConfigured = prefs.wifiConfigured,
             touchpadHaptics = prefs.touchpadHaptics,
+            touchpadHapticStrength = prefs.touchpadHapticStrength,
+            touchpadClickSound = prefs.touchpadClickSound,
+            touchpadStyle = prefs.touchpadStyle,
+            touchpadMiddleButton = prefs.touchpadMiddleButton,
+            touchpadClassicTap = prefs.touchpadClassicTap,
             nativeGestures = prefs.nativeGestures,
             touchpadSensitivity = prefs.touchpadSensitivity,
             rightClickMethod = prefs.rightClickMethod,
@@ -196,7 +230,6 @@ data class HostConfig(
             penMenu = prefs.penMenu,
             penMenuStyle = prefs.penMenuStyle,
             penMenuHoldMs = prefs.penMenuHoldMs,
-            stylusIdleHideTimeout = prefs.stylusIdleHideTimeout,
         )
     }
 }

@@ -3,7 +3,6 @@
 
 use super::super::*;
 use super::support::*;
-use std::time::{Duration, Instant};
 
 /// On the pen route hover is written to both devices, so the system cursor stays visible while the tablet tool is in range.
 #[test]
@@ -253,43 +252,7 @@ fn leaving_range_stops_pointer_updates_and_starts_the_idle_clock() {
         "range exit moves nothing on the pointer"
     );
     assert!(has(&pen, (EV_KEY, BTN_TOOL_PEN, 0)));
-    assert!(d.ghost_out_since.is_some());
     assert!(!d.pen_proximity);
-}
-
-/// Idle hide is off at 0 and otherwise fires once after the timeout with no pointer motion.
-#[test]
-fn idle_hide_is_off_at_zero_and_fires_once_after_the_timeout_with_no_pointer_motion() {
-    let (mut d, pp, qp) = rig();
-    d.ghost_pen(&sample(3, 321), false, "right", "middle");
-    d.ghost_pen(&sample(4, 321), false, "right", "middle");
-    assert!(!d.ghost_idle_tick(0), "0 means never");
-    assert!(!d.ghost_idle_tick(2), "too early");
-    d.ghost_out_since = Some(Instant::now() - Duration::from_secs(3));
-    let ptr_before = frames(&qp).len();
-    assert!(d.ghost_idle_tick(2));
-    assert!(!d.ghost_idle_tick(2), "only once");
-    let (pen, ptr) = (frames(&pp), frames(&qp));
-    done(&[&pp, &qp]);
-    assert_eq!(ptr.len(), ptr_before, "the hide never touches the pointer");
-    let n = pen.len();
-    assert_eq!(
-        pen[n - 2],
-        vec![
-            (EV_KEY, BTN_TOOL_PEN, 1),
-            (EV_ABS, ABS_X, 321),
-            (EV_ABS, ABS_Y, 500)
-        ]
-    );
-    assert_eq!(pen[n - 1], vec![(EV_KEY, BTN_TOOL_PEN, 0)]);
-    // Coming back shows the cursor again and re-arms the clock.
-    let (mut d2, p2, q2) = rig();
-    d2.ghost_out_since = Some(Instant::now() - Duration::from_secs(9));
-    d2.ghost_hidden = true;
-    d2.ghost_pen(&sample(3, 5), false, "right", "middle");
-    assert!(d2.ghost_out_since.is_none() && !d2.ghost_hidden);
-    assert!(frames(&q2).iter().flatten().any(|e| e.1 == ABS_X));
-    done(&[&p2, &q2]);
 }
 
 /// A range exit releases a held tip.

@@ -14,6 +14,12 @@ object TouchpadShape {
     /** Height of the right-click strip along the bottom edge, as a fraction of the touch area. */
     const val ZONE_FRACTION = 0.15f
 
+    /** Where the right-click corner of the Clickpad begins, as a fraction of the pad's width (the right third). */
+    const val CLICKPAD_ZONE_LEFT = 2f / 3f
+
+    /** Height of the button strip of the Classic style, as a fraction of the touch area. */
+    const val CLASSIC_STRIP = 0.2f
+
     /** Left, top, right, bottom of the touch area, in the pixels of the surface it sits on. */
     data class Bounds(val left: Float, val top: Float, val right: Float, val bottom: Float) {
         val width get() = right - left
@@ -26,6 +32,29 @@ object TouchpadShape {
         fun clampX(x: Float) = x.coerceIn(left, right)
         /** The y value nearest to [y] inside the rectangle. */
         fun clampY(y: Float) = y.coerceIn(top, bottom)
+    }
+
+    /** The part of [area] above the Classic button strip: where fingers move the pointer. */
+    fun classicPad(area: Bounds) = Bounds(area.left, area.top, area.right, area.bottom - area.height * CLASSIC_STRIP)
+
+    /** The Classic button strip along the bottom of [area]. */
+    fun classicStrip(area: Bounds) = Bounds(area.left, area.bottom - area.height * CLASSIC_STRIP, area.right, area.bottom)
+
+    /**
+     * The button under horizontal position [x] of [strip]: 0 left, 1 right, 2 middle. Two buttons split the strip in half;
+     * with a [middle] button the outer ones take 40 % each and the middle one 20 %.
+     */
+    fun classicButton(x: Float, strip: Bounds, middle: Boolean): Int {
+        val f = if (strip.width <= 0f) 0f else (x - strip.left) / strip.width
+        return if (!middle) {
+            if (f < 0.5f) 0 else 1
+        } else {
+            when {
+                f < 0.4f -> 0
+                f < 0.6f -> 2
+                else -> 1
+            }
+        }
     }
 
     /** Width over height of a rectangle shape, or null for the full screen. */

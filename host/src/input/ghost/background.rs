@@ -98,11 +98,6 @@ pub(in crate::input) fn spawn_idle_task(
                 continue;
             }
             let opts = crate::config::options::current_options(instance);
-            let timeout = if n.is_multiple_of(25) {
-                opts.stylus_idle_hide_timeout
-            } else {
-                0
-            };
             let to_pen = route_to_pen(&opts.stylus_art_apps);
             let Ok(mut guard) = uinput.lock() else {
                 continue;
@@ -114,9 +109,6 @@ pub(in crate::input) fn spawn_idle_task(
             guard.menu_enabled = opts.pen_menu;
             guard.still_cfg.long_press = Duration::from_millis(opts.pen_menu_hold_ms as u64);
             guard.auto_hold_check();
-            if timeout != 0 && guard.ghost_idle_tick(timeout) {
-                info!("Pen out of range for {}s — cursor hidden", timeout);
-            }
         }
     });
 }

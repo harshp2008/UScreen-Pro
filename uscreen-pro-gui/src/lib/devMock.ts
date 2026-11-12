@@ -19,6 +19,7 @@ const config: AppConfig = {
   stream_scale: 1,
   pen_only: false,
   position: "right",
+  interface_scale: 0,
   ten_bit: false,
   require_token: false,
   check_updates: true,
@@ -29,7 +30,7 @@ const config: AppConfig = {
   auto_resolution: true,
   video_port: 5000,
   input_port: 5001,
-  auto_launch_app: true,
+  auto_open_app: "never",
   max_performance_mode: false,
   hevc_low_latency_tuning: true,
   software_cursor: false,
@@ -57,6 +58,11 @@ const config: AppConfig = {
   dim_duration_ms: 3000,
   undim_duration_ms: 500,
   touchpad_haptics: true,
+  touchpad_haptic_strength: "medium",
+  touchpad_click_sound: false,
+  touchpad_style: "clickpad",
+  touchpad_middle_button: false,
+  touchpad_classic_tap: false,
   native_gestures: true,
   touchpad_sensitivity: 100,
   right_click_method: "bottom_right_zone",
@@ -64,7 +70,6 @@ const config: AppConfig = {
   stylus_style: "auto",
   stylus_button_primary: "right",
   stylus_button_secondary: "middle",
-  stylus_idle_hide_timeout: 0,
   pen_menu: true,
   pen_menu_style: "text",
   pen_menu_hold_ms: 500,
@@ -133,6 +138,8 @@ export function installDevMock() {
           return config;
         case "get_autostart_status":
           return false;
+        case "display_auto_percent":
+          return 175;
         case "launch_daemon":
           running = true;
           return "Daemon started";

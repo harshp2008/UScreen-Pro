@@ -1,6 +1,7 @@
 /*
  * The page of one device: identity, connection, stream and input overrides, and its actions (pause, install, forget). Presentational; state arrives as props from App.tsx.
  */
+import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { AlertTriangle, Check, Pause, Play, Trash2, Wifi } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,7 +9,7 @@ import { AppLockList } from "../components/ui/AppLockList";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Tabs, Section, SettingRow, SliderRow, SwitchRow, type Override } from "../components/ui/layout";
-import { ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL, TRANSPORTS, labelOf, qualityLabel } from "../lib/options";
+import { ENCODERS, FPS, POSITIONS, STREAM_DETAIL, TRANSPORTS, labelOf, modeLabel, qualityLabel } from "../lib/options";
 import { ModePanel, ModeSection, TabletPanel, POWER_TIP, type PowerValues } from "../components/PowerSettings";
 import type { AppConfig, ConnectedDevice, CurvePreset, TabletProfile } from "../lib/types";
 
@@ -31,7 +32,10 @@ interface Props {
   /** Re-open the Wireless Setup step for this device. */
   onConfigureWireless: () => void;
   /** True when the profile differs from what is saved. */
+  /** An edit that restarts the stream is waiting for Apply. */
   dirty: boolean;
+  /** Autosave state, shown beside the Apply button. */
+  saveNote?: "" | "saving" | "saved";
 }
 
 /** Settings page of one paired device: stream overrides, transport, pause/update/wireless actions and Save for that device only. */
@@ -49,6 +53,7 @@ export function DeviceSettings({
   onInstallApk,
   onConfigureWireless,
   dirty,
+  saveNote = "",
 }: Props) {
   const [confirmForget, setConfirmForget] = useState(false);
   /* Which tab is showing; view state only. */
@@ -83,6 +88,11 @@ export function DeviceSettings({
     dim_duration_ms: p.dim_duration_ms ?? g.dim_duration_ms,
     undim_duration_ms: p.undim_duration_ms ?? g.undim_duration_ms,
     touchpad_haptics: p.touchpad_haptics ?? g.touchpad_haptics,
+    touchpad_haptic_strength: p.touchpad_haptic_strength ?? g.touchpad_haptic_strength,
+    touchpad_click_sound: p.touchpad_click_sound ?? g.touchpad_click_sound,
+    touchpad_style: p.touchpad_style ?? g.touchpad_style,
+    touchpad_middle_button: p.touchpad_middle_button ?? g.touchpad_middle_button,
+    touchpad_classic_tap: p.touchpad_classic_tap ?? g.touchpad_classic_tap,
     native_gestures: p.native_gestures ?? g.native_gestures,
     touchpad_sensitivity: p.touchpad_sensitivity ?? g.touchpad_sensitivity,
     right_click_method: p.right_click_method ?? g.right_click_method,
@@ -93,7 +103,6 @@ export function DeviceSettings({
     pen_menu: p.pen_menu ?? g.pen_menu,
     pen_menu_style: p.pen_menu_style ?? g.pen_menu_style,
     pen_menu_hold_ms: p.pen_menu_hold_ms ?? g.pen_menu_hold_ms,
-    stylus_idle_hide_timeout: p.stylus_idle_hide_timeout ?? g.stylus_idle_hide_timeout,
   };
 
   /** The override switch builder of a power setting row, seeded with the global value. */
@@ -116,9 +125,12 @@ export function DeviceSettings({
             {device?.paused ? "Resume" : "Pause"}
           </Button>
         )}
-        <Button size="sm" onClick={onSave} disabled={!dirty}><Check />
-          Save
-        </Button>
+        {saveNote && <span className="text-xs text-muted-foreground">{saveNote === "saving" ? "Saving…" : "Saved"}</span>}
+        {dirty && (
+          <Button size="sm" onClick={onSave}><Check />
+            Apply
+          </Button>
+        )}
       </PageHeader>
 
       {mismatch && (
@@ -195,7 +207,7 @@ export function DeviceSettings({
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: "mode", label: labelOf(INPUT_MODES, power.input_mode) },
+          { value: "mode", label: modeLabel(power.input_mode, power.stylus_style) },
           { value: "tablet", label: "Android app" },
         ]}
       />
@@ -261,6 +273,44 @@ export function DeviceSettings({
                 onValueChange={(v) => onChange({ stream_scale: Number(v) })}
               />
             </SettingRow>
+            <SettingRow
+              label="Interface size"
+              tip="Scale of text and windows on this device's screen. Automatic lets the desktop choose. Works on GNOME, Hyprland and KDE Plasma."
+              override={ov("interface_scale", g.interface_scale, g.interface_scale === 0 ? "Automatic" : `${g.interface_scale}%`)}
+            >
+              <Select
+                label="Interface size mode"
+                value={(p.interface_scale ?? g.interface_scale) === 0 ? "auto" : "custom"}
+                options={[
+                  { value: "auto", label: "Automatic" },
+                  { value: "custom", label: "Custom" },
+                ]}
+                className="w-36"
+                onValueChange={async (v) => {
+                  if (v === "auto") return onChange({ interface_scale: 0 });
+                  // Start where Automatic already is, so choosing Custom changes nothing on screen.
+                  const pct = await invoke<number | null>("display_auto_percent", {
+                    width: p.width ?? null,
+                    height: p.height ?? null,
+                  }).catch(() => null);
+                  onChange({ interface_scale: Math.min(300, Math.max(50, Math.round((pct ?? 100) / 5) * 5)) });
+                }}
+              />
+            </SettingRow>
+            {(p.interface_scale ?? 0) > 0 && (
+              <SliderRow
+                label="Scale"
+                tip="Smaller is faster for whole-desktop screenshots. Snaps to a scale the display supports."
+                formatValue={(n) => `${Math.round(n)}%`}
+                minLabel="50%"
+                maxLabel="300%"
+                value={p.interface_scale ?? 100}
+                min={50}
+                max={300}
+                step={5}
+                onChange={(interface_scale) => onChange({ interface_scale })}
+              />
+            )}
             <SettingRow
               label="Position"
               override={ov("position", g.position, labelOf(POSITIONS, g.position))}

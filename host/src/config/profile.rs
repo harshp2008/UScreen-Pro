@@ -28,6 +28,9 @@ pub struct TabletProfile {
     pub stream_scale: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<String>,
+    /// Interface scale in percent, 0 for automatic. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface_scale: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,6 +104,21 @@ pub struct TabletProfile {
     /// Light vibration on touchpad clicks. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_haptics: Option<bool>,
+    /// Strength of the touchpad vibration: `light`, `medium` or `strong`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_haptic_strength: Option<String>,
+    /// Click sound on touchpad clicks. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_click_sound: Option<bool>,
+    /// Touchpad style: `clickpad` or `classic`. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_style: Option<String>,
+    /// Classic style: show a middle button. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_middle_button: Option<bool>,
+    /// Classic style: tapping the pad clicks. Unset inherits the global value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_classic_tap: Option<bool>,
     /// Touchpad mode replays the tablet's fingers on a virtual multi-touch touchpad so the desktop
     /// recognises swipes and pinches itself. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -132,9 +150,6 @@ pub struct TabletProfile {
     /// Milliseconds the pen is held still before the menu appears. Unset inherits the global value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pen_menu_hold_ms: Option<u32>,
-    /// Seconds out of range before the idle pen cursor is hidden (0 = never). Unset inherits the global value.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub stylus_idle_hide_timeout: Option<u32>,
     /// Firmware/APK version reported by the connected Android client.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app_version: Option<String>,

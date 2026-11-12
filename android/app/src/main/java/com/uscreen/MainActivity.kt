@@ -20,6 +20,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsetsController
 import android.view.WindowManager
@@ -40,6 +41,9 @@ import androidx.compose.runtime.getValue
 class MainActivity : AppCompatActivity() {
     private var hostVersion by mutableStateOf<String?>(null)
     private var hostNotice by mutableStateOf<HostNotice?>(null)
+
+    /** Classic touchpad buttons held now, for the on-screen highlight. */
+    private var padButtons by mutableStateOf(0)
     /** Set when the host forgot this device; survives restarts until the host talks to us again. */
     private var unpairedByHost by mutableStateOf(false)
     private var showThanks by mutableStateOf(false)
@@ -140,6 +144,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Any touch on the app, the settings sheet included, counts as use of the tablet: in Display mode it tells the
+     * host (at most once a second) so its idle timer does not dim the screen under the user's finger.
+     */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (hostConfig.inputMode == HostConfig.MODE_DISPLAY) touchCapture?.sendWake(force = false)
+        return super.dispatchTouchEvent(ev)
+    }
+
     /** The user touched the dimmed screen: fade back up with the host's undim curve and tell the host. */
     private fun wakeFromIdle() {
         if (!dimmedByHost) return
@@ -229,12 +242,16 @@ class MainActivity : AppCompatActivity() {
             it.setStylusMode(hostConfig.inputMode == HostConfig.MODE_STYLUS)
             it.setTouchpadShape(hostConfig.touchpadShape)
             it.hostConfig = hostConfig
-            // Touchpad clicks tick lightly when the setting is on (it is on by default).
+            // Touchpad clicks give the feedback the settings ask for: a vibration of the chosen strength and/or a click sound.
             it.onHaptic = {
-                if (hostConfig.touchpadHaptics && hostConfig.inputMode == HostConfig.MODE_TOUCHPAD) Haptics.click(this)
+                if (hostConfig.inputMode == HostConfig.MODE_TOUCHPAD) {
+                    if (hostConfig.touchpadHaptics) Haptics.click(this, hostConfig.touchpadHapticStrength)
+                    if (hostConfig.touchpadClickSound) ClickSound.play()
+                }
             }
         }
         touchCapture?.onHostConfig = { cfg -> runOnUiThread { applyHostConfig(cfg) } }
+        touchCapture?.onPadButtons = { mask -> runOnUiThread { padButtons = mask } }
         touchCapture?.onDimCommand = { dim, durationMs, curve ->
             runOnUiThread {
                 dimmedByHost = dim
@@ -350,6 +367,7 @@ class MainActivity : AppCompatActivity() {
                     hostOffline = hostOffline,
                     autoRetryDisabled = autoRetryDisabled,
                     onRetry = { retryHostLink() },
+                    padButtons = padButtons,
                     idleDimmed = dimmedByHost,
                     onWake = { wakeFromIdle() },
                     onSetting = { key, value -> onUserSetting(key, value) },
@@ -382,9 +400,15 @@ class MainActivity : AppCompatActivity() {
      * Mirror the host's per-device settings into [Prefs], the live input handling and the UI. Runs on the
      * UI thread; the host sends it on connect and whenever a setting changes there (or here).
      */
+    /** Whether a host config has been applied yet; the first one on connect is not announced. */
+    private var configSeen = false
+
     private fun applyHostConfig(cfg: HostConfig) {
         val prev = hostConfig
         hostConfig = cfg
+        // A change that arrives once the app is running (made here or on the computer) is confirmed briefly, so it is clear it took effect.
+        if (configSeen && prev != cfg) android.widget.Toast.makeText(this, "Settings updated", android.widget.Toast.LENGTH_SHORT).show()
+        configSeen = true
         touchCapture?.hostConfig = cfg
         prefs.inputMode = cfg.inputMode
         prefs.immersiveModeEnabled = cfg.immersiveMode
@@ -400,6 +424,11 @@ class MainActivity : AppCompatActivity() {
         prefs.batterySaverLock = cfg.batterySaverLock
         prefs.wifiConfigured = cfg.wifiConfigured
         prefs.touchpadHaptics = cfg.touchpadHaptics
+        prefs.touchpadHapticStrength = cfg.touchpadHapticStrength
+        prefs.touchpadClickSound = cfg.touchpadClickSound
+        prefs.touchpadStyle = cfg.touchpadStyle
+        prefs.touchpadMiddleButton = cfg.touchpadMiddleButton
+        prefs.touchpadClassicTap = cfg.touchpadClassicTap
         prefs.nativeGestures = cfg.nativeGestures
         prefs.touchpadSensitivity = cfg.touchpadSensitivity
         prefs.rightClickMethod = cfg.rightClickMethod
@@ -410,7 +439,6 @@ class MainActivity : AppCompatActivity() {
         prefs.penMenu = cfg.penMenu
         prefs.penMenuStyle = cfg.penMenuStyle
         prefs.penMenuHoldMs = cfg.penMenuHoldMs
-        prefs.stylusIdleHideTimeout = cfg.stylusIdleHideTimeout
         // Touchpad mode is made of finger input, so it overrides the "Touch input" switch.
         touchCapture?.setTouchEnabled(cfg.touchInput || cfg.inputMode == HostConfig.MODE_TOUCHPAD)
         touchCapture?.setTouchpadMode(cfg.inputMode == HostConfig.MODE_TOUCHPAD)

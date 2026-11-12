@@ -1,6 +1,7 @@
 //! Applying one setting changed on the tablet to its profile in config.toml
 
 use super::*;
+use crate::config::clean::PEN_BUTTON_ACTIONS;
 
 /// Store one setting pushed by the tablet as the device's override. `Ok(true)` when it changed.
 pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Result<bool, ()> {
@@ -40,6 +41,19 @@ pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Resul
         "idle_dim_enabled" => set(&mut p.idle_dim_enabled, b?),
         "idle_dim_timeout_secs" => set(&mut p.idle_dim_timeout_secs, n?),
         "touchpad_haptics" => set(&mut p.touchpad_haptics, b?),
+        "touchpad_haptic_strength" => match s?.as_str() {
+            m @ ("light" | "medium" | "strong") => {
+                set(&mut p.touchpad_haptic_strength, m.to_string())
+            }
+            _ => return Err(()),
+        },
+        "touchpad_click_sound" => set(&mut p.touchpad_click_sound, b?),
+        "touchpad_style" => match s?.as_str() {
+            m @ ("clickpad" | "classic") => set(&mut p.touchpad_style, m.to_string()),
+            _ => return Err(()),
+        },
+        "touchpad_middle_button" => set(&mut p.touchpad_middle_button, b?),
+        "touchpad_classic_tap" => set(&mut p.touchpad_classic_tap, b?),
         "native_gestures" => set(&mut p.native_gestures, b?),
         "touchpad_sensitivity" => set(&mut p.touchpad_sensitivity, n?.clamp(50, 200)),
         "touchpad_shape" => match s?.as_str() {
@@ -53,7 +67,9 @@ pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Resul
             _ => return Err(()),
         },
         "stylus_button_primary" => match s?.as_str() {
-            m @ ("right" | "middle" | "none") => set(&mut p.stylus_button_primary, m.to_string()),
+            m if PEN_BUTTON_ACTIONS.contains(&m) => {
+                set(&mut p.stylus_button_primary, m.to_string())
+            }
             _ => return Err(()),
         },
         "pen_menu" => set(&mut p.pen_menu, b?),
@@ -61,10 +77,11 @@ pub(super) fn set_override(p: &mut TabletProfile, key: &str, v: &Value) -> Resul
             m @ ("text" | "icons") => set(&mut p.pen_menu_style, m.to_string()),
             _ => return Err(()),
         },
-        "pen_menu_hold_ms" => set(&mut p.pen_menu_hold_ms, n?.clamp(300, 3000)),
-        "stylus_idle_hide_timeout" => set(&mut p.stylus_idle_hide_timeout, n?.min(3600)),
+        "pen_menu_hold_ms" => set(&mut p.pen_menu_hold_ms, n?.clamp(500, 1500)),
         "stylus_button_secondary" => match s?.as_str() {
-            m @ ("right" | "middle" | "none") => set(&mut p.stylus_button_secondary, m.to_string()),
+            m if PEN_BUTTON_ACTIONS.contains(&m) => {
+                set(&mut p.stylus_button_secondary, m.to_string())
+            }
             _ => return Err(()),
         },
         "right_click_method" => match s?.as_str() {

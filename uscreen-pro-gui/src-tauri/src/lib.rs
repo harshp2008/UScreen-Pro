@@ -8,6 +8,7 @@
 mod adb;
 mod config;
 mod daemon;
+mod display;
 mod forget;
 mod pairing;
 
@@ -19,6 +20,7 @@ pub fn run() {
         .manage(pairing::PairingState::default())
         .invoke_handler(tauri::generate_handler![
             config::get_config,
+            display::display_auto_percent,
             config::save_config,
             config::save_device_profile,
             config::save_curve_presets,

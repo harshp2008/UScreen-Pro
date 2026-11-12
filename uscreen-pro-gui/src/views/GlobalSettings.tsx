@@ -1,12 +1,13 @@
 /*
  * The global Settings page: the defaults every device inherits. Presentational; state arrives as props from App.tsx.
  */
+import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Segmented, Select, TextInput } from "../components/ui/controls";
 import { PageHeader, QualityRow, Section, SettingRow, SliderRow, SwitchRow, Tabs } from "../components/ui/layout";
-import { ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL } from "../lib/options";
+import { AUTO_OPEN, ENCODERS, INPUT_MODES, FPS, POSITIONS, STREAM_DETAIL, modeLabel } from "../lib/options";
 import { ModePanel, ModeSection, TabletPanel } from "../components/PowerSettings";
 import type { AppConfig, CurvePreset, InputMode } from "../lib/types";
 
@@ -15,7 +16,10 @@ import type { AppConfig, CurvePreset, InputMode } from "../lib/types";
  */
 interface Props {
   config: AppConfig;
+  /** An edit that restarts the stream is waiting for Apply. */
   dirty: boolean;
+  /** Autosave state, shown beside the Apply button. */
+  saveNote?: "" | "saving" | "saved";
   autostart: boolean;
   onChange: (patch: Partial<AppConfig>) => void;
   onSave: () => void;
@@ -25,19 +29,25 @@ interface Props {
 }
 
 /** Settings page for the defaults every device inherits, plus the daemon autostart switch. */
-export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, onAutostart, onPresetsChange }: Props) {
+export function GlobalSettings({ config: c, dirty, saveNote = "", autostart, onChange, onSave, onAutostart, onPresetsChange }: Props) {
   /* The tab and the mode being viewed are only view state: clicking them never changes a setting. */
   const [tab, setTab] = useState("general");
   const [viewMode, setViewMode] = useState<InputMode>(c.input_mode);
-  const modeOptions = INPUT_MODES.map((o) => ({ ...o, label: o.value === c.input_mode ? `${o.label} · Default` : o.label }));
+  const modeOptions = INPUT_MODES.map((o) => {
+    const name = modeLabel(o.value, c.stylus_style);
+    return { ...o, label: o.value === c.input_mode ? `${name} · Default` : name };
+  });
   const values = c;
 
   return (
     <div className="w-full space-y-2">
       <PageHeader title="Settings">
-        <Button size="sm" disabled={!dirty} onClick={onSave}><Check />
-          Save
-        </Button>
+        {saveNote && <span className="text-xs text-muted-foreground">{saveNote === "saving" ? "Saving…" : "Saved"}</span>}
+        {dirty && (
+          <Button size="sm" onClick={onSave}><Check />
+            Apply
+          </Button>
+        )}
       </PageHeader>
 
       <Tabs
@@ -56,12 +66,15 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
         <>
           <ModeSection values={values} onChange={onChange} title="Default mode" label="Default mode" />
           <Section title="General">
-          <SwitchRow
-            label="Auto-launch app"
-            tip="Start the UScreen app on the tablet when it is plugged in."
-            checked={c.auto_launch_app}
-            onChange={(auto_launch_app) => onChange({ auto_launch_app })}
-          />
+          <SettingRow label="Open app on connect" tip="When the computer opens UScreen on the tablet by itself.">
+            <Select
+              label="Open app on connect"
+              value={c.auto_open_app}
+              options={AUTO_OPEN}
+              className="w-56"
+              onValueChange={(auto_open_app) => onChange({ auto_open_app: auto_open_app as AppConfig["auto_open_app"] })}
+            />
+          </SettingRow>
           <SwitchRow
             label="Max performance scheduling"
             tip="Raise process priority and tune sockets for latency. Uses more CPU."
@@ -129,7 +142,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
               step={1000}
               onChange={(bitrate) => onChange({ bitrate })}
             />
-            <SettingRow label="Stream detail" tip="Full sends every pixel; Half renders at half resolution for the lowest latency.">
+            <SettingRow label="Stream detail" tip="Full sends every pixel. Half renders at half size for lower latency.">
               <Segmented
                 label="Stream detail"
                 value={String(c.stream_scale)}
@@ -156,10 +169,44 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
           <Section title="Display and layout">
             <SwitchRow
               label="Use Software Mouse Cursor (Slower, more compatible)"
-              tip="Off (default): the fast path, with the 1x1 boundary window that clears the ghost cursor on GNOME/Xwayland. On: plain composited cursor with no compositor-specific helper; use it on KDE, Sway or anything where the cursor misbehaves."
+              tip="Draw the cursor in software. Slower; use it on KDE, Sway or if the cursor misbehaves."
               checked={c.software_cursor}
               onChange={(software_cursor) => onChange({ software_cursor })}
             />
+            <SettingRow
+              label="Interface size"
+              tip="Scale of text and windows on the tablet's screen, like GNOME's display scale. Automatic lets the desktop choose. Works on GNOME, Hyprland and KDE Plasma."
+            >
+              <Select
+                label="Interface size mode"
+                value={c.interface_scale === 0 ? "auto" : "custom"}
+                options={[
+                  { value: "auto", label: "Automatic" },
+                  { value: "custom", label: "Custom" },
+                ]}
+                className="w-36"
+                onValueChange={async (v) => {
+                  if (v === "auto") return onChange({ interface_scale: 0 });
+                  // Start where Automatic already is, so choosing Custom changes nothing on screen.
+                  const pct = await invoke<number | null>("display_auto_percent", { width: null, height: null }).catch(() => null);
+                  onChange({ interface_scale: Math.min(300, Math.max(50, Math.round((pct ?? 100) / 5) * 5)) });
+                }}
+              />
+            </SettingRow>
+            {c.interface_scale > 0 && (
+              <SliderRow
+                label="Scale"
+                tip="Smaller is faster for whole-desktop screenshots. Snaps to a scale the display supports."
+                formatValue={(n) => `${Math.round(n)}%`}
+                minLabel="50%"
+                maxLabel="300%"
+                value={c.interface_scale}
+                min={50}
+                max={300}
+                step={5}
+                onChange={(interface_scale) => onChange({ interface_scale })}
+              />
+            )}
             <SettingRow label="Position" tip="Where the virtual display sits relative to your primary monitor.">
               <Segmented
                 label="Position"
@@ -214,7 +261,7 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
               <Section title="Pen and drawing tablets">
                 <SwitchRow
                   label="Physical tablet support"
-                  tip="Use a plugged-in drawing tablet (XP-Pen, Wacom, Huion, ...) with pressure, tilt and a visible cursor. UScreen takes the tablet exclusively while this is on. Off by default; not needed on X11."
+                  tip="Use a plugged-in drawing tablet (Wacom, XP-Pen, Huion). UScreen takes it exclusively."
                   checked={c.physical_tablet_support}
                   onChange={(physical_tablet_support) => onChange({ physical_tablet_support })}
                 />

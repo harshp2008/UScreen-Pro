@@ -51,6 +51,10 @@ Both were investigated in experiments 100 to 103: a resting pen is parked after 
 
 It is a fallback. Median latency can match USB but the tail does not (see [Findings](/UScreen-Pro/findings/) and the benchmarks page under Project documents). Use the cable when you can.
 
+## Screenshots of the whole desktop take 5 to 10 seconds
+
+Flameshot's GUI is slow to open, or `gnome-screenshot` takes ages, while a tablet is connected as a second display. The tool is not at fault: the desktop is captured as one picture at the largest display scale of any monitor, and a high-scale virtual display makes that picture huge (a 4320 x 1080 desktop with a 2.5x phone became a 10800 x 2700 PNG). Time grows with the pixel count, about 0.65 s per megapixel. A window or region screenshot stays fast (0.8 s). Lowering the scale of the virtual displays helps (10 s to 6 s in the measurement) at the price of smaller text. Details and numbers: [Findings](/UScreen-Pro/findings/) (record 104).
+
 ## After a crash the virtual display never comes back
 
 The compositor-safety guard starts in safe mode after a start that did not end cleanly. Run `uscreen reset-guard`, then restart the daemon.
@@ -71,4 +75,4 @@ The compositor-safety guard starts in safe mode after a start that did not end c
 
 - `docs/troubleshooting.md`, `docs/faq.md`, `SECURITY.md`
 - `host/src/cli/doctor/` (what the doctor checks)
-- `experiments_and_findings/100_hover_park_and_recorder.md`, `101_click_slop.md`, `102_pen_menu_and_desktop_layer.md`, `103_scanout_capture_dropped.md`
+- `experiments_and_findings/100_hover_park_and_recorder.md`, `101_click_slop.md`, `102_pen_menu_and_desktop_layer.md`, `103_scanout_capture_dropped.md`, `104_screenshots_slow_with_virtual_displays.md`

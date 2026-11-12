@@ -63,6 +63,9 @@ pub struct FileConfig {
     /// "right" (default), "left", "above" or "below". Anything else is
     /// treated as "right" rather than refusing to start over a typo.
     pub position: String,
+    /// The interface scale of the virtual display in percent (50 to 300), or 0 to leave it to the compositor's own choice. Set through
+    /// Mutter on GNOME Wayland and snapped to a scale that display supports.
+    pub interface_scale: u32,
     /// Encode in 10 bits (HEVC Main10). The captured desktop is 8-bit and
     /// cannot be otherwise, so this adds no colour — it gives the encoder
     /// more precision to work in, which is what removes banding from
@@ -112,8 +115,9 @@ pub struct FileConfig {
     pub auto_resolution: bool,
     pub video_port: u16,
     pub input_port: u16,
-    /// Launch the UScreen app on the tablet automatically when it's plugged in
-    pub auto_launch_app: bool,
+    /// When the daemon opens the UScreen app on the tablet by itself: `never` (default), `idle`
+    /// (only while the tablet shows its home or lock screen) or `always`.
+    pub auto_open_app: String,
     /// When enabled and system power profile is "performance", forces 60 FPS stream
     /// even when cursor is on the primary display.
     pub max_performance_mode: bool,
@@ -182,8 +186,19 @@ pub struct FileConfig {
     pub dim_duration_ms: u32,
     /// Length of the undim fade in milliseconds.
     pub undim_duration_ms: u32,
-    /// Light vibration on touchpad clicks.
+    /// Vibration on touchpad clicks.
     pub touchpad_haptics: bool,
+    /// How strong that vibration is: `light`, `medium` (default) or `strong`.
+    pub touchpad_haptic_strength: String,
+    /// A short click sound on the tablet for touchpad clicks. Off by default.
+    pub touchpad_click_sound: bool,
+    /// The touchpad's look and feel: `clickpad` (default: tap anywhere, a modern laptop pad) or
+    /// `classic` (a pad that only moves the pointer, with real buttons along the bottom edge).
+    pub touchpad_style: String,
+    /// Classic style: a middle button between the left and right ones. Off by default.
+    pub touchpad_middle_button: bool,
+    /// Classic style: tapping the pad clicks. Off by default, as on the old pads.
+    pub touchpad_classic_tap: bool,
     /// Use native gestures (Wayland / libinput) in Touchpad mode: the tablet's fingers are replayed
     /// on a virtual multi-touch touchpad and GNOME / KDE handle swipes and pinches themselves.
     /// Off, or on X11 and desktops without libinput gestures, the tablet recognises gestures and
@@ -202,9 +217,6 @@ pub struct FileConfig {
     pub stylus_button_primary: String,
     /// Second pen side button in `mouse` style: `right`, `middle` or `none`.
     pub stylus_button_secondary: String,
-    /// Ghost tracking: seconds with the pen out of range after which the desktop cursor is hidden.
-    /// `0` (default) never hides it, so the pen's cursor behaves like a mouse cursor.
-    pub stylus_idle_hide_timeout: u32,
     /// The pen's long-press menu (cut, copy, paste, ...) in the mouse route. On by default.
     pub pen_menu: bool,
     /// How the pen menu's buttons look: `text` (labels) or `icons`.
@@ -246,6 +258,7 @@ impl Default for FileConfig {
             stream_scale: 1,
             pen_only: false,
             position: "right".into(),
+            interface_scale: 0,
             ten_bit: false,
             require_token: true,
             check_updates: true,
@@ -257,7 +270,7 @@ impl Default for FileConfig {
             auto_resolution: true,
             video_port: 8890,
             input_port: 8891,
-            auto_launch_app: true,
+            auto_open_app: "never".into(),
             max_performance_mode: false,
             hevc_low_latency_tuning: true,
             keep_alive: false,
@@ -286,6 +299,11 @@ impl Default for FileConfig {
             dim_duration_ms: 3000,
             undim_duration_ms: 500,
             touchpad_haptics: true,
+            touchpad_haptic_strength: "medium".into(),
+            touchpad_click_sound: false,
+            touchpad_style: "clickpad".into(),
+            touchpad_middle_button: false,
+            touchpad_classic_tap: false,
             native_gestures: true,
             touchpad_sensitivity: 100,
             right_click_method: "bottom_right_zone".into(),
@@ -293,7 +311,6 @@ impl Default for FileConfig {
             stylus_style: "auto".into(),
             stylus_button_primary: "right".into(),
             stylus_button_secondary: "middle".into(),
-            stylus_idle_hide_timeout: 0,
             pen_menu: true,
             pen_menu_style: "text".into(),
             pen_menu_hold_ms: 500,

@@ -4,6 +4,16 @@
 
 use super::*;
 
+/// Aborts the task it holds when dropped, so a helper-bound watcher dies with the helper's stdout task.
+struct AbortOnDrop(tokio::task::JoinHandle<()>);
+
+impl Drop for AbortOnDrop {
+    /// Stop the held task.
+    fn drop(&mut self) {
+        self.0.abort();
+    }
+}
+
 impl CaptureManager {
     /// Start the EVDI helper process that writes the virtual display's frames into the FIFO, after
     /// killing any stray helper left from a previous run.
@@ -169,12 +179,24 @@ impl CaptureManager {
         let mode_tx = self.mode_tx.clone();
         let stream_tx = self.stream_tx.clone();
         let instance = self.config.instance;
+        // On Wayland the compositor is asked where the pointer is (the helper's X pointer goes
+        // stale over native windows); the watcher ends with this task.
+        let compositor_pointer = crate::desktop::gnome::pointer::available();
+        let mode_rx = self.mode_tx.subscribe();
         self.helper_stdout_task = Some(tokio::spawn(async move {
+            let _watch = compositor_pointer.then(|| {
+                AbortOnDrop(tokio::spawn(crate::desktop::gnome::pointer::watch_pointer(
+                    instance, mode_rx,
+                )))
+            });
             while let Ok(Some(line)) = lines.next_line().await {
-                // The helper watches the X pointer against this output's rectangle and reports
-                // each crossing; the idle-dim timer starts when the pointer leaves.
+                // Without the compositor's answer, the helper watches the X pointer against this
+                // output's rectangle and reports each crossing; the idle-dim timer starts when the
+                // pointer leaves.
                 if let Some(rest) = line.strip_prefix("POINTER_IN_TABLET ") {
-                    crate::config::options::set_pointer(instance, rest.trim() == "1");
+                    if !compositor_pointer {
+                        crate::config::options::set_pointer(instance, rest.trim() == "1");
+                    }
                     continue;
                 }
                 if let Some(rest) = line.strip_prefix("STREAM_SIZE ") {

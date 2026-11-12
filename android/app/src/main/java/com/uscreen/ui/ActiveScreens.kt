@@ -5,6 +5,8 @@
 package com.uscreen.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -31,11 +33,11 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 
 /**
- * Screen displayed when running in Graphics Tablet mode.
+ * Screen displayed in Stylus mode; [penStyle] is the pen style's name (Dynamic, Mouse or Graphics tablet).
  * Shows informational guidance and blanks out the OLED screen after a timeout to conserve battery.
  */
 @Composable
-fun PenOnlyScreen(blankAfterSeconds: Int) {
+fun PenOnlyScreen(blankAfterSeconds: Int, penStyle: String) {
     var blank by remember { mutableStateOf(false) }
     LaunchedEffect(blankAfterSeconds) {
         blank = false
@@ -57,7 +59,7 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
                 modifier = Modifier.padding(32.dp)
             ) {
                 Text(
-                    "Graphics tablet mode",
+                    "Stylus mode · $penStyle",
                     fontSize = 20.sp,
                     color = OnSurface,
                     fontWeight = FontWeight.Bold
@@ -97,6 +99,12 @@ fun PenOnlyScreen(blankAfterSeconds: Int) {
 fun TouchpadActiveScreen(
     showRightClickZone: Boolean = true,
     shape: String = com.uscreen.TouchpadShape.FULL,
+    /** The Classic style: a pad that only moves the pointer, with buttons along the bottom. */
+    classic: Boolean = false,
+    /** Classic style: show a middle button too. */
+    middleButton: Boolean = false,
+    /** Classic style: the buttons held down now (bits 1 left, 2 right, 4 middle), drawn lit. */
+    pressed: Int = 0,
 ) {
     Box(
         modifier = Modifier
@@ -104,7 +112,7 @@ fun TouchpadActiveScreen(
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        TouchpadArea(shape, showRightClickZone)
+        if (classic) ClassicPad(shape, middleButton, pressed) else TouchpadArea(shape, showRightClickZone)
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(32.dp)
@@ -117,12 +125,57 @@ fun TouchpadActiveScreen(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "Move your finger to move the pointer. Tap to click, two fingers to scroll or pinch.\n" +
+                (if (classic) "Move your finger on the pad. Press the buttons below to click.\n"
+                else "Move your finger to move the pointer. Tap to click, two fingers to scroll or pinch.\n") +
                     "No video is streamed to this screen. Settings are behind the gear icon.",
                 fontSize = 14.sp,
                 color = Muted,
                 textAlign = TextAlign.Center
             )
+        }
+    }
+}
+
+/**
+ * The Classic touchpad: a pad panel above a strip of buttons (Left, Right, and Middle between them when [middle]); a button
+ * held in [pressed] is drawn lit. Positions come from the same geometry the touch code uses, so what is drawn is what is hit.
+ */
+@Composable
+private fun ClassicPad(shape: String, middle: Boolean, pressed: Int) {
+    val line = Color(0x33FFFFFF)
+    androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val wPx = constraints.maxWidth.toFloat()
+        val hPx = constraints.maxHeight.toFloat()
+        val area = com.uscreen.TouchpadShape.bounds(shape, wPx, hPx)
+        val pad = com.uscreen.TouchpadShape.classicPad(area)
+        val strip = com.uscreen.TouchpadShape.classicStrip(area)
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+            val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
+            drawRect(Color(0xFF151515), androidx.compose.ui.geometry.Offset(pad.left, pad.top), androidx.compose.ui.geometry.Size(pad.width, pad.height))
+            drawRect(line, androidx.compose.ui.geometry.Offset(pad.left, pad.top), androidx.compose.ui.geometry.Size(pad.width, pad.height), style = stroke)
+        }
+        // (button index, bit, label, left fraction, right fraction) of the strip
+        val buttons = if (middle) listOf(
+            Triple(0, "Left", 0f to 0.4f), Triple(2, "Middle", 0.4f to 0.6f), Triple(1, "Right", 0.6f to 1f),
+        ) else listOf(
+            Triple(0, "Left", 0f to 0.5f), Triple(1, "Right", 0.5f to 1f),
+        )
+        for ((index, label, span) in buttons) {
+            val x = strip.left + strip.width * span.first
+            val w = strip.width * (span.second - span.first)
+            val lit = pressed and (1 shl index) != 0
+            Box(
+                modifier = Modifier
+                    .absoluteOffset(x = with(density) { x.toDp() }, y = with(density) { strip.top.toDp() })
+                    .size(width = with(density) { w.toDp() }, height = with(density) { strip.height.toDp() })
+                    .padding(3.dp)
+                    .background(if (lit) Color(0xFF3A3A3A) else Color(0xFF1C1C1C), androidx.compose.foundation.shape.RoundedCornerShape(6.dp))
+                    .border(1.dp, if (lit) Color(0x88FFFFFF) else line, androidx.compose.foundation.shape.RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(label, fontSize = 12.sp, color = if (lit) Color(0xDDFFFFFF) else Color(0x66FFFFFF))
+            }
         }
     }
 }
@@ -142,10 +195,15 @@ private fun TouchpadArea(shape: String, showRightClickZone: Boolean) {
                 drawRect(line, topLeft, area, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
             }
             if (showRightClickZone) {
-                val y = b.bottom - b.height * com.uscreen.TouchpadShape.ZONE_FRACTION
-                val mid = (b.left + b.right) / 2f
-                drawLine(line, androidx.compose.ui.geometry.Offset(b.left, y), androidx.compose.ui.geometry.Offset(b.right, y), strokeWidth = 2f)
-                drawLine(line, androidx.compose.ui.geometry.Offset(mid, y), androidx.compose.ui.geometry.Offset(mid, b.bottom), strokeWidth = 2f)
+                // Only a faint corner marks where a tap right-clicks: a modern pad has no button strip.
+                val zl = b.left + b.width * com.uscreen.TouchpadShape.CLICKPAD_ZONE_LEFT
+                val zt = b.bottom - b.height * com.uscreen.TouchpadShape.ZONE_FRACTION
+                drawRoundRect(
+                    Color(0x14FFFFFF),
+                    androidx.compose.ui.geometry.Offset(zl, zt),
+                    androidx.compose.ui.geometry.Size(b.right - zl, b.bottom - zt),
+                    androidx.compose.ui.geometry.CornerRadius(12f, 12f),
+                )
             }
         }
         if (showRightClickZone) {

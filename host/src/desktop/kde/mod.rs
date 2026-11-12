@@ -4,3 +4,4 @@
 
 pub mod display;
 pub mod osk;
+pub mod scale;

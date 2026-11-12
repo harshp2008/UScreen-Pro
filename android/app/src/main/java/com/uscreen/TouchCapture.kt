@@ -443,7 +443,11 @@ class TouchCapture {
         val vw = width.coerceAtLeast(1).toFloat()
         val vh = height.coerceAtLeast(1).toFloat()
 
-        val padBounds = TouchpadShape.bounds(touchpadShape, vw, vh)
+        val fullArea = TouchpadShape.bounds(touchpadShape, vw, vh)
+        // Classic style: the bottom strip holds the buttons and only the part above it is the pad.
+        val classic = classicOn()
+        val stripBounds = if (classic) TouchpadShape.classicStrip(fullArea) else null
+        val padBounds = if (classic) TouchpadShape.classicPad(fullArea) else fullArea
         val pointerCount = event.pointerCount
         val actionIndex = event.actionIndex
         val maskedAction = event.actionMasked
@@ -469,6 +473,12 @@ class TouchCapture {
                         val id = event.getPointerId(actionIndex)
                         val x = event.getX(actionIndex)
                         val y = event.getY(actionIndex)
+                        if (stripBounds != null && stripBounds.contains(x, y)) {
+                            // A Classic button: pressed while the finger stays down; the pad paths never see this finger.
+                            outsideIds.add(id)
+                            pressButton(id, TouchpadShape.classicButton(x, stripBounds, hostConfig.touchpadMiddleButton))
+                            return true
+                        }
                         if (!padBounds.contains(x, y)) {
                             outsideIds.add(id)
                             return true
@@ -552,6 +562,7 @@ class TouchCapture {
                     if (stylusMode) return true
                     if (touchpadMode) {
                         val id = event.getPointerId(actionIndex)
+                        if (buttonFingers.containsKey(id)) releaseButton(id)
                         if (outsideIds.remove(id)) return true
                         if (nativeActive()) feedRaw(event, padBounds, actionIndex, -1, lifted = id)
                         else feedPad(event, padBounds, actionIndex)
@@ -573,6 +584,7 @@ class TouchCapture {
                 if (penCancelled || penDown) liftPen()
                 if (stylusMode) return true
                 if (touchpadMode) {
+                    releaseButtons()
                     outsideIds.clear()
                     pad.cancel()
                     liftRaw()
@@ -1061,7 +1073,8 @@ and consults it when choosing between the device's adb entries.
         val k = mmPerPx()
         pad.padWidthMm = bounds.width * k
         pad.padHeightMm = bounds.height * k
-        pad.rightClickZone = hostConfig.rightClickMethod != HostConfig.RIGHT_CLICK_TWO_FINGER
+        pad.rightClickZone = !classicOn() && hostConfig.rightClickMethod != HostConfig.RIGHT_CLICK_TWO_FINGER
+        pad.tapClicks = !suppressTaps()
         val history = if (event.actionMasked == MotionEvent.ACTION_MOVE) event.historySize else 0
         for (h in 0..history) {
             val sample = if (h < history) h else -1
@@ -1101,6 +1114,59 @@ and consults it when choosing between the device's adb entries.
     // scrolling, pinch and 3 / 4 finger swipes. Only the touch area (shape) and the bottom-right
     // click strip are decided here, on the raw coordinates, before anything is sent.
 
+    // ---- Classic style: buttons along the bottom, a pad that only moves the pointer -------------------
+
+    /** Whether the Classic touchpad style is in use. */
+    private fun classicOn(): Boolean = touchpadMode && hostConfig.touchpadStyle == HostConfig.STYLE_CLASSIC
+
+    /** Classic without tap-to-click: taps on the pad must not click. */
+    private fun suppressTaps(): Boolean = classicOn() && !hostConfig.touchpadClassicTap
+
+    /** Fingers holding a Classic button: pointer id to button (0 left, 1 right, 2 middle). */
+    private val buttonFingers = HashMap<Int, Int>()
+
+    /** Told the set of Classic buttons held (bits 1 left, 2 right, 4 middle) so the screen can show them pressed. */
+    var onPadButtons: ((Int) -> Unit)? = null
+
+    /** The buttons held, as the bit set [onPadButtons] reports. */
+    private fun heldMask(): Int = buttonFingers.values.fold(0) { m, b -> m or (1 shl b) }
+
+    /** A finger lands on Classic button [button]: press it, tick, and light it up. */
+    private fun pressButton(id: Int, button: Int) {
+        buttonFingers[id] = button
+        sendSeq(JSONObject().apply {
+            put("type", "button")
+            put("button", button)
+            put("down", true)
+        })
+        onHaptic?.invoke()
+        onPadButtons?.invoke(heldMask())
+    }
+
+    /** The finger [id] on a Classic button lifts: release the button. */
+    private fun releaseButton(id: Int) {
+        val button = buttonFingers.remove(id) ?: return
+        sendSeq(JSONObject().apply {
+            put("type", "button")
+            put("button", button)
+            put("down", false)
+        })
+        onPadButtons?.invoke(heldMask())
+    }
+
+    /** Release every Classic button still held (mode change, cancelled gesture). */
+    private fun releaseButtons() {
+        for (id in buttonFingers.keys.toList()) releaseButton(id)
+    }
+
+    /** Classic without tap-to-click: holds back a new touch until it is more than a tap, and drops a tap whole. */
+    private val tapGate = TapGate<org.json.JSONArray>(points = { slots ->
+        (0 until slots.length()).map {
+            val s = slots.getJSONObject(it)
+            NativeTapDetector.Point(s.getInt("id"), s.getDouble("x").toFloat(), s.getDouble("y").toFloat())
+        }
+    })
+
     /** True when Touchpad mode should send raw fingers instead of running the gesture engine. */
     private fun nativeActive(): Boolean = touchpadMode && hostConfig.nativeGestures
 
@@ -1119,12 +1185,12 @@ and consults it when choosing between the device's adb entries.
     private fun feedRaw(event: MotionEvent, bounds: TouchpadShape.Bounds, excludeIndex: Int, downIndex: Int, lifted: Int = -1) {
         val k = mmPerPx()
         val now = event.eventTime
-        val zoneOn = hostConfig.rightClickMethod == HostConfig.RIGHT_CLICK_ZONE
+        val zoneOn = !classicOn() && hostConfig.rightClickMethod == HostConfig.RIGHT_CLICK_ZONE
         // A finger landing alone in the bottom-right strip is a possible right click and is not sent.
         if (downIndex >= 0 && zoneOn && zoneFinger == null && rawDown.not()) {
             val x = event.getX(downIndex)
             val y = event.getY(downIndex)
-            val inZone = x >= bounds.left + bounds.width / 2f && y >= bounds.top + bounds.height * (1f - TouchpadShape.ZONE_FRACTION)
+            val inZone = x >= bounds.left + bounds.width * TouchpadShape.CLICKPAD_ZONE_LEFT && y >= bounds.top + bounds.height * (1f - TouchpadShape.ZONE_FRACTION)
             if (inZone && countPadFingers(event, excludeIndex) == 1) {
                 zoneFinger = ZoneFinger(event.getPointerId(downIndex), now, x, y, false)
             }
@@ -1191,14 +1257,42 @@ and consults it when choosing between the device's adb entries.
      * Sends the raw touchpad slots for the host's native touchpad; an empty list lifts all fingers and is only sent if some were down.
      */
     private fun sendRaw(slots: org.json.JSONArray) {
+        // Classic without tap-to-click: a touch that does not move is held back and dropped, so libinput never sees a tap.
+        if (suppressTaps()) {
+            for (frame in tapGate.offer(slots, android.os.SystemClock.uptimeMillis())) sendRawFrame(frame)
+        } else {
+            tapGate.reset()
+            sendRawFrame(slots)
+        }
+    }
+
+    /** Sends one raw frame to the computer; an empty frame lifts all fingers and is only sent if some were down. */
+    private fun sendRawFrame(slots: org.json.JSONArray) {
         val empty = slots.length() == 0
         if (empty && !rawDown) return
+        // The computer's libinput makes the click from these fingers, so the tablet watches for a tap itself to tick.
+        val tapped = if (suppressTaps()) {
+            nativeTaps.reset()
+            false
+        } else {
+            nativeTaps.update(
+                (0 until slots.length()).map {
+                    val s = slots.getJSONObject(it)
+                    NativeTapDetector.Point(s.getInt("id"), s.getDouble("x").toFloat(), s.getDouble("y").toFloat())
+                },
+                android.os.SystemClock.uptimeMillis(),
+            )
+        }
         rawDown = !empty
         sendSeq(JSONObject().apply {
             put("type", "touchpad_raw")
             put("slots", slots)
         })
+        if (tapped) onHaptic?.invoke()
     }
+
+    /** Finds taps in the raw fingers so the tablet can give click feedback in native-gesture mode. */
+    private val nativeTaps = NativeTapDetector()
 
     /** Right click from the click strip: the host's relative mouse, since the pad only sees fingers. */
     private fun sendRightClick() {
@@ -1214,6 +1308,7 @@ and consults it when choosing between the device's adb entries.
 
     /** Lift every finger the host's touchpad still holds, and forget a click-strip finger. */
     private fun liftRaw() {
+        tapGate.reset()
         zoneFinger = null
         if (rawDown) sendRaw(org.json.JSONArray())
     }
@@ -1265,6 +1360,7 @@ and consults it when choosing between the device's adb entries.
     fun setTouchpadMode(on: Boolean) {
         if (touchpadMode == on) return
         touchpadMode = on
+        releaseButtons()
         liftTouches()
     }
 

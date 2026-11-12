@@ -37,6 +37,8 @@ pub struct TabletProfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub position: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface_scale: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub encoder: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ten_bit: Option<bool>,
@@ -87,6 +89,16 @@ pub struct TabletProfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_haptics: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_haptic_strength: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_click_sound: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_style: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_middle_button: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub touchpad_classic_tap: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub native_gestures: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub touchpad_sensitivity: Option<u32>,
@@ -128,6 +140,8 @@ pub struct AppConfig {
     pub stream_scale: u32,
     pub pen_only: bool,
     pub position: String,
+    /// Interface scale of the virtual display in percent, 0 for automatic.
+    pub interface_scale: u32,
     pub ten_bit: bool,
     pub require_token: bool,
     pub check_updates: bool,
@@ -138,7 +152,7 @@ pub struct AppConfig {
     pub auto_resolution: bool,
     pub video_port: u16,
     pub input_port: u16,
-    pub auto_launch_app: bool,
+    pub auto_open_app: String,
     pub max_performance_mode: bool,
     pub hevc_low_latency_tuning: bool,
     #[serde(default)]
@@ -169,8 +183,18 @@ pub struct AppConfig {
     pub undim_curve: String,
     pub dim_duration_ms: u32,
     pub undim_duration_ms: u32,
-    /// Light vibration on touchpad clicks.
+    /// Vibration on touchpad clicks.
     pub touchpad_haptics: bool,
+    /// Strength of that vibration: `light`, `medium` or `strong`.
+    pub touchpad_haptic_strength: String,
+    /// A short click sound on the tablet for touchpad clicks.
+    pub touchpad_click_sound: bool,
+    /// `clickpad` (tap anywhere) or `classic` (a pad that moves the pointer plus real buttons).
+    pub touchpad_style: String,
+    /// Classic style: a middle button.
+    pub touchpad_middle_button: bool,
+    /// Classic style: tapping the pad clicks.
+    pub touchpad_classic_tap: bool,
     /// Use native gestures (Wayland / libinput): the tablet's fingers are replayed on a virtual touchpad.
     pub native_gestures: bool,
     /// Touchpad sensitivity in percent (50-200).
@@ -185,8 +209,6 @@ pub struct AppConfig {
     pub stylus_button_primary: String,
     /// Second pen side button in `mouse` style.
     pub stylus_button_secondary: String,
-    /// Ghost tracking: seconds with the pen out of range before the cursor hides (0 = never).
-    pub stylus_idle_hide_timeout: u32,
     /// Apps that get the pressure-sensitive pen under `auto`; the daemon owns the default list.
     pub stylus_art_apps: Vec<String>,
     /// Read a plugged-in drawing tablet (XP-Pen, Wacom, ...) through the daemon.
@@ -217,6 +239,7 @@ impl Default for AppConfig {
             stream_scale: 1,
             pen_only: false,
             position: "right".into(),
+            interface_scale: 0,
             ten_bit: false,
             require_token: true,
             check_updates: true,
@@ -227,7 +250,7 @@ impl Default for AppConfig {
             auto_resolution: true,
             video_port: 8890,
             input_port: 8891,
-            auto_launch_app: true,
+            auto_open_app: "never".into(),
             max_performance_mode: false,
             hevc_low_latency_tuning: true,
             software_cursor: false,
@@ -254,6 +277,11 @@ impl Default for AppConfig {
             dim_duration_ms: 3000,
             undim_duration_ms: 500,
             touchpad_haptics: true,
+            touchpad_haptic_strength: "medium".into(),
+            touchpad_click_sound: false,
+            touchpad_style: "clickpad".into(),
+            touchpad_middle_button: false,
+            touchpad_classic_tap: false,
             native_gestures: true,
             touchpad_sensitivity: 100,
             right_click_method: "bottom_right_zone".into(),
@@ -261,7 +289,6 @@ impl Default for AppConfig {
             stylus_style: "auto".into(),
             stylus_button_primary: "right".into(),
             stylus_button_secondary: "middle".into(),
-            stylus_idle_hide_timeout: 0,
             stylus_art_apps: [
                 "krita",
                 "gimp",

@@ -97,6 +97,55 @@ pub struct DiscoveredDevice {
 /// Tests for device-serial handling and USB-first deduplication.
 #[cfg(test)]
 mod tests {
+    /// A device marked after an update is reopened once, and the mark goes when the app is launched for it.
+    #[test]
+    fn an_updated_device_is_marked_for_reopening() {
+        assert!(!super::app::marked_for_reopen_for_test("unmarked"));
+        super::reopen_after_update("marked-serial");
+        assert!(super::app::marked_for_reopen_for_test("marked-serial"));
+    }
+
+    use super::app::ScreenState;
+
+    const FOCUS_APP: &str = "  mCurrentFocus=Window{4f60b6d u0 com.uscreen/com.uscreen.MainActivity}\n    isKeyguardShowing=false\npackageName=com.sec.android.app.launcher\nmWakefulness=Awake\n";
+
+    /// Our own app in front counts as idle; another app in front does not.
+    #[test]
+    fn screen_state_reads_focus_and_treats_only_idle_screens_as_idle() {
+        let s = ScreenState::parse(FOCUS_APP);
+        assert_eq!(s.focus.as_deref(), Some("com.uscreen"));
+        assert_eq!(s.launcher.as_deref(), Some("com.sec.android.app.launcher"));
+        assert!(s.is_idle());
+        let chrome = FOCUS_APP.replace(
+            "com.uscreen/com.uscreen.MainActivity",
+            "com.android.chrome/org.chromium.Main",
+        );
+        assert!(!ScreenState::parse(&chrome).is_idle());
+    }
+
+    /// The home screen, the lock screen and a sleeping screen are idle.
+    #[test]
+    fn home_lock_and_sleep_are_idle() {
+        let home = FOCUS_APP.replace(
+            "com.uscreen/com.uscreen.MainActivity",
+            "com.sec.android.app.launcher/x.Launcher",
+        );
+        assert!(ScreenState::parse(&home).is_idle());
+        let chrome = FOCUS_APP.replace(
+            "com.uscreen/com.uscreen.MainActivity",
+            "com.android.chrome/y",
+        );
+        assert!(ScreenState::parse(
+            &chrome.replace("isKeyguardShowing=false", "isKeyguardShowing=true")
+        )
+        .is_idle());
+        assert!(
+            ScreenState::parse(&chrome.replace("mWakefulness=Awake", "mWakefulness=Asleep"))
+                .is_idle()
+        );
+        assert!(!ScreenState::parse("").is_idle());
+    }
+
     use super::*;
 
     /// Network serials (`ip:port` and mDNS names) are told apart from USB serials.

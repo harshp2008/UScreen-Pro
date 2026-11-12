@@ -64,10 +64,6 @@ impl InjectDevices {
         primary: &str,
         secondary: &str,
     ) {
-        if s.action != 4 {
-            self.ghost_out_since = None;
-            self.ghost_hidden = false;
-        }
         if matches!(s.action, 0..=3) {
             // The pen is (still) there: an announced exit is void.
             self.auto_exit_at = None;
@@ -214,12 +210,14 @@ impl InjectDevices {
                 }
                 self.ghost_tool_away(s);
                 self.auto_exit_at = Some(Instant::now());
-                self.ghost_out_since = Some(Instant::now());
             }
             5 | 6 if self.tip == Tip::Pen || (!open && to_pen) => self.ghost_tablet(s, s.action),
             5..=8 => {
                 let name = if s.action <= 6 { primary } else { secondary };
                 let down = s.action == 5 || s.action == 7;
+                if self.run_button_action(name, down) {
+                    return;
+                }
                 let (code, bit) = match name {
                     "right" => (BTN_RIGHT, 2u8),
                     "middle" => (BTN_MIDDLE, 4u8),

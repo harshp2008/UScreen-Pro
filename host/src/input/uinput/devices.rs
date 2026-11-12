@@ -73,10 +73,6 @@ pub(in crate::input) struct InjectDevices {
     pub(in crate::input) pen_mouse_buttons: u8,
     /// Ghost tracking: where the current stroke's tip goes (fixed at pen-down).
     pub(in crate::input) tip: Tip,
-    /// Ghost tracking: since when the pen has been out of range, for the idle hide.
-    pub(in crate::input) ghost_out_since: Option<std::time::Instant>,
-    /// Ghost tracking: the cursor has been hidden for this out-of-range spell.
-    pub(in crate::input) ghost_hidden: bool,
     /// Auto mode: when the tablet tool's range exit was announced; it is only carried out after a
     /// short grace (see `auto_flush_exit`), because Android sends a hover exit right before every
     /// touch-down and the tool must not leave and re-enter range around the click.
@@ -149,8 +145,6 @@ impl InjectDevices {
             pen_button: false,
             pen_mouse_buttons: 0,
             tip: Tip::None,
-            ghost_out_since: None,
-            ghost_hidden: false,
             auto_exit_at: None,
             auto_down_at: None,
             auto_last_at: None,
@@ -405,6 +399,12 @@ impl InjectDevices {
         secondary: &str,
     ) {
         let (px, py) = self.desktop_xy(x, y);
+        if (5..=8).contains(&action) {
+            let name = if action <= 6 { primary } else { secondary };
+            if self.run_button_action(name, action == 5 || action == 7) {
+                return;
+            }
+        }
         let side = |name: &str| match name {
             "right" => Some((BTN_RIGHT, 2u8)),
             "middle" => Some((BTN_MIDDLE, 4u8)),

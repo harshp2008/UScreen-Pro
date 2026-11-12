@@ -34,7 +34,7 @@ use crate::display::vdisplay;
 use crate::input::{InputConfig, InputServer};
 use crate::net::adb::{
     announce_transport, app_running, auto_provision_wifi, is_fake_serial, launch_app,
-    on_tablet_connected, scan_adb_devices, setup_adb_forwarding, spawn_adb_tracker,
-    teardown_adb_forwarding, DiscoveredDevice, Transport,
+    marked_for_reopen, may_open_app, on_tablet_connected, scan_adb_devices, setup_adb_forwarding,
+    spawn_adb_tracker, teardown_adb_forwarding, update_done, DiscoveredDevice, Transport,
 };
 use crate::net::stream::{StreamConfig, StreamServer};

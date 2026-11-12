@@ -9,6 +9,45 @@ Full notes for each version are on the
 
 ## Unreleased
 
+Settings overhaul (desktop app and tablet app, kept in step; see
+`experiments_and_findings/105_settings_overhaul.md`):
+
+- Settings that do not touch the stream save by themselves a second after a
+  change, with a "Saved" note and an Undo toast. Settings that restart the
+  stream (encoder, frame rate, bitrate, quality, resolution, mode, ports) wait
+  for an explicit Apply.
+- Two touchpad styles: Clickpad (tap anywhere, a faint bottom-right corner
+  for right click) and Classic buttons (a pad that only moves the pointer,
+  Left and Right buttons below it, an optional Middle button, tap-to-click off
+  by default).
+- Touchpad feedback: a vibration with a Light / Medium / Strong strength, a
+  click sound, and a button that lights up; left taps in native-gesture mode
+  now tick too. The tablet app says when the device has no vibration motor.
+- "Open app on connect" is Never (default), From home or lock screen, or Always.
+  An update that replaces the tablet app while it is open reopens it afterwards,
+  whatever that setting says.
+- Idle dimming applies in Extended Display mode only, touches in the tablet
+  app count as use, and the pointer position comes from the compositor on
+  GNOME Wayland, so moving the mouse onto the tablet's screen wakes it.
+- The dim and undim curves are edited by dragging two handles.
+- The Stylus tab is grouped into Pen, Pen menu and Screen cards. The pen menu
+  hold time is 0.5 to 1.5 s. The pen-cursor hide setting is removed.
+- Pen side buttons can send undo, redo, copy, paste, cut or select all, or
+  open the pen menu, as well as right click, middle click or nothing.
+- A new Interface size setting for virtual displays: Automatic, or a custom
+  scale from 50 % to 300 %. On GNOME Wayland the daemon sets it through
+  Mutter's display service (the same call the Settings app makes), snaps it to
+  a scale the display supports and moves the monitors to its right along. It
+  applies as soon as the setting is saved, and the daemon puts it back within a
+  few seconds if the desktop forgets it. The same setting works on Hyprland
+  (`hyprctl`) and KDE Plasma (`kscreen-doctor`); those two are built and unit
+  tested but not yet run on those desktops. X11 has no per-output scale.
+- Settings that wait for Apply show a glowing dot beside their label.
+- The tablet app confirms a setting that changed while it is running with a
+  short "Settings updated" note.
+- Rows wrap instead of clipping, columns follow the pane width, hints are
+  shorter, durations are in seconds, and the mode tab names the pen style.
+
 Onboarding warnings and a tidier stats overlay:
 
 - The fps / bandwidth overlay and its switch exist in Extended Display mode only.

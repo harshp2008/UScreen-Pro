@@ -25,6 +25,13 @@ pub struct DeviceOptions {
     pub dim_duration_ms: u32,
     pub undim_duration_ms: u32,
     pub touchpad_haptics: bool,
+    pub touchpad_haptic_strength: String,
+    pub touchpad_click_sound: bool,
+    pub touchpad_style: String,
+    /// Interface scale of the virtual display in percent, 0 for automatic. Host only (the tablet is not told).
+    pub interface_scale: u32,
+    pub touchpad_middle_button: bool,
+    pub touchpad_classic_tap: bool,
     /// The setting "Use Native Gestures (Wayland/libinput)". Whether it is in effect also depends
     /// on the desktop: see [`DeviceOptions::native_gestures_effective`].
     pub native_gestures: bool,
@@ -39,8 +46,6 @@ pub struct DeviceOptions {
     /// `right`, `middle` or `none`.
     pub stylus_button_primary: String,
     pub stylus_button_secondary: String,
-    /// Ghost tracking: seconds out of range before the cursor is hidden (0 = never). Global.
-    pub stylus_idle_hide_timeout: u32,
     /// The pen's long-press menu is on. Global.
     pub pen_menu: bool,
     /// Pen menu buttons: `text` or `icons`.
@@ -86,6 +91,12 @@ impl DeviceOptions {
         g.dim_duration_ms = pick!(dim_duration_ms);
         g.undim_duration_ms = pick!(undim_duration_ms);
         g.touchpad_haptics = pick!(touchpad_haptics);
+        g.touchpad_haptic_strength = pick!(touchpad_haptic_strength);
+        g.touchpad_click_sound = pick!(touchpad_click_sound);
+        g.touchpad_style = pick!(touchpad_style);
+        g.interface_scale = pick!(interface_scale);
+        g.touchpad_middle_button = pick!(touchpad_middle_button);
+        g.touchpad_classic_tap = pick!(touchpad_classic_tap);
         g.native_gestures = p.native_gestures.unwrap_or(cfg.native_gestures);
         g.touchpad_sensitivity = pick!(touchpad_sensitivity);
         g.right_click_method = pick!(right_click_method);
@@ -96,7 +107,6 @@ impl DeviceOptions {
         g.pen_menu = pick!(pen_menu);
         g.pen_menu_style = pick!(pen_menu_style);
         g.pen_menu_hold_ms = pick!(pen_menu_hold_ms);
-        g.stylus_idle_hide_timeout = pick!(stylus_idle_hide_timeout);
         g.sanitize();
         let global_mode = CLI_MODE
             .get()
@@ -124,6 +134,12 @@ impl DeviceOptions {
             dim_duration_ms: g.dim_duration_ms,
             undim_duration_ms: g.undim_duration_ms,
             touchpad_haptics: g.touchpad_haptics,
+            touchpad_haptic_strength: g.touchpad_haptic_strength.clone(),
+            touchpad_click_sound: g.touchpad_click_sound,
+            touchpad_style: g.touchpad_style.clone(),
+            interface_scale: g.interface_scale,
+            touchpad_middle_button: g.touchpad_middle_button,
+            touchpad_classic_tap: g.touchpad_classic_tap,
             native_gestures: g.native_gestures,
             touchpad_sensitivity: g.touchpad_sensitivity,
             right_click_method: g.right_click_method.clone(),
@@ -131,7 +147,6 @@ impl DeviceOptions {
             stylus_style: g.stylus_style.clone(),
             stylus_button_primary: g.stylus_button_primary.clone(),
             stylus_button_secondary: g.stylus_button_secondary.clone(),
-            stylus_idle_hide_timeout: g.stylus_idle_hide_timeout,
             pen_menu: g.pen_menu,
             pen_menu_style: g.pen_menu_style.clone(),
             pen_menu_hold_ms: g.pen_menu_hold_ms,
@@ -164,6 +179,11 @@ impl DeviceOptions {
             "dim_duration_ms": self.dim_duration_ms,
             "undim_duration_ms": self.undim_duration_ms,
             "touchpad_haptics": self.touchpad_haptics,
+            "touchpad_haptic_strength": self.touchpad_haptic_strength,
+            "touchpad_click_sound": self.touchpad_click_sound,
+            "touchpad_style": self.touchpad_style,
+            "touchpad_middle_button": self.touchpad_middle_button,
+            "touchpad_classic_tap": self.touchpad_classic_tap,
             "right_click_method": self.right_click_method,
             // What the tablet acts on is the effective value, so it falls back to its own gesture
             // recogniser on X11 and on desktops that do nothing with libinput gestures.
@@ -176,7 +196,6 @@ impl DeviceOptions {
             "pen_menu": self.pen_menu,
             "pen_menu_style": self.pen_menu_style,
             "pen_menu_hold_ms": self.pen_menu_hold_ms,
-            "stylus_idle_hide_timeout": self.stylus_idle_hide_timeout,
             "wifi_configured": self.wifi_configured,
         })
     }

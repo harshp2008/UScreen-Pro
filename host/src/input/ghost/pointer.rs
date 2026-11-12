@@ -6,11 +6,6 @@
 
 use super::route::route_to_pen;
 use super::*;
-use std::time::{Duration, Instant};
-
-/// After the cursor-hiding blip, how long Mutter's pointer-motion grace window (300 ms) has
-/// certainly passed. The idle timeout is at least one second, so this only guards the tests.
-pub(super) const MUTTER_POINTER_GRACE: Duration = Duration::from_millis(300);
 
 impl InjectDevices {
     /// Put the absolute pointer under the pen (no button): the visible cursor.
@@ -70,12 +65,6 @@ impl InjectDevices {
         primary: &str,
         secondary: &str,
     ) {
-        // Any sample ends an out-of-range wait, and brings a hidden cursor back (the pointer
-        // motion below is what shows it).
-        if s.action != 4 {
-            self.ghost_out_since = None;
-            self.ghost_hidden = false;
-        }
         let pressure_contact = s.pressure.clamp(1, PEN_PRESSURE_MAX);
         match s.action {
             0 => {
@@ -128,12 +117,14 @@ impl InjectDevices {
                 self.ghost_end_stroke(s);
                 self.ghost_tool_away(s);
                 self.ghost_panic_release(false);
-                self.ghost_out_since = Some(Instant::now());
             }
             5 | 6 if to_pen => self.ghost_tablet(s, s.action),
             5..=8 => {
                 let name = if s.action <= 6 { primary } else { secondary };
                 let down = s.action == 5 || s.action == 7;
+                if self.run_button_action(name, down) {
+                    return;
+                }
                 let (code, bit) = match name {
                     "right" => (BTN_RIGHT, 2u8),
                     "middle" => (BTN_MIDDLE, 4u8),
@@ -229,38 +220,6 @@ impl InjectDevices {
             self.pen_button = false;
         }
         self.tip = Tip::None;
-    }
-
-    /// Called a few times a second: once the pen has been out of range for `timeout_secs`
-    /// (0 = never), hide the cursor by sending a tablet-class frame with no pointer motion.
-    /// Returns whether it hid the cursor now.
-    pub(in crate::input) fn ghost_idle_tick(&mut self, timeout_secs: u32) -> bool {
-        let Some(since) = self.ghost_out_since else {
-            return false;
-        };
-        if timeout_secs == 0 || self.ghost_hidden || self.tip != Tip::None {
-            return false;
-        }
-        let wait = Duration::from_secs(timeout_secs as u64).max(MUTTER_POINTER_GRACE * 2);
-        if since.elapsed() < wait {
-            return false;
-        }
-        let (x, y) = self.last_pen_pos;
-        if let Some(ref mut dev) = self.pen {
-            // Proximity in at the last position, then out: two tablet-class frames, no pointer-class
-            // event. More than 300 ms after the last pointer motion, Mutter hides the pointer.
-            let _ = dev.emit(EV_KEY, BTN_TOOL_PEN, 1);
-            let _ = dev.emit(EV_ABS, ABS_X, x);
-            let _ = dev.emit(EV_ABS, ABS_Y, y);
-            let _ = dev.syn();
-            // Apart, so the shell handles "in" and "out" as two events: back to back, the tool's own
-            // cursor can stay on screen at this spot as a second, stale pointer.
-            std::thread::sleep(Duration::from_millis(40));
-            let _ = dev.emit(EV_KEY, BTN_TOOL_PEN, 0);
-            let _ = dev.syn();
-        }
-        self.ghost_hidden = true;
-        true
     }
 }
 

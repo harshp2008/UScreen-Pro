@@ -47,11 +47,52 @@ pub fn default_art_apps() -> Vec<String> {
     .collect()
 }
 
-/// `right`, `middle` or `none`; anything else falls back to `default`.
+/// What a pen side button may do: the mouse buttons `right` and `middle`, `none`, a key combination (`undo`, `redo`, `copy`, `paste`,
+/// `cut`, `select-all`) or `menu` (open the pen menu).
+pub const PEN_BUTTON_ACTIONS: [&str; 10] = [
+    "right",
+    "middle",
+    "none",
+    "undo",
+    "redo",
+    "copy",
+    "paste",
+    "cut",
+    "select-all",
+    "menu",
+];
+
+/// One of [`PEN_BUTTON_ACTIONS`]; anything else falls back to `default`.
 pub fn clean_pen_button(v: &str, default: &str) -> String {
+    let v = v.trim().to_ascii_lowercase();
+    if PEN_BUTTON_ACTIONS.contains(&v.as_str()) {
+        v
+    } else {
+        default.to_string()
+    }
+}
+
+/// `clickpad` (default) or `classic`; anything else falls back to `clickpad`.
+pub(super) fn clean_touchpad_style(v: &str) -> String {
     match v.trim().to_ascii_lowercase().as_str() {
-        b @ ("right" | "middle" | "none") => b.to_string(),
-        _ => default.to_string(),
+        "classic" => "classic".into(),
+        _ => "clickpad".into(),
+    }
+}
+
+/// `light`, `medium` (default) or `strong`; anything else falls back to `medium`.
+pub(super) fn clean_haptic_strength(v: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        s @ ("light" | "strong") => s.to_string(),
+        _ => "medium".into(),
+    }
+}
+
+/// `never` (default), `idle` or `always`; anything else falls back to `never`.
+pub(super) fn clean_auto_open(v: &str) -> String {
+    match v.trim().to_ascii_lowercase().as_str() {
+        m @ ("idle" | "always") => m.to_string(),
+        _ => "never".into(),
     }
 }
 

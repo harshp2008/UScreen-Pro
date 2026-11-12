@@ -12,7 +12,6 @@ import {
   FADE_MIN_MS,
   IDLE_TIMEOUT_MAX,
   IDLE_TIMEOUT_MIN,
-  IDLE_HIDE,
   INPUT_MODES,
   INPUT_MODE_HELP,
   PEN_MENU_HOLD,
@@ -23,7 +22,10 @@ import {
   STYLUS_STYLES,
   PEN_BUTTONS,
   THEME_MODES,
+  HAPTIC_STRENGTHS,
+  TOUCHPAD_STYLES,
   labelOf,
+  modeLabel,
 } from "../lib/options";
 import type { CurvePreset, InputMode } from "../lib/types";
 
@@ -48,6 +50,11 @@ export interface PowerValues {
   dim_duration_ms: number;
   undim_duration_ms: number;
   touchpad_haptics: boolean;
+  touchpad_haptic_strength: string;
+  touchpad_click_sound: boolean;
+  touchpad_style: string;
+  touchpad_middle_button: boolean;
+  touchpad_classic_tap: boolean;
   native_gestures: boolean;
   touchpad_sensitivity: number;
   right_click_method: string;
@@ -58,7 +65,6 @@ export interface PowerValues {
   pen_menu: boolean;
   pen_menu_style: string;
   pen_menu_hold_ms: number;
-  stylus_idle_hide_timeout: number;
 }
 
 /** Tooltip of the Input mode row of a device: where the power goes and what to do about it. */
@@ -93,11 +99,9 @@ export function ModeSection({ values: v, onChange, override, modeTip, title, lab
     <Section title={title} hint={override ? "Click a grey value to override it for this device" : undefined}>
       <SettingRow
         label={label}
-        tip={
-          modeTip ??
-          "The mode new devices start in. Exactly one is active per device: a second screen, a laptop touchpad (no video, saves battery) or a graphics tablet (no video)."
-        }
-        override={ov("input_mode", labelOf(INPUT_MODES, v.input_mode))}
+        tip={modeTip ?? "The mode new devices start in. One mode is active per device."}
+        hint={INPUT_MODE_HELP[v.input_mode]}
+        override={ov("input_mode", modeLabel(v.input_mode, v.stylus_style))}
       >
         <Segmented
           label="Input mode"
@@ -106,7 +110,6 @@ export function ModeSection({ values: v, onChange, override, modeTip, title, lab
           onValueChange={(input_mode) => onChange({ input_mode: input_mode as InputMode })}
         />
       </SettingRow>
-      <p className="px-3 pb-2 text-[11px] text-muted-foreground">{INPUT_MODE_HELP[v.input_mode]}</p>
     </Section>
   );
 }
@@ -155,7 +158,7 @@ export function ModePanel({
       <Section title="Touchpad">
           <SliderRow
             label="Sensitivity"
-            tip="How far the pointer and swipes travel per finger movement on the tablet (100% is the finger's real distance on the tablet). Applies with native gestures. Pointer acceleration on top of it is your desktop's touchpad speed setting."
+            tip="How far the pointer moves per finger movement. 100% is the finger's real distance."
             formatValue={(n) => `${Math.round(n)}%`}
             value={v.touchpad_sensitivity}
             min={50}
@@ -164,23 +167,74 @@ export function ModePanel({
             onChange={(touchpad_sensitivity) => onChange({ touchpad_sensitivity })}
             override={ov("touchpad_sensitivity", `${v.touchpad_sensitivity}%`)}
           />
+          <SettingRow
+            label="Touchpad style"
+            tip="Clickpad: tap anywhere to click. Classic: the pad only moves the pointer and real buttons sit along the bottom."
+            override={ov("touchpad_style", labelOf(TOUCHPAD_STYLES, v.touchpad_style))}
+          >
+            <Segmented
+              label="Touchpad style"
+              value={v.touchpad_style}
+              options={TOUCHPAD_STYLES}
+              onValueChange={(touchpad_style) => onChange({ touchpad_style })}
+            />
+          </SettingRow>
+          {v.touchpad_style === "classic" && (
+            <>
+              <SwitchRow
+                label="Middle button"
+                tip="Add a middle button between the left and right ones."
+                checked={v.touchpad_middle_button}
+                onChange={(touchpad_middle_button) => onChange({ touchpad_middle_button })}
+                override={ov("touchpad_middle_button", onOff(v.touchpad_middle_button))}
+              />
+              <SwitchRow
+                label="Tap to click"
+                tip="Let a tap on the pad click, as on a modern laptop. Off, like old pads: use the buttons."
+                checked={v.touchpad_classic_tap}
+                onChange={(touchpad_classic_tap) => onChange({ touchpad_classic_tap })}
+                override={ov("touchpad_classic_tap", onOff(v.touchpad_classic_tap))}
+              />
+            </>
+          )}
           <SwitchRow
             label="Touchpad Haptics"
-            tip="A light 50 ms vibration on the tablet for left, right and middle clicks."
+            tip="Vibrate the tablet on clicks. Needs a vibration motor; the tablet app says if it has none."
             checked={v.touchpad_haptics}
             onChange={(touchpad_haptics) => onChange({ touchpad_haptics })}
             override={ov("touchpad_haptics", onOff(v.touchpad_haptics))}
           />
+          {v.touchpad_haptics && (
+            <SettingRow
+              label="Haptic strength"
+              tip="How firm the vibration is."
+              override={ov("touchpad_haptic_strength", labelOf(HAPTIC_STRENGTHS, v.touchpad_haptic_strength))}
+            >
+              <Segmented
+                label="Haptic strength"
+                value={v.touchpad_haptic_strength}
+                options={HAPTIC_STRENGTHS}
+                onValueChange={(touchpad_haptic_strength) => onChange({ touchpad_haptic_strength })}
+              />
+            </SettingRow>
+          )}
+          <SwitchRow
+            label="Click sound"
+            tip="A short tick from the tablet's speaker on clicks."
+            checked={v.touchpad_click_sound}
+            onChange={(touchpad_click_sound) => onChange({ touchpad_click_sound })}
+            override={ov("touchpad_click_sound", onOff(v.touchpad_click_sound))}
+          />
           <SwitchRow
             label="Use Native Gestures (Wayland/libinput)"
-            tip="On: the tablet's fingers are passed to this computer as a real touchpad, so motion, taps, scrolling, pinch zoom and 3 / 4 finger workspace swipes are handled by GNOME or KDE exactly as on a laptop trackpad (the workspace follows your hand). Off, or on X11 and desktops that do nothing with libinput gestures: the tablet recognises gestures itself and sends key presses (Super + Page Up / Down, Ctrl + scroll)."
+            tip="Pass fingers to this computer as a real touchpad (GNOME/KDE gestures). Off: the tablet sends key presses instead."
             checked={v.native_gestures}
             onChange={(native_gestures) => onChange({ native_gestures })}
             override={ov("native_gestures", onOff(v.native_gestures))}
           />
           <SettingRow
             label="Touchpad Shape"
-            tip="Which part of the tablet acts as the touchpad. Full Screen is all of it; Standard is the largest centred 4:3 rectangle and Wide the largest centred 16:9 one. The tablet draws the shape and ignores touches outside it."
+            tip="Which part of the tablet is the touchpad. Touches outside it are ignored."
             override={ov("touchpad_shape", labelOf(TOUCHPAD_SHAPES, v.touchpad_shape))}
           >
             <Segmented
@@ -190,9 +244,10 @@ export function ModePanel({
               onValueChange={(touchpad_shape) => onChange({ touchpad_shape })}
             />
           </SettingRow>
+          {v.touchpad_style === "clickpad" && (
           <SettingRow
             label="Right Click Method"
-            tip="Bottom Right Zone: tap the right half of the strip along the bottom edge of the touch area (a faint line marks it). Two-Finger Tap: tap with two fingers. Two-finger tap is also a right click and three-finger tap a middle click. Pinch zooms, and swiping three or four fingers sideways switches workspace (up or down: overview)."
+            tip="Tap the bottom-right zone, or tap with two fingers. Three fingers is a middle click."
             override={ov("right_click_method", labelOf(RIGHT_CLICK_METHODS, v.right_click_method))}
           >
             <Segmented
@@ -202,116 +257,114 @@ export function ModePanel({
               onValueChange={(right_click_method) => onChange({ right_click_method })}
             />
           </SettingRow>
+          )}
         </Section>
     );
   }
   return (
     <Columns>
-      <Section title="Stylus">
-        <>
-            <SettingRow
+      <div>
+        <Section title="Pen">
+          <SettingRow
+            label="Pen acts as"
+            tip="Dynamic: a pointer, plus pressure and tilt in drawing apps. Mouse: a plain pointer. Graphics tablet: drawing only."
+            override={ov("stylus_style", labelOf(STYLUS_STYLES, v.stylus_style))}
+          >
+            <Select
               label="Pen acts as"
-              tip="Dynamic (experimental, tested only on GNOME / Ubuntu): a visible cursor follows the pen everywhere and text selection works; drawing programs (Krita, GIMP, ...) get pressure and tilt, other apps get a mouse click. Ctrl+Alt+P flips the choice for the focused app. Mouse: the pen is a pointer. The tip is the left button and stays down while you drag, so you can select text and move windows; hovering moves a visible cursor. Graphics tablet: a pressure and tilt pen for drawing programs."
-              override={ov("stylus_style", labelOf(STYLUS_STYLES, v.stylus_style))}
-            >
-              <Segmented
-                label="Pen acts as"
-                value={v.stylus_style}
-                options={STYLUS_STYLES}
-                onValueChange={(stylus_style) => onChange({ stylus_style })}
-              />
-            </SettingRow>
-            {(v.stylus_style === "mouse" || v.stylus_style === "auto") && (
-              <>
-                <SettingRow
+              value={v.stylus_style}
+              options={STYLUS_STYLES}
+              className="w-52"
+              onValueChange={(stylus_style) => onChange({ stylus_style })}
+            />
+          </SettingRow>
+          {(v.stylus_style === "mouse" || v.stylus_style === "auto") && (
+            <>
+              <SettingRow
+                label="Pen button"
+                tip="What the pen's side button does: click, send a shortcut, or open the pen menu."
+                override={ov("stylus_button_primary", labelOf(PEN_BUTTONS, v.stylus_button_primary))}
+              >
+                <Select
                   label="Pen button"
-                  tip="What the pen's side button does while the pen acts as a mouse."
-                  override={ov("stylus_button_primary", labelOf(PEN_BUTTONS, v.stylus_button_primary))}
-                >
-                  <Segmented
-                    label="Pen button"
-                    value={v.stylus_button_primary}
-                    options={PEN_BUTTONS}
-                    onValueChange={(stylus_button_primary) => onChange({ stylus_button_primary })}
-                  />
-                </SettingRow>
-                <SettingRow
+                  value={v.stylus_button_primary}
+                  options={PEN_BUTTONS}
+                  className="w-40"
+                  onValueChange={(stylus_button_primary) => onChange({ stylus_button_primary })}
+                />
+              </SettingRow>
+              <SettingRow
+                label="Second pen button"
+                tip="For pens with a second side button."
+                override={ov("stylus_button_secondary", labelOf(PEN_BUTTONS, v.stylus_button_secondary))}
+              >
+                <Select
                   label="Second pen button"
-                  tip="For pens with a second side button."
-                  override={ov("stylus_button_secondary", labelOf(PEN_BUTTONS, v.stylus_button_secondary))}
-                >
-                  <Segmented
-                    label="Second pen button"
-                    value={v.stylus_button_secondary}
-                    options={PEN_BUTTONS}
-                    onValueChange={(stylus_button_secondary) => onChange({ stylus_button_secondary })}
-                  />
-                </SettingRow>
-              </>
-            )}
-        </>
-        <SwitchRow
-          label="Black screen in stylus mode"
-          tip="Nothing is streamed, so the tablet's screen goes black a few seconds after stylus mode starts (spares OLED panels)."
-          checked={v.blank_pen_only}
-          onChange={(blank_pen_only) => onChange({ blank_pen_only })}
-          override={ov("blank_pen_only", onOff(v.blank_pen_only))}
-        />
-        <SwitchRow
-          label="Pen menu"
-          tip="Hold the pen still on the screen to get a small menu: cut, copy, paste, select all, undo. Works on GNOME (Wayland) with the UScreen extension; never shown in drawing apps."
-          checked={v.pen_menu}
-          onChange={(pen_menu) => onChange({ pen_menu })}
-          override={ov("pen_menu", onOff(v.pen_menu))}
-        />
-        {v.pen_menu && (
-          <>
-            <SettingRow
-              label="Hold time for the menu"
-              tip="How long to hold the pen still before the menu appears."
-              override={ov("pen_menu_hold_ms", labelOf(PEN_MENU_HOLD, v.pen_menu_hold_ms))}
-            >
-              <Select
-                label="Hold time for the menu"
-                value={String(v.pen_menu_hold_ms)}
-                options={PEN_MENU_HOLD}
-                className="w-36"
-                onValueChange={(x) => onChange({ pen_menu_hold_ms: Number(x) })}
-              />
-            </SettingRow>
-            <SettingRow
-              label="Menu buttons"
-              tip="Show the menu buttons as text labels or as icons."
-              override={ov("pen_menu_style", labelOf(PEN_MENU_STYLE, v.pen_menu_style))}
-            >
-              <Select
-                label="Menu buttons"
-                value={v.pen_menu_style}
-                options={PEN_MENU_STYLE}
-                className="w-36"
-                onValueChange={(pen_menu_style) => onChange({ pen_menu_style })}
-              />
-            </SettingRow>
-          </>
-        )}
-        <SettingRow
-          label="Hide idle pen cursor"
-          tip="Hide the cursor when the pen has been completely out of range for this long. Never keeps it visible like a mouse cursor. Works on GNOME (Wayland)."
-          override={ov("stylus_idle_hide_timeout", labelOf(IDLE_HIDE, v.stylus_idle_hide_timeout))}
-        >
-          <Select
-            label="Hide idle pen cursor"
-            value={String(v.stylus_idle_hide_timeout)}
-            options={IDLE_HIDE}
-            className="w-36"
-            onValueChange={(x) => onChange({ stylus_idle_hide_timeout: Number(x) })}
+                  value={v.stylus_button_secondary}
+                  options={PEN_BUTTONS}
+                  className="w-40"
+                  onValueChange={(stylus_button_secondary) => onChange({ stylus_button_secondary })}
+                />
+              </SettingRow>
+            </>
+          )}
+        </Section>
+        <Section title="Pen menu">
+          <SwitchRow
+            label="Pen menu"
+            tip="Hold the pen still for a small menu: cut, copy, paste, select all, undo. GNOME only."
+            checked={v.pen_menu}
+            onChange={(pen_menu) => onChange({ pen_menu })}
+            override={ov("pen_menu", onOff(v.pen_menu))}
           />
-        </SettingRow>
-      </Section>
+          {v.pen_menu && (
+            <>
+              <SettingRow
+                label="Hold time"
+                tip="How long to hold the pen still before the menu appears."
+                override={ov("pen_menu_hold_ms", labelOf(PEN_MENU_HOLD, v.pen_menu_hold_ms))}
+              >
+                <Select
+                  label="Hold time for the menu"
+                  value={String(v.pen_menu_hold_ms)}
+                  options={PEN_MENU_HOLD}
+                  className="w-36"
+                  onValueChange={(x) => onChange({ pen_menu_hold_ms: Number(x) })}
+                />
+              </SettingRow>
+              <SettingRow
+                label="Menu buttons"
+                tip="Show the menu buttons as text labels or as icons."
+                override={ov("pen_menu_style", labelOf(PEN_MENU_STYLE, v.pen_menu_style))}
+              >
+                <Select
+                  label="Menu buttons"
+                  value={v.pen_menu_style}
+                  options={PEN_MENU_STYLE}
+                  className="w-36"
+                  onValueChange={(pen_menu_style) => onChange({ pen_menu_style })}
+                />
+              </SettingRow>
+            </>
+          )}
+        </Section>
+        <Section title="Screen">
+          <SwitchRow
+            label="Black screen in stylus mode"
+            tip="Blank the tablet's screen a few seconds after stylus mode starts. Spares OLED panels."
+            checked={v.blank_pen_only}
+            onChange={(blank_pen_only) => onChange({ blank_pen_only })}
+            override={ov("blank_pen_only", onOff(v.blank_pen_only))}
+          />
+        </Section>
+      </div>
       {stylusExtra}
     </Columns>
   );
 }
+
+/** `3000` ms as "3 s" (and 1500 as "1.5 s"). */
+const seconds = (ms: number) => `${ms / 1000} s`;
 
 /** Tablet-app, power and idle-dimming settings; the same for every mode. */
 export function TabletPanel({
@@ -354,7 +407,7 @@ export function TabletPanel({
         </SettingRow>
         <SwitchRow
           label="Immersive mode"
-          tip="Hide the settings button on the tablet and draw under the camera cutout. The Back button opens settings."
+          tip="Hide the settings button and draw under the camera cutout. Back opens settings."
           checked={v.immersive_mode}
           onChange={(immersive_mode) => onChange({ immersive_mode })}
           override={ov("immersive_mode", onOff(v.immersive_mode))}
@@ -364,14 +417,14 @@ export function TabletPanel({
       <Section title="Power & battery" hint={hint}>
         <SwitchRow
           label="Battery saver on disconnect"
-          tip="If the tablet cannot reach this computer for 2 minutes it stops retrying and dims to 10%. The user taps Retry to reconnect."
+          tip="After 2 minutes without the computer, stop retrying and dim to 10%. Tap Retry to reconnect."
           checked={v.battery_saver_on_disconnect}
           onChange={(battery_saver_on_disconnect) => onChange({ battery_saver_on_disconnect })}
           override={ov("battery_saver_on_disconnect", onOff(v.battery_saver_on_disconnect))}
         />
         <SwitchRow
           label="Require Device Admin Lock"
-          tip="Off: battery saver only dims the screen and stops retrying. On: it also locks the tablet, which needs the Device Admin permission (the tablet asks for it)."
+          tip="Also lock the tablet in battery saver. Needs the Device Admin permission."
           checked={v.battery_saver_lock}
           onChange={(battery_saver_lock) => onChange({ battery_saver_lock })}
           override={ov("battery_saver_lock", onOff(v.battery_saver_lock))}
@@ -400,18 +453,21 @@ export function TabletPanel({
       </Section>
 
       </Columns>
+      {override && v.input_mode !== "display" ? (
+        <p className="px-1 pt-3 text-[11px] text-muted-foreground">Idle dimming applies in Extended Display mode only.</p>
+      ) : (
       <Columns>
-        <Section title="Dim when idle" hint="Dims the tablet while the pointer is elsewhere">
+        <Section title="Dim when idle" hint="Extended Display mode only">
         <SwitchRow
           label="Dim when idle"
-          tip="Fade the tablet's screen down once the pointer has left it and the tablet has gone unused for the timeout. Touching the tablet or moving the pointer back fades it up again."
+          tip="Fade the tablet down when the pointer is away and it is unused. Touch or the pointer wakes it."
           checked={v.idle_dim_enabled}
           onChange={(idle_dim_enabled) => onChange({ idle_dim_enabled })}
           override={ov("idle_dim_enabled", onOff(v.idle_dim_enabled))}
         />
         <SettingRow
           label="Idle timeout"
-          tip={`How long the pointer must stay away before the tablet dims (${IDLE_TIMEOUT_MIN}-${IDLE_TIMEOUT_MAX} seconds).`}
+          tip={`Seconds of no use before dimming (${IDLE_TIMEOUT_MIN}-${IDLE_TIMEOUT_MAX}).`}
           override={ov("idle_dim_timeout_secs", `${v.idle_dim_timeout_secs} s`)}
         >
           <NumberInput
@@ -434,17 +490,17 @@ export function TabletPanel({
         />
         <SettingRow
           label="Dim duration"
-          tip={`Length of the fade down, in milliseconds (${FADE_MIN_MS}-${FADE_MAX_MS}). Type an exact value such as 1500.`}
-          override={ov("dim_duration_ms", `${v.dim_duration_ms} ms`)}
+          tip="How long the fade down takes."
+          override={ov("dim_duration_ms", seconds(v.dim_duration_ms))}
         >
           <NumberInput
-            label="Dim duration in milliseconds"
-            unit="ms"
-            step={100}
-            value={v.dim_duration_ms}
-            min={FADE_MIN_MS}
-            max={FADE_MAX_MS}
-            onCommit={(dim_duration_ms) => onChange({ dim_duration_ms })}
+            label="Dim duration in seconds"
+            unit="s"
+            step={0.1}
+            value={v.dim_duration_ms / 1000}
+            min={FADE_MIN_MS / 1000}
+            max={FADE_MAX_MS / 1000}
+            onCommit={(s) => onChange({ dim_duration_ms: Math.round(s * 1000) })}
           />
         </SettingRow>
         </Section>
@@ -460,21 +516,22 @@ export function TabletPanel({
         />
         <SettingRow
           label="Undim duration"
-          tip={`Length of the fade back up, in milliseconds (${FADE_MIN_MS}-${FADE_MAX_MS}). Keep it short for a quick wake.`}
-          override={ov("undim_duration_ms", `${v.undim_duration_ms} ms`)}
+          tip="How long the fade back up takes. Short wakes quickly."
+          override={ov("undim_duration_ms", seconds(v.undim_duration_ms))}
         >
           <NumberInput
-            label="Undim duration in milliseconds"
-            unit="ms"
-            step={100}
-            value={v.undim_duration_ms}
-            min={FADE_MIN_MS}
-            max={FADE_MAX_MS}
-            onCommit={(undim_duration_ms) => onChange({ undim_duration_ms })}
+            label="Undim duration in seconds"
+            unit="s"
+            step={0.1}
+            value={v.undim_duration_ms / 1000}
+            min={FADE_MIN_MS / 1000}
+            max={FADE_MAX_MS / 1000}
+            onCommit={(s) => onChange({ undim_duration_ms: Math.round(s * 1000) })}
           />
         </SettingRow>
         </Section>
       </Columns>
+      )}
     </>
   );
 }
