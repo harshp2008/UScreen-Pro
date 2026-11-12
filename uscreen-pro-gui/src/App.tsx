@@ -100,6 +100,24 @@ function mergeConfig(base: AppConfig, local: AppConfig, remote: AppConfig): AppC
 /** A readable message from a thrown value. */
 const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/**
+ * Settings whose change restarts the video stream or the daemon. Every other setting saves by itself a moment after it
+ * is changed; these wait for an explicit Apply so the stream does not restart while you are still choosing.
+ */
+const HEAVY = new Set([
+  "encoder", "fps", "bitrate", "quality", "stream_scale", "width", "height", "position", "ten_bit", "vaapi_device",
+  "pointer_handoff", "auto_resolution", "video_port", "input_port", "max_tablets", "max_performance_mode",
+  "hevc_low_latency_tuning", "software_cursor", "keep_alive", "input_mode", "pen_only", "require_token", "wifi_address",
+  "preferred_transport", "wireless_configured", "allow_legacy_fallback", "auto_enable_wifi_adb", "locked_apps",
+]);
+
+/** The top-level keys whose values differ between two objects. */
+function changedKeys(a: object, b: object): string[] {
+  const x = a as Record<string, unknown>;
+  const y = b as Record<string, unknown>;
+  return [...new Set([...Object.keys(x), ...Object.keys(y)])].filter((k) => stable(x[k]) !== stable(y[k]));
+}
+
 /** Fingerprint of the global settings only; per-device edits have their own Save button. */
 const globalsKey = (c: AppConfig) => JSON.stringify({ ...c, tablets: {} });
 
@@ -300,6 +318,31 @@ export default function App() {
   /** Edits global settings in the window's copy only; saving is separate. */
   const patchConfig = (patch: Partial<AppConfig>) => setConfig((c) => (c ? { ...c, ...patch } : c));
 
+  /** Keys of the global settings edited here and not yet saved. */
+  const globalPending = useMemo(() => {
+    if (!config || !savedConfig) return [] as string[];
+    try {
+      return changedKeys(JSON.parse(savedConfig), { ...config, tablets: {} });
+    } catch {
+      return [] as string[];
+    }
+  }, [config, savedConfig]);
+  /** Edits that need an explicit Apply (they restart the stream). */
+  const globalNeedsApply = globalPending.some((k) => HEAVY.has(k));
+  /** "saving" while an autosave is running, "saved" for a few seconds after. */
+  const [saveNote, setSaveNote] = useState<"" | "saving" | "saved">("");
+
+  /** Tells the user a change was saved by itself, with a way back. */
+  const announceSaved = (undo: () => Promise<void>) => {
+    setSaveNote("saved");
+    window.setTimeout(() => setSaveNote((n) => (n === "saved" ? "" : n)), 3000);
+    toast.action("Saved", {
+      id: "autosave",
+      duration: 5000,
+      action: { label: "Undo", onClick: () => void undo() },
+    });
+  };
+
   /** Writes the global settings to the file, then re-syncs and confirms with a toast. */
   const saveConfig = () =>
     guarded(async () => {
@@ -339,6 +382,32 @@ export default function App() {
     }
   };
 
+  /* Autosave of the global settings: a second after the last light edit; heavy edits wait for Apply. */
+  useEffect(() => {
+    if (view !== "settings" || !config || !dirty || globalNeedsApply || busy) return;
+    const timer = window.setTimeout(async () => {
+      const before = baseRef.current;
+      const now = configRef.current;
+      if (!now) return;
+      setSaveNote("saving");
+      try {
+        await invoke("save_config", { config: now });
+        await syncConfig();
+        announceSaved(async () => {
+          if (!before) return;
+          await invoke("save_config", { config: before });
+          await fetchConfig();
+          setSaveNote("");
+        });
+      } catch (e) {
+        setSaveNote("");
+        toast.error(`Autosave failed: ${errText(e)}`);
+      }
+    }, 900);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, dirty, globalNeedsApply, view, busy]);
+
   const serial = typeof view === "object" ? view.device : null;
   const device = status?.devices.find((d) => d.serial === serial);
   const profile: TabletProfile | null =
@@ -356,6 +425,42 @@ export default function App() {
       c ? { ...c, tablets: { ...c.tablets, [serial]: { ...(c.tablets[serial] ?? { label: device?.model ?? serial }), ...patch } } } : c,
     );
   };
+
+  /** Keys of the open device's profile edited here and not yet saved. */
+  const profilePending = useMemo(() => {
+    if (!serial || !profile) return [] as string[];
+    try {
+      return changedKeys(JSON.parse(savedProfiles[serial] ?? stable({ label: device?.model ?? serial })), profile);
+    } catch {
+      return [] as string[];
+    }
+  }, [serial, profile, savedProfiles, device?.model]);
+  const profileNeedsApply = profilePending.some((k) => HEAVY.has(k));
+
+  /* Autosave of the open device's profile, with the same rule as the global settings. */
+  useEffect(() => {
+    if (!serial || !profile || !profileDirty || profileNeedsApply || busy) return;
+    const timer = window.setTimeout(async () => {
+      const before = savedProfiles[serial];
+      setSaveNote("saving");
+      try {
+        await invoke("save_device_profile", { serial, profile });
+        setSavedProfiles((m) => ({ ...m, [serial]: stable(profile) }));
+        await syncConfig();
+        announceSaved(async () => {
+          if (!before) return;
+          await invoke("save_device_profile", { serial, profile: JSON.parse(before) });
+          await fetchConfig();
+          setSaveNote("");
+        });
+      } catch (e) {
+        setSaveNote("");
+        toast.error(`Autosave failed: ${errText(e)}`);
+      }
+    }, 900);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serial, profile, profileDirty, profileNeedsApply, busy]);
 
   /** Writes the open device's profile to the file and marks it as saved. */
   const saveProfile = () =>
@@ -471,7 +576,8 @@ export default function App() {
                 {view === "settings" && config && (
                   <GlobalSettings
                     config={config}
-                    dirty={dirty}
+                    dirty={dirty && globalNeedsApply}
+                    saveNote={saveNote}
                     autostart={autostart}
                     onChange={patchConfig}
                     onSave={saveConfig}
@@ -495,10 +601,11 @@ export default function App() {
                     onPresetsChange={savePresets}
                     onSave={saveProfile}
                     onDelete={deleteProfile}
+                    saveNote={saveNote}
                     onTogglePause={togglePause}
                     onInstallApk={() => queueInstall(serial)}
                     onConfigureWireless={() => setWizard({ serial, reconfigure: true })}
-                    dirty={profileDirty}
+                    dirty={profileDirty && profileNeedsApply}
                   />
                 )}
               </div>

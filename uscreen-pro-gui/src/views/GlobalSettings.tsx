@@ -15,7 +15,10 @@ import type { AppConfig, CurvePreset, InputMode } from "../lib/types";
  */
 interface Props {
   config: AppConfig;
+  /** An edit that restarts the stream is waiting for Apply. */
   dirty: boolean;
+  /** Autosave state, shown beside the Apply button. */
+  saveNote?: "" | "saving" | "saved";
   autostart: boolean;
   onChange: (patch: Partial<AppConfig>) => void;
   onSave: () => void;
@@ -25,7 +28,7 @@ interface Props {
 }
 
 /** Settings page for the defaults every device inherits, plus the daemon autostart switch. */
-export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, onAutostart, onPresetsChange }: Props) {
+export function GlobalSettings({ config: c, dirty, saveNote = "", autostart, onChange, onSave, onAutostart, onPresetsChange }: Props) {
   /* The tab and the mode being viewed are only view state: clicking them never changes a setting. */
   const [tab, setTab] = useState("general");
   const [viewMode, setViewMode] = useState<InputMode>(c.input_mode);
@@ -38,9 +41,12 @@ export function GlobalSettings({ config: c, dirty, autostart, onChange, onSave, 
   return (
     <div className="w-full space-y-2">
       <PageHeader title="Settings">
-        <Button size="sm" disabled={!dirty} onClick={onSave}><Check />
-          Save
-        </Button>
+        {saveNote && <span className="text-xs text-muted-foreground">{saveNote === "saving" ? "Saving…" : "Saved"}</span>}
+        {dirty && (
+          <Button size="sm" onClick={onSave}><Check />
+            Apply
+          </Button>
+        )}
       </PageHeader>
 
       <Tabs

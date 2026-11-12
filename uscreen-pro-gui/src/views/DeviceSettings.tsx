@@ -31,7 +31,10 @@ interface Props {
   /** Re-open the Wireless Setup step for this device. */
   onConfigureWireless: () => void;
   /** True when the profile differs from what is saved. */
+  /** An edit that restarts the stream is waiting for Apply. */
   dirty: boolean;
+  /** Autosave state, shown beside the Apply button. */
+  saveNote?: "" | "saving" | "saved";
 }
 
 /** Settings page of one paired device: stream overrides, transport, pause/update/wireless actions and Save for that device only. */
@@ -49,6 +52,7 @@ export function DeviceSettings({
   onInstallApk,
   onConfigureWireless,
   dirty,
+  saveNote = "",
 }: Props) {
   const [confirmForget, setConfirmForget] = useState(false);
   /* Which tab is showing; view state only. */
@@ -120,9 +124,12 @@ export function DeviceSettings({
             {device?.paused ? "Resume" : "Pause"}
           </Button>
         )}
-        <Button size="sm" onClick={onSave} disabled={!dirty}><Check />
-          Save
-        </Button>
+        {saveNote && <span className="text-xs text-muted-foreground">{saveNote === "saving" ? "Saving…" : "Saved"}</span>}
+        {dirty && (
+          <Button size="sm" onClick={onSave}><Check />
+            Apply
+          </Button>
+        )}
       </PageHeader>
 
       {mismatch && (

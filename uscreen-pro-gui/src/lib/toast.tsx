@@ -8,12 +8,16 @@ import { Toaster } from "@/components/ui/sonner";
 /** Options of a toast; `id` replaces an existing toast with the same id. */
 type Opts = { id?: string };
 
+/** A toast with one action button (used for Undo after an autosave). */
+type ActionOpts = { id?: string; duration?: number; action: { label: string; onClick: () => void } };
+
 /** Thin wrapper over sonner keeping the call shape the app uses; errors stay up longer than other toasts. */
 export const toast = {
   success: (message: string, opts?: Opts) => void sonner.success(message, opts),
   info: (message: string) => void sonner(message),
   error: (message: string, opts?: Opts) => void sonner.error(message, { ...opts, duration: 8000 }),
   loading: (message: string, opts?: Opts) => void sonner.loading(message, opts),
+  action: (message: string, opts: ActionOpts) => void sonner.success(message, opts),
 };
 
 /** Mount point of the toast stack; place once near the root. */
