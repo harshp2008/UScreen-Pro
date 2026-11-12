@@ -8,7 +8,8 @@
 
 Written in step 4 of the cleanup, before any code moved. Step 5 implemented the part of it that has more than one backend
 (the display capability); the rest is a seam with a doc comment. What was actually done is in
-[platform-modularity.md](platform-modularity.md).
+[platform-modularity.md](platform-modularity.md). The tag tables below were regenerated after step 5, so line numbers
+and the "gaps" at the end describe the code as it is now.
 
 ## How the code is tagged
 
@@ -23,7 +24,7 @@ git grep -n "PLATFORM(hyprland)"    # one platform
 
 Names in use: `gnome`, `x11`, `wayland`, `kde`, `hyprland`, `cosmic`, `linux`, `systemd`, `dbus`, `evdi`, `uinput`, `android`,
 and the distribution families `debian`, `fedora`, `arch`, `suse`. A tag marks the function or file where the dependency lives;
-it does not claim the whole file is platform code. 137 tags exist at the time of writing.
+it does not claim the whole file is platform code. 134 tags exist at the time of writing.
 
 ## The model to copy
 
@@ -78,9 +79,10 @@ platform implements, how the backend is chosen, and what happens when there is n
 
 | Where | Platform | What the code does |
 |---|---|---|
-| `host/src/desktop/mod.rs:130` | linux | chooses the backend from XDG_SESSION_TYPE (X11 first) and XDG_CURRENT_DESKTOP (GNOME); every other desktop gets the generic backend |
-| `host/src/desktop/mod.rs:149` | x11 | reads XDG_SESSION_TYPE; X11 has one core pointer, so ghost-pointer tracking is switched off |
-| `host/src/desktop/mod.rs:155` | linux | files exchanged with the Shell extension and the CLI live under $HOME/.local/share/uscreen |
+| `host/src/desktop/display.rs:36` | linux | the one place that decides the desktop for display work; the order is Hyprland, COSMIC, GNOME, X11, then the KDE fall-through |
+| `host/src/desktop/mod.rs:132` | linux | chooses the backend from XDG_SESSION_TYPE (X11 first) and XDG_CURRENT_DESKTOP (GNOME); every other desktop gets the generic backend |
+| `host/src/desktop/mod.rs:151` | x11 | reads XDG_SESSION_TYPE; X11 has one core pointer, so ghost-pointer tracking is switched off |
+| `host/src/desktop/mod.rs:157` | linux | files exchanged with the Shell extension and the CLI live under $HOME/.local/share/uscreen |
 | `host/src/desktop/scale.rs:41` | linux | detection order is Hyprland, GNOME, X11, then "kscreen-doctor is on PATH" as the KDE signal; any other desktop gets no scale support |
 
 * **Neutral signature.** `fn detect() -> Box<dyn DesktopBackend>` (exists) and `fn backend() -> Option<Backend>` (exists in
@@ -88,7 +90,7 @@ platform implements, how the backend is chosen, and what happens when there is n
   rest) and several more `active()` functions, one per display module.
 * **A new platform implements.** One `active() -> bool` (cheap, no side effects) in its `desktop/<name>/` directory.
 * **Selection.** Runtime, from `XDG_SESSION_TYPE`, `XDG_CURRENT_DESKTOP` and whether the needed tool is on `PATH`. Step 5
-  replaces the `active()` ladders with one `desktop::display::backend()` that returns an enum, so the order is written once.
+  replaced the `active()` ladders with one `desktop::display::backend()` that returns an enum, so the order is written once.
 * **Fallback.** The `generic` backend and no display backend: the daemon runs, streams, and injects input, and logs once that
   the desktop is not known; `uscreen doctor` says which features are missing.
 
@@ -97,30 +99,27 @@ platform implements, how the backend is chosen, and what happens when there is n
 | Where | Platform | What the code does |
 |---|---|---|
 | `host/src/capture/display.rs:10` | evdi | explains a missing evdi kernel module or missing devices by reading /sys/module/evdi and /sys/devices/evdi |
-| `host/src/capture/display.rs:71` | linux | if-ladder over desktop backends: Hyprland, COSMIC, GNOME (does it by itself), X11, then inline kscreen-doctor code for KDE |
-| `host/src/capture/display.rs:72` | linux | if-ladder over desktop backends: Hyprland, COSMIC, GNOME (does it by itself), X11, then inline kscreen-doctor code for KDE |
-| `host/src/capture/display.rs:73` | linux | if-ladder over desktop backends: Hyprland, COSMIC, GNOME (does it by itself), X11, then inline kscreen-doctor code for KDE |
-| `host/src/capture/display.rs:283` | linux | same ladder as enable_evdi_display; the KDE branch is inline kscreen-doctor code |
+| `host/src/capture/display.rs:71` | linux | thin wrapper; desktop::display::enable_output picks Hyprland, COSMIC, GNOME (does it by itself), X11 or the KDE fall-through |
+| `host/src/capture/display.rs:85` | linux | thin wrapper over desktop::display::disable_output |
 | `host/src/display/vdisplay.rs:3` | evdi | EVDI virtual cards are found through /sys/class/drm and /sys/devices/evdi (Linux sysfs) |
 | `host/src/display/vdisplay.rs:51` | evdi | connector names of EVDI cards come from /sys/class/drm; a real DVI monitor has the same name pattern |
 | `host/src/desktop/cosmic/display.rs:12` | cosmic | virtual display on COSMIC through the cosmic-randr command |
 | `host/src/desktop/cosmic/mod.rs:2` | cosmic | COSMIC has output enable/disable only; there is no input mapping or scale backend |
 | `host/src/desktop/gnome/display.rs:17` | gnome | virtual display on GNOME: Mutter DisplayConfig over busctl, and device-to-monitor mapping through gsettings (also used for Cinnamon) |
-| `host/src/desktop/gnome/display.rs:275` | gnome | Cinnamon keeps the same per-device schema under org.cinnamon.desktop.peripherals |
+| `host/src/desktop/gnome/display.rs:268` | gnome | Cinnamon keeps the same per-device schema under org.cinnamon.desktop.peripherals |
 | `host/src/desktop/hyprland/display.rs:11` | hyprland | virtual display on Hyprland: monitors, placement and input mapping through hyprctl |
 | `host/src/desktop/hyprland/mod.rs:2` | hyprland | Hyprland has display handling only; focus and the pen menu use the generic backend |
 | `host/src/desktop/kde/display.rs:14` | kde | virtual display on KDE Plasma: kscreen-doctor for outputs, KWin D-Bus (busctl) for input device properties |
+| `host/src/desktop/kde/display.rs:253` | kde | finds the laptop panel with kscreen-doctor |
+| `host/src/desktop/kde/display.rs:293` | kde | reads a property of a KWin input device over D-Bus |
+| `host/src/desktop/kde/display.rs:304` | kde | output rectangle from kscreen-doctor JSON |
+| `host/src/desktop/kde/display.rs:348` | kde | runs kscreen-doctor -j and parses its JSON |
+| `host/src/desktop/kde/display.rs:427` | kde | enable the EVDI output and place it beside the other screens with one atomic kscreen-doctor call |
+| `host/src/desktop/kde/display.rs:607` | kde | turn the EVDI output back off with kscreen-doctor |
 | `host/src/desktop/kde/mod.rs:4` | kde | KDE Plasma has display handling and the keyboard policy only; focus and the pen menu use the generic backend |
 | `host/src/desktop/x11/display.rs:15` | x11 | virtual display on X11: RandR through the xrandr command, input mapping through xinput |
-| `host/src/input/mapping.rs:12` | kde | finds the laptop panel with kscreen-doctor |
-| `host/src/input/mapping.rs:52` | kde | reads a property of a KWin input device over D-Bus |
-| `host/src/input/mapping.rs:63` | linux | if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case) |
-| `host/src/input/mapping.rs:64` | linux | if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case) |
-| `host/src/input/mapping.rs:65` | linux | if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case) |
-| `host/src/input/mapping.rs:66` | linux | if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case) |
-| `host/src/input/mapping.rs:288` | linux | area lookup differs per desktop: Hyprland, GNOME, X11 (none) and kscreen-doctor for the rest |
-| `host/src/input/mapping.rs:338` | kde | output rectangle from kscreen-doctor JSON |
-| `host/src/input/mapping.rs:382` | kde | runs kscreen-doctor -j and parses its JSON |
+| `host/src/input/mapping.rs:16` | linux | dispatches on desktop::display::backend(): Hyprland, GNOME, X11, and the KWin code below for KDE and for COSMIC (which has no mapping) |
+| `host/src/input/mapping.rs:234` | linux | area lookup differs per desktop: Hyprland, GNOME, X11 (none) and kscreen-doctor (kde::display::output_area) for the rest |
 
 * **Neutral signature** (one module per desktop, same names; step 5 puts the dispatch in `desktop/display.rs`):
 
@@ -134,9 +133,10 @@ platform implements, how the backend is chosen, and what happens when there is n
 * **A new platform implements.** The five functions above in `desktop/<name>/display.rs`, using whatever the compositor offers
   (a D-Bus interface, a command-line tool, a protocol). `names` are the EVDI connector names from
   `display::vdisplay::evdi_connectors`, never a guess from the name pattern.
-* **Selection.** Runtime. The order today is Hyprland, COSMIC, GNOME, X11, then KDE as the fall-through in three files
-  (`capture/display.rs`, `input/mapping.rs`, `cli/doctor/display.rs`). KDE has no module of its own for enabling and mapping:
-  its code is inline in the first two. Step 5 moves it into `desktop/kde/display.rs` so KDE is a peer.
+* **Selection.** Runtime. Before step 5 the order was Hyprland, COSMIC, GNOME, X11, then KDE as the fall-through, written out in
+  three files (`capture/display.rs`, `input/mapping.rs`, `cli/doctor/display.rs`), and KDE's enable and disable code was inline
+  in `capture/display.rs`. Step 5 moved that code into `desktop/kde/display.rs` and put the order in one function,
+  `desktop::display::backend()`.
 * **Fallback.** No backend: the output is left as the compositor made it, the devices are not mapped (touch and pen then
   address the whole desktop) and the daemon logs a warning that says so. Today a missing KDE tool produces that warning; a
   desktop with no case at all (Sway, Windows, macOS) falls into the KDE path and fails the same way.
@@ -320,10 +320,10 @@ platform implements, how the backend is chosen, and what happens when there is n
 
 | Where | Platform | What the code does |
 |---|---|---|
-| `host/src/cli/doctor/display.rs:5` | linux | if-ladder over desktop backends for the "is the virtual display on" report |
+| `host/src/cli/doctor/display.rs:5` | linux | Hyprland is checked with hyprctl; every other desktop goes through kscreen-doctor, which only exists on Plasma |
 | `host/src/cli/doctor/display.rs:109` | kde | parses `kwin_wayland --version` style banner text |
 | `host/src/cli/doctor/display.rs:121` | kde | on-screen keyboard check; says nothing useful off KDE |
-| `host/src/cli/doctor/display.rs:240` | systemd | asks systemctl --user whether uscreen.service is enabled |
+| `host/src/cli/doctor/display.rs:244` | systemd | asks systemctl --user whether uscreen.service is enabled |
 | `host/src/cli/doctor/system.rs:5` | kde | kscreen-doctor is an optional tool, needed only on KDE |
 | `host/src/cli/doctor/system.rs:78` | evdi | reads /sys/devices/evdi/count |
 | `host/src/cli/doctor/system.rs:127` | evdi | looks for evdi_helper processes |
@@ -337,13 +337,12 @@ platform implements, how the backend is chosen, and what happens when there is n
 | Where | Platform | What the code does |
 |---|---|---|
 | `android/app/src/main/AndroidManifest.xml:4` | android | permissions and component declarations |
-| `android/app/src/main/java/com/uscreen/Haptics.kt:12` | android | Vibrator and VibrationEffect, which exist from different API levels |
 | `android/app/src/main/java/com/uscreen/IdentifyReceiver.kt:17` | android | posts a heads-up notification (needs POST_NOTIFICATIONS on Android 13+) |
-| `android/app/src/main/java/com/uscreen/MainActivity.kt:71` | android | show-when-locked and turn-screen-on window flags (API differs by version) |
-| `android/app/src/main/java/com/uscreen/MainActivity.kt:97` | android | PowerManager wake lock |
-| `android/app/src/main/java/com/uscreen/MainActivity.kt:548` | android | display mode / preferred refresh rate APIs, different before and after Android 11 |
-| `android/app/src/main/java/com/uscreen/MainActivity.kt:628` | android | OrientationEventListener |
-| `android/app/src/main/java/com/uscreen/MainActivity.kt:670` | android | system bar hiding; WindowInsetsController on newer versions |
+| `android/app/src/main/java/com/uscreen/MainActivity.kt:76` | android | show-when-locked and turn-screen-on window flags (API differs by version) |
+| `android/app/src/main/java/com/uscreen/MainActivity.kt:102` | android | PowerManager wake lock |
+| `android/app/src/main/java/com/uscreen/MainActivity.kt:553` | android | display mode / preferred refresh rate APIs, different before and after Android 11 |
+| `android/app/src/main/java/com/uscreen/MainActivity.kt:633` | android | OrientationEventListener |
+| `android/app/src/main/java/com/uscreen/MainActivity.kt:675` | android | system bar hiding; WindowInsetsController on newer versions |
 | `android/app/src/main/java/com/uscreen/OrientationPolicy.kt:10` | android | Surface rotation constants and panels whose natural orientation is landscape |
 | `android/app/src/main/java/com/uscreen/PlatformSupport.kt:18` | android | assumes the Wi-Fi interface is named wlan*, which holds on most but not all devices |
 | `android/app/src/main/java/com/uscreen/PlatformSupport.kt:38` | android | Android 8.1 (O_MR1) or later |
@@ -353,9 +352,10 @@ platform implements, how the backend is chosen, and what happens when there is n
 | `android/app/src/main/java/com/uscreen/PowerSupport.kt:133` | android | DevicePolicyManager.lockNow |
 | `android/app/src/main/java/com/uscreen/RemoveAdminReceiver.kt:7` | android | Device Admin removal |
 | `android/app/src/main/java/com/uscreen/StreamingService.kt:19` | android | foreground service of type connectedDevice (Android 14 and later require the type) |
-| `android/app/src/main/java/com/uscreen/TouchCapture.kt:35` | android | a hidden constant of MotionEvent |
-| `android/app/src/main/java/com/uscreen/VideoReceiver.kt:160` | android | picks a software decoder by MediaCodecList names |
-| `android/app/src/main/java/com/uscreen/VideoReceiver.kt:303` | android | MediaCodec; KEY_LOW_LATENCY needs Android 11 (API 30), and vendor-specific keys cover some Samsung decoders |
+| `android/app/src/main/java/com/uscreen/input/Haptics.kt:12` | android | Vibrator and VibrationEffect, which exist from different API levels |
+| `android/app/src/main/java/com/uscreen/input/TouchCapture.kt:40` | android | a hidden constant of MotionEvent |
+| `android/app/src/main/java/com/uscreen/video/VideoReceiver.kt:163` | android | picks a software decoder by MediaCodecList names |
+| `android/app/src/main/java/com/uscreen/video/VideoReceiver.kt:306` | android | MediaCodec; KEY_LOW_LATENCY needs Android 11 (API 30), and vendor-specific keys cover some Samsung decoders |
 | `host/src/net/adb/app.rs:76` | android | parses dumpsys output and a HOME-intent query to tell whether the tablet shows its launcher or lock screen |
 | `host/src/net/adb/wifi.rs:3` | android | wireless debugging (adb pair / adb connect) exists on Android 11 and later |
 | `host/src/net/installer.rs:161` | linux | looks for app-debug.apk under $HOME/.local/share/uscreen |
@@ -371,8 +371,13 @@ platform implements, how the backend is chosen, and what happens when there is n
 
 ## Gaps to know about
 
-1. KDE has no module for enabling the output and mapping devices; its code is inline in `capture/display.rs` and `input/mapping.rs`.
-2. COSMIC has `enable_output`/`disable_output` only; no mapping, area or scale, and no case in the ladders: it falls into the KDE path.
-3. `scale::backend()`, `desktop::detect()` and the per-module `active()` functions each decide the desktop separately, in two different orders.
-4. `desktop::session_is_x11()` and `native_gestures_supported()` read the environment on their own.
-5. systemd, XDG paths and uinput are assumed everywhere; they are listed in groups 5 and 9 but not abstracted, on purpose, while only one implementation exists.
+1. COSMIC has `enable_output`/`disable_output` only; no mapping, area or scale. In input mapping it takes the KDE path, which
+   finds no `kscreen-doctor` and warns.
+2. `scale::backend()` still decides the desktop on its own (it recognises KDE by `kscreen-doctor` being on `PATH`, where
+   `display::backend()` treats KDE as the fall-through), and `desktop::detect()` decides for focus and the menu. Three detectors,
+   not one; merging them would change what an unknown desktop with `kscreen-doctor` installed does.
+3. `desktop::session_is_x11()` and `native_gestures_supported()` read the environment on their own.
+4. systemd, XDG paths and uinput are assumed everywhere; they are listed in groups 5 and 9 but not abstracted, on purpose, while
+   only one implementation exists.
+5. The KDE input-mapping code (`map_devices_to_output`'s KWin tail) still lives in `input/mapping.rs` because it needs
+   `DeviceIdentity`; the KWin and kscreen helpers it calls are in `desktop/kde/display.rs`.
