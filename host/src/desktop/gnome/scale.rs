@@ -183,7 +183,7 @@ pub fn busctl_args(serial: u32, method: u32, layout: &[Logical]) -> Vec<String> 
         "/org/gnome/Mutter/DisplayConfig",
         "org.gnome.Mutter.DisplayConfig",
         "ApplyMonitorsConfig",
-        "ua(iiduba(ssa{sv}))a{sv}",
+        "uua(iiduba(ssa{sv}))a{sv}",
     ]
     .iter()
     .map(|s| s.to_string())
@@ -343,6 +343,7 @@ mod tests {
     fn busctl_arguments_have_the_signature_shape() {
         let s = parse_state(STATE).unwrap();
         let a = busctl_args(26, 2, &s.logical);
+        assert_eq!(a[6], "uua(iiduba(ssa{sv}))a{sv}", "serial and method are both uint32");
         let tail = &a[7..];
         assert_eq!(&tail[..3], ["26", "2", "3"]);
         // first logical monitor: x y scale transform primary count, then connector mode 0 props
