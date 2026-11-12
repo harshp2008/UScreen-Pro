@@ -82,6 +82,7 @@ impl CaptureManager {
         crate::desktop::display::enable_output(card, position).await;
     }
 
+    // PLATFORM(linux): thin wrapper over desktop::display::disable_output
     /// Turn the virtual output back off so its windows return to the real
     /// screens. Without this the desktop keeps a monitor nobody can see after
     /// the tablet is unplugged, and windows left there are effectively lost.

@@ -2,7 +2,7 @@
 
 use super::*;
 
-// PLATFORM(linux): if-ladder over desktop backends for the "is the virtual display on" report
+// PLATFORM(linux): Hyprland is checked with hyprctl; every other desktop goes through kscreen-doctor, which only exists on Plasma
 /// Doctor check of the EVDI virtual display: its connector, mode and placement.
 pub(super) async fn check_virtual_display(r: &mut Report, cfg: &FileConfig) {
     let connectors = vdisplay::evdi_connectors();

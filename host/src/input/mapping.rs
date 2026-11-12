@@ -7,7 +7,7 @@
 use super::*;
 use crate::desktop::display::DisplayBackend;
 
-// PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
+// PLATFORM(linux): dispatches on desktop::display::backend(): Hyprland, GNOME, X11, and the KWin code below for KDE and for COSMIC (which has no mapping)
 /// Pin the virtual input devices to the virtual display.
 ///
 /// An absolute-positioning device is meaningless without knowing which screen
@@ -225,7 +225,7 @@ pub(super) async fn map_devices_on_x11(
     Some(output)
 }
 
-// PLATFORM(linux): area lookup differs per desktop: Hyprland, GNOME, X11 (none) and kscreen-doctor for the rest
+// PLATFORM(linux): area lookup differs per desktop: Hyprland, GNOME, X11 (none) and kscreen-doctor (kde::display::output_area) for the rest
 /// Map, then tell the pointer device where that output sits on the desktop.
 pub(super) async fn map_and_note_area(
     instance: u32,
