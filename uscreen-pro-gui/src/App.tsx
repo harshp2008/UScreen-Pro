@@ -1,7 +1,7 @@
 /*
  * Root of the UScreen Pro window.
- * Owns the shared state (daemon status, config and its saved fingerprints), the three-way merge of tablet-side changes into the open window, and routing between the views.
- * Does not own how a view looks (src/views, src/components) or how settings are stored (src-tauri).
+ * Owns the shared state (daemon status, config and its saved fingerprints) and routing between the views; it applies the merge of tablet-side changes that lib/configMerge.ts computes.
+ * Does not own how a view looks (src/views, src/components), the merge itself (lib/configMerge.ts) or how settings are stored (src-tauri).
  */
 import { useTheme } from "./lib/theme";
 import { invoke } from "@tauri-apps/api/core";
@@ -9,118 +9,21 @@ import { listen } from "@tauri-apps/api/event";
 import { RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { AddDeviceWizard } from "./components/AddDeviceWizard";
-import { Sidebar } from "./components/Sidebar";
-import { TitleBar } from "./components/TitleBar";
+import { AddDeviceWizard } from "./components/wizard/AddDeviceWizard";
+import { Sidebar } from "./components/shell/Sidebar";
+import { TitleBar } from "./components/shell/TitleBar";
 import { PendingContext, TooltipProvider } from "./components/ui/layout";
+import { globalsKey, changedKeys, HEAVY, mergeConfig, stable } from "./lib/configMerge";
 import { APPLY_LABELS } from "./lib/pending";
+import { readScroll, writeScroll } from "./lib/scroll";
 import { Notifications, toast } from "./lib/toast";
 import type { AppConfig, CurvePreset, DaemonStatus, ForgetReport, PipelineEvent, TabletProfile, View } from "./lib/types";
 import { DeviceSettings } from "./views/DeviceSettings";
 import { Advanced } from "./views/Advanced";
 import { GlobalSettings } from "./views/GlobalSettings";
 import { Health } from "./views/Health";
+import { errText } from "@/lib/utils";
 import "./index.css";
-
-const SCROLL_PREFIX = "uscreen-scroll:";
-
-/**
- * The remembered scroll offset in pixels of the view [key] for this session, or 0 when none is stored or storage is unavailable.
- */
-function readScroll(key: string): number {
-  try {
-    return Number(sessionStorage.getItem(SCROLL_PREFIX + key)) || 0;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * Remembers the scroll offset [top] of the view [key] for the session; silently skipped when storage is unavailable.
- */
-function writeScroll(key: string, top: number) {
-  try {
-    sessionStorage.setItem(SCROLL_PREFIX + key, String(Math.round(top)));
-  } catch {
-    /* storage unavailable: scroll just won't be remembered */
-  }
-}
-
-/** JSON with sorted keys, so re-adding a key later does not look like an edit. */
-const stable = (v: unknown) =>
-  JSON.stringify(v, (_k, x) =>
-    x && typeof x === "object" && !Array.isArray(x)
-      ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b)))
-      : x,
-  );
-
-/**
- * Three-way merge of the settings file as it is now (`remote`) into the window's copy (`local`),
- * given what the window last loaded (`base`): a value the user has not touched here takes the new
- * file value (so changes made on the tablet appear), a value they edited here stays theirs.
- */
-function mergeConfig(base: AppConfig, local: AppConfig, remote: AppConfig): AppConfig {
-  /**
-   * The merged value: the local one if it differs from the base (edited here), otherwise the one now in the file.
-   */
-  const take = (b: unknown, l: unknown, r: unknown) => (stable(l) !== stable(b) ? l : r);
-  const merged: Record<string, unknown> = {};
-  const keys = new Set([...Object.keys(remote), ...Object.keys(local)]);
-  for (const k of keys) {
-    if (k === "tablets") continue;
-    /** Reads the top-level setting [k] from an object. */
-    const rec = (o: unknown) => (o as Record<string, unknown>)[k];
-    merged[k] = take(rec(base), rec(local), rec(remote));
-  }
-  const tablets: Record<string, TabletProfile> = {};
-  for (const serial of new Set([...Object.keys(remote.tablets), ...Object.keys(local.tablets)])) {
-    const r = remote.tablets[serial];
-    const l = local.tablets[serial];
-    const b = base.tablets[serial];
-    if (!r) {
-      // Gone from the file: keep it only if there are unsaved edits to it here.
-      if (l && b && stable(l) !== stable(b)) tablets[serial] = l;
-      continue;
-    }
-    if (!l || !b) {
-      tablets[serial] = r;
-      continue;
-    }
-    const profile: Record<string, unknown> = {};
-    for (const k of new Set([...Object.keys(r), ...Object.keys(l)])) {
-      /** Reads the profile setting [k] from an object. */
-      const rec = (o: unknown) => (o as Record<string, unknown>)[k];
-      const v = take(rec(b), rec(l), rec(r));
-      if (v !== undefined) profile[k] = v;
-    }
-    tablets[serial] = profile as unknown as TabletProfile;
-  }
-  return { ...(merged as unknown as AppConfig), tablets };
-}
-
-/** A readable message from a thrown value. */
-const errText = (e: unknown) => (e instanceof Error ? e.message : String(e));
-
-/**
- * Settings whose change restarts the video stream or the daemon. Every other setting saves by itself a moment after it
- * is changed; these wait for an explicit Apply so the stream does not restart while you are still choosing.
- */
-const HEAVY = new Set([
-  "encoder", "fps", "bitrate", "quality", "stream_scale", "width", "height", "position", "ten_bit", "vaapi_device",
-  "pointer_handoff", "auto_resolution", "video_port", "input_port", "max_tablets", "max_performance_mode",
-  "hevc_low_latency_tuning", "software_cursor", "keep_alive", "input_mode", "pen_only", "require_token", "wifi_address",
-  "preferred_transport", "wireless_configured", "allow_legacy_fallback", "auto_enable_wifi_adb", "locked_apps",
-]);
-
-/** The top-level keys whose values differ between two objects. */
-function changedKeys(a: object, b: object): string[] {
-  const x = a as Record<string, unknown>;
-  const y = b as Record<string, unknown>;
-  return [...new Set([...Object.keys(x), ...Object.keys(y)])].filter((k) => stable(x[k]) !== stable(y[k]));
-}
-
-/** Fingerprint of the global settings only; per-device edits have their own Save button. */
-const globalsKey = (c: AppConfig) => JSON.stringify({ ...c, tablets: {} });
 
 /**
  * Root of the UScreen Pro window.

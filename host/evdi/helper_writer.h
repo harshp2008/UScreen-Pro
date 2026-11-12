@@ -5,6 +5,7 @@
  * whole helper is still one translation unit (static functions stay static and the hot loops still inline).
  * It is not a header and cannot be compiled on its own. It owns the triple-buffer hand-over and the FIFO; it does not decide when a frame is grabbed.
  */
+// PLATFORM(linux): writes frames into a named pipe (FIFO)
 
 /* Convert the stride-padded BGRA framebuffer into the NV12 fill buffer and
    publish it as the latest frame. Called from the event-loop thread. */

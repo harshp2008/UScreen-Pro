@@ -4,6 +4,8 @@
  */
 package com.uscreen.ui
 
+import com.uscreen.input.TouchpadShape
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.absoluteOffset
@@ -98,7 +100,7 @@ fun PenOnlyScreen(blankAfterSeconds: Int, penStyle: String) {
 @Composable
 fun TouchpadActiveScreen(
     showRightClickZone: Boolean = true,
-    shape: String = com.uscreen.TouchpadShape.FULL,
+    shape: String = com.uscreen.input.TouchpadShape.FULL,
     /** The Classic style: a pad that only moves the pointer, with buttons along the bottom. */
     classic: Boolean = false,
     /** Classic style: show a middle button too. */
@@ -146,9 +148,9 @@ private fun ClassicPad(shape: String, middle: Boolean, pressed: Int) {
     androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val wPx = constraints.maxWidth.toFloat()
         val hPx = constraints.maxHeight.toFloat()
-        val area = com.uscreen.TouchpadShape.bounds(shape, wPx, hPx)
-        val pad = com.uscreen.TouchpadShape.classicPad(area)
-        val strip = com.uscreen.TouchpadShape.classicStrip(area)
+        val area = com.uscreen.input.TouchpadShape.bounds(shape, wPx, hPx)
+        val pad = com.uscreen.input.TouchpadShape.classicPad(area)
+        val strip = com.uscreen.input.TouchpadShape.classicStrip(area)
         val density = androidx.compose.ui.platform.LocalDensity.current
         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
             val stroke = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f)
@@ -186,8 +188,8 @@ private fun TouchpadArea(shape: String, showRightClickZone: Boolean) {
     val line = Color(0x33FFFFFF)
     Box(modifier = Modifier.fillMaxSize()) {
         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
-            val b = com.uscreen.TouchpadShape.bounds(shape, size.width, size.height)
-            val restricted = shape != com.uscreen.TouchpadShape.FULL
+            val b = com.uscreen.input.TouchpadShape.bounds(shape, size.width, size.height)
+            val restricted = shape != com.uscreen.input.TouchpadShape.FULL
             val topLeft = androidx.compose.ui.geometry.Offset(b.left, b.top)
             val area = androidx.compose.ui.geometry.Size(b.width, b.height)
             if (restricted) {
@@ -196,8 +198,8 @@ private fun TouchpadArea(shape: String, showRightClickZone: Boolean) {
             }
             if (showRightClickZone) {
                 // Only a faint corner marks where a tap right-clicks: a modern pad has no button strip.
-                val zl = b.left + b.width * com.uscreen.TouchpadShape.CLICKPAD_ZONE_LEFT
-                val zt = b.bottom - b.height * com.uscreen.TouchpadShape.ZONE_FRACTION
+                val zl = b.left + b.width * com.uscreen.input.TouchpadShape.CLICKPAD_ZONE_LEFT
+                val zt = b.bottom - b.height * com.uscreen.input.TouchpadShape.ZONE_FRACTION
                 drawRoundRect(
                     Color(0x14FFFFFF),
                     androidx.compose.ui.geometry.Offset(zl, zt),
@@ -211,7 +213,7 @@ private fun TouchpadArea(shape: String, showRightClickZone: Boolean) {
             androidx.compose.foundation.layout.BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val wPx = constraints.maxWidth.toFloat()
                 val hPx = constraints.maxHeight.toFloat()
-                val b = com.uscreen.TouchpadShape.bounds(shape, wPx, hPx)
+                val b = com.uscreen.input.TouchpadShape.bounds(shape, wPx, hPx)
                 val density = androidx.compose.ui.platform.LocalDensity.current
                 Text(
                     "Right click",

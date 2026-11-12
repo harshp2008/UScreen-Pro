@@ -11,6 +11,7 @@
 #
 # Everything that differs between distribution families lives in distros/<family>.sh (one file each, all
 # functions prefixed with the family name). This file finds the family and calls its functions.
+# PLATFORM(linux): detection of distro family, desktop and session; every `<family>_*` function it calls lives in scripts/lib/distros/
 
 US_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Files starting with `_` (the template) are not families.
@@ -40,6 +41,7 @@ us_os_value() {
 }
 
 # The family of this system: the name of a file in distros/, or `unknown`. os-release ID first, then ID_LIKE.
+# PLATFORM(linux): family from /etc/os-release ID and ID_LIKE
 us_distro_family() {
     local id like fam tok
     id="$(us_os_value ID)"
@@ -53,6 +55,7 @@ us_distro_family() {
 }
 
 # 0 (true) when the root file system is image based, so packages are layered and need a reboot.
+# PLATFORM(linux): image-based distros (Bazzite, Silverblue) need layering and a reboot
 us_immutable() {
     case "${US_OSTREE:-}" in
         1) return 0 ;;
@@ -62,6 +65,7 @@ us_immutable() {
 }
 
 # gnome | kde | other | none
+# PLATFORM(linux): XDG_CURRENT_DESKTOP
 us_desktop() {
     local d
     d="$(printf '%s' "${XDG_CURRENT_DESKTOP:-}" | tr '[:upper:]' '[:lower:]')"
@@ -74,6 +78,7 @@ us_desktop() {
 }
 
 # wayland | x11 | unknown
+# PLATFORM(wayland): XDG_SESSION_TYPE, X11 or Wayland
 us_session() {
     case "$(printf '%s' "${XDG_SESSION_TYPE:-}" | tr '[:upper:]' '[:lower:]')" in
         wayland) echo wayland ;;
@@ -84,11 +89,13 @@ us_session() {
 
 # True on GNOME Shell under Wayland: the one place where the Shell extension cannot be reloaded in
 # place, so a new or changed extension needs a log out and back in.
+# PLATFORM(gnome): the Shell extension needs a log out on GNOME Wayland
 us_gnome_wayland() {
     [ "$(us_desktop)" = gnome ] && [ "$(us_session)" = wayland ]
 }
 
 # Kernel release with the flavour split off: "7.0.0-42-generic" -> "generic".
+# PLATFORM(linux): kernel flavour picks the prebuilt EVDI module package on Ubuntu
 us_kernel_flavour() {
     local k="${UNAME_R:-$(uname -r)}"
     printf '%s' "${k##*-}"

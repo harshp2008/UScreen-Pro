@@ -16,6 +16,7 @@ import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.util.Log
 
+// PLATFORM(android): foreground service of type connectedDevice (Android 14 and later require the type)
 /**
  * Foreground service that keeps the process (and thus the video and input sockets) alive while the
  * activity is in the background, holding a partial wake lock and a Wi-Fi lock for the duration.

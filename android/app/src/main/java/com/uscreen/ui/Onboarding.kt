@@ -4,6 +4,9 @@
  */
 package com.uscreen.ui
 
+import com.uscreen.input.TouchCapture
+import com.uscreen.video.VideoReceiver
+
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -53,8 +56,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.uscreen.Prefs
 import com.uscreen.ReconnectPolicy
-import com.uscreen.TouchCapture
-import com.uscreen.VideoReceiver
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue

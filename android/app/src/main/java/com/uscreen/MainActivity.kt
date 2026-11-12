@@ -4,6 +4,11 @@
  */
 package com.uscreen
 
+import com.uscreen.input.ClickSound
+import com.uscreen.input.Haptics
+import com.uscreen.input.TouchCapture
+import com.uscreen.video.VideoReceiver
+
 import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -68,6 +73,7 @@ class MainActivity : AppCompatActivity() {
     private var inForeground = false
 
 
+    // PLATFORM(android): show-when-locked and turn-screen-on window flags (API differs by version)
     /**
      * Let the activity stay visible and wake the screen over the keyguard when the user opted into
      * "keep display alive when locked"; otherwise restore the default lock-screen behaviour.
@@ -93,6 +99,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // PLATFORM(android): PowerManager wake lock
     /**
      * Takes a partial wake lock (up to 10 hours, not reference counted) so the CPU keeps running the sockets while the screen is off; failure is logged, not fatal.
      */
@@ -396,13 +403,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Whether a host config has been applied yet; the first one on connect is not announced. */
+    private var configSeen = false
+
     /**
      * Mirror the host's per-device settings into [Prefs], the live input handling and the UI. Runs on the
      * UI thread; the host sends it on connect and whenever a setting changes there (or here).
      */
-    /** Whether a host config has been applied yet; the first one on connect is not announced. */
-    private var configSeen = false
-
     private fun applyHostConfig(cfg: HostConfig) {
         val prev = hostConfig
         hostConfig = cfg
@@ -543,6 +550,7 @@ class MainActivity : AppCompatActivity() {
         videoReceiver?.retryConnection()
     }
 
+    // PLATFORM(android): display mode / preferred refresh rate APIs, different before and after Android 11
     /**
      * Ask for the panel's fastest mode.
      *
@@ -622,6 +630,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // PLATFORM(android): OrientationEventListener
     /**
      * Starts the tilt listener that switches between the two landscape orientations by sensor; does nothing when it is running or the sensor cannot detect orientation.
      */
@@ -663,6 +672,7 @@ class MainActivity : AppCompatActivity() {
         touchCapture?.sendPing()
     }
 
+    // PLATFORM(android): system bar hiding; WindowInsetsController on newer versions
     /**
      * Switch between the default window insets and the opt-in immersive layout (content under the
      * cutout, system bars hidden). Wrapped in try/catch because OEM window managers differ.

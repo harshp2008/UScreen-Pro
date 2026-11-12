@@ -5,6 +5,7 @@
  * whole helper is still one translation unit (static functions stay static and the hot loops still inline).
  * It is not a header and cannot be compiled on its own. It sets flags only; acting on them is up to the event loop and the writer thread.
  */
+// PLATFORM(linux): POSIX signal handling
 
 /**
  * POSIX Signal Handlers & EVDI Event Loop State Transitions

@@ -73,6 +73,7 @@ impl ScreenState {
     }
 }
 
+// PLATFORM(android): parses dumpsys output and a HOME-intent query to tell whether the tablet shows its launcher or lock screen
 /// Ask the tablet what it is showing; `None` if adb could not tell.
 async fn screen_state(serial: &str) -> Option<ScreenState> {
     let script = "dumpsys window | grep -E 'mCurrentFocus|isKeyguardShowing'; \

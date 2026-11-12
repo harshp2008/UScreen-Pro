@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider as UiTooltipProvider, TooltipT
 import { QUALITY_MAX, QUALITY_MIN, qualityLabel } from "@/lib/options";
 import { Slider } from "./controls";
 
+/** Re-export so views import every layout piece from this one module. */
 export const TooltipProvider = UiTooltipProvider;
 
 /** Labels of the settings that were changed here and wait for Apply; their rows show a glowing dot. Provided by the app, empty elsewhere. */

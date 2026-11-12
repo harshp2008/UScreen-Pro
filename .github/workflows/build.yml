@@ -48,6 +48,14 @@ jobs:
       - name: Run tests
         run: cargo test --release -p uscreen
 
+      # Both are cheap and were not checked before; formatting had drifted in the desktop app's Rust crate.
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      # The host, the tablet app and the desktop app must name the same per-device settings.
+      - name: Check settings parity
+        run: python3 scripts/tests/settings_parity.py
+
       - name: Build EVDI helper
         run: make build-helper || echo "Skipped (libevdi headers not available)"
 

@@ -1,3 +1,7 @@
+/**
+ * vite.config.ts: Vite settings for the Tauri window: React plugin, the `@` alias for `src/`, and the
+ * fixed dev-server port and HMR host Tauri expects. Not used at runtime in the installed app.
+ */
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";

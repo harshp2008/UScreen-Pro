@@ -8,6 +8,7 @@
 //! Everything here is a runtime `hyprctl keyword`, never an edit to the
 //! user's config: a monitor rule of their own for the output always wins,
 //! because the output is only touched when Hyprland left it switched off.
+// PLATFORM(hyprland): virtual display on Hyprland: monitors, placement and input mapping through hyprctl
 
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;

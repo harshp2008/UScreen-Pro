@@ -9,6 +9,16 @@ Full notes for each version are on the
 
 ## Unreleased
 
+Internal (no change in behaviour; see `docs/cleanup/CHANGES.md`):
+
+- The code that enables, places and removes the virtual output, and pins the input devices to it, is chosen by one function per
+  session (`desktop::display::backend()`) instead of repeated `if` chains; KDE's part moved into `desktop/kde/`.
+- Android classes moved into `com.uscreen.input` and `com.uscreen.video`; the desktop app's components into `wizard/`,
+  `power/` and `shell/`.
+- Every platform-specific place carries a `PLATFORM(<name>)` comment; `docs/architecture/` explains the design and how to add a
+  desktop.
+- CI checks formatting and the settings parity of the host, the tablet app and the desktop app.
+
 Settings overhaul (desktop app and tablet app, kept in step; see
 `experiments_and_findings/105_settings_overhaul.md`):
 

@@ -12,6 +12,7 @@
 //! * `kde` - KDE Plasma: virtual monitor through KWin and the on-screen keyboard policy. No backend
 //!   yet, so the pen menu and focus routing fall back to `generic`.
 //! * `hyprland`, `cosmic` - virtual monitor placement only, for the same reason.
+//! * `display` - not a desktop but the dispatcher for the virtual output: which of the above enables, places and removes it.
 //! * `generic` - an unknown desktop: reads the same focus file a helper script may write, otherwise
 //!   knows nothing. Every feature that needs the desktop is simply unavailable there.
 //!
@@ -20,6 +21,7 @@
 
 mod context;
 pub mod cosmic;
+pub mod display;
 mod focus_file;
 mod generic;
 pub mod gnome;
@@ -127,6 +129,7 @@ pub trait DesktopBackend: Send {
     }
 }
 
+// PLATFORM(linux): chooses the backend from XDG_SESSION_TYPE (X11 first) and XDG_CURRENT_DESKTOP (GNOME); every other desktop gets the generic backend
 /// Pick the backend for this session: X11 if it is one and connects, GNOME if the desktop says
 /// so, otherwise the generic one.
 pub fn detect() -> Box<dyn DesktopBackend> {
@@ -145,9 +148,20 @@ pub fn detect() -> Box<dyn DesktopBackend> {
     }
 }
 
+// PLATFORM(x11): reads XDG_SESSION_TYPE; X11 has one core pointer, so ghost-pointer tracking is switched off
 /// Whether the session is X11, where ghost tracking is unnecessary (one core pointer).
 pub fn session_is_x11() -> bool {
     std::env::var("XDG_SESSION_TYPE").is_ok_and(|s| s.eq_ignore_ascii_case("x11"))
+}
+
+// PLATFORM(linux): files exchanged with the Shell extension and the CLI live under $HOME/.local/share/uscreen
+/// Whether a file called `name` exists in any directory of `$PATH`. The one place that asks, so every backend's
+/// `active()` and the doctor agree on what "installed" means.
+pub fn command_exists(name: &str) -> bool {
+    std::env::var("PATH")
+        .unwrap_or_default()
+        .split(':')
+        .any(|d| std::path::Path::new(d).join(name).exists())
 }
 
 /// `~/.local/share/uscreen/<name>`: where the Shell extension, the CLI and the daemon exchange small

@@ -1,5 +1,6 @@
 //! Discovery of the EVDI virtual display through sysfs.
 
+// PLATFORM(evdi): EVDI virtual cards are found through /sys/class/drm and /sys/devices/evdi (Linux sysfs)
 /// DRM card indices backed by the EVDI driver, read from sysfs.
 ///
 /// Matching on the connector name alone ("contains DVI") is not safe: a real
@@ -47,6 +48,7 @@ pub struct EvdiConnector {
     pub edid: Vec<u8>,
 }
 
+// PLATFORM(evdi): connector names of EVDI cards come from /sys/class/drm; a real DVI monitor has the same name pattern
 /// Enumerate the connectors of every EVDI card. Used to address the virtual
 /// display unambiguously instead of guessing from the output name.
 pub fn evdi_connectors() -> Vec<EvdiConnector> {

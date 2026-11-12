@@ -38,6 +38,7 @@ pub struct Target {
     pub card: Option<u32>,
 }
 
+// PLATFORM(linux): detection order is Hyprland, GNOME, X11, then "kscreen-doctor is on PATH" as the KDE signal; any other desktop gets no scale support
 /// The backend for this session, or `None` when the desktop is unknown. The order is the one the input mapping uses.
 pub fn backend() -> Option<Backend> {
     if crate::desktop::hyprland::display::active() {
@@ -46,11 +47,7 @@ pub fn backend() -> Option<Backend> {
         Some(Backend::Gnome)
     } else if crate::desktop::x11::display::active() {
         Some(Backend::X11)
-    } else if std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|d| std::path::Path::new(d).join("kscreen-doctor").exists())
-    {
+    } else if crate::desktop::command_exists("kscreen-doctor") {
         Some(Backend::Kde)
     } else {
         None
@@ -67,11 +64,7 @@ pub fn supported() -> bool {
 
 /// The connector names of the virtual displays of `target`'s card (all of them when the card is not known yet).
 fn connectors(target: &Target) -> Vec<String> {
-    crate::display::vdisplay::evdi_connectors()
-        .into_iter()
-        .filter(|c| target.card.is_none_or(|want| c.card == want))
-        .map(|c| c.name)
-        .collect()
+    crate::desktop::display::connector_names(target.card)
 }
 
 /// Set the interface scale of the display of `target` to `percent` (0 = automatic). True when the display is as asked afterwards, also

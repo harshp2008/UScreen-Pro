@@ -1,4 +1,5 @@
 # Desktop entry of the UScreen Pro window (the application-menu entry; the installer rewrites Exec to the installed binary).
+# PLATFORM(linux): freedesktop.org desktop entry
 [Desktop Entry]
 Type=Application
 Name=UScreen Pro

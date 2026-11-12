@@ -406,6 +406,7 @@ pub async fn adb_monitor(
                             let _ = tablet_tx.send(false);
                             let fifo = capture::fifo_path_for(0);
                             let _ = tokio::process::Command::new("pkill")
+                                // PLATFORM(linux): pkill -f matches the helper and ffmpeg by command line, because they share a fifo path per slot
                                 .args(["-f", &format!("evdi_helper .*--capture-fifo {}( |$)", fifo)])
                                 .status().await;
                             let _ = tokio::process::Command::new("pkill")

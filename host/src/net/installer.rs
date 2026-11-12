@@ -158,6 +158,7 @@ where
     true
 }
 
+// PLATFORM(linux): looks for app-debug.apk under $HOME/.local/share/uscreen
 /// Candidate locations of the built APK; the most recently modified one wins so a stale copy
 /// in `~/.local/share/uscreen` can never shadow a fresh build.
 pub fn find_apk() -> Option<PathBuf> {

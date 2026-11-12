@@ -2,6 +2,7 @@
  * lib/dataFiles.js: the shared directory ~/.local/share/uscreen/, the whole interface between this extension and the UScreen daemon.
  * Owns where files live and how they are written; what each file means is documented in the module that uses it.
  */
+// PLATFORM(gnome): runs inside GNOME Shell; the supported Shell versions are listed in compat/versions.js and metadata.json
 
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';

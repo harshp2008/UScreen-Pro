@@ -4,6 +4,9 @@
  */
 package com.uscreen.ui
 
+import com.uscreen.input.Haptics
+import com.uscreen.input.TouchpadShape
+
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,13 +50,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.uscreen.Haptics
 import com.uscreen.BuildConfig
 import com.uscreen.ChargingStatus
 import com.uscreen.HostConfig
 import com.uscreen.Prefs
 import com.uscreen.ScreenLock
-import com.uscreen.TouchpadShape
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 

@@ -1,5 +1,6 @@
 //! Wireless adb: turning it on or off, finding the tablet's IP address and provisioning Wi-Fi automatically after a USB
 //! connection. Owns the wireless setup; the tunnels and the app are elsewhere.
+// PLATFORM(android): wireless debugging (adb pair / adb connect) exists on Android 11 and later
 
 use super::*;
 

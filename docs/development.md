@@ -56,8 +56,8 @@ host/                   Rust daemon (binary `uscreen`)
                           `update.rs`
   src/capture/            EVDI helper + encoders: frames in, H.264/HEVC packets out (`packetizer.rs`,
                           `encoders.rs`, `latency.rs`, `timing.rs`)
-  src/desktop/            one directory per desktop environment (see below) plus the shared `DesktopBackend`
-                          trait in `mod.rs`
+  src/desktop/            one directory per desktop environment (see below), the shared `DesktopBackend`
+                          trait in `mod.rs`, and the dispatchers `display.rs` (virtual output) and `scale.rs`
   src/display/            what is not desktop specific: the generated EDID (`edid.rs`) and EVDI card
                           discovery in sysfs (`vdisplay.rs`)
   src/input/              input path: `server.rs` (WebSocket), `protocol/` (wire types, sequence filter),
@@ -72,9 +72,11 @@ host/                   Rust daemon (binary `uscreen`)
                           signals, X11 boundary sync, timing ring, NV12 conversion, writer, EVDI events)
 menu/                   `uscreen-menu`: the pen's long-press menu window (GTK 4), launched by the daemon
 uscreen-pro-gui/        Tauri + React desktop app (settings, pairing, status)
-  src/                    `App.tsx` (state, merge of tablet-side changes), `views/`, `components/`, `lib/`
+  src/                    `App.tsx` (state and routing), `views/`, `lib/` (types, options, `configMerge.ts`,
+                          `scroll.ts`), `components/` (`shell/`, `wizard/`, `power/`, `ui/`)
   src-tauri/src/          `adb/` (devices, install, intents), `config.rs`, `daemon.rs`, `forget.rs`, `pairing.rs`
-android/                Kotlin/Compose app: MediaCodec decoder, touch/pen capture, touchpad engine
+android/                Kotlin/Compose app: `input/` (touch, pen and touchpad), `video/` (MediaCodec decoder),
+                          `ui/` (screens); entry points and Android-version helpers in the root package
 extensions/             GNOME Shell extension `uscreen-app-lock`: `extension.js` (entry), `lib/` (app lock,
                           pen routing, context probe, pen menu), `compat/` (per-Shell-version code)
 packaging/              deb control/postinst, rpm spec, PKGBUILD, udev/modprobe files

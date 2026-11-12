@@ -5,6 +5,7 @@
 # for ffmpeg, layering on image-based systems, and the fact that no EVDI module is packaged (it is built
 # from upstream source, or already bundled in the image on Bazzite and Nobara).
 # Does not own the shared EVDI steps (evdi.sh) or detection (platform.sh). Interface: see _template.sh.
+# PLATFORM(fedora): package manager, GTK runtime and EVDI strategy of the fedora family
 
 # Tried second.
 fedora_order() { echo 20; }

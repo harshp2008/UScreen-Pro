@@ -56,7 +56,7 @@ function splitTitle(text) {
 const MIRRORED = [
   ['docs/features.md', 'features', 0, 'Features (the full list)'],
   ['docs/development.md', 'code-layout', 1, 'Code layout and building'],
-  ['docs/architecture.md', 'behavior-notes', 2, 'Behaviour notes (architecture and protocol)'],
+  ['docs/architecture/overview.md', 'behavior-notes', 2, 'Behaviour notes (architecture and protocol)'],
   ['docs/desktop-backends.md', 'design-desktop-backends', 3, 'Design: desktop backends'],
   ['docs/installer.md', 'design-installer', 4, 'Design: the installer'],
   ['docs/HEVC_VAAPI_PATCH.md', 'design-hevc-vaapi', 5, 'Design: HEVC VA-API'],

@@ -1,4 +1,5 @@
 //! The interface scale of a virtual display on KDE Plasma, through `kscreen-doctor`.
+// PLATFORM(kde): scale through kscreen-doctor output.NAME.scale.S
 
 /// The `kscreen-doctor` argument that gives `connector` `percent`, read from `kscreen-doctor -j`; `None` when the output is not listed or
 /// already has that scale.
@@ -45,6 +46,7 @@ pub async fn apply(connectors: &[String], percent: u32) -> bool {
 mod tests {
     use super::*;
 
+    /// `kscreen-doctor -j` output with the laptop panel and one virtual output.
     const OUTPUTS: &str =
         r#"{"outputs":[{"name":"eDP-1","scale":1.0},{"name":"DVI-I-1","scale":1.0}]}"#;
 

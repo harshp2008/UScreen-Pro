@@ -317,6 +317,7 @@ impl Default for AppConfig {
     }
 }
 
+// PLATFORM(linux): $HOME; the config lives in ~/.config/uscreen
 /// The user's home directory (`$HOME`), or an empty path if unset.
 pub fn home_dir() -> PathBuf {
     std::env::var_os("HOME")

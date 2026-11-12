@@ -68,9 +68,10 @@ Everything one desktop needs sits in one directory, `host/src/desktop/<name>/`:
 2. **Create the directory** and a `mod.rs` that starts with a `//!` comment saying what the backend does and
    what it does not. Implement `DesktopBackend` from `host/src/desktop/mod.rs`.
 3. **Register it:** `pub mod <name>;` and one arm in `detect()` in `host/src/desktop/mod.rs`.
-4. **Wire the display code**: the compositor-specific calls that enable the virtual monitor and map devices are
-   chosen by `active()` checks in `host/src/capture/display.rs`, `host/src/input/mapping.rs` and
-   `host/src/cli/doctor/`. Add your `active()` there (these ladders are the one place that still lists every desktop).
+4. **Wire the display code**: `display.rs` of your directory offers `active()`, `enable_output` and `disable_output`;
+   add a variant to `DisplayBackend` in `host/src/desktop/display.rs` and one arm in its `backend()`, `enable_output` and
+   `disable_output`. The compiler then points at the other `match`es (`input/mapping.rs`, `cli/doctor/`). A worked example
+   is in [architecture/platform-modularity.md](architecture/platform-modularity.md).
 5. **Ship the helper**, if the desktop needs one (a Shell extension, a script), under `extensions/`, and install it
    from `scripts/install.sh`.
 6. **Test**: unit-test the parsing of what your signals return, then try it on the real desktop. Record what you

@@ -21,6 +21,7 @@ pub struct DaemonStatus {
     pub devices: Vec<ConnectedDevice>,
 }
 
+// PLATFORM(linux): XDG_RUNTIME_DIR
 /// Runtime directory of the daemon: `XDG_RUNTIME_DIR`, else `/run/user/<uid>`, else `~/.cache`, plus `uscreen`.
 fn runtime_dir() -> PathBuf {
     std::env::var_os("XDG_RUNTIME_DIR")
@@ -39,6 +40,7 @@ fn control_sock_path() -> PathBuf {
     runtime_dir().join("control.sock")
 }
 
+// PLATFORM(linux): pid file under ~/.local/share/uscreen
 /// Path of the daemon's pid file.
 fn pid_path() -> PathBuf {
     config::home_dir().join(".local/share/uscreen/uscreen.pid")
@@ -255,6 +257,7 @@ pub async fn get_daemon_status() -> Result<DaemonStatus, String> {
 /// Name of the systemd user unit.
 const UNIT: &str = "uscreen.service";
 
+// PLATFORM(systemd): every start, stop and status of the daemon goes through `systemctl --user`
 /// Runs `systemctl --user` with `args`; `None` if it could not be run.
 async fn systemctl(args: &[&str]) -> Option<std::process::Output> {
     Command::new("systemctl")
@@ -279,6 +282,7 @@ async fn unit_active() -> bool {
         .is_some_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "active")
 }
 
+// PLATFORM(linux): looks in ~/.local/bin first
 /// First existing daemon binary among `~/.local/bin`, `/usr/local/bin` and `/usr/bin`.
 pub(crate) fn daemon_binary() -> Option<PathBuf> {
     [
@@ -384,6 +388,7 @@ pub async fn stop_daemon() -> Result<String, String> {
     }
 }
 
+// PLATFORM(systemd): autostart is the enabled state of uscreen.service
 /// Tauri command: is the user service enabled at login?
 #[tauri::command]
 pub async fn get_autostart_status() -> bool {
@@ -394,6 +399,7 @@ pub async fn get_autostart_status() -> bool {
         .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "enabled")
 }
 
+// PLATFORM(systemd): enables or disables uscreen.service for the user
 /// Tauri command: enable (and start) or disable the user service.
 #[tauri::command]
 pub async fn set_autostart_status(enabled: bool) -> Result<bool, String> {

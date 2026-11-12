@@ -197,6 +197,7 @@ fn open_release_page() {
     }
 }
 
+// PLATFORM(systemd): starts the settings app outside uscreen.service's cgroup so `systemctl stop` does not kill it
 /// Best effort: a missing GUI binary is worth a log line, not a crash in the
 /// middle of a menu callback.
 fn open_settings() {
@@ -263,6 +264,7 @@ fn open_settings() {
     }
 }
 
+// PLATFORM(dbus): StatusNotifierItem tray (ksni); GNOME shows it only with an AppIndicator extension
 /// Publish the tray icon and keep it in step with the daemon.
 ///
 /// Returns without an icon if no StatusNotifierWatcher answers — a desktop

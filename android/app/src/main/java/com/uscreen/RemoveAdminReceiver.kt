@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 
+// PLATFORM(android): Device Admin removal
 /**
  * Lets the computer's installer ask this app to give up its Device Admin role before a reinstall:
  * `adb shell am broadcast -n com.uscreen/.RemoveAdminReceiver`. An active admin cannot be uninstalled,

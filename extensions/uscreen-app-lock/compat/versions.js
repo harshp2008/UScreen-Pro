@@ -8,6 +8,7 @@
  * To add a Shell version: add it to metadata.json and add a row here. Add a compat/shell-<n>.js only if
  * something behaves differently on that version (see ../../../docs/adding-support.md).
  */
+// PLATFORM(gnome): runs inside GNOME Shell; the supported Shell versions are listed in compat/versions.js and metadata.json
 
 /** `tested`: run by the maintainer. `declared`: named in metadata.json but never run. `unloadable`: named but cannot load. */
 export const SHELL_VERSIONS = {

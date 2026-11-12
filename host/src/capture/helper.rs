@@ -15,6 +15,7 @@ impl Drop for AbortOnDrop {
 }
 
 impl CaptureManager {
+    // PLATFORM(evdi): spawns the C evdi_helper process; it must be stopped by pid, never by name, because other tablets run their own
     /// Start the EVDI helper process that writes the virtual display's frames into the FIFO, after
     /// killing any stray helper left from a previous run.
     pub(super) async fn start_helper(&mut self) -> Result<()> {

@@ -69,6 +69,7 @@ pub async fn run_latency(secs: u64, sparse: bool) -> anyhow::Result<()> {
     Ok(())
 }
 
+// PLATFORM(uinput): opens /dev/uinput directly to measure injection latency
 /// A relative uinput mouse that sweeps left-right over more than the whole
 /// desktop (the pointer clamps at the edges) at ~125 Hz.
 pub(super) fn sweep_mouse(secs: u64, sparse: bool) -> anyhow::Result<()> {

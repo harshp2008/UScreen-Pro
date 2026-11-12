@@ -10,6 +10,7 @@ import { type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 import { toggleVariants } from "@/components/ui/toggle"
 
+/** Carries the group's size and variant down to its items. */
 const ToggleGroupContext = React.createContext<
   VariantProps<typeof toggleVariants>
 >({

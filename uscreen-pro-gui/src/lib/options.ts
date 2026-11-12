@@ -49,6 +49,7 @@ export function labelOf(options: Option[], value: string | number | undefined): 
 
 /** Encoder CRF/QP scale of the quality slider: lower is sharper. 18 is the host default. */
 export const QUALITY_MIN = 12;
+/** Upper bound of the quality slider on the same CRF/QP scale as `QUALITY_MIN`. */
 export const QUALITY_MAX = 32;
 
 /** Named band for a CRF value, shown next to the number while the slider moves. */
@@ -70,8 +71,11 @@ export const CURVES: Option[] = [
 
 /** Bounds of the idle-dim sliders; kept in step with `config.rs` on the host. */
 export const IDLE_TIMEOUT_MIN = 10;
+/** Longest idle-dim timeout the UI offers, in seconds (`IDLE_TIMEOUT_MIN` is the shortest). */
 export const IDLE_TIMEOUT_MAX = 300;
+/** Shortest dim/undim fade the UI offers, in milliseconds. */
 export const FADE_MIN_MS = 100;
+/** Longest dim/undim fade the UI offers, in milliseconds. */
 export const FADE_MAX_MS = 30_000;
 
 /** The three mutually exclusive ways a tablet can be used. */

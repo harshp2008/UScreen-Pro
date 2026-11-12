@@ -2,6 +2,7 @@
 
 use super::*;
 
+// PLATFORM(kde): kscreen-doctor is an optional tool, needed only on KDE
 /// Doctor check: the required and optional external tools are installed (ffmpeg, adb,
 /// kscreen-doctor, ...).
 pub(super) async fn check_tools(r: &mut Report, cfg: &FileConfig) {
@@ -12,15 +13,15 @@ pub(super) async fn check_tools(r: &mut Report, cfg: &FileConfig) {
             r.line(Level::Fail, tool, "not installed");
             r.hint(&format!("install {} with your package manager", tool));
         } else {
-            if crate::desktop::hyprland::display::active() {
-                r.line(Level::Ok, tool, "not needed on Hyprland (hyprctl is used)");
-            } else if crate::desktop::gnome::display::active()
-                || crate::desktop::x11::display::active()
-                || crate::desktop::cosmic::display::active()
-            {
-                r.line(Level::Ok, tool, "not needed on this desktop");
-            } else {
-                r.line(Level::Warn, tool, "not installed (KDE only)");
+            use crate::desktop::display::{backend, DisplayBackend};
+            match backend() {
+                DisplayBackend::Hyprland => {
+                    r.line(Level::Ok, tool, "not needed on Hyprland (hyprctl is used)")
+                }
+                DisplayBackend::Gnome | DisplayBackend::X11 | DisplayBackend::Cosmic => {
+                    r.line(Level::Ok, tool, "not needed on this desktop")
+                }
+                DisplayBackend::Kde => r.line(Level::Warn, tool, "not installed (KDE only)"),
             }
         }
     }
@@ -74,6 +75,7 @@ pub(super) async fn check_tools(r: &mut Report, cfg: &FileConfig) {
     }
 }
 
+// PLATFORM(evdi): reads /sys/devices/evdi/count
 /// Doctor check: the evdi kernel module is loaded and exposes devices.
 pub(super) fn check_modules(r: &mut Report) {
     match std::fs::read_to_string("/sys/devices/evdi/count") {
@@ -122,6 +124,7 @@ pub(super) fn check_modules(r: &mut Report) {
     }
 }
 
+// PLATFORM(evdi): looks for evdi_helper processes
 /// The check that matters most: more than one helper or encoder means several
 /// processes are writing/reading the same FIFO and every frame is corrupt.
 pub(super) async fn check_processes(r: &mut Report) {

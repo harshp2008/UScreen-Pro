@@ -14,6 +14,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 
+// PLATFORM(android): posts a heads-up notification (needs POST_NOTIFICATIONS on Android 13+)
 /**
  * Posts a heads-up "this is your target device" notification when the desktop's Identify button asks
  * for it (`adb shell am broadcast -n com.uscreen/.IdentifyReceiver --es name <device name>`).

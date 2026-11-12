@@ -2,6 +2,7 @@
  * lib/penRouting.js: pen routing: reports the focused app to the daemon and offers the route hotkey.
  * Owns focus.json (written here) and toggle_request (written on Ctrl+Alt+P); the daemon decides what to do with them.
  */
+// PLATFORM(gnome): runs inside GNOME Shell; the supported Shell versions are listed in compat/versions.js and metadata.json
 
 import Shell from 'gi://Shell';
 import Meta from 'gi://Meta';

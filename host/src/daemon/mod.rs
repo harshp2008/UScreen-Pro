@@ -27,6 +27,7 @@ use crate::display::{edid, vdisplay};
 use crate::net::stream;
 use crate::{capture, config, input};
 
+// PLATFORM(linux): single-instance check by looking for /proc/<pid>
 /// Execute the primary uscreen daemon event loop.
 ///
 /// Coordinates hardware video capture, hardware uinput forwarding, Unix control socket,

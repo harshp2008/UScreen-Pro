@@ -14,16 +14,10 @@
 //! Written from the schemas and mutter's documented D-Bus interface without a
 //! GNOME session to run it in; every step is logged, and the setting is read
 //! back like the KWin mapping is.
+// PLATFORM(gnome): virtual display on GNOME: Mutter DisplayConfig over busctl, and device-to-monitor mapping through gsettings (also used for Cinnamon)
 
+use crate::desktop::command_exists;
 use tracing::{info, warn};
-
-/// Whether a file called `name` exists in any directory of `$PATH`.
-fn command_exists(name: &str) -> bool {
-    std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|d| std::path::Path::new(d).join(name).exists())
-}
 
 /// A GNOME Wayland session with the two tools this needs. On GNOME's X11
 /// session `desktop/x11/display.rs` does the mapping instead.
@@ -271,6 +265,7 @@ fn unique_monitor<'a>(monitors: &'a [[String; 4]], connector: &str) -> Option<&'
     (monitors.iter().filter(|m| m[1..] == target[1..]).count() == 1).then_some(target)
 }
 
+// PLATFORM(gnome): Cinnamon keeps the same per-device schema under org.cinnamon.desktop.peripherals
 /// Muffin can overwrite a direct XInput transform with its automatic guess. Give Cinnamon the
 /// explicit per-device EDID triple as well. Pen-only mode clears it before the X11 path maps onto
 /// the physical primary output. Returns whether both devices accepted the value.

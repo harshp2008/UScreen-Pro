@@ -1,5 +1,6 @@
 //! X11 sessions: the focused app is the `_NET_ACTIVE_WINDOW` property of the root window and its
 //! `WM_CLASS`, read over x11rb.
+// PLATFORM(x11): focus from the _NET_ACTIVE_WINDOW root property (x11rb)
 
 pub mod display;
 

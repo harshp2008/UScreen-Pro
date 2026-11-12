@@ -1,3 +1,7 @@
+/**
+ * AppLockList.tsx: the editable list of application IDs behind the `locked_apps` setting (Advanced and per-device settings).
+ * Input/output: a string array and its change callback. Validation of one ID is the `APP_ID` pattern below.
+ */
 import { Plus, X } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";

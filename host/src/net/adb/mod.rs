@@ -107,6 +107,7 @@ mod tests {
 
     use super::app::ScreenState;
 
+    /// `dumpsys window` excerpt with this app in front, as a Samsung launcher session reports it.
     const FOCUS_APP: &str = "  mCurrentFocus=Window{4f60b6d u0 com.uscreen/com.uscreen.MainActivity}\n    isKeyguardShowing=false\npackageName=com.sec.android.app.launcher\nmWakefulness=Awake\n";
 
     /// Our own app in front counts as idle; another app in front does not.

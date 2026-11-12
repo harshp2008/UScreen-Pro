@@ -6,6 +6,7 @@ use super::*;
 /// The APK compiled into this app (empty when built without one, see `build.rs`).
 static EMBEDDED_APK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/app.apk"));
 
+// PLATFORM(linux): copies the embedded APK to ~/.local/share/uscreen/app-debug.apk
 /// The APK to install: the one carried inside this app, written to `~/.local/share/uscreen/app-debug.apk`
 /// (only when that file differs, so the background daemon's update path uses the same build); an app built
 /// without an embedded APK falls back to searching the usual locations.
@@ -14,7 +15,10 @@ fn apk_to_install() -> Option<PathBuf> {
         return find_apk_path();
     }
     let path = config::home_dir().join(".local/share/uscreen/app-debug.apk");
-    if std::fs::read(&path).map(|b| b != EMBEDDED_APK).unwrap_or(true) {
+    if std::fs::read(&path)
+        .map(|b| b != EMBEDDED_APK)
+        .unwrap_or(true)
+    {
         std::fs::create_dir_all(path.parent()?).ok()?;
         std::fs::write(&path, EMBEDDED_APK).ok()?;
     }
@@ -78,10 +82,22 @@ pub async fn install_apk(
             progress(app, ev, Some(serial), "Found old APK");
             // Ask the installed app to drop its Device Admin role first (an active admin cannot be
             // uninstalled). Builds without the receiver just ignore this; the retry below covers them.
-            progress(app, ev, Some(serial), "Asking the old app to remove its Device Admin");
+            progress(
+                app,
+                ev,
+                Some(serial),
+                "Asking the old app to remove its Device Admin",
+            );
             let _ = run(
                 Some(serial),
-                &["shell", "am", "broadcast", "-W", "-n", "com.uscreen/.RemoveAdminReceiver"],
+                &[
+                    "shell",
+                    "am",
+                    "broadcast",
+                    "-W",
+                    "-n",
+                    "com.uscreen/.RemoveAdminReceiver",
+                ],
                 Duration::from_secs(10),
             )
             .await;
@@ -97,7 +113,12 @@ pub async fn install_apk(
                 // The old app is an active device admin (it uses force-lock), which Android will not
                 // uninstall. Try to deactivate the admin and retry; if that is refused too, fall through
                 // and update in place with `install -r` (works when the signing key matches).
-                progress(app, ev, Some(serial), "Old APK is a device admin, deactivating it");
+                progress(
+                    app,
+                    ev,
+                    Some(serial),
+                    "Old APK is a device admin, deactivating it",
+                );
                 let _ = run(
                     Some(serial),
                     &[

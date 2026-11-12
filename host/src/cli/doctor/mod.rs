@@ -27,6 +27,7 @@ use tablet::*;
 
 use crate::capture::fifo_path;
 use crate::config::{self, FileConfig, MAX_BITRATE_KBPS, MAX_FPS};
+use crate::desktop::command_exists;
 use crate::display::vdisplay;
 use anyhow::Result;
 use std::path::Path;
@@ -93,14 +94,6 @@ async fn output_of(program: &str, args: &[&str]) -> Option<String> {
         .await
         .ok()?;
     Some(String::from_utf8_lossy(&out.stdout).to_string())
-}
-
-/// Whether a file called `name` exists in any directory of `$PATH`.
-fn command_exists(name: &str) -> bool {
-    std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .any(|dir| Path::new(dir).join(name).exists())
 }
 
 /// PIDs whose executable name matches exactly (`pgrep -x`).

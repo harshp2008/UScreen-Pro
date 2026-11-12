@@ -5,6 +5,7 @@
  * whole helper is still one translation unit (static functions stay static and the hot loops still inline).
  * It is not a header and cannot be compiled on its own. It owns the X11 connection and the boundary thread; it never touches frames.
  */
+// PLATFORM(x11): pointer-crossing detection uses an X11 connection (XRandR); the connection is NULL on a Wayland-only session
 
 /* --- Dynamic Boundary Synchronization (Zero Ghost Cursor & Zero Boundary Lag)
  * --- */

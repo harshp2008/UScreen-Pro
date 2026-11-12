@@ -306,6 +306,7 @@ pub fn get_pid_path() -> PathBuf {
     PathBuf::from(format!("{}/.local/share/uscreen/uscreen.pid", home))
 }
 
+// PLATFORM(evdi): looks for the evdi_helper binary next to the daemon and in ~/.local/bin
 /// Locate the `evdi_helper` binary across local development builds and installed system prefixes.
 ///
 /// Evaluates explicit command line arguments, relative workspace paths, executable siblings,

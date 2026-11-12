@@ -4,6 +4,7 @@
 # Owns everything specific to pacman systems: the os-release IDs, the package names, and getting evdi-dkms,
 # which exists only in the AUR (so an AUR helper is needed and its absence is explained).
 # Does not own the shared EVDI steps (evdi.sh) or detection (platform.sh). Interface: see _template.sh.
+# PLATFORM(arch): package manager, GTK runtime and EVDI strategy of the arch family
 
 # Tried third.
 arch_order() { echo 30; }

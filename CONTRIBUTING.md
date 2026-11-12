@@ -1,6 +1,6 @@
 <!--
   CONTRIBUTING.md: how to build, test and propose a change.
-  Owns the contribution workflow; the architecture is in docs/architecture.md and the comment rules in docs/comment-style.md.
+  Owns the contribution workflow; the architecture is in docs/architecture/overview.md and the comment rules in docs/comment-style.md.
 -->
 # Contributing
 

@@ -3,6 +3,7 @@
  * Owns detecting the running Shell's major version; the table of known versions is in versions.js and the
  * version-dependent monitor lookup in monitors.js. Other modules import from here, never from `Config` directly.
  */
+// PLATFORM(gnome): runs inside GNOME Shell; the supported Shell versions are listed in compat/versions.js and metadata.json
 
 import {PACKAGE_VERSION} from 'resource:///org/gnome/shell/misc/config.js';
 

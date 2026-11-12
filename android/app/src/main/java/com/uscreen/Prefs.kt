@@ -4,6 +4,9 @@
  */
 package com.uscreen
 
+import com.uscreen.input.Haptics
+import com.uscreen.input.TouchpadShape
+
 import android.content.Context
 import android.content.SharedPreferences
 

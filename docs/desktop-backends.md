@@ -32,7 +32,7 @@ Key presses (Ctrl+C, ...) are sent through uinput and need no backend.
 2. **Create the directory `host/src/desktop/<name>/`.** Its `mod.rs` holds a struct that implements
    `DesktopBackend`: `name()`, `capabilities()` (set only what really works), `poll_focus()`, and any of the
    optional methods. Reuse `focus_file.rs` if your helper writes `~/.local/share/uscreen/focus.json`. Put the
-   compositor-specific virtual-monitor code (enable, place, map input devices) in `display.rs` of the same directory.
+   compositor-specific virtual-monitor code (enable, place, map input devices) in `display.rs` of the same directory, reached through the dispatcher `desktop/display.rs`.
 3. **Pick it in `detect()`** (`desktop/mod.rs`), from `XDG_CURRENT_DESKTOP` / `XDG_SESSION_TYPE`,
    before the `generic` fallback.
 4. **Ship the helper**, if there is one (a Shell extension, a KWin script, ...) under `extensions/`,

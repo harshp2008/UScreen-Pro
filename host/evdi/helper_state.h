@@ -5,6 +5,7 @@
  * whole helper is still one translation unit (static functions stay static and the hot loops still inline).
  * It is not a header and cannot be compiled on its own. It owns the globals (EVDI handle, the framebuffer, the triple buffer and its dirty masks, the timing counters) and the constants; it owns no functions except cmp_int.
  */
+// PLATFORM(evdi): holds the libevdi handle and the DRM card index
 
 static evdi_handle g_handle = EVDI_INVALID_HANDLE;
 /* Index of the EVDI card in use (/dev/dri/cardN), -1 before it is known. */

@@ -3,6 +3,7 @@
  * Owns app_lock.json (written by the daemon), the window hooks and the move of an unauthorised window to the primary monitor.
  * It does not own how a monitor is found in a given Shell version (compat/monitors.js).
  */
+// PLATFORM(gnome): runs inside GNOME Shell; the supported Shell versions are listed in compat/versions.js and metadata.json
 
 import Shell from 'gi://Shell';
 import Meta from 'gi://Meta';

@@ -14,6 +14,7 @@
 //!
 //! The previous value still goes to disk, so a daemon that was killed rather
 //! than stopped can be undone by the next run.
+// PLATFORM(kde): switches KWin's on-screen keyboard off over D-Bus and restores it afterwards
 
 use std::path::PathBuf;
 use tracing::{info, warn};
