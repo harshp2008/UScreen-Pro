@@ -11,10 +11,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.SurfaceView
 import kotlin.math.abs
-import kotlin.math.atan2
-import kotlin.math.cos
 import kotlin.math.max
-import kotlin.math.sin
 import kotlinx.coroutines.*
 import okhttp3.*
 import org.json.JSONObject
@@ -521,7 +518,7 @@ class TouchCapture {
                         for (h in 0 until hist) {
                             val (hx, hy) = mapCoordinates(event.getHistoricalX(i, h), event.getHistoricalY(i, h), vw, vh)
                             val hp = event.getHistoricalPressure(i, h).toDouble()
-                            val (htx, hty) = decomposeTilt(
+                            val (htx, hty) = PenTilt.decompose(
                                 getHistoricalAxis(event, MotionEvent.AXIS_TILT, i, h),
                                 getHistoricalAxis(event, MotionEvent.AXIS_ORIENTATION, i, h))
                             emitPen(hx.toDouble(), hy.toDouble(), hp, htx, hty,
@@ -658,46 +655,13 @@ class TouchCapture {
     }
 
     /**
-     * Decompose Android's stylus tilt into X/Y tilt angles, **in degrees**.
-     *
-     * Android exposes AXIS_TILT as the angle from the screen normal (0 =
-     * perpendicular, π/2 = flat) and AXIS_ORIENTATION as the azimuth of the
-     * tilt around that normal (0..2π). A Wacom-style ABS_TILT_X/Y device wants
-     * the signed X and Y tilt *angles*, which are the arctangents of the tilt
-     * vector's components projected onto the surface — not the components
-     * themselves.
-     *
-     * The previous version returned the raw projections `sin(tilt)·cos(orient)`
-     * (a dimensionless value in [-1,1]) and the host multiplied them by
-     * 180/π as if they were radians. A pen laid flat at 90° came out as 57°,
-     * and everything in between was wrong non-linearly.
-     */
-    private fun decomposeTilt(tiltRad: Double, orientationRad: Double): Pair<Double, Double> {
-        val sinTilt = sin(tiltRad)
-        val cosTilt = cos(tiltRad)
-        // Android's AXIS_ORIENTATION is measured clockwise from the top of the
-        // screen: 0 points up, +pi/2 points right. So the direction the pen
-        // leans, in screen coordinates with y downwards, is
-        // (sin(orientation), -cos(orientation)).
-        //
-        // libinput wants tilt_x positive towards the right edge and tilt_y
-        // positive towards the user, which is the bottom edge — hence the
-        // minus on the y component. These two were the other way round until
-        // 1.2.2, so a pen leaning right reported as leaning down; reported by
-        // a Lenovo Tab Pen Plus user in issue #11.
-        val tx = atan2(sinTilt * sin(orientationRad), cosTilt)
-        val ty = atan2(-sinTilt * cos(orientationRad), cosTilt)
-        return Math.toDegrees(tx) to Math.toDegrees(ty)
-    }
-
-    /**
      * Sends one pen sample of the pointer at [index]: position mapped to the stream, pressure, tilt from the tilt and orientation axes, eraser flag and [action]; then syncs the side button state.
      */
     private fun sendPenEvent(event: MotionEvent, index: Int, action: Int,
                               vw: Float, vh: Float) {
         val (x, y) = mapCoordinates(event.getX(index), event.getY(index), vw, vh)
         val pressure = event.getPressure(index).toDouble()
-        val (tiltX, tiltY) = decomposeTilt(
+        val (tiltX, tiltY) = PenTilt.decompose(
             getAxis(event, MotionEvent.AXIS_TILT, index),
             getAxis(event, MotionEvent.AXIS_ORIENTATION, index))
         emitPen(x.toDouble(), y.toDouble(), pressure, tiltX, tiltY,
