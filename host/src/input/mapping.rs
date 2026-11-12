@@ -6,60 +6,6 @@
 
 use super::*;
 
-/// D-Bus interface name of a KWin input device.
-pub(super) const KWIN_INPUT_IFACE: &str = "org.kde.KWin.InputDevice";
-
-// PLATFORM(kde): finds the laptop panel with kscreen-doctor
-/// The screen the user is actually looking at: the first enabled output that is
-/// not one of ours. In pen-only mode the tablet drives this one, so the pen has
-/// to be mapped onto it rather than onto the virtual display.
-pub(super) async fn primary_non_evdi_output() -> Option<String> {
-    let evdi: Vec<String> = crate::display::vdisplay::evdi_connectors()
-        .into_iter()
-        .map(|c| c.name)
-        .collect();
-    let out = tokio::process::Command::new("kscreen-doctor")
-        .arg("-j")
-        .output()
-        .await
-        .ok()?;
-    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-    let outputs = v.get("outputs")?.as_array()?;
-    let mut fallback = None;
-    // Plasma 6 dropped the boolean `primary` for a `priority` where 1 is the
-    // primary screen; looking only for `primary` found none and took the first
-    // enabled output in the list, which on a multi-monitor desktop is not
-    // necessarily the one in front of the user.
-    let mut best: Option<(u64, String)> = None;
-    for o in outputs {
-        let name = o.get("name").and_then(|v| v.as_str())?.to_string();
-        if evdi.contains(&name) || !o.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
-            continue;
-        }
-        if o.get("primary").and_then(|v| v.as_bool()).unwrap_or(false) {
-            return Some(name);
-        }
-        if let Some(p) = o.get("priority").and_then(|v| v.as_u64()) {
-            if best.as_ref().is_none_or(|(bp, _)| p < *bp) {
-                best = Some((p, name.clone()));
-            }
-        }
-        fallback.get_or_insert(name);
-    }
-    best.map(|(_, n)| n).or(fallback)
-}
-
-// PLATFORM(kde): reads a property of a KWin input device over D-Bus
-/// Read one property of a KWin input device by its sysname.
-pub(super) async fn kwin_device_property(sysname: &str, property: &str) -> Option<String> {
-    crate::desktop::kde::display::get_property(
-        &format!("/org/kde/KWin/InputDevice/{}", sysname),
-        KWIN_INPUT_IFACE,
-        property,
-    )
-    .await
-}
-
 // PLATFORM(linux): if-ladder over desktop backends: Hyprland, GNOME, X11, then KDE/KWin as the fallback (COSMIC has no case)
 /// Pin the virtual input devices to the virtual display.
 ///
@@ -89,7 +35,12 @@ pub(super) async fn map_devices_to_output(
     if crate::desktop::x11::display::active() {
         return map_devices_on_x11(pen_only, ident, card).await;
     }
-    let Some(output) = target_output(pen_only, card, std::time::Duration::from_secs(10)).await
+    let Some(output) = crate::desktop::kde::display::target_output(
+        pen_only,
+        card,
+        std::time::Duration::from_secs(10),
+    )
+    .await
     else {
         if pen_only {
             warn!("No physical output found — pen will address the whole desktop");
@@ -120,7 +71,9 @@ pub(super) async fn map_devices_to_output(
 
         let mut mapped = 0;
         for sysname in devices {
-            let Some(name) = kwin_device_property(&sysname, "name").await else {
+            let Some(name) =
+                crate::desktop::kde::display::kwin_device_property(&sysname, "name").await
+            else {
                 continue;
             };
             if !ident.owns(&name) {
@@ -128,7 +81,7 @@ pub(super) async fn map_devices_to_output(
             }
             let ok = crate::desktop::kde::display::set_property(
                 &format!("/org/kde/KWin/InputDevice/{}", sysname),
-                KWIN_INPUT_IFACE,
+                crate::desktop::kde::display::KWIN_INPUT_IFACE,
                 "outputName",
                 "s",
                 &output,
@@ -140,7 +93,9 @@ pub(super) async fn map_devices_to_output(
                     // keeps the old value when the output is not usable yet.
                     // Only what reads back counts, so a lost mapping is
                     // retried on the next pass instead of logged as done.
-                    match kwin_device_property(&sysname, "outputName").await {
+                    match crate::desktop::kde::display::kwin_device_property(&sysname, "outputName")
+                        .await
+                    {
                         Some(now) if now == output => {
                             info!("Mapped '{}' ({}) to output {}", name, sysname, output);
                             mapped += 1;
@@ -306,7 +261,7 @@ pub(super) async fn map_and_note_area(
             crate::desktop::gnome::display::output_area(o).await
         }
         Some(_) if crate::desktop::x11::display::active() => None,
-        Some(o) => output_area_on_desktop(o).await,
+        Some(o) => crate::desktop::kde::display::output_area(o).await,
         None => None,
     };
     let snap_grid = if crate::desktop::gnome::display::active() {
@@ -329,128 +284,5 @@ pub(super) async fn map_and_note_area(
             w * 100.0,
             h * 100.0
         );
-    }
-}
-
-// PLATFORM(kde): output rectangle from kscreen-doctor JSON
-/// Where `output` sits on the desktop, as fractions of the whole desktop:
-/// (x, y, width, height). `None` when the layout cannot be read.
-///
-/// Used only for the plain pointer device — see `InjectDevices::pointer_area`.
-pub(super) async fn output_area_on_desktop(output: &str) -> Option<(f64, f64, f64, f64)> {
-    let outputs = kscreen_outputs().await?;
-    let logical = |o: &serde_json::Value| -> Option<(f64, f64, f64, f64)> {
-        let scale = o
-            .get("scale")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0)
-            .max(0.01);
-        let id = o.get("currentModeId")?.as_str()?;
-        let mode = o
-            .get("modes")?
-            .as_array()?
-            .iter()
-            .find(|m| m.get("id").and_then(|v| v.as_str()) == Some(id))?;
-        let w = mode.pointer("/size/width")?.as_f64()? / scale;
-        let h = mode.pointer("/size/height")?.as_f64()? / scale;
-        let x = o.pointer("/pos/x")?.as_f64()?;
-        let y = o.pointer("/pos/y")?.as_f64()?;
-        Some((x, y, w, h))
-    };
-    let mut mine = None;
-    let (mut max_x, mut max_y) = (0.0f64, 0.0f64);
-    for o in &outputs {
-        if !o.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
-            continue;
-        }
-        let Some((x, y, w, h)) = logical(o) else {
-            continue;
-        };
-        max_x = max_x.max(x + w);
-        max_y = max_y.max(y + h);
-        if o.get("name").and_then(|v| v.as_str()) == Some(output) {
-            mine = Some((x, y, w, h));
-        }
-    }
-    let (x, y, w, h) = mine?;
-    (max_x > 0.0 && max_y > 0.0).then(|| (x / max_x, y / max_y, w / max_x, h / max_y))
-}
-
-// PLATFORM(kde): runs kscreen-doctor -j and parses its JSON
-/// The outputs KWin currently knows, as reported by `kscreen-doctor -j`.
-/// `None` when the tool is not there at all (not a KDE session).
-pub(super) async fn kscreen_outputs() -> Option<Vec<serde_json::Value>> {
-    let out = tokio::process::Command::new("kscreen-doctor")
-        .arg("-j")
-        .output()
-        .await
-        .ok()?;
-    let v: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
-    Some(v.get("outputs")?.as_array()?.clone())
-}
-
-/// The output the devices should address in this mode, returned only once
-/// KWin lists it as enabled.
-///
-/// Mapping is not something that can be done ahead of time: set `outputName`
-/// while the virtual display is still being brought back and KWin keeps the
-/// previous mapping, so after leaving graphics-tablet mode the pen and touch
-/// would go on driving the laptop screen (issue #6). Leaving display mode has
-/// the opposite problem — the physical screen is always there, but the EVDI
-/// output is going away at that moment. So this polls the output list up to
-/// `timeout` and only then falls back to the best name it knows, so a mapping
-/// is at least attempted on a desktop where kscreen-doctor cannot answer.
-pub(super) async fn target_output(
-    pen_only: bool,
-    card: Option<u32>,
-    timeout: std::time::Duration,
-) -> Option<String> {
-    let deadline = tokio::time::Instant::now() + timeout;
-    loop {
-        if pen_only {
-            if let Some(name) = primary_non_evdi_output().await {
-                return Some(name);
-            }
-            // No kscreen-doctor means no KDE session: nothing to wait for.
-            kscreen_outputs().await?;
-        } else {
-            let connectors = crate::display::vdisplay::evdi_connectors();
-            // This tablet's own card first; "any connected EVDI output" only
-            // as a fallback while the card is not known yet.
-            let fallback = connectors
-                .iter()
-                .find(|c| card.is_some_and(|want| c.card == want))
-                .or_else(|| connectors.iter().find(|c| c.connected))
-                .or_else(|| connectors.first())
-                .map(|c| c.name.clone());
-            let Some(outputs) = kscreen_outputs().await else {
-                return fallback;
-            };
-            let mine: Vec<&str> = connectors
-                .iter()
-                .filter(|c| card.is_none_or(|want| c.card == want))
-                .map(|c| c.name.as_str())
-                .collect();
-            let enabled = outputs.iter().find(|o| {
-                let name = o.get("name").and_then(|v| v.as_str()).unwrap_or("");
-                mine.contains(&name) && o.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false)
-            });
-            if let Some(o) = enabled {
-                return o.get("name").and_then(|v| v.as_str()).map(str::to_string);
-            }
-            if tokio::time::Instant::now() >= deadline {
-                if fallback.is_some() {
-                    warn!(
-                        "EVDI output not enabled within {:?} — mapping onto {:?} anyway",
-                        timeout, fallback
-                    );
-                }
-                return fallback;
-            }
-        }
-        if tokio::time::Instant::now() >= deadline {
-            return None;
-        }
-        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
     }
 }
