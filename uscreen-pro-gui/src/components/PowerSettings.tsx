@@ -263,94 +263,101 @@ export function ModePanel({
   }
   return (
     <Columns>
-      <Section title="Stylus">
-        <>
-            <SettingRow
+      <div>
+        <Section title="Pen">
+          <SettingRow
+            label="Pen acts as"
+            tip="Dynamic: a pointer, plus pressure and tilt in drawing apps. Mouse: a plain pointer. Graphics tablet: drawing only."
+            override={ov("stylus_style", labelOf(STYLUS_STYLES, v.stylus_style))}
+          >
+            <Select
               label="Pen acts as"
-              tip="Dynamic: a pointer, plus pressure and tilt in drawing apps. Mouse: a plain pointer. Graphics tablet: drawing only."
-              override={ov("stylus_style", labelOf(STYLUS_STYLES, v.stylus_style))}
-            >
-              <Segmented
-                label="Pen acts as"
-                value={v.stylus_style}
-                options={STYLUS_STYLES}
-                onValueChange={(stylus_style) => onChange({ stylus_style })}
-              />
-            </SettingRow>
-            {(v.stylus_style === "mouse" || v.stylus_style === "auto") && (
-              <>
-                <SettingRow
+              value={v.stylus_style}
+              options={STYLUS_STYLES}
+              className="w-52"
+              onValueChange={(stylus_style) => onChange({ stylus_style })}
+            />
+          </SettingRow>
+          {(v.stylus_style === "mouse" || v.stylus_style === "auto") && (
+            <>
+              <SettingRow
+                label="Pen button"
+                tip="What the pen's side button does while the pen acts as a mouse."
+                override={ov("stylus_button_primary", labelOf(PEN_BUTTONS, v.stylus_button_primary))}
+              >
+                <Select
                   label="Pen button"
-                  tip="What the pen's side button does while the pen acts as a mouse."
-                  override={ov("stylus_button_primary", labelOf(PEN_BUTTONS, v.stylus_button_primary))}
-                >
-                  <Segmented
-                    label="Pen button"
-                    value={v.stylus_button_primary}
-                    options={PEN_BUTTONS}
-                    onValueChange={(stylus_button_primary) => onChange({ stylus_button_primary })}
-                  />
-                </SettingRow>
-                <SettingRow
+                  value={v.stylus_button_primary}
+                  options={PEN_BUTTONS}
+                  className="w-40"
+                  onValueChange={(stylus_button_primary) => onChange({ stylus_button_primary })}
+                />
+              </SettingRow>
+              <SettingRow
+                label="Second pen button"
+                tip="For pens with a second side button."
+                override={ov("stylus_button_secondary", labelOf(PEN_BUTTONS, v.stylus_button_secondary))}
+              >
+                <Select
                   label="Second pen button"
-                  tip="For pens with a second side button."
-                  override={ov("stylus_button_secondary", labelOf(PEN_BUTTONS, v.stylus_button_secondary))}
-                >
-                  <Segmented
-                    label="Second pen button"
-                    value={v.stylus_button_secondary}
-                    options={PEN_BUTTONS}
-                    onValueChange={(stylus_button_secondary) => onChange({ stylus_button_secondary })}
-                  />
-                </SettingRow>
-              </>
-            )}
-        </>
-        <SwitchRow
-          label="Black screen in stylus mode"
-          tip="Blank the tablet's screen a few seconds after stylus mode starts. Spares OLED panels."
-          checked={v.blank_pen_only}
-          onChange={(blank_pen_only) => onChange({ blank_pen_only })}
-          override={ov("blank_pen_only", onOff(v.blank_pen_only))}
-        />
-        <SwitchRow
-          label="Pen menu"
-          tip="Hold the pen still for a small menu: cut, copy, paste, select all, undo. GNOME only."
-          checked={v.pen_menu}
-          onChange={(pen_menu) => onChange({ pen_menu })}
-          override={ov("pen_menu", onOff(v.pen_menu))}
-        />
-        {v.pen_menu && (
-          <>
-            <SettingRow
-              label="Hold time for the menu"
-              tip="How long to hold the pen still before the menu appears."
-              override={ov("pen_menu_hold_ms", labelOf(PEN_MENU_HOLD, v.pen_menu_hold_ms))}
-            >
-              <Select
-                label="Hold time for the menu"
-                value={String(v.pen_menu_hold_ms)}
-                options={PEN_MENU_HOLD}
-                className="w-36"
-                onValueChange={(x) => onChange({ pen_menu_hold_ms: Number(x) })}
-              />
-            </SettingRow>
-            <SettingRow
-              label="Menu buttons"
-              tip="Show the menu buttons as text labels or as icons."
-              override={ov("pen_menu_style", labelOf(PEN_MENU_STYLE, v.pen_menu_style))}
-            >
-              <Select
+                  value={v.stylus_button_secondary}
+                  options={PEN_BUTTONS}
+                  className="w-40"
+                  onValueChange={(stylus_button_secondary) => onChange({ stylus_button_secondary })}
+                />
+              </SettingRow>
+            </>
+          )}
+        </Section>
+        <Section title="Pen menu">
+          <SwitchRow
+            label="Pen menu"
+            tip="Hold the pen still for a small menu: cut, copy, paste, select all, undo. GNOME only."
+            checked={v.pen_menu}
+            onChange={(pen_menu) => onChange({ pen_menu })}
+            override={ov("pen_menu", onOff(v.pen_menu))}
+          />
+          {v.pen_menu && (
+            <>
+              <SettingRow
+                label="Hold time"
+                tip="How long to hold the pen still before the menu appears."
+                override={ov("pen_menu_hold_ms", labelOf(PEN_MENU_HOLD, v.pen_menu_hold_ms))}
+              >
+                <Select
+                  label="Hold time for the menu"
+                  value={String(v.pen_menu_hold_ms)}
+                  options={PEN_MENU_HOLD}
+                  className="w-36"
+                  onValueChange={(x) => onChange({ pen_menu_hold_ms: Number(x) })}
+                />
+              </SettingRow>
+              <SettingRow
                 label="Menu buttons"
-                value={v.pen_menu_style}
-                options={PEN_MENU_STYLE}
-                className="w-36"
-                onValueChange={(pen_menu_style) => onChange({ pen_menu_style })}
-              />
-            </SettingRow>
-          </>
-        )}
-      </Section>
+                tip="Show the menu buttons as text labels or as icons."
+                override={ov("pen_menu_style", labelOf(PEN_MENU_STYLE, v.pen_menu_style))}
+              >
+                <Select
+                  label="Menu buttons"
+                  value={v.pen_menu_style}
+                  options={PEN_MENU_STYLE}
+                  className="w-36"
+                  onValueChange={(pen_menu_style) => onChange({ pen_menu_style })}
+                />
+              </SettingRow>
+            </>
+          )}
+        </Section>
+        <Section title="Screen">
+          <SwitchRow
+            label="Black screen in stylus mode"
+            tip="Blank the tablet's screen a few seconds after stylus mode starts. Spares OLED panels."
+            checked={v.blank_pen_only}
+            onChange={(blank_pen_only) => onChange({ blank_pen_only })}
+            override={ov("blank_pen_only", onOff(v.blank_pen_only))}
+          />
+        </Section>
+      </div>
       {stylusExtra}
     </Columns>
   );

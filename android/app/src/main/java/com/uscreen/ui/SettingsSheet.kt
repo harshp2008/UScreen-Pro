@@ -181,21 +181,20 @@ fun SettingsSheet(
                                     onSetting("stylus_button_secondary", it)
                                 }
                                 Text(
-                                    "The tip is the left button and stays down while you drag, so you can select text " +
-                                        "and move windows. Hovering moves the cursor.",
+                                    "The tip is the left button and stays down while you drag. Hovering moves the cursor.",
                                     fontSize = 11.sp,
                                     color = Muted
                                 )
                             }
                             SwitchRow(
                                 "Pen menu",
-                                "Hold the pen still on the computer's screen for a small menu: cut, copy, paste, select all, undo.",
+                                "Hold the pen still for a small menu: cut, copy, paste, select all, undo. GNOME only.",
                                 hostConfig.penMenu,
                                 { onSetting("pen_menu", it) }
                             )
                             if (hostConfig.penMenu) {
                                 ChipChoice(
-                                    "Hold time for the menu",
+                                    "Hold time",
                                     listOf("500" to "0.5 s", "800" to "0.8 s", "1000" to "1 s", "1500" to "1.5 s"),
                                     hostConfig.penMenuHoldMs.toString(),
                                 ) { onSetting("pen_menu_hold_ms", it.toInt()) }
@@ -207,7 +206,7 @@ fun SettingsSheet(
                             }
                             SwitchRow(
                                 "Black screen in stylus mode",
-                                "Nothing is streamed, so the screen goes black a few seconds after it starts.",
+                                "Blank the screen a few seconds after stylus mode starts. Spares OLED panels.",
                                 hostConfig.blankPenOnly,
                                 { onSetting("blank_pen_only", it) }
                             )
@@ -269,9 +268,7 @@ fun SettingsSheet(
                             )
                             SwitchRow(
                                 "Use Native Gestures (Wayland/libinput)",
-                                "Your fingers are passed to the computer as a real touchpad, so swipes, pinch and " +
-                                    "workspace gestures follow your hand. Turns itself off on X11 and desktops " +
-                                    "without libinput gestures.",
+                                "Pass fingers to the computer as a real touchpad (GNOME/KDE gestures). Off: the tablet sends key presses instead.",
                                 hostConfig.nativeGestures,
                                 { onSetting("native_gestures", it) }
                             )
@@ -317,17 +314,12 @@ fun SettingsSheet(
                                 hostConfig.touchpadShape,
                             ) { onSetting("touchpad_shape", it) }
                             Text(
-                                "Only the shaded rectangle responds; touches outside it are ignored. Standard is a centred 4:3, " +
-                                    "Wide a centred 16:9.",
+                                "Which part of the tablet is the touchpad. Touches outside it are ignored.",
                                 fontSize = 11.sp,
                                 color = Muted
                             )
-                            Text(
-                                "Bottom Right Zone: tap the right half of the strip along the bottom edge of the touch area. " +
-                                    "With native gestures the computer decides the rest: tap-to-click, two-finger tap, " +
-                                    "and 3 / 4 finger swipes use its own touchpad settings. Without them, two-finger tap is " +
-                                    "also a right click, three-finger tap is middle click, and swiping three or four " +
-                                    "fingers sideways switches workspace (up or down: overview).",
+                            if (hostConfig.touchpadStyle == HostConfig.STYLE_CLICKPAD) Text(
+                                "Tap the bottom-right corner, or tap with two fingers. Three fingers is a middle click.",
                                 fontSize = 11.sp,
                                 color = Muted
                             )
@@ -433,8 +425,7 @@ fun SettingsSheet(
                         )
                         SwitchRow(
                             "Require Device Admin Lock",
-                            "Off: battery saver only dims and stops retrying. On: it also locks the tablet, which needs the " +
-                                "Device Admin permission.",
+                            "Also lock the tablet in battery saver. Needs the Device Admin permission.",
                             hostConfig.batterySaverLock,
                             { onSetting("battery_saver_lock", it) },
                             enabled = hostConfig.batterySaverOnDisconnect
@@ -518,7 +509,7 @@ fun SettingsSheet(
                             )
                         }
                         Text(
-                            "Auto-launch, the session security token and encoder options are set in UScreen Pro on the computer.",
+                            "Opening the app on connect, the security token and the encoder are set in UScreen Pro on the computer.",
                             fontSize = 11.sp,
                             color = Muted,
                             modifier = Modifier.padding(top = 12.dp)
