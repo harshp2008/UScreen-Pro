@@ -13,15 +13,15 @@ pub(super) async fn check_tools(r: &mut Report, cfg: &FileConfig) {
             r.line(Level::Fail, tool, "not installed");
             r.hint(&format!("install {} with your package manager", tool));
         } else {
-            if crate::desktop::hyprland::display::active() {
-                r.line(Level::Ok, tool, "not needed on Hyprland (hyprctl is used)");
-            } else if crate::desktop::gnome::display::active()
-                || crate::desktop::x11::display::active()
-                || crate::desktop::cosmic::display::active()
-            {
-                r.line(Level::Ok, tool, "not needed on this desktop");
-            } else {
-                r.line(Level::Warn, tool, "not installed (KDE only)");
+            use crate::desktop::display::{backend, DisplayBackend};
+            match backend() {
+                DisplayBackend::Hyprland => {
+                    r.line(Level::Ok, tool, "not needed on Hyprland (hyprctl is used)")
+                }
+                DisplayBackend::Gnome | DisplayBackend::X11 | DisplayBackend::Cosmic => {
+                    r.line(Level::Ok, tool, "not needed on this desktop")
+                }
+                DisplayBackend::Kde => r.line(Level::Warn, tool, "not installed (KDE only)"),
             }
         }
     }
